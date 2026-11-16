@@ -1,5 +1,6 @@
 package com.example.ui.auth
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -10,7 +11,6 @@ import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.NoCredentialException
-import com.example.R
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
@@ -30,6 +30,15 @@ object GoogleSignInHelper {
   private tailrec fun Context.findActivity(): Activity? =
     (this as? Activity) ?: (this as? ContextWrapper)?.baseContext?.findActivity()
 
+  @SuppressLint("DiscouragedApi")
+  private fun resolveDefaultWebClientId(context: Context): String? =
+    try {
+      val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
+      if (resId != 0) context.getString(resId).takeIf { it.isNotBlank() } else null
+    } catch (_: Exception) {
+      null
+    }
+
   fun attemptAutoSignIn(
     context: Context,
     credentialManager: CredentialManager,
@@ -42,9 +51,7 @@ object GoogleSignInHelper {
       onAuthSuccess(existing.displayName)
       return
     }
-    val clientId = try {
-      context.getString(R.string.default_web_client_id)
-    } catch (e: Exception) {
+    val clientId = resolveDefaultWebClientId(context) ?: run {
       onUnauthenticated()
       return
     }
@@ -92,10 +99,8 @@ object GoogleSignInHelper {
     scope: CoroutineScope,
     onAuthCancelled: () -> Unit = {},
   ) {
-    val clientId = try {
-      context.getString(R.string.default_web_client_id)
-    } catch (e: Exception) {
-      onAuthError("Google Sign-In configuration missing: default_web_client_id not found")
+    val clientId = resolveDefaultWebClientId(context) ?: run {
+      onAuthError("Google Sign-In configuration missing: add app/google-services.json to enable Google Sign-In, or tap Boot UnknownOS.")
       return
     }
 

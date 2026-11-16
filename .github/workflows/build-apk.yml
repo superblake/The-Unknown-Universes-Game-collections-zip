@@ -49,7 +49,14 @@ jobs:
       - name: Prepare signing keystore, secrets config, and Gradle wrapper
         run: |
           if [ ! -f .env ] && [ ! -f .env.example ]; then
-            touch .env.example
+            cat << 'EOF' > .env.example
+          EPIC_CLIENT_ID=MY_EPIC_CLIENT_ID
+          GOG_CLIENT_ID=MY_GOG_CLIENT_ID
+          EA_CLIENT_ID=MY_EA_CLIENT_ID
+          AMAZON_CLIENT_ID=MY_AMAZON_CLIENT_ID
+          SAMSUNG_CLIENT_ID=MY_SAMSUNG_CLIENT_ID
+          STEAM_OPENID_RETURN_URL=MY_STEAM_OPENID_RETURN_URL
+          EOF
           fi
           if [ ! -f debug.keystore ]; then
             if [ -f debug.keystore.base64 ]; then

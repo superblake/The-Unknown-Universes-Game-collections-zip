@@ -4,8 +4,20 @@ plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
   alias(libs.plugins.google.devtools.ksp)
-  alias(libs.plugins.secrets)
-  alias(libs.plugins.google.services)
+  alias(libs.plugins.secrets) apply false
+  alias(libs.plugins.google.services) apply false
+}
+
+val hasSecretsFile = rootProject.file(".env").exists() || rootProject.file(".env.example").exists()
+val hasGoogleServicesFile = file("google-services.json").exists() ||
+  file("src/debug/google-services.json").exists() ||
+  file("src/release/google-services.json").exists()
+
+if (hasSecretsFile) {
+  apply(plugin = libs.plugins.secrets.get().pluginId)
+}
+if (hasGoogleServicesFile) {
+  apply(plugin = libs.plugins.google.services.get().pluginId)
 }
 
 android {
@@ -20,6 +32,15 @@ android {
     versionName = "4.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+    if (!hasSecretsFile) {
+      buildConfigField("String", "EPIC_CLIENT_ID", "\"\"")
+      buildConfigField("String", "GOG_CLIENT_ID", "\"\"")
+      buildConfigField("String", "EA_CLIENT_ID", "\"\"")
+      buildConfigField("String", "AMAZON_CLIENT_ID", "\"\"")
+      buildConfigField("String", "SAMSUNG_CLIENT_ID", "\"\"")
+      buildConfigField("String", "STEAM_OPENID_RETURN_URL", "\"\"")
+    }
   }
 
   // Do not remove or modify these signingConfigs. They are necessary for building, installing,
@@ -76,10 +97,12 @@ android {
 
 // Configure the Secrets Gradle Plugin to use .env and .env.example files
 // to match the convention used in Web projects.
-secrets {
-  propertiesFileName = ".env"
-  defaultPropertiesFileName = ".env.example"
-  ignoreList.add("FIREBASE_APPCHECK_DEBUG_TOKEN")
+if (hasSecretsFile) {
+  extensions.configure<com.google.android.libraries.mapsplatform.secrets_gradle_plugin.SecretsPluginExtension> {
+    propertiesFileName = ".env"
+    defaultPropertiesFileName = ".env.example"
+    ignoreList.add("FIREBASE_APPCHECK_DEBUG_TOKEN")
+  }
 }
 
 // Some unused dependencies are commented out below instead of being removed.
