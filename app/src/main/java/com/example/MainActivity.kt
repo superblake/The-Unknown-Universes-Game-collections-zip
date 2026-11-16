@@ -6,8 +6,10 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -243,6 +245,32 @@ fun UnknownOsShell(
   val oauthRedirectUri by pendingOAuthRedirect.collectAsStateWithLifecycle()
   val snackbarHostState = remember { SnackbarHostState() }
 
+  val handleDesktopGoogleSuccess: (String?) -> Unit = { name ->
+    isGoogleSigningIn = false
+    viewModel.showBanner("Signed in with Google${name?.let { " as $it" } ?: ""}")
+  }
+  val handleDesktopGoogleError: (String) -> Unit = { err ->
+    isGoogleSigningIn = false
+    viewModel.showBanner(err)
+  }
+  val handleDesktopGoogleCancelled: () -> Unit = {
+    isGoogleSigningIn = false
+    viewModel.showBanner("Google Sign-In was cancelled.")
+  }
+
+  val legacyGoogleSignInLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.StartActivityForResult()
+  ) { activityResult ->
+    GoogleSignInHelper.handleLegacyGoogleSignInResult(
+      context = context,
+      data = activityResult.data,
+      scope = scope,
+      onAuthSuccess = handleDesktopGoogleSuccess,
+      onAuthError = handleDesktopGoogleError,
+      onAuthCancelled = handleDesktopGoogleCancelled,
+    )
+  }
+
   LaunchedEffect(oauthRedirectUri) {
     val uri = oauthRedirectUri ?: return@LaunchedEffect
     onConsumeRedirect()
@@ -386,18 +414,16 @@ fun UnknownOsShell(
                     GoogleSignInHelper.onGoogleSignInClicked(
                       context = context,
                       credentialManager = credentialManager,
-                      onAuthSuccess = { name ->
-                        isGoogleSigningIn = false
-                        viewModel.showBanner("Signed in with Google${name?.let { " as $it" } ?: ""}")
-                      },
-                      onAuthError = { err ->
-                        isGoogleSigningIn = false
-                        viewModel.showBanner(err)
-                      },
+                      onAuthSuccess = handleDesktopGoogleSuccess,
+                      onAuthError = handleDesktopGoogleError,
                       scope = scope,
-                      onAuthCancelled = {
-                        isGoogleSigningIn = false
-                        viewModel.showBanner("Google Sign-In was cancelled or unavailable.")
+                      onAuthCancelled = handleDesktopGoogleCancelled,
+                      onLaunchLegacySignIn = { intent ->
+                        try {
+                          legacyGoogleSignInLauncher.launch(intent)
+                        } catch (e: Exception) {
+                          handleDesktopGoogleError(GoogleSignInHelper.formatAuthError(e, context))
+                        }
                       },
                     )
                   },

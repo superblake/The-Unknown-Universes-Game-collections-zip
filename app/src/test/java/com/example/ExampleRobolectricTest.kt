@@ -16,6 +16,8 @@ import androidx.test.core.app.ApplicationProvider
 import com.example.ui.auth.AuthScreen
 import com.example.ui.auth.GoogleSignInHelper
 import com.example.ui.theme.UnknownUniversesTheme
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.Status
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -78,6 +80,12 @@ class ExampleRobolectricTest {
 
     val shaMismatch = GoogleSignInHelper.formatAuthError(RuntimeException("[28444] Developer console is not set up correctly."))
     assertTrue(shaMismatch.contains("SHA-1"))
+
+    val apiDeveloperError = GoogleSignInHelper.formatAuthError(ApiException(Status(10, "DEVELOPER_ERROR")))
+    assertTrue(apiDeveloperError.contains("10/28444"))
+
+    val apiNetworkError = GoogleSignInHelper.formatAuthError(ApiException(Status(7, "NETWORK_ERROR")))
+    assertTrue(apiNetworkError.contains("code 7"))
   }
 
   @Test

@@ -1,5 +1,7 @@
 package com.example.ui.auth
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -65,6 +67,38 @@ fun AuthScreen(
   val context = LocalContext.current
   val coroutineScope = rememberCoroutineScope()
   val credentialManager = remember(context) { CredentialManager.create(context) }
+
+  val handleGoogleSignInSuccess: (String?) -> Unit = { googleName ->
+    isGoogleSigningIn = false
+    val resolved = googleName?.trim()?.takeIf { it.length >= 2 }?.take(30)
+      ?: callsign.trim().takeIf { it.length >= 2 }
+      ?: "VanguardPrime"
+    onBootLocalOperator(resolved)
+  }
+
+  val handleGoogleSignInError: (String) -> Unit = { err ->
+    isGoogleSigningIn = false
+    validationError = err
+  }
+
+  val handleGoogleSignInCancelled: () -> Unit = {
+    isGoogleSigningIn = false
+    authNotice =
+      "Google Sign-In was cancelled. Tap Sign in with Google to retry, or tap Boot UnknownOS to play locally."
+  }
+
+  val legacyGoogleSignInLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.StartActivityForResult()
+  ) { activityResult ->
+    GoogleSignInHelper.handleLegacyGoogleSignInResult(
+      context = context,
+      data = activityResult.data,
+      scope = coroutineScope,
+      onAuthSuccess = handleGoogleSignInSuccess,
+      onAuthError = handleGoogleSignInError,
+      onAuthCancelled = handleGoogleSignInCancelled,
+    )
+  }
 
   LaunchedEffect(Unit) {
     GoogleSignInHelper.attemptAutoSignIn(
@@ -221,22 +255,16 @@ fun AuthScreen(
                 GoogleSignInHelper.onGoogleSignInClicked(
                   context = context,
                   credentialManager = credentialManager,
-                  onAuthSuccess = { googleName ->
-                    isGoogleSigningIn = false
-                    val resolved = googleName?.trim()?.takeIf { it.length >= 2 }?.take(30)
-                      ?: callsign.trim().takeIf { it.length >= 2 }
-                      ?: "VanguardPrime"
-                    onBootLocalOperator(resolved)
-                  },
-                  onAuthError = { err ->
-                    isGoogleSigningIn = false
-                    validationError = err
-                  },
+                  onAuthSuccess = handleGoogleSignInSuccess,
+                  onAuthError = handleGoogleSignInError,
                   scope = coroutineScope,
-                  onAuthCancelled = {
-                    isGoogleSigningIn = false
-                    authNotice =
-                      "Google Sign-In was dismissed or is unavailable in this environment. Tap Sign in with Google to retry, or tap Boot UnknownOS to play locally."
+                  onAuthCancelled = handleGoogleSignInCancelled,
+                  onLaunchLegacySignIn = { intent ->
+                    try {
+                      legacyGoogleSignInLauncher.launch(intent)
+                    } catch (e: Exception) {
+                      handleGoogleSignInError(GoogleSignInHelper.formatAuthError(e, context))
+                    }
                   },
                 )
               },

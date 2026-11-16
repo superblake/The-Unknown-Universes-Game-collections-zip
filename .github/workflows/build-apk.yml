@@ -72,8 +72,10 @@ jobs:
           fi
           if [ ! -f debug.keystore ]; then
             if [ -f debug.keystore.base64 ]; then
+              echo "Decoding repository debug.keystore.base64..."
               tr -d '\r\n ' < debug.keystore.base64 | base64 -d > debug.keystore
             else
+              echo "Generating fallback debug.keystore (no debug.keystore or debug.keystore.base64 found)..."
               "$JAVA_HOME/bin/keytool" -genkeypair -v \
                 -keystore debug.keystore \
                 -storepass android \
@@ -82,7 +84,10 @@ jobs:
                 -keyalg RSA -keysize 2048 -validity 10000 \
                 -dname "CN=Android Debug,O=Android,C=US"
             fi
+          else
+            echo "Using existing debug.keystore."
           fi
+          "$JAVA_HOME/bin/keytool" -list -v -keystore debug.keystore -storepass android -alias androiddebugkey | grep -E 'Alias name:|SHA1:|SHA256:' || true
           if [ -f gradlew ]; then
             sed -i 's/\r$//' gradlew
             chmod +x gradlew
