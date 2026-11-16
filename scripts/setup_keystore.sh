@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+set -e
+
+# 1. Restore app/google-services.json if missing
+if [ ! -f app/google-services.json ]; then
+  FOUND_GS="$(find . -maxdepth 4 -name 'google-services.json' -type f | head -n 1 || true)"
+  if [ -n "$FOUND_GS" ]; then
+    echo "Found google-services.json at $FOUND_GS; copying to app/google-services.json"
+    cp "$FOUND_GS" app/google-services.json
+  elif [ -n "$GOOGLE_SERVICES_JSON" ]; then
+    echo "Writing app/google-services.json from GOOGLE_SERVICES_JSON secret..."
+    printf '%s\n' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+  else
+    echo "Writing embedded fallback app/google-services.json..."
+    cat << 'EOF' > app/google-services.json
+{
+  "project_info": {
+    "project_number": "531913103030",
+    "project_id": "gen-lang-client-0465389899",
+    "storage_bucket": "gen-lang-client-0465389899.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:531913103030:android:779a9f56343da78261b817",
+        "android_client_info": {
+          "package_name": "com.unknownuniverses.os"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "531913103030-2pmjvvt98foaj4kt71h2aogrfkdb9emf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.unknownuniverses.os",
+            "certificate_hash": "b79ccbf913eb179ffddb645d3913d023556e23d7"
+          }
+        },
+        {
+          "client_id": "531913103030-47sroa9ak43bnbi01ui6vk4eamsg2kqr.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.unknownuniverses.os",
+            "certificate_hash": "9202f079040c512dc40edc493ada8ff10d583e4e"
+          }
+        },
+        {
+          "client_id": "531913103030-6lsvj3cqu3i8pi3aaqinhoer3t3bkgre.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.unknownuniverses.os",
+            "certificate_hash": "b14f3ed4e25e46618594c9b8b95963a0a3c98299"
+          }
+        },
+        {
+          "client_id": "531913103030-bvim9n2cpe2ra39cm2kggog9l27n3jvo.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.unknownuniverses.os",
+            "certificate_hash": "c4b6fabdcbe41500042b98e49eeb7ad7fc2767b3"
+          }
+        },
+        {
+          "client_id": "531913103030-e1nme7i59u3hmvaddh8hk080nqg7lmac.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.unknownuniverses.os",
+            "certificate_hash": "0fd52bfb7f07a3b97c66c6197729dc305c511baa"
+          }
+        },
+        {
+          "client_id": "531913103030-ij6ps05s4birhsm2g0vq4r7hremn5do8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.unknownuniverses.os",
+            "certificate_hash": "20bbcece442f5a363a5b55349bf740e81a167bd2"
+          }
+        },
+        {
+          "client_id": "531913103030-5fglsponek4ll9urhcvkpnrq23finq4g.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBuerasOMo3W1WP0jMdwLnYfb6hkPwsCpI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "531913103030-5fglsponek4ll9urhcvkpnrq23finq4g.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
+EOF
+  fi
+fi
+
+# 2. Setup .env / .env.example
+if [ ! -f .env ] && [ ! -f .env.example ]; then
+  cat << 'EOF' > .env.example
+EPIC_CLIENT_ID=MY_EPIC_CLIENT_ID
+GOG_CLIENT_ID=MY_GOG_CLIENT_ID
+EA_CLIENT_ID=MY_EA_CLIENT_ID
+AMAZON_CLIENT_ID=MY_AMAZON_CLIENT_ID
+SAMSUNG_CLIENT_ID=MY_SAMSUNG_CLIENT_ID
+STEAM_OPENID_RETURN_URL=MY_STEAM_OPENID_RETURN_URL
+EOF
+fi
+
+# 3. Setup debug.keystore (always stable B7:9C:CB:F9:... to avoid random keys)
+if [ ! -f debug.keystore ]; then
+  if [ -f debug.keystore.base64 ]; then
+    echo "Decoding repository debug.keystore.base64..."
+    tr -d '\r\n ' < debug.keystore.base64 | base64 -d > debug.keystore
+  else
+    echo "Decoding embedded stable project debug keystore (SHA-1 B7:9C:CB:F9:13:EB:17:9F:FD:DB:64:5D:39:13:D0:23:55:6E:23:D7)..."
+    cat << 'KEYSTORE_EOF' | tr -d '\r\n ' | base64 -d > debug.keystore
+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
+KEYSTORE_EOF
+  fi
+else
+  echo "Using existing debug.keystore."
+fi
+
+# Print fingerprint for verification in logs
+keytool -list -v -keystore debug.keystore -storepass android -alias androiddebugkey | grep -E 'Alias name:|SHA1:|SHA256:' || true
