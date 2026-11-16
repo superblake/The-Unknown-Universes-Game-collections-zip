@@ -46,8 +46,18 @@ jobs:
             "$SDKMANAGER" --install "platform-tools" "build-tools;36.0.0" "platforms;android-36.1" || true
           fi
 
-      - name: Prepare signing keystore, secrets config, and Gradle wrapper
+      - name: Prepare signing keystore, google-services, secrets config, and Gradle wrapper
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
+          if [ ! -f app/google-services.json ]; then
+            FOUND_GS="$(find . -maxdepth 4 -name 'google-services.json' -type f | head -n 1 || true)"
+            if [ -n "$FOUND_GS" ]; then
+              cp "$FOUND_GS" app/google-services.json
+            elif [ -n "$GOOGLE_SERVICES_JSON" ]; then
+              printf '%s\n' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+            fi
+          fi
           if [ ! -f .env ] && [ ! -f .env.example ]; then
             cat << 'EOF' > .env.example
           EPIC_CLIENT_ID=MY_EPIC_CLIENT_ID
