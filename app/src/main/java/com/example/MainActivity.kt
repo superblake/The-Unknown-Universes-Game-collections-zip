@@ -1,0 +1,440 @@
+package com.example
+
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
+import androidx.core.content.edit
+import androidx.credentials.CredentialManager
+import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import com.example.data.local.UniverseRepository
+import com.example.ui.OsWorkspaceTab
+import com.example.ui.UniverseUiState
+import com.example.ui.UniverseViewModel
+import com.example.ui.auth.AuthScreen
+import com.example.ui.auth.GoogleSignInHelper
+import com.example.ui.auth.OAuthCallbackResult
+import com.example.ui.auth.PlatformOAuthManager
+import com.google.firebase.Firebase
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.auth
+import com.example.ui.screens.ArenaScreen
+import com.example.ui.screens.ArmoryScreen
+import com.example.ui.screens.ExportCompatScreen
+import com.example.ui.screens.ForgeRigScreen
+import com.example.ui.screens.MediaVaultScreen
+import com.example.ui.screens.OsDesktopScreen
+import com.example.ui.theme.AppIcons
+import com.example.ui.theme.UnknownUniversesTheme
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
+class MainActivity : ComponentActivity() {
+  private val pendingOAuthRedirect = MutableStateFlow<Uri?>(null)
+
+  override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    pendingOAuthRedirect.value = intent?.data
+    enableEdgeToEdge()
+    setContent {
+      UnknownUniversesTheme(darkTheme = true) {
+        AppNavigation(
+          pendingOAuthRedirect = pendingOAuthRedirect.asStateFlow(),
+          onConsumeRedirect = { pendingOAuthRedirect.value = null },
+        )
+      }
+    }
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    intent.data?.let { pendingOAuthRedirect.value = it }
+  }
+}
+
+private const val SESSION_PREFS = "unknown_os_local_session"
+private const val KEY_SESSION_ACTIVE = "session_active"
+private const val KEY_LAST_CALLSIGN = "last_callsign"
+private const val KEY_VAULT_WALLPAPER = "vault_wallpaper_path"
+private const val LOCAL_OPERATOR_ID = "local_operator"
+
+@Composable
+fun AppNavigation(
+  pendingOAuthRedirect: StateFlow<Uri?> = MutableStateFlow(null),
+  onConsumeRedirect: () -> Unit = {},
+) {
+  val context = LocalContext.current
+  val scope = rememberCoroutineScope()
+  val credentialManager = remember(context) { CredentialManager.create(context) }
+  val prefs = remember(context) {
+    context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
+  }
+
+  var firebaseUser by remember {
+    mutableStateOf(runCatching { Firebase.auth.currentUser }.getOrNull())
+  }
+  DisposableEffect(Unit) {
+    val auth = runCatching { Firebase.auth }.getOrNull()
+    val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+      firebaseUser = firebaseAuth.currentUser
+    }
+    auth?.addAuthStateListener(listener)
+    onDispose {
+      auth?.removeAuthStateListener(listener)
+    }
+  }
+
+  var isSessionActive by remember(firebaseUser) {
+    mutableStateOf(prefs.getBoolean(KEY_SESSION_ACTIVE, false) || firebaseUser != null)
+  }
+  var activeCallsign by remember(firebaseUser) {
+    mutableStateOf(
+      firebaseUser?.displayName?.takeIf { it.length >= 2 }?.take(30)
+        ?: prefs.getString(KEY_LAST_CALLSIGN, "VanguardPrime")
+        ?: "VanguardPrime"
+    )
+  }
+  var activeWallpaperPath by remember {
+    mutableStateOf(prefs.getString(KEY_VAULT_WALLPAPER, null))
+  }
+
+  val currentUserId = firebaseUser?.uid ?: LOCAL_OPERATOR_ID
+
+  if (!isSessionActive) {
+    AuthScreen(
+      initialCallsign = activeCallsign,
+      onBootLocalOperator = { callsign ->
+        activeCallsign = callsign
+        prefs.edit {
+          putBoolean(KEY_SESSION_ACTIVE, true)
+          putString(KEY_LAST_CALLSIGN, callsign)
+        }
+        isSessionActive = true
+      },
+    )
+  } else {
+    key(currentUserId) {
+      UnknownOsShell(
+        currentUserId = currentUserId,
+        displayName = activeCallsign,
+        activeWallpaperPath = activeWallpaperPath,
+        onSetWallpaperPath = { path ->
+          activeWallpaperPath = path
+          prefs.edit {
+            if (path == null) remove(KEY_VAULT_WALLPAPER)
+            else putString(KEY_VAULT_WALLPAPER, path)
+          }
+        },
+        pendingOAuthRedirect = pendingOAuthRedirect,
+        onConsumeRedirect = onConsumeRedirect,
+        onLockSession = {
+          prefs.edit { putBoolean(KEY_SESSION_ACTIVE, false) }
+          GoogleSignInHelper.signOut(
+            credentialManager = credentialManager,
+            scope = scope,
+            onSignOutComplete = { isSessionActive = false },
+          )
+        },
+      )
+    }
+  }
+}
+
+@Composable
+fun UnknownOsShell(
+  currentUserId: String,
+  displayName: String?,
+  activeWallpaperPath: String?,
+  onSetWallpaperPath: (String?) -> Unit,
+  pendingOAuthRedirect: StateFlow<Uri?>,
+  onConsumeRedirect: () -> Unit,
+  onLockSession: () -> Unit,
+) {
+  val context = LocalContext.current
+
+  val viewModel: UniverseViewModel = viewModel(
+    key = currentUserId,
+    factory = viewModelFactory {
+      initializer {
+        val app = checkNotNull(this[APPLICATION_KEY])
+        UniverseViewModel(
+          repository = UniverseRepository(app),
+          currentUserId = currentUserId,
+          defaultDisplayName = displayName,
+        )
+      }
+    },
+  )
+
+  val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+  val activeTab by viewModel.activeTab.collectAsStateWithLifecycle()
+  val statusBanner by viewModel.statusBanner.collectAsStateWithLifecycle()
+  val oauthRedirectUri by pendingOAuthRedirect.collectAsStateWithLifecycle()
+  val snackbarHostState = remember { SnackbarHostState() }
+
+  LaunchedEffect(oauthRedirectUri) {
+    val uri = oauthRedirectUri ?: return@LaunchedEffect
+    onConsumeRedirect()
+    when (val outcome = PlatformOAuthManager.handleRedirectUri(context, uri)) {
+      is OAuthCallbackResult.Linked -> {
+        viewModel.saveLinkedAccount(
+          outcome.providerId,
+          outcome.displayName,
+          outcome.externalSubject,
+          outcome.bridgedAccounts,
+        )
+      }
+      is OAuthCallbackResult.Failed -> {
+        viewModel.showBanner(outcome.message)
+      }
+      null -> Unit
+    }
+  }
+
+  LaunchedEffect(statusBanner) {
+    val msg = statusBanner
+    if (msg != null) {
+      snackbarHostState.showSnackbar(msg)
+      viewModel.dismissBanner()
+    }
+  }
+
+  if (activeTab != OsWorkspaceTab.OS_DESKTOP) {
+    BackHandler {
+      viewModel.selectTab(OsWorkspaceTab.OS_DESKTOP)
+    }
+  }
+
+  BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+    val useNavRail = maxWidth >= 600.dp
+
+    Scaffold(
+      contentWindowInsets = WindowInsets.safeDrawing,
+      snackbarHost = {
+        SnackbarHost(hostState = snackbarHostState) { data ->
+          Snackbar(snackbarData = data)
+        }
+      },
+      bottomBar = {
+        if (!useNavRail) {
+          NavigationBar(
+            windowInsets = WindowInsets.navigationBars,
+            containerColor = MaterialTheme.colorScheme.surface,
+          ) {
+            OsWorkspaceTab.entries.forEach { tab ->
+              NavigationBarItem(
+                selected = activeTab == tab,
+                onClick = { viewModel.selectTab(tab) },
+                icon = {
+                  Icon(
+                    imageVector = tabIcon(tab),
+                    contentDescription = tab.label,
+                  )
+                },
+                label = { Text(tab.label, maxLines = 1) },
+                modifier = Modifier.testTag("nav_${tab.routeTag}"),
+              )
+            }
+          }
+        }
+      },
+    ) { innerPadding ->
+      Row(
+        modifier = Modifier.fillMaxSize().padding(innerPadding)
+      ) {
+        if (useNavRail) {
+          NavigationRail(
+            containerColor = MaterialTheme.colorScheme.surface,
+            modifier = Modifier.fillMaxHeight(),
+          ) {
+            OsWorkspaceTab.entries.forEach { tab ->
+              NavigationRailItem(
+                selected = activeTab == tab,
+                onClick = { viewModel.selectTab(tab) },
+                icon = {
+                  Icon(
+                    imageVector = tabIcon(tab),
+                    contentDescription = tab.label,
+                  )
+                },
+                label = { Text(tab.label) },
+                modifier = Modifier.testTag("rail_${tab.routeTag}"),
+              )
+            }
+          }
+        }
+
+        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+          when (val state = uiState) {
+            is UniverseUiState.Loading -> {
+              Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+              ) {
+                CircularProgressIndicator(modifier = Modifier.size(40.dp))
+                Text(
+                  text = "Booting UnknownOS Kernel...",
+                  style = MaterialTheme.typography.titleMedium,
+                  modifier = Modifier.padding(top = 12.dp),
+                )
+              }
+            }
+
+            is UniverseUiState.Error -> {
+              Column(
+                modifier = Modifier.fillMaxSize().padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+              ) {
+                Text(
+                  text = "Storage Error",
+                  style = MaterialTheme.typography.headlineSmall,
+                  color = MaterialTheme.colorScheme.error,
+                )
+                Text(
+                  text = state.message,
+                  style = MaterialTheme.typography.bodyMedium,
+                  modifier = Modifier.padding(top = 8.dp),
+                )
+              }
+            }
+
+            is UniverseUiState.Ready -> {
+              when (activeTab) {
+                OsWorkspaceTab.OS_DESKTOP -> OsDesktopScreen(
+                  profile = state.profile,
+                  armory = state.armory,
+                  rigs = state.rigs,
+                  matchLogs = state.matchLogs,
+                  linkedAccounts = state.linkedAccounts,
+                  activeWallpaperPath = activeWallpaperPath,
+                  onSelectUniverse = viewModel::selectUniverse,
+                  onSelectMode = viewModel::selectMode,
+                  onLaunchArena = { viewModel.selectTab(OsWorkspaceTab.ARENA_PLAY) },
+                  onOpenForgeRig = { viewModel.selectTab(OsWorkspaceTab.FORGE_RIG) },
+                  onOpenMediaVault = { viewModel.selectTab(OsWorkspaceTab.MEDIA_VAULT) },
+                  onOpenExport = { viewModel.selectTab(OsWorkspaceTab.EXPORT_COMPAT) },
+                  onCycleWallpaper = { viewModel.cycleWallpaper(state.profile.osWallpaperIndex) },
+                  onUpdateCallsign = viewModel::updateCallsign,
+                  onUnlinkAccount = viewModel::unlinkExternalAccount,
+                  onStatusMessage = viewModel::showBanner,
+                  onSignOut = onLockSession,
+                )
+
+                OsWorkspaceTab.ARENA_PLAY -> ArenaScreen(
+                  profile = state.profile,
+                  armory = state.armory,
+                  rigs = state.rigs,
+                  onSaveMatchAndExit = { score, wave, elims, extracted, durationSec ->
+                    viewModel.submitMatchResult(
+                      profile = state.profile,
+                      universeId = state.profile.activeUniverseId,
+                      mode = state.profile.activeMode,
+                      score = score,
+                      waveReached = wave,
+                      eliminations = elims,
+                      extracted = extracted,
+                      durationSec = durationSec,
+                    )
+                    viewModel.selectTab(OsWorkspaceTab.OS_DESKTOP)
+                  },
+                )
+
+                OsWorkspaceTab.FORGE_RIG -> ForgeRigScreen(
+                  rigs = state.rigs,
+                  activeRigId = state.profile.activeRigId,
+                  onSelectRig = viewModel::selectActiveRig,
+                  onSaveRig = viewModel::saveRig,
+                )
+
+                OsWorkspaceTab.ARMORY -> ArmoryScreen(
+                  armory = state.armory,
+                  totalEssence = state.profile.totalEssence,
+                  onToggleEquip = viewModel::toggleArmoryEquip,
+                  onUpgradeItem = { item ->
+                    viewModel.upgradeArmoryItem(item, state.profile.totalEssence)
+                  },
+                  onCreateCustomItem = viewModel::createCustomArmoryItem,
+                  onDeleteItem = viewModel::deleteCustomArmoryItem,
+                )
+
+                OsWorkspaceTab.MEDIA_VAULT -> MediaVaultScreen(
+                  activeWallpaperPath = activeWallpaperPath,
+                  onSetWallpaper = onSetWallpaperPath,
+                  onDeploySeries = viewModel::mountAndDeploySeries,
+                  onStatusMessage = viewModel::showBanner,
+                )
+
+                OsWorkspaceTab.EXPORT_COMPAT -> ExportCompatScreen(
+                  profile = state.profile,
+                  armory = state.armory,
+                  rigs = state.rigs,
+                  onSelectConsolePreset = viewModel::selectConsolePreset,
+                  onStatusMessage = viewModel::showBanner,
+                )
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+private fun tabIcon(tab: OsWorkspaceTab) = when (tab) {
+  OsWorkspaceTab.OS_DESKTOP -> AppIcons.DesktopWindows
+  OsWorkspaceTab.ARENA_PLAY -> AppIcons.Gamepad
+  OsWorkspaceTab.FORGE_RIG -> AppIcons.Animation
+  OsWorkspaceTab.ARMORY -> AppIcons.Shield
+  OsWorkspaceTab.MEDIA_VAULT -> AppIcons.PhotoLibrary
+  OsWorkspaceTab.EXPORT_COMPAT -> AppIcons.Download
+}

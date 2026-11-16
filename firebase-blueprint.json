@@ -1,0 +1,118 @@
+{
+  "entities": {
+    "OperatorProfile": {
+      "title": "OperatorProfile",
+      "description": "User profile, active OS settings, active universe/mode, and lifetime progression in The Unknown Universes.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Authenticated Firebase UID." },
+        "callsign": { "type": "string", "description": "Operator display callsign (3-30 chars)." },
+        "activeUniverseId": { "type": "string", "description": "Currently selected universe ID." },
+        "activeMode": { "type": "string", "enum": ["zombies", "dmz", "br", "multiplayer", "sandbox"] },
+        "activeRigId": { "type": "string", "description": "Currently active character rig ID." },
+        "consolePreset": { "type": "string", "enum": ["universal_web", "ps5_dualsense", "xbox_series", "switch_handheld", "ios_safari", "pc_desktop"] },
+        "totalEssence": { "type": "integer", "description": "Accumulated multiverse essence currency." },
+        "highScore": { "type": "integer", "description": "Best single-run arena score." },
+        "highestWave": { "type": "integer", "description": "Highest wave cleared." },
+        "osWallpaperIndex": { "type": "integer", "description": "Selected UnknownOS theme wallpaper index (0-10)." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["userId", "callsign", "activeUniverseId", "activeMode", "activeRigId", "consolePreset", "totalEssence", "highScore", "highestWave", "osWallpaperIndex", "createdAt", "updatedAt"]
+    },
+    "ArmoryItem": {
+      "title": "ArmoryItem",
+      "description": "Custom or upgraded Perk, Power, Weapon/Rig Upgrade, or Consumable in the player armory.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Authenticated Firebase UID." },
+        "name": { "type": "string", "description": "Item name (1-50 chars)." },
+        "category": { "type": "string", "enum": ["perk", "power", "upgrade", "consumable"] },
+        "universeTag": { "type": "string", "description": "Origin universe label." },
+        "description": { "type": "string", "description": "Effect summary (0-240 chars)." },
+        "tier": { "type": "integer", "description": "Current upgrade tier (1-5)." },
+        "maxTier": { "type": "integer", "description": "Maximum upgrade tier (1-5)." },
+        "cooldownSec": { "type": "integer", "description": "Cooldown in seconds (0-120)." },
+        "powerValue": { "type": "integer", "description": "Base effectiveness stat (1-500)." },
+        "accentColorHex": { "type": "string", "description": "Hex color token (e.g. #00E5FF)." },
+        "equipped": { "type": "boolean", "description": "Whether item is active in current loadout." },
+        "isCustom": { "type": "boolean", "description": "Whether authored by the user." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["userId", "name", "category", "universeTag", "description", "tier", "maxTier", "cooldownSec", "powerValue", "accentColorHex", "equipped", "isCustom", "createdAt", "updatedAt"]
+    },
+    "RigAsset": {
+      "title": "RigAsset",
+      "description": "Blender-style skeletal rig configuration, bone pose angles, and animation clip keyframes.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Authenticated Firebase UID." },
+        "name": { "type": "string", "description": "Rig name (1-50 chars)." },
+        "archetype": { "type": "string", "enum": ["operator", "biomorph", "infernal", "chrono", "starblade"] },
+        "activeClip": { "type": "string", "enum": ["idle", "sprint", "lunge", "slam", "vault", "inspect"] },
+        "ikEnabled": { "type": "boolean", "description": "Whether inverse kinematics constraints are active." },
+        "rigScale": { "type": "number", "description": "Rig scale multiplier (0.5-2.0)." },
+        "playbackSpeed": { "type": "number", "description": "Animation playback speed multiplier (0.25-3.0)." },
+        "poseAngles": { "type": "object", "description": "Map of bone IDs to pose angle degrees." },
+        "keyframeFrames": { "type": "array", "description": "Bounded list of keyframe indices (0-60)." },
+        "isCompleted": { "type": "boolean", "description": "Whether rigging and animation polish is marked complete." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["userId", "name", "archetype", "activeClip", "ikEnabled", "rigScale", "playbackSpeed", "poseAngles", "keyframeFrames", "isCompleted", "createdAt", "updatedAt"]
+    },
+    "MatchRecord": {
+      "title": "MatchRecord",
+      "description": "Immutable match score and extraction record for Zombies, DMZ, BR, Multiplayer, and Sandbox.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Authenticated Firebase UID." },
+        "universeId": { "type": "string", "description": "Universe identifier." },
+        "mode": { "type": "string", "enum": ["zombies", "dmz", "br", "multiplayer", "sandbox"] },
+        "score": { "type": "integer", "description": "Total match score." },
+        "waveReached": { "type": "integer", "description": "Wave or ring reached." },
+        "eliminations": { "type": "integer", "description": "Hostiles neutralized." },
+        "extracted": { "type": "boolean", "description": "Whether operator successfully extracted." },
+        "durationSec": { "type": "integer", "description": "Session duration in seconds." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." }
+      },
+      "required": ["userId", "universeId", "mode", "score", "waveReached", "eliminations", "extracted", "durationSec", "createdAt"]
+    },
+    "LinkedAccount": {
+      "title": "LinkedAccount",
+      "description": "External gaming or store account linked via OAuth 2.0 PKCE or Steam OpenID 2.0.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Authenticated Firebase UID." },
+        "providerId": { "type": "string", "enum": ["epic", "steam", "gog", "ea_origin", "amazon", "galaxy_store", "psn", "nintendo", "ubisoft", "xbox", "apple"] },
+        "displayName": { "type": "string", "description": "Verified account display label or ID." },
+        "externalSubject": { "type": "string", "description": "Verified external account ID or SteamID64." },
+        "linkedAt": { "type": "string", "format": "date-time", "description": "Server timestamp when linked." }
+      },
+      "required": ["userId", "providerId", "displayName", "externalSubject", "linkedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/OperatorProfile" },
+      "description": "User operator profile and UnknownOS persistent configuration."
+    },
+    "/users/{userId}/armoryItems/{itemId}": {
+      "schema": { "$ref": "#/entities/ArmoryItem" },
+      "description": "User perks, powers, upgrades, and consumables."
+    },
+    "/users/{userId}/customRigs/{rigId}": {
+      "schema": { "$ref": "#/entities/RigAsset" },
+      "description": "User skeletal rigs, bone pose angles, and animation keyframes."
+    },
+    "/users/{userId}/matchLogs/{matchId}": {
+      "schema": { "$ref": "#/entities/MatchRecord" },
+      "description": "Append-only match logs across Zombies, DMZ, BR, Multiplayer, and Sandbox."
+    },
+    "/users/{userId}/linkedAccounts/{providerId}": {
+      "schema": { "$ref": "#/entities/LinkedAccount" },
+      "description": "Verified third-party gaming and store accounts linked via OAuth2 PKCE or OpenID."
+    }
+  }
+}

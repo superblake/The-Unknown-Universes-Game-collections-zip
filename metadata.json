@@ -1,0 +1,8 @@
+{
+  "name": "The Unknown Universes",
+  "description": "Interactive multiverse game collection, UnknownOS shell, Blender-style rigging and animation studio, custom perks and powers armory, original media vault and trailers, and cross-platform portable web package exporter.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

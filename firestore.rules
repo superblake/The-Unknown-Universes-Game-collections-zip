@@ -1,0 +1,272 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened reusable primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidMode(mode) {
+      return mode in ['zombies', 'dmz', 'br', 'multiplayer', 'sandbox'];
+    }
+
+    function isValidConsolePreset(preset) {
+      return preset in ['universal_web', 'ps5_dualsense', 'xbox_series', 'switch_handheld', 'ios_safari', 'pc_desktop'];
+    }
+
+    function isValidOperatorProfile(data) {
+      return data.userId is string &&
+             data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.callsign is string && data.callsign.size() >= 2 && data.callsign.size() <= 30 &&
+             data.activeUniverseId is string && data.activeUniverseId.size() >= 1 && data.activeUniverseId.size() <= 64 &&
+             data.activeMode is string && isValidMode(data.activeMode) &&
+             data.activeRigId is string && data.activeRigId.size() >= 1 && data.activeRigId.size() <= 64 &&
+             data.consolePreset is string && isValidConsolePreset(data.consolePreset) &&
+             data.totalEssence is int && data.totalEssence >= 0 && data.totalEssence <= 999999999 &&
+             data.highScore is int && data.highScore >= 0 && data.highScore <= 999999999 &&
+             data.highestWave is int && data.highestWave >= 0 && data.highestWave <= 9999 &&
+             data.osWallpaperIndex is int && data.osWallpaperIndex >= 0 && data.osWallpaperIndex <= 10;
+    }
+
+    function isValidArmoryItem(data) {
+      return data.userId is string &&
+             data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 50 &&
+             data.category in ['perk', 'power', 'upgrade', 'consumable'] &&
+             data.universeTag is string && data.universeTag.size() >= 1 && data.universeTag.size() <= 40 &&
+             data.description is string && data.description.size() <= 240 &&
+             data.tier is int && data.tier >= 1 && data.tier <= 5 &&
+             data.maxTier is int && data.maxTier >= 1 && data.maxTier <= 5 &&
+             data.tier <= data.maxTier &&
+             data.cooldownSec is int && data.cooldownSec >= 0 && data.cooldownSec <= 120 &&
+             data.powerValue is int && data.powerValue >= 1 && data.powerValue <= 500 &&
+             data.accentColorHex is string && data.accentColorHex.size() >= 4 && data.accentColorHex.size() <= 10 &&
+             data.equipped is bool &&
+             data.isCustom is bool;
+    }
+
+    function isValidRigAsset(data) {
+      return data.userId is string &&
+             data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 50 &&
+             data.archetype in ['operator', 'biomorph', 'infernal', 'chrono', 'starblade'] &&
+             data.activeClip in ['idle', 'sprint', 'lunge', 'slam', 'vault', 'inspect'] &&
+             data.ikEnabled is bool &&
+             data.rigScale is number && data.rigScale >= 0.5 && data.rigScale <= 2.0 &&
+             data.playbackSpeed is number && data.playbackSpeed >= 0.25 && data.playbackSpeed <= 3.0 &&
+             data.poseAngles is map && data.poseAngles.size() <= 20 &&
+             data.keyframeFrames is list && data.keyframeFrames.size() <= 20 &&
+             (data.keyframeFrames.size() == 0 || data.keyframeFrames[0] is int) &&
+             data.isCompleted is bool;
+    }
+
+    function isValidMatchRecord(data) {
+      return data.userId is string &&
+             data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.universeId is string && data.universeId.size() >= 1 && data.universeId.size() <= 64 &&
+             data.mode is string && isValidMode(data.mode) &&
+             data.score is int && data.score >= 0 && data.score <= 999999999 &&
+             data.waveReached is int && data.waveReached >= 0 && data.waveReached <= 9999 &&
+             data.eliminations is int && data.eliminations >= 0 && data.eliminations <= 99999 &&
+             data.extracted is bool &&
+             data.durationSec is int && data.durationSec >= 0 && data.durationSec <= 86400;
+    }
+
+    function isValidLinkedAccount(data) {
+      return data.userId is string &&
+             data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.providerId in ['epic', 'steam', 'gog', 'ea_origin', 'amazon', 'galaxy_store', 'psn', 'nintendo', 'ubisoft', 'xbox', 'apple'] &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 64 &&
+             data.externalSubject is string && data.externalSubject.size() >= 1 && data.externalSubject.size() <= 128;
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      allow list: if isSignedIn() && request.auth.uid == userId;
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       isValidOperatorProfile(incoming()) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'userId', 'callsign', 'activeUniverseId', 'activeMode', 'activeRigId',
+                         'consolePreset', 'totalEssence', 'highScore', 'highestWave',
+                         'osWallpaperIndex', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'callsign', 'activeUniverseId', 'activeMode', 'activeRigId',
+                         'consolePreset', 'totalEssence', 'highScore', 'highestWave',
+                         'osWallpaperIndex', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time;
+
+      allow update: if isSignedIn() &&
+                       isValidOperatorProfile(incoming()) &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'callsign', 'activeUniverseId', 'activeMode', 'activeRigId',
+                         'consolePreset', 'totalEssence', 'highScore', 'highestWave',
+                         'osWallpaperIndex', 'updatedAt'
+                       ]);
+
+      allow delete: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+
+      match /armoryItems/{itemId} {
+        allow get: if isSignedIn() && isValidId(userId) && isValidId(itemId) && request.auth.uid == userId;
+        allow list: if isSignedIn() && request.auth.uid == userId;
+
+        allow create: if isSignedIn() &&
+                         isValidArmoryItem(incoming()) &&
+                         isValidId(userId) &&
+                         isValidId(itemId) &&
+                         request.auth.uid == userId &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().keys().hasAll([
+                           'userId', 'name', 'category', 'universeTag', 'description',
+                           'tier', 'maxTier', 'cooldownSec', 'powerValue', 'accentColorHex',
+                           'equipped', 'isCustom', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'name', 'category', 'universeTag', 'description',
+                           'tier', 'maxTier', 'cooldownSec', 'powerValue', 'accentColorHex',
+                           'equipped', 'isCustom', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                         incoming().updatedAt is timestamp && incoming().updatedAt <= request.time;
+
+        allow update: if isSignedIn() &&
+                         isValidArmoryItem(incoming()) &&
+                         isValidId(userId) &&
+                         isValidId(itemId) &&
+                         request.auth.uid == userId &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'name', 'category', 'universeTag', 'description',
+                           'tier', 'maxTier', 'cooldownSec', 'powerValue', 'accentColorHex',
+                           'equipped', 'updatedAt'
+                         ]);
+
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(itemId) && request.auth.uid == userId;
+      }
+
+      match /customRigs/{rigId} {
+        allow get: if isSignedIn() && isValidId(userId) && isValidId(rigId) && request.auth.uid == userId;
+        allow list: if isSignedIn() && request.auth.uid == userId;
+
+        allow create: if isSignedIn() &&
+                         isValidRigAsset(incoming()) &&
+                         isValidId(userId) &&
+                         isValidId(rigId) &&
+                         request.auth.uid == userId &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().keys().hasAll([
+                           'userId', 'name', 'archetype', 'activeClip', 'ikEnabled',
+                           'rigScale', 'playbackSpeed', 'poseAngles', 'keyframeFrames',
+                           'isCompleted', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'name', 'archetype', 'activeClip', 'ikEnabled',
+                           'rigScale', 'playbackSpeed', 'poseAngles', 'keyframeFrames',
+                           'isCompleted', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                         incoming().updatedAt is timestamp && incoming().updatedAt <= request.time;
+
+        allow update: if isSignedIn() &&
+                         isValidRigAsset(incoming()) &&
+                         isValidId(userId) &&
+                         isValidId(rigId) &&
+                         request.auth.uid == userId &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'name', 'archetype', 'activeClip', 'ikEnabled',
+                           'rigScale', 'playbackSpeed', 'poseAngles', 'keyframeFrames',
+                           'isCompleted', 'updatedAt'
+                         ]);
+
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(rigId) && request.auth.uid == userId;
+      }
+
+      match /matchLogs/{matchId} {
+        allow get: if isSignedIn() && isValidId(userId) && isValidId(matchId) && request.auth.uid == userId;
+        allow list: if isSignedIn() && request.auth.uid == userId;
+
+        allow create: if isSignedIn() &&
+                         isValidMatchRecord(incoming()) &&
+                         isValidId(userId) &&
+                         isValidId(matchId) &&
+                         request.auth.uid == userId &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().keys().hasAll([
+                           'userId', 'universeId', 'mode', 'score', 'waveReached',
+                           'eliminations', 'extracted', 'durationSec', 'createdAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'universeId', 'mode', 'score', 'waveReached',
+                           'eliminations', 'extracted', 'durationSec', 'createdAt'
+                         ]) &&
+                         incoming().createdAt is timestamp && incoming().createdAt <= request.time;
+
+        allow update: if false;
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(matchId) && request.auth.uid == userId;
+      }
+
+      match /linkedAccounts/{providerId} {
+        allow get: if isSignedIn() && isValidId(userId) && isValidId(providerId) && request.auth.uid == userId;
+        allow list: if isSignedIn() && request.auth.uid == userId;
+
+        allow create: if isSignedIn() &&
+                         isValidLinkedAccount(incoming()) &&
+                         isValidId(userId) &&
+                         isValidId(providerId) &&
+                         incoming().providerId == providerId &&
+                         request.auth.uid == userId &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().keys().hasAll(['userId', 'providerId', 'displayName', 'externalSubject', 'linkedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'providerId', 'displayName', 'externalSubject', 'linkedAt']) &&
+                         incoming().linkedAt is timestamp && incoming().linkedAt <= request.time;
+
+        allow update: if isSignedIn() &&
+                         isValidLinkedAccount(incoming()) &&
+                         isValidId(userId) &&
+                         isValidId(providerId) &&
+                         incoming().providerId == providerId &&
+                         request.auth.uid == userId &&
+                         incoming().userId == existing().userId &&
+                         incoming().keys().hasAll(['userId', 'providerId', 'displayName', 'externalSubject', 'linkedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'providerId', 'displayName', 'externalSubject', 'linkedAt']) &&
+                         incoming().linkedAt is timestamp && incoming().linkedAt <= request.time;
+
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(providerId) && request.auth.uid == userId;
+      }
+    }
+  }
+}

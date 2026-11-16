@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">The Unknown Universes</string>
+    <string name="os_boot_tag">UNKNOWNOS v2.4 // MULTIVERSE SHELL</string>
+    <string name="auth_title">Boot UnknownOS (Local Profile)</string>
+    <string name="auth_subtitle">Save your custom Perks, Powers, Blender-style Rigs, Animation clips, and Multiverse scores locally on this device.</string>
+    <string name="boot_unknownos">Boot UnknownOS</string>
+    <string name="cd_hero_banner">The Unknown Universes command nexus artwork</string>
+    <string name="cd_world_banner">Universe world artwork banner</string>
+    <string name="cd_sign_out">Lock UnknownOS session</string>
+    <string name="launch_arena">Deploy to Arena</string>
+    <string name="forge_custom_module">Forge Custom Module</string>
+    <string name="save_rig_cloud">Save &amp; Finish Rig</string>
+    <string name="export_html_btn">Download Playable .HTML (iOS / Console / PC)</string>
+    <string name="export_blender_btn">Download Blender Rig Script (.PY)</string>
+</resources>
