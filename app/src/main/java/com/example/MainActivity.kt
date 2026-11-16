@@ -118,6 +118,11 @@ fun AppNavigation(
     context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
   }
 
+  val googleSessionUser by GoogleSignInHelper.sessionUser.collectAsStateWithLifecycle()
+  LaunchedEffect(Unit) {
+    GoogleSignInHelper.restoreSavedSession(context)
+  }
+
   var firebaseUser by remember {
     mutableStateOf(runCatching { Firebase.auth.currentUser }.getOrNull())
   }
@@ -132,18 +137,24 @@ fun AppNavigation(
     }
   }
 
+  val signedInGoogleUid = firebaseUser?.uid ?: googleSessionUser?.uid
   val googleAccountLabel = firebaseUser?.let { user ->
+    user.displayName?.takeIf { it.isNotBlank() }
+      ?: user.email?.takeIf { it.isNotBlank() }
+      ?: "Connected"
+  } ?: googleSessionUser?.let { user ->
     user.displayName?.takeIf { it.isNotBlank() }
       ?: user.email?.takeIf { it.isNotBlank() }
       ?: "Connected"
   }
 
-  var isSessionActive by remember(firebaseUser?.uid) {
-    mutableStateOf(prefs.getBoolean(KEY_SESSION_ACTIVE, false) || firebaseUser != null)
+  var isSessionActive by remember(signedInGoogleUid) {
+    mutableStateOf(prefs.getBoolean(KEY_SESSION_ACTIVE, false) || signedInGoogleUid != null)
   }
-  var activeCallsign by remember(firebaseUser?.uid) {
+  var activeCallsign by remember(signedInGoogleUid) {
     mutableStateOf(
       firebaseUser?.displayName?.takeIf { it.length >= 2 }?.take(30)
+        ?: googleSessionUser?.displayName?.takeIf { it.length >= 2 }?.take(30)
         ?: prefs.getString(KEY_LAST_CALLSIGN, "VanguardPrime")
         ?: "VanguardPrime"
     )
@@ -152,7 +163,7 @@ fun AppNavigation(
     mutableStateOf(prefs.getString(KEY_VAULT_WALLPAPER, null))
   }
 
-  val currentUserId = firebaseUser?.uid ?: LOCAL_OPERATOR_ID
+  val currentUserId = signedInGoogleUid ?: LOCAL_OPERATOR_ID
 
   if (!isSessionActive) {
     AuthScreen(
@@ -185,6 +196,7 @@ fun AppNavigation(
         onLockSession = {
           prefs.edit { putBoolean(KEY_SESSION_ACTIVE, false) }
           GoogleSignInHelper.signOut(
+            context = context,
             credentialManager = credentialManager,
             scope = scope,
             onSignOutComplete = { isSessionActive = false },

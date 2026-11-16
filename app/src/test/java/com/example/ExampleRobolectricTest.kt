@@ -1,6 +1,7 @@
 package com.example
 
 import android.content.Context
+import android.util.Base64
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -77,5 +78,22 @@ class ExampleRobolectricTest {
 
     val shaMismatch = GoogleSignInHelper.formatAuthError(RuntimeException("[28444] Developer console is not set up correctly."))
     assertTrue(shaMismatch.contains("SHA-1"))
+  }
+
+  @Test
+  fun `google session extractor decodes JWT sub name and email cleanly`() {
+    val payload = Base64.encodeToString(
+      """{"sub":"99887766","email":"superblake@example.com","name":"Super Blake"}""".toByteArray(),
+      Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
+    )
+    val fakeJwt = "eyJhbGciOiJSUzI1NiJ9.$payload.sig"
+    val session = GoogleSignInHelper.extractGoogleSessionFromIdToken(
+      idToken = fakeJwt,
+      fallbackId = "superblake@example.com",
+      fallbackDisplayName = null,
+    )
+    assertEquals("google_99887766", session.uid)
+    assertEquals("Super Blake", session.displayName)
+    assertEquals("superblake@example.com", session.email)
   }
 }

@@ -56,6 +56,8 @@ jobs:
               cp "$FOUND_GS" app/google-services.json
             elif [ -n "$GOOGLE_SERVICES_JSON" ]; then
               printf '%s\n' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+            else
+              echo "app/google-services.json not found; APK will use Credential Manager Google Sign-In + local storage."
             fi
           fi
           if [ ! -f .env ] && [ ! -f .env.example ]; then
