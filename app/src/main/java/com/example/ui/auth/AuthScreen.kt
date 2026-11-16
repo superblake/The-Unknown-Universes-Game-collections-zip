@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -58,6 +59,7 @@ fun AuthScreen(
 ) {
   var callsign by remember(initialCallsign) { mutableStateOf(initialCallsign) }
   var validationError by remember { mutableStateOf<String?>(null) }
+  var authNotice by remember { mutableStateOf<String?>(null) }
   var isGoogleSigningIn by remember { mutableStateOf(false) }
 
   val context = LocalContext.current
@@ -201,6 +203,7 @@ fun AuthScreen(
               onValueChange = {
                 callsign = it.take(30)
                 validationError = null
+                authNotice = null
               },
               label = { Text("Operator Callsign") },
               placeholder = { Text("VanguardPrime") },
@@ -208,25 +211,12 @@ fun AuthScreen(
               modifier = Modifier.fillMaxWidth().testTag("operator_callsign_input"),
             )
 
-            if (validationError != null) {
-              Surface(
-                color = MaterialTheme.colorScheme.error.copy(alpha = 0.14f),
-                shape = RoundedCornerShape(10.dp),
-              ) {
-                Text(
-                  text = validationError!!,
-                  style = MaterialTheme.typography.bodyMedium,
-                  color = MaterialTheme.colorScheme.error,
-                  modifier = Modifier.padding(10.dp),
-                )
-              }
-            }
-
             Spacer(modifier = Modifier.height(4.dp))
 
             OutlinedButton(
               onClick = {
                 validationError = null
+                authNotice = null
                 isGoogleSigningIn = true
                 GoogleSignInHelper.onGoogleSignInClicked(
                   context = context,
@@ -245,6 +235,8 @@ fun AuthScreen(
                   scope = coroutineScope,
                   onAuthCancelled = {
                     isGoogleSigningIn = false
+                    authNotice =
+                      "Google Sign-In was dismissed or is unavailable in this environment. Tap Sign in with Google to retry, or tap Boot UnknownOS to play locally."
                   },
                 )
               },
@@ -257,13 +249,58 @@ fun AuthScreen(
             ) {
               if (isGoogleSigningIn) {
                 CircularProgressIndicator(
-                  modifier = Modifier.size(20.dp),
+                  modifier = Modifier.size(18.dp),
                   strokeWidth = 2.dp,
                 )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                  text = "Signing in with Google...",
+                  style = MaterialTheme.typography.labelLarge,
+                )
               } else {
+                Icon(
+                  imageVector = AppIcons.Shield,
+                  contentDescription = null,
+                  modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                   text = "Sign in with Google",
                   style = MaterialTheme.typography.labelLarge,
+                )
+              }
+            }
+
+            if (validationError != null) {
+              Surface(
+                color = MaterialTheme.colorScheme.error.copy(alpha = 0.14f),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .border(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                  .testTag("auth_error_banner"),
+              ) {
+                Text(
+                  text = validationError!!,
+                  style = MaterialTheme.typography.bodyMedium,
+                  color = MaterialTheme.colorScheme.error,
+                  modifier = Modifier.padding(12.dp),
+                )
+              }
+            } else if (authNotice != null) {
+              Surface(
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                  .testTag("auth_notice_banner"),
+              ) {
+                Text(
+                  text = authNotice!!,
+                  style = MaterialTheme.typography.bodyMedium,
+                  color = MaterialTheme.colorScheme.onSurface,
+                  modifier = Modifier.padding(12.dp),
                 )
               }
             }
@@ -272,6 +309,7 @@ fun AuthScreen(
               onClick = {
                 val trimmed = callsign.trim()
                 if (trimmed.length < 2) {
+                  authNotice = null
                   validationError = "Enter a callsign with at least 2 characters."
                 } else {
                   onBootLocalOperator(trimmed)

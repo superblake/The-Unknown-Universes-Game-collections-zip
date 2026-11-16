@@ -32,6 +32,10 @@ import com.example.ui.theme.AppIcons
 @Composable
 fun CrossPlatformAccountsCard(
   linkedAccounts: List<LinkedAccount>,
+  googleAccountLabel: String? = null,
+  isGoogleSigningIn: Boolean = false,
+  onSignInGoogle: (() -> Unit)? = null,
+  onSignOutGoogle: (() -> Unit)? = null,
   onUnlinkExternal: (String) -> Unit,
   onStatusMessage: (String) -> Unit,
 ) {
@@ -69,10 +73,71 @@ fun CrossPlatformAccountsCard(
       }
 
       Text(
-        text = "Local UnknownOS Profile Active. Open official iOS/Apple & Xbox portals, connect storefronts via OAuth PKCE / Steam OpenID, or manage Epic Connections.",
+        text = if (googleAccountLabel != null) {
+          "Google Account active ($googleAccountLabel). Manage linked portals, storefronts, and Epic Connections below."
+        } else {
+          "Local UnknownOS Profile Active. Sign in with Google or open official iOS/Apple, Xbox & PC store portals below."
+        },
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
       )
+
+      // Primary Google Account row
+      Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = if (googleAccountLabel != null) {
+          Color(0xFF00E676).copy(alpha = 0.12f)
+        } else {
+          MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+        },
+        modifier = Modifier
+          .fillMaxWidth()
+          .border(
+            1.dp,
+            if (googleAccountLabel != null) Color(0xFF00E676).copy(alpha = 0.45f)
+            else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+            RoundedCornerShape(12.dp),
+          ),
+      ) {
+        Row(
+          modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+          Column(modifier = Modifier.weight(1f)) {
+            Text(
+              text = "Google Account",
+              style = MaterialTheme.typography.titleMedium,
+              color = if (googleAccountLabel != null) Color(0xFF00E676) else MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+              text = googleAccountLabel?.let { "Signed in as $it" }
+                ?: "Not signed in — local device profile active",
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
+          Spacer(Modifier.width(8.dp))
+          if (googleAccountLabel != null && onSignOutGoogle != null) {
+            TextButton(
+              onClick = onSignOutGoogle,
+              colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+              modifier = Modifier.testTag("desktop_google_sign_out_btn"),
+            ) {
+              Text("Sign Out")
+            }
+          } else if (onSignInGoogle != null) {
+            OutlinedButton(
+              onClick = onSignInGoogle,
+              enabled = !isGoogleSigningIn,
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.testTag("desktop_google_sign_in_btn"),
+            ) {
+              Text(if (isGoogleSigningIn) "Signing in..." else "Sign In")
+            }
+          }
+        }
+      }
 
       // Official Console & Mobile Account Portals: Apple (iOS) & Xbox (Microsoft)
       PlatformOAuthManager.platformPortalProviders.forEach { spec ->

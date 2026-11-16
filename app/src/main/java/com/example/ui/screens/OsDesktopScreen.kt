@@ -71,6 +71,9 @@ fun OsDesktopScreen(
   rigs: List<RigAsset>,
   matchLogs: List<MatchRecord>,
   linkedAccounts: List<LinkedAccount>,
+  googleAccountLabel: String? = null,
+  isGoogleSigningIn: Boolean = false,
+  onSignInGoogle: (() -> Unit)? = null,
   activeWallpaperPath: String?,
   onSelectUniverse: (String) -> Unit,
   onSelectMode: (String) -> Unit,
@@ -603,6 +606,10 @@ fun OsDesktopScreen(
     item {
       CrossPlatformAccountsCard(
         linkedAccounts = linkedAccounts,
+        googleAccountLabel = googleAccountLabel,
+        isGoogleSigningIn = isGoogleSigningIn,
+        onSignInGoogle = onSignInGoogle,
+        onSignOutGoogle = onSignOut,
         onUnlinkExternal = onUnlinkAccount,
         onStatusMessage = onStatusMessage,
       )

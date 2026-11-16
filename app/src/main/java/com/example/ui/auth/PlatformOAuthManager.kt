@@ -1,6 +1,6 @@
 package com.example.ui.auth
 
-import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -198,11 +198,14 @@ object PlatformOAuthManager {
 
   fun openPortalUrl(context: Context, url: String): Result<Unit> {
     val intent = Intent(Intent.ACTION_VIEW, url.toUri()).apply {
+      addCategory(Intent.CATEGORY_BROWSABLE)
       addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
     return try {
       context.startActivity(intent)
       Result.success(Unit)
+    } catch (_: ActivityNotFoundException) {
+      Result.failure(IllegalStateException("No web browser installed on this device to open $url"))
     } catch (e: Exception) {
       Result.failure(e)
     }
@@ -229,11 +232,14 @@ object PlatformOAuthManager {
 
     val uri = buildAuthorizationUri(spec, state, challenge)
     val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+      addCategory(Intent.CATEGORY_BROWSABLE)
       addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
     return try {
       context.startActivity(intent)
       Result.success(Unit)
+    } catch (_: ActivityNotFoundException) {
+      Result.failure(IllegalStateException("No web browser installed on this device to open ${spec.label} sign-in."))
     } catch (e: Exception) {
       Result.failure(e)
     }

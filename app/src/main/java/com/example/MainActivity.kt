@@ -132,10 +132,16 @@ fun AppNavigation(
     }
   }
 
-  var isSessionActive by remember(firebaseUser) {
+  val googleAccountLabel = firebaseUser?.let { user ->
+    user.displayName?.takeIf { it.isNotBlank() }
+      ?: user.email?.takeIf { it.isNotBlank() }
+      ?: "Connected"
+  }
+
+  var isSessionActive by remember(firebaseUser?.uid) {
     mutableStateOf(prefs.getBoolean(KEY_SESSION_ACTIVE, false) || firebaseUser != null)
   }
-  var activeCallsign by remember(firebaseUser) {
+  var activeCallsign by remember(firebaseUser?.uid) {
     mutableStateOf(
       firebaseUser?.displayName?.takeIf { it.length >= 2 }?.take(30)
         ?: prefs.getString(KEY_LAST_CALLSIGN, "VanguardPrime")
@@ -165,6 +171,7 @@ fun AppNavigation(
       UnknownOsShell(
         currentUserId = currentUserId,
         displayName = activeCallsign,
+        googleAccountLabel = googleAccountLabel,
         activeWallpaperPath = activeWallpaperPath,
         onSetWallpaperPath = { path ->
           activeWallpaperPath = path
@@ -192,6 +199,7 @@ fun AppNavigation(
 fun UnknownOsShell(
   currentUserId: String,
   displayName: String?,
+  googleAccountLabel: String?,
   activeWallpaperPath: String?,
   onSetWallpaperPath: (String?) -> Unit,
   pendingOAuthRedirect: StateFlow<Uri?>,
@@ -199,6 +207,9 @@ fun UnknownOsShell(
   onLockSession: () -> Unit,
 ) {
   val context = LocalContext.current
+  val scope = rememberCoroutineScope()
+  val credentialManager = remember(context) { CredentialManager.create(context) }
+  var isGoogleSigningIn by remember { mutableStateOf(false) }
 
   val viewModel: UniverseViewModel = viewModel(
     key = currentUserId,
@@ -356,6 +367,28 @@ fun UnknownOsShell(
                   rigs = state.rigs,
                   matchLogs = state.matchLogs,
                   linkedAccounts = state.linkedAccounts,
+                  googleAccountLabel = googleAccountLabel,
+                  isGoogleSigningIn = isGoogleSigningIn,
+                  onSignInGoogle = {
+                    isGoogleSigningIn = true
+                    GoogleSignInHelper.onGoogleSignInClicked(
+                      context = context,
+                      credentialManager = credentialManager,
+                      onAuthSuccess = { name ->
+                        isGoogleSigningIn = false
+                        viewModel.showBanner("Signed in with Google${name?.let { " as $it" } ?: ""}")
+                      },
+                      onAuthError = { err ->
+                        isGoogleSigningIn = false
+                        viewModel.showBanner(err)
+                      },
+                      scope = scope,
+                      onAuthCancelled = {
+                        isGoogleSigningIn = false
+                        viewModel.showBanner("Google Sign-In was cancelled or unavailable.")
+                      },
+                    )
+                  },
                   activeWallpaperPath = activeWallpaperPath,
                   onSelectUniverse = viewModel::selectUniverse,
                   onSelectMode = viewModel::selectMode,

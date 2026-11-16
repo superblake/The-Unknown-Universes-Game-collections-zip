@@ -5,11 +5,18 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextReplacement
+import androidx.credentials.exceptions.GetCredentialProviderConfigurationException
+import androidx.credentials.exceptions.GetCredentialUnsupportedException
+import androidx.credentials.exceptions.NoCredentialException
 import androidx.test.core.app.ApplicationProvider
 import com.example.ui.auth.AuthScreen
+import com.example.ui.auth.GoogleSignInHelper
 import com.example.ui.theme.UnknownUniversesTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -43,5 +50,32 @@ class ExampleRobolectricTest {
     composeRule.onNodeWithTag("google_sign_in_button").performScrollTo().assertIsDisplayed()
     composeRule.onNodeWithText("Sign in with Google").assertIsDisplayed()
     composeRule.onNodeWithTag("boot_unknownos_button").performScrollTo().assertIsDisplayed()
+  }
+
+  @Test
+  fun `auth screen shows error banner next to buttons when callsign is too short`() {
+    composeRule.setContent {
+      UnknownUniversesTheme(darkTheme = true) {
+        AuthScreen(onBootLocalOperator = {})
+      }
+    }
+    composeRule.onNodeWithTag("operator_callsign_input").performScrollTo().performTextReplacement("X")
+    composeRule.onNodeWithTag("boot_unknownos_button").performScrollTo().performClick()
+    composeRule.onNodeWithTag("auth_error_banner").performScrollTo().assertIsDisplayed()
+  }
+
+  @Test
+  fun `google sign in error formatter gives actionable guidance for common failures`() {
+    val noCred = GoogleSignInHelper.formatAuthError(NoCredentialException("No credential"))
+    assertTrue(noCred.contains("Boot UnknownOS"))
+
+    val providerErr = GoogleSignInHelper.formatAuthError(GetCredentialProviderConfigurationException("Provider missing"))
+    assertTrue(providerErr.contains("Play Services"))
+
+    val unsupported = GoogleSignInHelper.formatAuthError(GetCredentialUnsupportedException("Unsupported"))
+    assertTrue(unsupported.contains("Boot UnknownOS"))
+
+    val shaMismatch = GoogleSignInHelper.formatAuthError(RuntimeException("[28444] Developer console is not set up correctly."))
+    assertTrue(shaMismatch.contains("SHA-1"))
   }
 }
