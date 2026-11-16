@@ -6,10 +6,8 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -258,19 +256,6 @@ fun UnknownOsShell(
     viewModel.showBanner("Google Sign-In was cancelled.")
   }
 
-  val legacyGoogleSignInLauncher = rememberLauncherForActivityResult(
-    contract = ActivityResultContracts.StartActivityForResult()
-  ) { activityResult ->
-    GoogleSignInHelper.handleLegacyGoogleSignInResult(
-      context = context,
-      data = activityResult.data,
-      scope = scope,
-      onAuthSuccess = handleDesktopGoogleSuccess,
-      onAuthError = handleDesktopGoogleError,
-      onAuthCancelled = handleDesktopGoogleCancelled,
-    )
-  }
-
   LaunchedEffect(oauthRedirectUri) {
     val uri = oauthRedirectUri ?: return@LaunchedEffect
     onConsumeRedirect()
@@ -418,13 +403,6 @@ fun UnknownOsShell(
                       onAuthError = handleDesktopGoogleError,
                       scope = scope,
                       onAuthCancelled = handleDesktopGoogleCancelled,
-                      onLaunchLegacySignIn = { intent ->
-                        try {
-                          legacyGoogleSignInLauncher.launch(intent)
-                        } catch (e: Exception) {
-                          handleDesktopGoogleError(GoogleSignInHelper.formatAuthError(e, context))
-                        }
-                      },
                     )
                   },
                   activeWallpaperPath = activeWallpaperPath,

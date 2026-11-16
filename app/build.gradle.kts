@@ -28,8 +28,8 @@ android {
     applicationId = "com.unknownuniverses.os"
     minSdk = 24
     targetSdk = 36
-    versionCode = 6
-    versionName = "4.2"
+    versionCode = 8
+    versionName = "4.4"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -139,7 +139,7 @@ dependencies {
   implementation(libs.androidx.credentials)
   implementation(libs.androidx.credentials.play.services)
   implementation(libs.googleid)
-  implementation(libs.play.services.auth)
+  // implementation(libs.play.services.auth)
   // implementation(libs.firebase.appcheck.recaptcha)
   // implementation(libs.firebase.appcheck.debug)
   implementation(libs.kotlinx.coroutines.android)

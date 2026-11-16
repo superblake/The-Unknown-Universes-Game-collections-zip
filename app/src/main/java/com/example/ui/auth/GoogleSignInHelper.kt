@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.SystemClock
@@ -24,12 +23,7 @@ import androidx.credentials.exceptions.GetCredentialProviderConfigurationExcepti
 import androidx.credentials.exceptions.GetCredentialUnknownException
 import androidx.credentials.exceptions.GetCredentialUnsupportedException
 import androidx.credentials.exceptions.NoCredentialException
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.ConnectionResult
-import com.google.android.gms.common.GoogleApiAvailability
 import com.google.android.gms.common.api.ApiException
-import com.google.android.gms.common.api.CommonStatusCodes
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
@@ -220,60 +214,6 @@ object GoogleSignInHelper {
     return directSession.displayName
   }
 
-  @Suppress("DEPRECATION")
-  fun buildLegacyGoogleSignInIntent(context: Context): Intent {
-    val clientId = resolveDefaultWebClientId(context)
-    val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-      .requestIdToken(clientId)
-      .requestEmail()
-      .build()
-    return GoogleSignIn.getClient(context, gso).signInIntent
-  }
-
-  @Suppress("DEPRECATION")
-  fun handleLegacyGoogleSignInResult(
-    context: Context,
-    data: Intent?,
-    scope: CoroutineScope,
-    onAuthSuccess: (displayName: String?) -> Unit,
-    onAuthError: (String) -> Unit,
-    onAuthCancelled: () -> Unit,
-  ) {
-    scope.launch {
-      try {
-        val task = GoogleSignIn.getSignedInAccountFromIntent(data)
-        val account = task.getResult(ApiException::class.java)
-        val idToken = account.idToken
-        if (idToken.isNullOrBlank()) {
-          onAuthError(
-            formatAuthError(
-              IllegalStateException("Google account returned without ID token (client ID or SHA-1 mismatch)."),
-              context,
-            )
-          )
-          return@launch
-        }
-        val name = completeSignInWithIdToken(
-          context = context,
-          idToken = idToken,
-          fallbackId = account.email ?: account.id ?: "google_user",
-          fallbackDisplayName = account.displayName,
-        )
-        onAuthSuccess(name)
-      } catch (e: ApiException) {
-        Log.w("Auth", "Legacy GoogleSignIn ApiException status=${e.statusCode}: ${e.message}", e)
-        if (e.statusCode == CommonStatusCodes.CANCELED) {
-          onAuthCancelled()
-        } else {
-          onAuthError(formatAuthError(e, context))
-        }
-      } catch (e: Exception) {
-        Log.e("Auth", "Legacy GoogleSignIn failed", e)
-        onAuthError(formatAuthError(e, context))
-      }
-    }
-  }
-
   fun attemptAutoSignIn(
     context: Context,
     credentialManager: CredentialManager,
@@ -333,7 +273,6 @@ object GoogleSignInHelper {
     onAuthError: (String) -> Unit,
     scope: CoroutineScope,
     onAuthCancelled: () -> Unit = {},
-    onLaunchLegacySignIn: ((Intent) -> Unit)? = null,
   ) {
     val clientId = resolveDefaultWebClientId(context)
     val hostContext = context.findActivity() ?: context
@@ -341,7 +280,6 @@ object GoogleSignInHelper {
     val primaryRequest = GetCredentialRequest.Builder().addCredentialOption(signInOption).build()
 
     scope.launch {
-      val startedAtMs = SystemClock.elapsedRealtime()
       try {
         val result = requestInteractiveCredential(
           hostContext = hostContext,
@@ -363,32 +301,14 @@ object GoogleSignInHelper {
           onAuthError("Unexpected credential type returned by Google Sign-In.")
         }
       } catch (e: GetCredentialCancellationException) {
-        val elapsedMs = SystemClock.elapsedRealtime() - startedAtMs
-        Log.w("Auth", "Google Sign-In flow cancelled/dismissed in ${elapsedMs}ms: ${e.message}", e)
+        Log.w("Auth", "Google Sign-In flow cancelled/dismissed: ${e.message}", e)
         if (isConfigurationMismatchMessage(e.message) || hasRegisteredSignature(context) == false) {
           onAuthError(formatAuthError(e, context))
-        } else if (onLaunchLegacySignIn != null && elapsedMs < 1200L) {
-          Log.w("Auth", "Fast cancellation (${elapsedMs}ms); falling back to GoogleSignInClient intent")
-          onLaunchLegacySignIn(buildLegacyGoogleSignInIntent(hostContext))
         } else {
           onAuthCancelled()
         }
       } catch (e: GetCredentialException) {
         Log.w("Auth", "CredentialManager failed (${e::class.simpleName}): ${e.message}", e)
-        val shouldTryLegacy =
-          e is GetCredentialProviderConfigurationException ||
-            e is GetCredentialUnsupportedException ||
-            e is GetCredentialUnknownException ||
-            e is NoCredentialException
-        if (shouldTryLegacy && onLaunchLegacySignIn != null) {
-          val playStatus = runCatching {
-            GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(hostContext)
-          }.getOrDefault(ConnectionResult.SUCCESS)
-          if (playStatus == ConnectionResult.SUCCESS) {
-            onLaunchLegacySignIn(buildLegacyGoogleSignInIntent(hostContext))
-            return@launch
-          }
-        }
         onAuthError(formatAuthError(e, context))
       } catch (e: Exception) {
         Log.e("Auth", "Google Sign-In failed", e)
@@ -470,7 +390,6 @@ object GoogleSignInHelper {
     }
   }
 
-  @Suppress("DEPRECATION")
   fun signOut(
     context: Context,
     credentialManager: CredentialManager,
@@ -484,10 +403,6 @@ object GoogleSignInHelper {
           credentialManager.clearCredentialState(ClearCredentialStateRequest())
         } catch (e: Exception) {
           Log.w("Auth", "Failed to clear credential state: ${e.message}")
-        }
-        runCatching {
-          val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build()
-          GoogleSignIn.getClient(context, gso).signOut().await()
         }
         if (isFirebaseReady(context)) {
           runCatching { Firebase.auth.signOut() }

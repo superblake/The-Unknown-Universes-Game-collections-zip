@@ -1,7 +1,5 @@
 package com.example.ui.auth
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -85,19 +83,6 @@ fun AuthScreen(
     isGoogleSigningIn = false
     authNotice =
       "Google Sign-In was cancelled. Tap Sign in with Google to retry, or tap Boot UnknownOS to play locally."
-  }
-
-  val legacyGoogleSignInLauncher = rememberLauncherForActivityResult(
-    contract = ActivityResultContracts.StartActivityForResult()
-  ) { activityResult ->
-    GoogleSignInHelper.handleLegacyGoogleSignInResult(
-      context = context,
-      data = activityResult.data,
-      scope = coroutineScope,
-      onAuthSuccess = handleGoogleSignInSuccess,
-      onAuthError = handleGoogleSignInError,
-      onAuthCancelled = handleGoogleSignInCancelled,
-    )
   }
 
   LaunchedEffect(Unit) {
@@ -259,13 +244,6 @@ fun AuthScreen(
                   onAuthError = handleGoogleSignInError,
                   scope = coroutineScope,
                   onAuthCancelled = handleGoogleSignInCancelled,
-                  onLaunchLegacySignIn = { intent ->
-                    try {
-                      legacyGoogleSignInLauncher.launch(intent)
-                    } catch (e: Exception) {
-                      handleGoogleSignInError(GoogleSignInHelper.formatAuthError(e, context))
-                    }
-                  },
                 )
               },
               enabled = !isGoogleSigningIn,
