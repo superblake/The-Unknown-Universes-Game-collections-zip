@@ -46,8 +46,11 @@ jobs:
             "$SDKMANAGER" --install "platform-tools" "build-tools;36.0.0" "platforms;android-36.1" || true
           fi
 
-      - name: Prepare signing keystore and Gradle wrapper
+      - name: Prepare signing keystore, secrets config, and Gradle wrapper
         run: |
+          if [ ! -f .env ] && [ ! -f .env.example ]; then
+            touch .env.example
+          fi
           if [ ! -f debug.keystore ]; then
             if [ -f debug.keystore.base64 ]; then
               tr -d '\r\n ' < debug.keystore.base64 | base64 -d > debug.keystore
