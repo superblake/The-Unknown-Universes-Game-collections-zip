@@ -12,4 +12,9 @@
     <string name="save_rig_cloud">Save &amp; Finish Rig</string>
     <string name="export_html_btn">Download Playable .HTML (iOS / Console / PC)</string>
     <string name="export_blender_btn">Download Blender Rig Script (.PY)</string>
+    <string name="sync_now_btn">Sync Now</string>
+    <string name="export_save_btn">Save Data (.JSON)</string>
+    <string name="share_save_btn">Share Save</string>
+    <string name="import_save_btn">Import (.JSON)</string>
+    <string name="paste_save_btn">Paste JSON</string>
 </resources>

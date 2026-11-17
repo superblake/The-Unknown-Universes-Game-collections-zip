@@ -238,10 +238,12 @@ fun UnknownOsShell(
   )
 
   val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+  val cloudSyncState by viewModel.cloudSyncState.collectAsStateWithLifecycle()
   val activeTab by viewModel.activeTab.collectAsStateWithLifecycle()
   val statusBanner by viewModel.statusBanner.collectAsStateWithLifecycle()
   val oauthRedirectUri by pendingOAuthRedirect.collectAsStateWithLifecycle()
   val snackbarHostState = remember { SnackbarHostState() }
+  val isCloudSignedIn = runCatching { Firebase.auth.currentUser?.uid == currentUserId }.getOrDefault(false)
 
   val handleDesktopGoogleSuccess: (String?) -> Unit = { name ->
     isGoogleSigningIn = false
@@ -392,6 +394,8 @@ fun UnknownOsShell(
                   rigs = state.rigs,
                   matchLogs = state.matchLogs,
                   linkedAccounts = state.linkedAccounts,
+                  cloudSyncState = cloudSyncState,
+                  isCloudSignedIn = isCloudSignedIn,
                   googleAccountLabel = googleAccountLabel,
                   isGoogleSigningIn = isGoogleSigningIn,
                   onSignInGoogle = {
@@ -405,6 +409,10 @@ fun UnknownOsShell(
                       onAuthCancelled = handleDesktopGoogleCancelled,
                     )
                   },
+                  onSyncNow = viewModel::syncNow,
+                  onRequestSaveExportJson = viewModel::exportSaveJson,
+                  onParseSaveJson = viewModel::parseSavePreview,
+                  onConfirmSaveImport = viewModel::importSavePreview,
                   activeWallpaperPath = activeWallpaperPath,
                   onSelectUniverse = viewModel::selectUniverse,
                   onSelectMode = viewModel::selectMode,
@@ -467,6 +475,12 @@ fun UnknownOsShell(
                   profile = state.profile,
                   armory = state.armory,
                   rigs = state.rigs,
+                  cloudSyncState = cloudSyncState,
+                  isCloudSignedIn = isCloudSignedIn,
+                  onSyncNow = viewModel::syncNow,
+                  onRequestSaveExportJson = viewModel::exportSaveJson,
+                  onParseSaveJson = viewModel::parseSavePreview,
+                  onConfirmSaveImport = viewModel::importSavePreview,
                   onSelectConsolePreset = viewModel::selectConsolePreset,
                   onStatusMessage = viewModel::showBanner,
                 )

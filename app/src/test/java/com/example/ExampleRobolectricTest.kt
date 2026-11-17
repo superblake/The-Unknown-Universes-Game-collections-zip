@@ -104,4 +104,28 @@ class ExampleRobolectricTest {
     assertEquals("Super Blake", session.displayName)
     assertEquals("superblake@example.com", session.email)
   }
+
+  @Test
+  fun `cloud sync and save transfer card renders sync and export import actions`() {
+    composeRule.setContent {
+      UnknownUniversesTheme(darkTheme = true) {
+        com.example.ui.screens.CloudSyncAndSaveCard(
+          callsign = "SuperBlake",
+          cloudSyncState = com.example.data.local.CloudSyncState.Synced(1234L),
+          isCloudSignedIn = true,
+          onSyncNow = {},
+          onRequestSaveExportJson = {},
+          onParseSaveJson = { Result.failure(IllegalStateException("none")) },
+          onConfirmSaveImport = { _, _ -> },
+          onStatusMessage = {},
+        )
+      }
+    }
+    composeRule.onNodeWithText("CLOUD SYNCED").assertIsDisplayed()
+    composeRule.onNodeWithTag("cloud_sync_now_btn").assertIsDisplayed()
+    composeRule.onNodeWithTag("export_save_file_btn").assertIsDisplayed()
+    composeRule.onNodeWithTag("share_save_text_btn").assertIsDisplayed()
+    composeRule.onNodeWithTag("import_save_file_btn").assertIsDisplayed()
+    composeRule.onNodeWithTag("paste_save_json_btn").assertIsDisplayed()
+  }
 }

@@ -3,6 +3,9 @@ package com.example.ui
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.local.CloudSyncState
+import com.example.data.local.SaveBundlePreview
+import com.example.data.local.SaveDataSerializer
 import com.example.data.local.UniverseRepository
 import com.example.data.model.ArmoryItem
 import com.example.data.model.LinkedAccount
@@ -10,12 +13,16 @@ import com.example.data.model.MatchRecord
 import com.example.data.model.OperatorProfile
 import com.example.data.model.RigAsset
 import com.example.data.model.UniverseCatalog
+import com.example.data.remote.extractFirestoreRootError
+import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -53,12 +60,39 @@ class UniverseViewModel(
   private val _statusBanner = MutableStateFlow<String?>(null)
   val statusBanner: StateFlow<String?> = _statusBanner.asStateFlow()
 
+  val cloudSyncState: StateFlow<CloudSyncState> = repository.cloudSyncState
+
+  private var cloudListenerJob: Job? = null
+
   init {
     viewModelScope.launch {
       val initRes = repository.ensureStarterData(currentUserId, defaultDisplayName)
       if (initRes.isFailure) {
         _statusBanner.value = initRes.exceptionOrNull()?.localizedMessage ?: "Local storage warning"
       }
+      if (repository.isCloudSyncAvailableFor(currentUserId)) {
+        val syncRes = repository.syncWithCloud(currentUserId, defaultDisplayName)
+        if (syncRes.isFailure) {
+          Log.w(TAG, "Initial cloud sync failed", syncRes.exceptionOrNull())
+        }
+        startCloudListener()
+      }
+    }
+  }
+
+  private fun startCloudListener() {
+    if (cloudListenerJob?.isActive == true) return
+    cloudListenerJob = viewModelScope.launch {
+      repository.observeCloudChanges(currentUserId)
+        .catch { error ->
+          val firestoreError = generateSequence(error) { it.cause }
+            .filterIsInstance<FirebaseFirestoreException>()
+            .firstOrNull()
+          if (firestoreError == null && error is CancellationException) throw error
+          val rootError = extractFirestoreRootError(error)
+          Log.w(TAG, "Cloud snapshot listener warning", rootError)
+        }
+        .collect()
     }
   }
 
@@ -103,6 +137,47 @@ class UniverseViewModel(
 
   fun showBanner(message: String) {
     _statusBanner.value = message
+  }
+
+  fun syncNow() {
+    viewModelScope.launch {
+      val res = repository.syncWithCloud(currentUserId, defaultDisplayName)
+      if (res.isSuccess) {
+        startCloudListener()
+        _statusBanner.value = res.getOrThrow()
+      } else {
+        _statusBanner.value = res.exceptionOrNull()?.localizedMessage ?: "Cloud Sync unavailable"
+      }
+    }
+  }
+
+  fun exportSaveJson(onReady: (String) -> Unit) {
+    viewModelScope.launch {
+      val res = repository.exportSaveDataJson(currentUserId)
+      if (res.isSuccess) {
+        onReady(res.getOrThrow())
+      } else {
+        _statusBanner.value = res.exceptionOrNull()?.localizedMessage ?: "Could not export save data"
+      }
+    }
+  }
+
+  fun parseSavePreview(rawJson: String): Result<SaveBundlePreview> =
+    SaveDataSerializer.parseAndValidateSaveJson(rawJson, currentUserId)
+
+  fun importSavePreview(preview: SaveBundlePreview, replaceExisting: Boolean) {
+    viewModelScope.launch {
+      val res = repository.importSaveBundle(
+        userId = currentUserId,
+        bundle = preview.bundle,
+        replaceExisting = replaceExisting,
+      )
+      _statusBanner.value = if (res.isSuccess) {
+        res.getOrThrow()
+      } else {
+        res.exceptionOrNull()?.localizedMessage ?: "Save import failed"
+      }
+    }
   }
 
   fun selectUniverse(universeId: String) {
@@ -250,7 +325,8 @@ class UniverseViewModel(
       if (res.isSuccess) {
         val savedId = res.getOrThrow()
         repository.updateProfileSelection(userId = currentUserId, activeRigId = savedId)
-        _statusBanner.value = "Saved rig '$name' ($activeClip) locally"
+        val cloudSuffix = if (repository.isCloudSyncAvailableFor(currentUserId)) " & synced to Cloud" else " locally"
+        _statusBanner.value = "Saved rig '$name' ($activeClip)$cloudSuffix"
       } else {
         _statusBanner.value = res.exceptionOrNull()?.localizedMessage ?: "Rig save failed"
       }
@@ -284,7 +360,8 @@ class UniverseViewModel(
         )
       _statusBanner.value =
         if (res.isSuccess) {
-          "Match saved! +$essenceEarned Essence earned"
+          val suffix = if (repository.isCloudSyncAvailableFor(currentUserId)) " & synced to Cloud" else ""
+          "Match saved! +$essenceEarned Essence earned$suffix"
         } else {
           res.exceptionOrNull()?.localizedMessage ?: "Failed to save match"
         }

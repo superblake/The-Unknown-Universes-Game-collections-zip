@@ -36,10 +36,13 @@ data class ExternalOAuthProviderSpec(
   val accentHex: Long,
   private val configValueProvider: () -> String,
 ) {
-  fun configuredValue(): String = configValueProvider().trim()
+  fun configuredValue(context: Context? = null): String {
+    val runtimeVal = context?.let { PlatformOAuthManager.getRuntimeClientId(it, id) }.orEmpty()
+    return if (runtimeVal.isNotBlank()) runtimeVal.trim() else configValueProvider().trim()
+  }
 
-  fun isConfigured(): Boolean {
-    val v = configuredValue()
+  fun isConfigured(context: Context? = null): Boolean {
+    val v = configuredValue(context)
     return v.isNotEmpty() && !v.startsWith("MY_")
   }
 
@@ -51,13 +54,7 @@ data class PlatformPortalSpec(
   val label: String,
   val platformNote: String,
   val portalUrl: String,
-  val accentHex: Long,
-)
-
-data class EpicBridgedPlatformSpec(
-  val providerId: String,
-  val label: String,
-  val epicKey: String,
+  val handleHint: String,
   val accentHex: Long,
 )
 
@@ -78,8 +75,14 @@ sealed interface OAuthCallbackResult {
   data class Failed(val message: String) : OAuthCallbackResult
 }
 
+data class SteamResolvedProfile(
+  val steamId64: String,
+  val personaName: String,
+)
+
 object PlatformOAuthManager {
   private const val PREFS_NAME = "unknown_os_oauth_pending"
+  private const val CLIENT_OVERRIDES_PREFS = "unknown_os_oauth_clients"
   private const val KEY_STATE = "pending_state"
   private const val KEY_VERIFIER = "pending_verifier"
   private const val KEY_PROVIDER = "pending_provider"
@@ -87,17 +90,19 @@ object PlatformOAuthManager {
 
   val platformPortalProviders: List<PlatformPortalSpec> = listOf(
     PlatformPortalSpec(
-      providerId = "apple.com",
+      providerId = "apple",
       label = "Apple / iOS",
-      platformNote = "Sign in via Apple ID portal for iOS Safari builds",
+      platformNote = "Sign in via Apple Account portal for iOS Safari & Apple bindings",
       portalUrl = "https://account.apple.com/",
+      handleHint = "Apple ID / Game Center nickname",
       accentHex = 0xFFE2E8F0,
     ),
     PlatformPortalSpec(
-      providerId = "microsoft.com",
+      providerId = "xbox",
       label = "Xbox / Microsoft",
       platformNote = "Sign in via Xbox Live / Microsoft account portal",
       portalUrl = "https://account.xbox.com/",
+      handleHint = "Xbox Gamertag (e.g. Operator#1234)",
       accentHex = 0xFF107C10,
     ),
   )
@@ -184,14 +189,47 @@ object PlatformOAuthManager {
   )
 
   /**
-   * Platforms supported directly inside Epic Games Account Connections & Epic Account Services
-   * (PSN, Nintendo, Ubisoft, Xbox, Steam, Apple) without requiring console/publisher devkit portals.
+   * Console & publisher accounts linkable both via Epic Connections AND directly via their official web portals.
    */
-  val epicBridgedPlatforms: List<EpicBridgedPlatformSpec> = listOf(
-    EpicBridgedPlatformSpec("psn", "PlayStation Network (PS5 / PS4 / PS3)", "psn", 0xFF2979FF),
-    EpicBridgedPlatformSpec("nintendo", "Nintendo Account (Switch / Legacy)", "nintendo", 0xFFFF3D71),
-    EpicBridgedPlatformSpec("ubisoft", "Ubisoft Connect", "ubisoft", 0xFF7C4DFF),
+  val epicBridgedPlatforms: List<PlatformPortalSpec> = listOf(
+    PlatformPortalSpec(
+      providerId = "psn",
+      label = "PlayStation Network (PS5 / PS4 / PS3)",
+      platformNote = "Link via PlayStation sign-in portal or Epic Connections",
+      portalUrl = "https://www.playstation.com/acct/management",
+      handleHint = "PSN Online ID",
+      accentHex = 0xFF2979FF,
+    ),
+    PlatformPortalSpec(
+      providerId = "nintendo",
+      label = "Nintendo Account (Switch / Legacy)",
+      platformNote = "Link via Nintendo Account portal or Epic Connections",
+      portalUrl = "https://accounts.nintendo.com/",
+      handleHint = "Nintendo Nickname or SW-Friend Code",
+      accentHex = 0xFFFF3D71,
+    ),
+    PlatformPortalSpec(
+      providerId = "ubisoft",
+      label = "Ubisoft Connect",
+      platformNote = "Link via Ubisoft Account portal or Epic Connections",
+      portalUrl = "https://account.ubisoft.com/",
+      handleHint = "Ubisoft Username",
+      accentHex = 0xFF7C4DFF,
+    ),
   )
+
+  fun getRuntimeClientId(context: Context, providerId: String): String =
+    context.getSharedPreferences(CLIENT_OVERRIDES_PREFS, Context.MODE_PRIVATE)
+      .getString("client_$providerId", null)
+      .orEmpty()
+
+  fun saveRuntimeClientId(context: Context, providerId: String, clientId: String) {
+    context.getSharedPreferences(CLIENT_OVERRIDES_PREFS, Context.MODE_PRIVATE).edit {
+      val trimmed = clientId.trim()
+      if (trimmed.isEmpty()) remove("client_$providerId")
+      else putString("client_$providerId", trimmed)
+    }
+  }
 
   fun openEpicConnectionsPortal(context: Context): Result<Unit> =
     openPortalUrl(context, EPIC_CONNECTIONS_URL)
@@ -215,10 +253,8 @@ object PlatformOAuthManager {
     context: Context,
     spec: ExternalOAuthProviderSpec,
   ): Result<Unit> {
-    if (!spec.isConfigured()) {
-      return Result.failure(
-        IllegalStateException("Configure ${spec.secretKeyName} in the AI Studio Secrets panel first.")
-      )
+    if (!spec.isConfigured(context)) {
+      return openPortalUrl(context, spec.portalUrl)
     }
     val state = generateRandomUrlSafeToken(24)
     val verifier = generateRandomUrlSafeToken(48)
@@ -230,7 +266,7 @@ object PlatformOAuthManager {
       putString(KEY_PROVIDER, spec.id)
     }
 
-    val uri = buildAuthorizationUri(spec, state, challenge)
+    val uri = buildAuthorizationUri(spec, state, challenge, context)
     val intent = Intent(Intent.ACTION_VIEW, uri).apply {
       addCategory(Intent.CATEGORY_BROWSABLE)
       addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -249,15 +285,16 @@ object PlatformOAuthManager {
     spec: ExternalOAuthProviderSpec,
     state: String,
     codeChallenge: String,
+    context: Context? = null,
   ): Uri {
+    val configVal = spec.configuredValue(context)
     if (spec.protocol == OAuthProtocol.STEAM_OPENID_2) {
-      val returnUrl = spec.configuredValue()
-      val parsedReturn = returnUrl.toUri()
+      val parsedReturn = configVal.toUri()
       val realm = "${parsedReturn.scheme}://${parsedReturn.authority}"
       return spec.authEndpoint.toUri().buildUpon()
         .appendQueryParameter("openid.ns", "http://specs.openid.net/auth/2.0")
         .appendQueryParameter("openid.mode", "checkid_setup")
-        .appendQueryParameter("openid.return_to", returnUrl)
+        .appendQueryParameter("openid.return_to", configVal)
         .appendQueryParameter("openid.realm", realm)
         .appendQueryParameter("openid.identity", "http://specs.openid.net/auth/2.0/identifier_select")
         .appendQueryParameter("openid.claimed_id", "http://specs.openid.net/auth/2.0/identifier_select")
@@ -266,7 +303,7 @@ object PlatformOAuthManager {
 
     val builder = spec.authEndpoint.toUri().buildUpon()
       .appendQueryParameter("response_type", "code")
-      .appendQueryParameter("client_id", spec.configuredValue())
+      .appendQueryParameter("client_id", configVal)
       .appendQueryParameter("redirect_uri", spec.redirectUri())
       .appendQueryParameter("state", state)
       .appendQueryParameter("code_challenge", codeChallenge)
@@ -290,25 +327,95 @@ object PlatformOAuthManager {
     val expectedProvider = prefs.getString(KEY_PROVIDER, null)
 
     if (spec.protocol == OAuthProtocol.STEAM_OPENID_2) {
+      prefs.edit { clear() }
       return verifySteamOpenIdCallback(spec, uri)
     }
 
     val error = uri.getQueryParameter("error")
     if (!error.isNullOrBlank()) {
+      prefs.edit { clear() }
       val desc = uri.getQueryParameter("error_description") ?: error
       return OAuthCallbackResult.Failed("${spec.label} sign-in cancelled or denied: $desc")
     }
 
     val returnedState = uri.getQueryParameter("state")
     if (expectedProvider != providerId || expectedState.isNullOrBlank() || returnedState != expectedState || verifier.isNullOrBlank()) {
+      prefs.edit { clear() }
       return OAuthCallbackResult.Failed("OAuth state verification failed for ${spec.label}.")
     }
 
     val code = uri.getQueryParameter("code")
-      ?: return OAuthCallbackResult.Failed("Missing authorization code from ${spec.label}.")
+      ?: run {
+        prefs.edit { clear() }
+        return OAuthCallbackResult.Failed("Missing authorization code from ${spec.label}.")
+      }
 
     prefs.edit { clear() }
-    return exchangePkceCode(spec, code, verifier)
+    return exchangePkceCode(context, spec, code, verifier)
+  }
+
+  /**
+   * Resolves a real Steam account directly from Steam Community XML (`?xml=1`) using a Steam URL,
+   * Steam Vanity ID, or 17-digit SteamID64, requiring no Steam Web API key.
+   */
+  suspend fun resolveSteamProfile(input: String): Result<SteamResolvedProfile> = withContext(Dispatchers.IO) {
+    val xmlUrl = buildSteamXmlUrl(input)
+      ?: return@withContext Result.failure(
+        IllegalArgumentException("Enter a Steam Vanity ID, 17-digit SteamID64, or steamcommunity.com URL.")
+      )
+    try {
+      val conn = (URL(xmlUrl).openConnection() as HttpURLConnection).apply {
+        requestMethod = "GET"
+        connectTimeout = 10_000
+        readTimeout = 10_000
+        setRequestProperty("Accept", "application/xml, text/xml")
+      }
+      val code = conn.responseCode
+      val xml = (if (code in 200..299) conn.inputStream else conn.errorStream)
+        ?.bufferedReader()?.use { it.readText() }.orEmpty()
+      if (code !in 200..299 || xml.contains("<error>")) {
+        return@withContext Result.failure(
+          IllegalStateException("Steam profile not found or unreachable (HTTP $code).")
+        )
+      }
+      val steamId64 = extractXmlTag(xml, "steamID64")
+        ?.takeIf { it.all(Char::isDigit) && it.length >= 15 }
+        ?: return@withContext Result.failure(IllegalStateException("Steam profile did not return a valid SteamID64."))
+      val persona = extractXmlTag(xml, "steamID")
+        ?.ifBlank { "Steam #$steamId64" }
+        ?: "Steam #$steamId64"
+      Result.success(SteamResolvedProfile(steamId64 = steamId64, personaName = persona.take(64)))
+    } catch (e: Exception) {
+      Result.failure(IllegalStateException("Unable to verify Steam profile: ${e.localizedMessage}"))
+    }
+  }
+
+  internal fun buildSteamXmlUrl(rawInput: String): String? {
+    val trimmed = rawInput.trim().trimEnd('/')
+    if (trimmed.isEmpty()) return null
+    val cleanPath = trimmed
+      .removePrefix("https://")
+      .removePrefix("http://")
+    return when {
+      cleanPath.startsWith("steamcommunity.com/profiles/") -> {
+        val id = cleanPath.removePrefix("steamcommunity.com/profiles/").substringBefore("/").substringBefore("?")
+        if (id.isNotBlank()) "https://steamcommunity.com/profiles/$id/?xml=1" else null
+      }
+      cleanPath.startsWith("steamcommunity.com/id/") -> {
+        val vanity = cleanPath.removePrefix("steamcommunity.com/id/").substringBefore("/").substringBefore("?")
+        if (vanity.isNotBlank()) "https://steamcommunity.com/id/${URLEncoder.encode(vanity, "UTF-8")}/?xml=1" else null
+      }
+      trimmed.all(Char::isDigit) && trimmed.length >= 15 ->
+        "https://steamcommunity.com/profiles/$trimmed/?xml=1"
+      trimmed.matches(Regex("^[a-zA-Z0-9_\\-\\.]{2,64}$")) ->
+        "https://steamcommunity.com/id/${URLEncoder.encode(trimmed, "UTF-8")}/?xml=1"
+      else -> null
+    }
+  }
+
+  internal fun extractXmlTag(xml: String, tag: String): String? {
+    val regex = Regex("<$tag>(?:<!\\[CDATA\\[)?(.*?)(?:]]>)?<\\/$tag>", RegexOption.DOT_MATCHES_ALL)
+    return regex.find(xml)?.groupValues?.getOrNull(1)?.trim()
   }
 
   private suspend fun verifySteamOpenIdCallback(
@@ -336,9 +443,10 @@ object PlatformOAuthManager {
       if (!body.contains("is_valid:true")) {
         return@withContext OAuthCallbackResult.Failed("Steam OpenID signature verification failed.")
       }
+      val resolvedName = resolveSteamProfile(steamId).getOrNull()?.personaName ?: "Steam #$steamId"
       OAuthCallbackResult.Linked(
         providerId = spec.id,
-        displayName = "Steam #$steamId",
+        displayName = resolvedName,
         externalSubject = steamId,
       )
     } catch (e: Exception) {
@@ -347,6 +455,7 @@ object PlatformOAuthManager {
   }
 
   private suspend fun exchangePkceCode(
+    context: Context,
     spec: ExternalOAuthProviderSpec,
     code: String,
     verifier: String,
@@ -357,7 +466,7 @@ object PlatformOAuthManager {
         params = mapOf(
           "grant_type" to "authorization_code",
           "code" to code,
-          "client_id" to spec.configuredValue(),
+          "client_id" to spec.configuredValue(context),
           "redirect_uri" to spec.redirectUri(),
           "code_verifier" to verifier,
         ),

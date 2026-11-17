@@ -1,21 +1,57 @@
 package com.example.data.local
 
 import android.content.Context
+import com.example.R
 import com.example.data.model.ArmoryItem
 import com.example.data.model.LinkedAccount
 import com.example.data.model.MatchRecord
 import com.example.data.model.OperatorProfile
 import com.example.data.model.RigAsset
 import com.example.data.model.UniverseCatalog
+import com.example.data.remote.FirestoreSyncCodec
+import com.example.data.remote.UniverseCloudSync
+import com.google.firebase.Firebase
+import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.auth
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.onEach
 import java.util.UUID
 
-class UniverseRepository(private val dao: UniverseDao) {
+sealed interface CloudSyncState {
+  data object LocalOnly : CloudSyncState
+  data object Syncing : CloudSyncState
+  data class Synced(val lastSyncedMillis: Long) : CloudSyncState
+  data class Error(val message: String) : CloudSyncState
+}
+
+class UniverseRepository(
+  private val dao: UniverseDao,
+  firestore: FirebaseFirestore? = null,
+  private val authProvider: () -> FirebaseAuth? = { null },
+) {
 
   constructor(context: Context) : this(
-    UniverseDatabase.getInstance(context).universeDao()
+    dao = UniverseDatabase.getInstance(context).universeDao(),
+    firestore = resolveFirestore(context),
+    authProvider = createAuthProvider(context.applicationContext),
   )
+
+  private val cloudSync: UniverseCloudSync? = firestore?.let { db ->
+    UniverseCloudSync(db = db, dao = dao, authProvider = authProvider)
+  }
+
+  private val _cloudSyncState = MutableStateFlow<CloudSyncState>(CloudSyncState.LocalOnly)
+  val cloudSyncState: StateFlow<CloudSyncState> = _cloudSyncState.asStateFlow()
+
+  fun isCloudSyncAvailableFor(userId: String): Boolean =
+    cloudSync?.isAuthenticatedFor(userId) == true
 
   fun observeProfile(userId: String): Flow<OperatorProfile?> = dao.observeProfile(userId)
 
@@ -27,12 +63,46 @@ class UniverseRepository(private val dao: UniverseDao) {
 
   fun observeLinkedAccounts(userId: String): Flow<List<LinkedAccount>> = dao.observeLinkedAccounts(userId)
 
+  fun observeCloudChanges(userId: String): Flow<Long> {
+    val sync = cloudSync ?: return emptyFlow()
+    if (!sync.isAuthenticatedFor(userId)) {
+      _cloudSyncState.value = CloudSyncState.LocalOnly
+      return emptyFlow()
+    }
+    return sync.observeAndMirrorCloud(userId).onEach { timestamp ->
+      _cloudSyncState.value = CloudSyncState.Synced(timestamp)
+    }
+  }
+
+  suspend fun syncWithCloud(userId: String, displayName: String?): Result<String> {
+    val sync = cloudSync
+    if (sync == null || !sync.isAuthenticatedFor(userId)) {
+      _cloudSyncState.value = CloudSyncState.LocalOnly
+      return Result.failure(IllegalStateException("Sign in with Google to enable Cloud Sync."))
+    }
+    _cloudSyncState.value = CloudSyncState.Syncing
+    val res = sync.pullMergeAndPush(
+      userId = userId,
+      displayName = displayName,
+      starterArmoryProvider = ::starterArmoryItems,
+      starterRigsProvider = ::starterRigs,
+    )
+    return if (res.isSuccess) {
+      val summary = res.getOrThrow()
+      _cloudSyncState.value = CloudSyncState.Synced(summary.syncedAtMillis)
+      Result.success("Cloud synced (${summary.downloadedCount} pulled, ${summary.uploadedCount} pushed)")
+    } else {
+      val msg = res.exceptionOrNull()?.localizedMessage ?: "Cloud sync failed"
+      _cloudSyncState.value = CloudSyncState.Error(msg)
+      Result.failure(res.exceptionOrNull() ?: IllegalStateException(msg))
+    }
+  }
+
   suspend fun ensureStarterData(userId: String, displayName: String?): Result<Unit> {
     return try {
       val existing = dao.getProfileOnce(userId)
       if (existing == null) {
-        val safeCallsign =
-          displayName?.trim()?.takeIf { it.length >= 2 }?.take(30) ?: "VanguardPrime"
+        val safeCallsign = FirestoreSyncCodec.sanitizeCallsign(displayName)
         val now = System.currentTimeMillis()
         dao.upsertProfile(
           OperatorProfile(
@@ -54,12 +124,11 @@ class UniverseRepository(private val dao: UniverseDao) {
         dao.upsertArmoryItems(starterArmoryItems(userId, now))
         dao.upsertRigs(starterRigs(userId, now))
       } else if (!displayName.isNullOrBlank() && displayName.trim().length >= 2 && existing.callsign != displayName.trim().take(30)) {
-        dao.upsertProfile(
-          existing.copy(
-            callsign = displayName.trim().take(30),
-            updatedAtMillis = System.currentTimeMillis(),
-          )
+        val updated = existing.copy(
+          callsign = displayName.trim().take(30),
+          updatedAtMillis = System.currentTimeMillis(),
         )
+        dao.upsertProfile(updated)
       }
       Result.success(Unit)
     } catch (e: CancellationException) {
@@ -82,15 +151,16 @@ class UniverseRepository(private val dao: UniverseDao) {
       val existing = dao.getProfileOnce(userId)
         ?: return Result.failure(IllegalStateException("Operator profile not found"))
       val updated = existing.copy(
-        activeUniverseId = activeUniverseId ?: existing.activeUniverseId,
-        activeMode = activeMode ?: existing.activeMode,
-        activeRigId = activeRigId ?: existing.activeRigId,
-        consolePreset = consolePreset ?: existing.consolePreset,
-        callsign = callsign?.let { it.trim().take(30).padEnd(2, '_') } ?: existing.callsign,
+        activeUniverseId = activeUniverseId?.trim()?.take(64)?.ifEmpty { existing.activeUniverseId } ?: existing.activeUniverseId,
+        activeMode = activeMode?.let { FirestoreSyncCodec.sanitizeMode(it) } ?: existing.activeMode,
+        activeRigId = activeRigId?.trim()?.take(64)?.ifEmpty { existing.activeRigId } ?: existing.activeRigId,
+        consolePreset = consolePreset?.let { FirestoreSyncCodec.sanitizePreset(it) } ?: existing.consolePreset,
+        callsign = callsign?.let { FirestoreSyncCodec.sanitizeCallsign(it) } ?: existing.callsign,
         osWallpaperIndex = osWallpaperIndex?.coerceIn(0L, 10L) ?: existing.osWallpaperIndex,
         updatedAtMillis = System.currentTimeMillis(),
       )
       dao.upsertProfile(updated)
+      mirrorCloud(userId) { it.pushProfile(updated) }
       Result.success(Unit)
     } catch (e: CancellationException) {
       throw e
@@ -114,25 +184,25 @@ class UniverseRepository(private val dao: UniverseDao) {
     return try {
       val itemId = "custom_${UUID.randomUUID().toString().take(8)}"
       val now = System.currentTimeMillis()
-      dao.upsertArmoryItem(
-        ArmoryItem(
-          id = itemId,
-          userId = userId,
-          name = name.trim().take(50).ifEmpty { "Custom Module" },
-          category = category,
-          universeTag = universeTag.trim().take(40).ifEmpty { "UnknownOS" },
-          description = description.trim().take(240),
-          tier = 1L,
-          maxTier = 5L,
-          cooldownSec = cooldownSec.coerceIn(0L, 120L),
-          powerValue = powerValue.coerceIn(1L, 500L),
-          accentColorHex = accentColorHex,
-          equipped = equipped,
-          isCustom = isCustom,
-          createdAtMillis = now,
-          updatedAtMillis = now,
-        )
+      val item = ArmoryItem(
+        id = itemId,
+        userId = userId,
+        name = name.trim().take(50).ifEmpty { "Custom Module" },
+        category = FirestoreSyncCodec.sanitizeArmoryCategory(category),
+        universeTag = universeTag.trim().take(40).ifEmpty { "UnknownOS" },
+        description = description.trim().take(240),
+        tier = 1L,
+        maxTier = 5L,
+        cooldownSec = cooldownSec.coerceIn(0L, 120L),
+        powerValue = powerValue.coerceIn(1L, 500L),
+        accentColorHex = accentColorHex.trim().take(10).ifEmpty { "#00E5FF" },
+        equipped = equipped,
+        isCustom = isCustom,
+        createdAtMillis = now,
+        updatedAtMillis = now,
       )
+      dao.upsertArmoryItem(item)
+      mirrorCloud(userId) { it.pushArmoryItem(item) }
       Result.success(itemId)
     } catch (e: CancellationException) {
       throw e
@@ -144,13 +214,13 @@ class UniverseRepository(private val dao: UniverseDao) {
   suspend fun toggleArmoryEquipped(userId: String, item: ArmoryItem): Result<Unit> {
     require(item.id.isNotBlank()) { "ArmoryItem id required" }
     return try {
-      dao.upsertArmoryItem(
-        item.copy(
-          userId = userId,
-          equipped = !item.equipped,
-          updatedAtMillis = System.currentTimeMillis(),
-        )
+      val updated = item.copy(
+        userId = userId,
+        equipped = !item.equipped,
+        updatedAtMillis = System.currentTimeMillis(),
       )
+      dao.upsertArmoryItem(updated)
+      mirrorCloud(userId) { it.pushArmoryItem(updated) }
       Result.success(Unit)
     } catch (e: CancellationException) {
       throw e
@@ -176,20 +246,22 @@ class UniverseRepository(private val dao: UniverseDao) {
       val now = System.currentTimeMillis()
       val profile = dao.getProfileOnce(userId)
         ?: return Result.failure(IllegalStateException("Operator profile not found"))
-      dao.upsertArmoryItem(
-        item.copy(
-          userId = userId,
-          tier = item.tier + 1L,
-          powerValue = (item.powerValue + 35L).coerceAtMost(500L),
-          updatedAtMillis = now,
-        )
+      val updatedItem = item.copy(
+        userId = userId,
+        tier = item.tier + 1L,
+        powerValue = (item.powerValue + 35L).coerceAtMost(500L),
+        updatedAtMillis = now,
       )
-      dao.upsertProfile(
-        profile.copy(
-          totalEssence = (currentEssence - upgradeCost).coerceAtLeast(0L),
-          updatedAtMillis = now,
-        )
+      val updatedProfile = profile.copy(
+        totalEssence = (currentEssence - upgradeCost).coerceAtLeast(0L),
+        updatedAtMillis = now,
       )
+      dao.upsertArmoryItem(updatedItem)
+      dao.upsertProfile(updatedProfile)
+      mirrorCloud(userId) {
+        it.pushArmoryItem(updatedItem)
+        it.pushProfile(updatedProfile)
+      }
       Result.success(Unit)
     } catch (e: CancellationException) {
       throw e
@@ -201,6 +273,7 @@ class UniverseRepository(private val dao: UniverseDao) {
   suspend fun deleteArmoryItem(userId: String, itemId: String): Result<Unit> {
     return try {
       dao.deleteArmoryItem(userId, itemId)
+      mirrorCloud(userId) { it.deleteArmoryItem(userId, itemId) }
       Result.success(Unit)
     } catch (e: CancellationException) {
       throw e
@@ -228,23 +301,23 @@ class UniverseRepository(private val dao: UniverseDao) {
     return try {
       val resolvedId = if (rigId.isNullOrBlank()) "rig_${UUID.randomUUID().toString().take(8)}" else rigId
       val existing = if (rigId.isNullOrBlank()) null else dao.getRigOnce(userId, rigId)
-      dao.upsertRig(
-        RigAsset(
-          id = resolvedId,
-          userId = userId,
-          name = safeName,
-          archetype = archetype,
-          activeClip = activeClip,
-          ikEnabled = ikEnabled,
-          rigScale = rigScale.coerceIn(0.5, 2.0),
-          playbackSpeed = playbackSpeed.coerceIn(0.25, 3.0),
-          poseAngles = poseAngles,
-          keyframeFrames = safeFrames,
-          isCompleted = isCompleted,
-          createdAtMillis = existing?.createdAtMillis ?: now,
-          updatedAtMillis = now,
-        )
+      val rig = RigAsset(
+        id = resolvedId,
+        userId = userId,
+        name = safeName,
+        archetype = FirestoreSyncCodec.sanitizeArchetype(archetype),
+        activeClip = FirestoreSyncCodec.sanitizeClip(activeClip),
+        ikEnabled = ikEnabled,
+        rigScale = rigScale.coerceIn(0.5, 2.0),
+        playbackSpeed = playbackSpeed.coerceIn(0.25, 3.0),
+        poseAngles = poseAngles,
+        keyframeFrames = safeFrames,
+        isCompleted = isCompleted,
+        createdAtMillis = existing?.createdAtMillis ?: now,
+        updatedAtMillis = now,
       )
+      dao.upsertRig(rig)
+      mirrorCloud(userId) { it.pushRigAsset(rig) }
       Result.success(resolvedId)
     } catch (e: CancellationException) {
       throw e
@@ -268,29 +341,31 @@ class UniverseRepository(private val dao: UniverseDao) {
     return try {
       val matchId = "match_${UUID.randomUUID().toString().take(8)}"
       val now = System.currentTimeMillis()
-      dao.insertMatchLog(
-        MatchRecord(
-          id = matchId,
-          userId = userId,
-          universeId = universeId,
-          mode = mode,
-          score = score.coerceIn(0L, 999_999_999L),
-          waveReached = waveReached.coerceIn(0L, 9999L),
-          eliminations = eliminations.coerceIn(0L, 99999L),
-          extracted = extracted,
-          durationSec = durationSec.coerceIn(0L, 86400L),
-          createdAtMillis = now,
-        )
+      val record = MatchRecord(
+        id = matchId,
+        userId = userId,
+        universeId = universeId.trim().take(64).ifEmpty { "sector_zero" },
+        mode = FirestoreSyncCodec.sanitizeMode(mode),
+        score = score.coerceIn(0L, 999_999_999L),
+        waveReached = waveReached.coerceIn(0L, 9999L),
+        eliminations = eliminations.coerceIn(0L, 99999L),
+        extracted = extracted,
+        durationSec = durationSec.coerceIn(0L, 86400L),
+        createdAtMillis = now,
       )
+      dao.insertMatchLog(record)
       val latestProfile = dao.getProfileOnce(userId) ?: profile
-      dao.upsertProfile(
-        latestProfile.copy(
-          totalEssence = (latestProfile.totalEssence + essenceEarned).coerceAtMost(999_999_999L),
-          highScore = maxOf(latestProfile.highScore, score),
-          highestWave = maxOf(latestProfile.highestWave, waveReached),
-          updatedAtMillis = now,
-        )
+      val updatedProfile = latestProfile.copy(
+        totalEssence = (latestProfile.totalEssence + essenceEarned).coerceAtMost(999_999_999L),
+        highScore = maxOf(latestProfile.highScore, score),
+        highestWave = maxOf(latestProfile.highestWave, waveReached),
+        updatedAtMillis = now,
       )
+      dao.upsertProfile(updatedProfile)
+      mirrorCloud(userId) {
+        it.pushMatchRecord(record)
+        it.pushProfile(updatedProfile)
+      }
       Result.success(matchId)
     } catch (e: CancellationException) {
       throw e
@@ -306,16 +381,16 @@ class UniverseRepository(private val dao: UniverseDao) {
     externalSubject: String,
   ): Result<Unit> {
     return try {
-      dao.upsertLinkedAccount(
-        LinkedAccount(
-          id = "${userId}_$providerId",
-          userId = userId,
-          providerId = providerId,
-          displayName = displayName.trim().take(64).ifEmpty { providerId },
-          externalSubject = externalSubject.trim().take(128).ifEmpty { providerId },
-          linkedAtMillis = System.currentTimeMillis(),
-        )
+      val account = LinkedAccount(
+        id = "${userId}_$providerId",
+        userId = userId,
+        providerId = providerId,
+        displayName = displayName.trim().take(64).ifEmpty { providerId },
+        externalSubject = externalSubject.trim().take(128).ifEmpty { providerId },
+        linkedAtMillis = System.currentTimeMillis(),
       )
+      dao.upsertLinkedAccount(account)
+      mirrorCloud(userId) { it.pushLinkedAccount(account) }
       Result.success(Unit)
     } catch (e: CancellationException) {
       throw e
@@ -327,11 +402,127 @@ class UniverseRepository(private val dao: UniverseDao) {
   suspend fun unlinkAccount(userId: String, providerId: String): Result<Unit> {
     return try {
       dao.deleteLinkedAccount(userId, providerId)
+      mirrorCloud(userId) { it.deleteLinkedAccount(userId, providerId) }
       Result.success(Unit)
     } catch (e: CancellationException) {
       throw e
     } catch (e: Exception) {
       Result.failure(e)
+    }
+  }
+
+  suspend fun exportSaveDataJson(userId: String): Result<String> {
+    return try {
+      val profile = dao.getProfileOnce(userId)
+        ?: return Result.failure(IllegalStateException("No save profile loaded yet"))
+      val armory = dao.getArmoryItemsOnce(userId)
+      val rigs = dao.getRigsOnce(userId)
+      val logs = dao.getMatchLogsOnce(userId)
+      Result.success(SaveDataSerializer.exportSaveJson(profile, armory, rigs, logs))
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      Result.failure(e)
+    }
+  }
+
+  suspend fun importSaveBundle(
+    userId: String,
+    bundle: SaveDataBundle,
+    replaceExisting: Boolean,
+  ): Result<String> {
+    return try {
+      val now = System.currentTimeMillis()
+      val existingProfile = dao.getProfileOnce(userId)
+      val importedProfile = bundle.profile.copy(
+        id = userId,
+        userId = userId,
+        createdAtMillis = existingProfile?.createdAtMillis ?: now,
+        updatedAtMillis = now,
+      )
+
+      val targetProfile = if (replaceExisting || existingProfile == null) {
+        importedProfile
+      } else {
+        existingProfile.copy(
+          totalEssence = maxOf(existingProfile.totalEssence, importedProfile.totalEssence),
+          highScore = maxOf(existingProfile.highScore, importedProfile.highScore),
+          highestWave = maxOf(existingProfile.highestWave, importedProfile.highestWave),
+          activeUniverseId = importedProfile.activeUniverseId,
+          activeMode = importedProfile.activeMode,
+          activeRigId = importedProfile.activeRigId,
+          updatedAtMillis = now,
+        )
+      }
+
+      val resolvedArmory = bundle.armoryItems.map { it.copy(userId = userId, updatedAtMillis = now) }
+        .ifEmpty { starterArmoryItems(userId, now) }
+      val resolvedRigs = bundle.customRigs.map { it.copy(userId = userId, updatedAtMillis = now) }
+        .ifEmpty { starterRigs(userId, now) }
+      val resolvedLogs = bundle.matchLogs.map { it.copy(userId = userId) }
+
+      if (replaceExisting) {
+        dao.deleteAllArmoryItemsForUser(userId)
+        dao.deleteAllRigsForUser(userId)
+        dao.deleteAllMatchLogsForUser(userId)
+      }
+
+      dao.upsertProfile(targetProfile)
+      dao.upsertArmoryItems(resolvedArmory)
+      dao.upsertRigs(resolvedRigs)
+      if (resolvedLogs.isNotEmpty()) {
+        dao.insertMatchLogs(resolvedLogs)
+      }
+
+      mirrorCloud(userId) { sync ->
+        sync.pushProfile(targetProfile)
+        resolvedArmory.forEach { sync.pushArmoryItem(it) }
+        resolvedRigs.forEach { sync.pushRigAsset(it) }
+        resolvedLogs.forEach { sync.pushMatchRecord(it) }
+      }
+
+      val modeLabel = if (replaceExisting) "Loaded" else "Merged"
+      val cloudNote = if (isCloudSyncAvailableFor(userId)) " & synced to Cloud" else ""
+      Result.success(
+        "$modeLabel save (${targetProfile.callsign}: ${resolvedArmory.size} modules, ${resolvedRigs.size} rigs)$cloudNote",
+      )
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      Result.failure(e)
+    }
+  }
+
+  private suspend inline fun mirrorCloud(userId: String, block: (UniverseCloudSync) -> Unit) {
+    val sync = cloudSync ?: return
+    if (!sync.isAuthenticatedFor(userId)) return
+    _cloudSyncState.value = CloudSyncState.Syncing
+    try {
+      block(sync)
+      _cloudSyncState.value = CloudSyncState.Synced(System.currentTimeMillis())
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      _cloudSyncState.value = CloudSyncState.Error(e.localizedMessage ?: "Cloud sync warning")
+    }
+  }
+
+  companion object {
+    private fun createAuthProvider(appCtx: Context): () -> FirebaseAuth? = {
+      if (runCatching { FirebaseApp.getApps(appCtx).isNotEmpty() }.getOrDefault(false)) {
+        runCatching { Firebase.auth }.getOrNull()
+      } else {
+        null
+      }
+    }
+
+    private fun resolveFirestore(context: Context): FirebaseFirestore? {
+      val appCtx = context.applicationContext
+      if (!runCatching { FirebaseApp.getApps(appCtx).isNotEmpty() }.getOrDefault(false)) {
+        return null
+      }
+      val dbId = appCtx.getString(R.string.firestore_database_id)
+      return runCatching { FirebaseFirestore.getInstance(dbId) }.getOrNull()
     }
   }
 

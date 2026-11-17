@@ -44,6 +44,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.BuildConfig
 import com.example.R
+import com.example.data.local.CloudSyncState
+import com.example.data.local.SaveBundlePreview
 import com.example.data.model.ArmoryItem
 import com.example.data.model.OperatorProfile
 import com.example.data.model.RigAsset
@@ -55,6 +57,12 @@ fun ExportCompatScreen(
   profile: OperatorProfile,
   armory: List<ArmoryItem>,
   rigs: List<RigAsset>,
+  cloudSyncState: CloudSyncState = CloudSyncState.LocalOnly,
+  isCloudSignedIn: Boolean = false,
+  onSyncNow: () -> Unit = {},
+  onRequestSaveExportJson: ((String) -> Unit) -> Unit = {},
+  onParseSaveJson: (String) -> Result<SaveBundlePreview> = { Result.failure(IllegalStateException("Unavailable")) },
+  onConfirmSaveImport: (SaveBundlePreview, Boolean) -> Unit = { _, _ -> },
   onSelectConsolePreset: (String) -> Unit,
   onStatusMessage: (String) -> Unit,
 ) {
@@ -114,6 +122,19 @@ fun ExportCompatScreen(
           )
         }
       }
+    }
+
+    item {
+      CloudSyncAndSaveCard(
+        callsign = profile.callsign,
+        cloudSyncState = cloudSyncState,
+        isCloudSignedIn = isCloudSignedIn,
+        onSyncNow = onSyncNow,
+        onRequestSaveExportJson = onRequestSaveExportJson,
+        onParseSaveJson = onParseSaveJson,
+        onConfirmSaveImport = onConfirmSaveImport,
+        onStatusMessage = onStatusMessage,
+      )
     }
 
     // Console / iOS / PC Target Presets

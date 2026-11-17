@@ -54,6 +54,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.BuildConfig
 import com.example.R
+import com.example.data.local.CloudSyncState
+import com.example.data.local.SaveBundlePreview
 import com.example.data.model.ArmoryItem
 import com.example.data.model.LinkedAccount
 import com.example.data.model.MatchRecord
@@ -71,9 +73,15 @@ fun OsDesktopScreen(
   rigs: List<RigAsset>,
   matchLogs: List<MatchRecord>,
   linkedAccounts: List<LinkedAccount>,
+  cloudSyncState: CloudSyncState = CloudSyncState.LocalOnly,
+  isCloudSignedIn: Boolean = false,
   googleAccountLabel: String? = null,
   isGoogleSigningIn: Boolean = false,
   onSignInGoogle: (() -> Unit)? = null,
+  onSyncNow: () -> Unit = {},
+  onRequestSaveExportJson: ((String) -> Unit) -> Unit = {},
+  onParseSaveJson: (String) -> Result<SaveBundlePreview> = { Result.failure(IllegalStateException("Unavailable")) },
+  onConfirmSaveImport: (SaveBundlePreview, Boolean) -> Unit = { _, _ -> },
   activeWallpaperPath: String?,
   onSelectUniverse: (String) -> Unit,
   onSelectMode: (String) -> Unit,
@@ -600,6 +608,20 @@ fun OsDesktopScreen(
           }
         }
       }
+    }
+
+    // Cloud Sync & Shareable Save Data Card
+    item {
+      CloudSyncAndSaveCard(
+        callsign = profile.callsign,
+        cloudSyncState = cloudSyncState,
+        isCloudSignedIn = isCloudSignedIn,
+        onSyncNow = onSyncNow,
+        onRequestSaveExportJson = onRequestSaveExportJson,
+        onParseSaveJson = onParseSaveJson,
+        onConfirmSaveImport = onConfirmSaveImport,
+        onStatusMessage = onStatusMessage,
+      )
     }
 
     // Cross-Platform Store & Console Accounts Card
