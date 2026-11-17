@@ -128,4 +128,73 @@ class ExampleRobolectricTest {
     composeRule.onNodeWithTag("import_save_file_btn").assertIsDisplayed()
     composeRule.onNodeWithTag("paste_save_json_btn").assertIsDisplayed()
   }
+
+  @Test
+  fun `cross platform accounts card detects signed-in apple xbox and steam accounts`() {
+    val links = listOf(
+      com.example.data.model.LinkedAccount(
+        id = "u1_apple",
+        userId = "u1",
+        providerId = "apple",
+        displayName = "BlakeApple",
+        externalSubject = "apple:blakeapple",
+      ),
+      com.example.data.model.LinkedAccount(
+        id = "u1_xbox",
+        userId = "u1",
+        providerId = "xbox",
+        displayName = "BlakeXbox",
+        externalSubject = "xbox:blakexbox",
+      ),
+      com.example.data.model.LinkedAccount(
+        id = "u1_psn",
+        userId = "u1",
+        providerId = "psn",
+        displayName = "BlakePSN",
+        externalSubject = "psn:blakepsn",
+      ),
+    )
+    composeRule.setContent {
+      UnknownUniversesTheme(darkTheme = true) {
+        com.example.ui.auth.CrossPlatformAccountsCard(
+          linkedAccounts = links,
+          onUnlinkExternal = {},
+          onStatusMessage = {},
+        )
+      }
+    }
+    composeRule.onNodeWithText("Signed in: BlakeApple").assertIsDisplayed()
+    composeRule.onNodeWithText("Signed in: BlakeXbox").assertIsDisplayed()
+    composeRule.onNodeWithText("Signed in: BlakePSN").assertIsDisplayed()
+    composeRule.onNodeWithTag("sign_out_apple").assertIsDisplayed()
+    composeRule.onNodeWithTag("sign_out_xbox").assertIsDisplayed()
+    composeRule.onNodeWithTag("sign_out_psn").assertIsDisplayed()
+  }
+
+  @Test
+  fun `auth screen detects linked platform sessions and expands other logins`() {
+    val links = listOf(
+      com.example.data.model.LinkedAccount(
+        id = "local_steam",
+        userId = "local_operator",
+        providerId = "steam",
+        displayName = "SteamBlake",
+        externalSubject = "76561198000000000",
+      ),
+    )
+    composeRule.setContent {
+      UnknownUniversesTheme(darkTheme = true) {
+        AuthScreen(
+          linkedAccounts = links,
+          onBootLocalOperator = {},
+        )
+      }
+    }
+    composeRule.onNodeWithTag("auth_other_logins_card").performScrollTo().assertIsDisplayed()
+    composeRule.onNodeWithText("1 platform login(s) detected on device").assertIsDisplayed()
+    composeRule.onNodeWithText("Steam: SteamBlake").assertIsDisplayed()
+    composeRule.onNodeWithTag("toggle_other_logins_btn").performClick()
+    composeRule.onNodeWithTag("auth_sign_out_steam").performScrollTo().assertIsDisplayed()
+    composeRule.onNodeWithTag("auth_login_xbox").performScrollTo().assertIsDisplayed()
+  }
 }

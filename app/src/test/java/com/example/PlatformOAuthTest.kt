@@ -1,10 +1,16 @@
 package com.example
 
+import android.content.Context
+import android.util.Base64
+import androidx.test.core.app.ApplicationProvider
 import com.example.ui.auth.ExternalOAuthProviderSpec
 import com.example.ui.auth.OAuthProtocol
 import com.example.ui.auth.PlatformOAuthManager
+import com.example.ui.auth.PlatformProfileParsers
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -87,6 +93,65 @@ class PlatformOAuthTest {
     assertTrue(parsed.any { it.providerId == "nintendo" && it.displayName.contains("BlakeSwitch") })
     assertTrue(parsed.any { it.providerId == "ubisoft" && it.displayName.contains("BlakeUbi") })
     assertTrue(parsed.any { it.providerId == "xbox" && it.displayName.contains("BlakeXbox") })
+    assertEquals("BlakePrime", PlatformProfileParsers.parseEpicAccountDisplayNameJson(sampleJson))
+  }
+
+  @Test
+  fun unifiedPlatforms_coversAll11ProvidersAndResolvesMetadata() {
+    val expected = setOf(
+      "apple", "xbox", "epic", "steam", "gog", "ea_origin",
+      "amazon", "galaxy_store", "psn", "nintendo", "ubisoft",
+    )
+    val actual = PlatformOAuthManager.allUnifiedPlatforms().map { it.providerId }.toSet()
+    assertEquals(expected, actual)
+    expected.forEach { id ->
+      val meta = PlatformOAuthManager.findPlatformMeta(id)
+      assertNotNull("Expected metadata for $id", meta)
+      assertTrue(meta!!.portalUrl.startsWith("https://"))
+    }
+  }
+
+  @Test
+  fun profileParsers_decodeJwtAndAmazonGogEaProfiles() {
+    val claimsPayload = Base64.encodeToString(
+      """{"sub":"sam_99","preferred_username":"GalaxyBlake"}""".toByteArray(),
+      Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
+    )
+    val claims = PlatformProfileParsers.decodeJwtClaims("hdr.$claimsPayload.sig")
+    assertEquals("sam_99", claims?.optString("sub"))
+    assertEquals("GalaxyBlake", claims?.optString("preferred_username"))
+
+    val amazon = PlatformProfileParsers.parseAmazonProfileJson(
+      """{"user_id":"amzn1.account.ABC","name":"BlakeAmazon","email":"b@example.com"}""",
+    )
+    assertEquals("BlakeAmazon", amazon?.displayName)
+    assertEquals("amzn1.account.ABC", amazon?.subject)
+
+    val gog = PlatformProfileParsers.parseGogUserDataJson(
+      """{"isLoggedIn":true,"userId":"445566","username":"BlakeGOG"}""",
+    )
+    assertEquals("BlakeGOG", gog?.displayName)
+    assertEquals("445566", gog?.subject)
+
+    val ea = PlatformProfileParsers.parseEaPidMeJson(
+      """{"pid":{"pidId":"100200300","displayName":"BlakeEA"}}""",
+    )
+    assertEquals("BlakeEA", ea?.displayName)
+    assertEquals("100200300", ea?.subject)
+  }
+
+  @Test
+  fun runtimeClientIdOverride_persistsAndEnablesOAuthConfig() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    PlatformOAuthManager.saveRuntimeClientId(context, "epic", "epic_custom_client_xyz")
+    val epicSpec = PlatformOAuthManager.externalOAuthProviders.first { it.id == "epic" }
+    assertTrue(epicSpec.isConfigured(context))
+    assertEquals("epic_custom_client_xyz", epicSpec.configuredValue(context))
+
+    PlatformOAuthManager.saveRuntimeClientId(context, "epic", "")
+    assertFalse(epicSpec.isConfigured(context))
+    PlatformOAuthManager.clearPendingAuth(context)
+    assertNull(PlatformOAuthManager.restorePendingAuth(context))
   }
 
   @Test

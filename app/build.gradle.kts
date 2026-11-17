@@ -28,8 +28,8 @@ android {
     applicationId = "com.unknownuniverses.os"
     minSdk = 24
     targetSdk = 36
-    versionCode = 9
-    versionName = "4.4.1"
+    versionCode = 10
+    versionName = "4.4.2"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

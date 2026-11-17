@@ -36,6 +36,7 @@ fun CrossPlatformAccountsCard(
   isGoogleSigningIn: Boolean = false,
   onSignInGoogle: (() -> Unit)? = null,
   onSignOutGoogle: (() -> Unit)? = null,
+  onLinkExternal: (providerId: String, displayName: String, externalSubject: String) -> Unit = { _, _, _ -> },
   onUnlinkExternal: (String) -> Unit,
   onStatusMessage: (String) -> Unit,
 ) {
@@ -43,6 +44,11 @@ fun CrossPlatformAccountsCard(
   val externalLinkedMap = remember(linkedAccounts) {
     linkedAccounts.associateBy { it.providerId }
   }
+  val platformController = rememberPlatformSignInController(
+    onAccountLinked = onLinkExternal,
+    onStatusMessage = onStatusMessage,
+  )
+  val pendingProviderId = platformController.pendingAuth?.providerId
 
   Surface(
     shape = RoundedCornerShape(18.dp),
@@ -73,10 +79,13 @@ fun CrossPlatformAccountsCard(
       }
 
       Text(
-        text = if (googleAccountLabel != null) {
-          "Google Account active ($googleAccountLabel). Manage linked portals, storefronts, and Epic Connections below."
-        } else {
-          "Local UnknownOS Profile Active. Sign in with Google or open official iOS/Apple, Xbox & PC store portals below."
+        text = buildString {
+          if (googleAccountLabel != null) {
+            append("Google Account active ($googleAccountLabel). ")
+          } else {
+            append("Local UnknownOS Profile Active. ")
+          }
+          append("${linkedAccounts.size} external platform(s) linked. Sign in below — returns from browser are detected automatically.")
         },
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -141,43 +150,24 @@ fun CrossPlatformAccountsCard(
 
       // Official Console & Mobile Account Portals: Apple (iOS) & Xbox (Microsoft)
       PlatformOAuthManager.platformPortalProviders.forEach { spec ->
-        Surface(
-          shape = RoundedCornerShape(12.dp),
-          color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-          modifier = Modifier.fillMaxWidth(),
-        ) {
-          Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-          ) {
-            Column(modifier = Modifier.weight(1f)) {
-              Text(
-                text = spec.label,
-                style = MaterialTheme.typography.titleMedium,
-                color = Color(spec.accentHex),
-              )
-              Text(
-                text = spec.platformNote,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-              )
-            }
-            Spacer(Modifier.width(8.dp))
-            OutlinedButton(
-              onClick = {
-                val res = PlatformOAuthManager.openPortalUrl(context, spec.portalUrl)
-                if (res.isFailure) {
-                  onStatusMessage(res.exceptionOrNull()?.localizedMessage ?: "Unable to open browser")
-                }
-              },
-              shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.testTag("portal_${spec.providerId}"),
-            ) {
-              Text("Portal")
-            }
-          }
-        }
+        val linked = externalLinkedMap[spec.providerId]
+        PlatformAccountRow(
+          title = spec.label,
+          accentColor = Color(spec.accentHex),
+          subtitle = when {
+            linked != null -> "Signed in: ${linked.displayName}"
+            pendingProviderId == spec.providerId -> "Waiting for browser sign-in return..."
+            else -> spec.platformNote
+          },
+          isLinked = linked != null,
+          isPending = pendingProviderId == spec.providerId,
+          signInLabel = "Sign In",
+          signInTestTag = "portal_${spec.providerId}",
+          signOutTestTag = "sign_out_${spec.providerId}",
+          onSignIn = { platformController.startSignIn(spec.providerId) },
+          onFinishPending = { platformController.openVerificationDialog(spec.providerId) },
+          onSignOut = { onUnlinkExternal(spec.providerId) },
+        )
       }
 
       HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
@@ -185,74 +175,27 @@ fun CrossPlatformAccountsCard(
       // OAuth 2.0 PKCE & Steam OpenID 2.0 Storefronts (Epic, Steam, GOG, EA/Origin, Amazon, Galaxy Store)
       PlatformOAuthManager.externalOAuthProviders.forEach { spec ->
         val linked = externalLinkedMap[spec.id]
-        val configured = spec.isConfigured()
-        Surface(
-          shape = RoundedCornerShape(12.dp),
-          color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f),
-          modifier = Modifier.fillMaxWidth(),
-        ) {
-          Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-          ) {
-            Column(modifier = Modifier.weight(1f)) {
-              Text(
-                text = "${spec.label} • ${spec.platformGroup}",
-                style = MaterialTheme.typography.titleMedium,
-                color = Color(spec.accentHex),
-              )
-              Text(
-                text = when {
-                  linked != null -> "Linked: ${linked.displayName}"
-                  configured -> "Direct in-app OAuth ready"
-                  else -> "Sign in via official account portal"
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = if (linked != null) Color(0xFF00E676) else MaterialTheme.colorScheme.onSurfaceVariant,
-              )
-            }
-            Spacer(Modifier.width(8.dp))
-            when {
-              linked != null -> {
-                TextButton(
-                  onClick = { onUnlinkExternal(spec.id) },
-                  colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                ) {
-                  Text("Unlink")
-                }
-              }
-              configured -> {
-                OutlinedButton(
-                  onClick = {
-                    val res = PlatformOAuthManager.launchExternalOAuth(context, spec)
-                    if (res.isFailure) {
-                      onStatusMessage(res.exceptionOrNull()?.localizedMessage ?: "OAuth launch failed")
-                    }
-                  },
-                  shape = RoundedCornerShape(10.dp),
-                  modifier = Modifier.testTag("connect_oauth_${spec.id}"),
-                ) {
-                  Text("Connect")
-                }
-              }
-              else -> {
-                OutlinedButton(
-                  onClick = {
-                    val res = PlatformOAuthManager.openPortalUrl(context, spec.portalUrl)
-                    if (res.isFailure) {
-                      onStatusMessage(res.exceptionOrNull()?.localizedMessage ?: "Unable to open browser")
-                    }
-                  },
-                  shape = RoundedCornerShape(10.dp),
-                  modifier = Modifier.testTag("portal_oauth_${spec.id}"),
-                ) {
-                  Text("Sign In")
-                }
-              }
-            }
-          }
-        }
+        val configured = spec.isConfigured(context)
+        val isPending = pendingProviderId == spec.id
+        PlatformAccountRow(
+          title = "${spec.label} • ${spec.platformGroup}",
+          accentColor = Color(spec.accentHex),
+          subtitle = when {
+            linked != null -> "Signed in: ${linked.displayName}"
+            isPending -> "Waiting for ${spec.label} login return..."
+            spec.id == "steam" -> "Live Steam Community check or OpenID sign-in"
+            configured -> "Direct in-app OAuth ready"
+            else -> "Sign in via official portal (auto-detected on return)"
+          },
+          isLinked = linked != null,
+          isPending = isPending,
+          signInLabel = if (configured) "Connect" else "Sign In",
+          signInTestTag = if (configured) "connect_oauth_${spec.id}" else "portal_oauth_${spec.id}",
+          signOutTestTag = "sign_out_${spec.id}",
+          onSignIn = { platformController.startSignIn(spec.id) },
+          onFinishPending = { platformController.openVerificationDialog(spec.id) },
+          onSignOut = { onUnlinkExternal(spec.id) },
+        )
       }
 
       HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
@@ -281,43 +224,110 @@ fun CrossPlatformAccountsCard(
         }
       }
       Text(
-        text = "Epic Games links PlayStation, Nintendo, Xbox, Steam, Apple & Ubisoft under one account—no console developer portals required.",
+        text = "Sign in directly with PlayStation, Nintendo & Ubisoft below, or link them all via Epic Connections.",
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
       )
 
       PlatformOAuthManager.epicBridgedPlatforms.forEach { bridgedSpec ->
         val synced = externalLinkedMap[bridgedSpec.providerId]
-        Surface(
-          shape = RoundedCornerShape(10.dp),
-          color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
-          modifier = Modifier.fillMaxWidth(),
-        ) {
-          Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
+        val isPending = pendingProviderId == bridgedSpec.providerId
+        PlatformAccountRow(
+          title = bridgedSpec.label,
+          accentColor = Color(bridgedSpec.accentHex),
+          subtitle = when {
+            synced != null -> "Signed in: ${synced.displayName}"
+            isPending -> "Waiting for ${bridgedSpec.label} login return..."
+            else -> bridgedSpec.platformNote
+          },
+          isLinked = synced != null,
+          isPending = isPending,
+          signInLabel = "Sign In",
+          signInTestTag = "connect_bridged_${bridgedSpec.providerId}",
+          signOutTestTag = "sign_out_${bridgedSpec.providerId}",
+          onSignIn = { platformController.startSignIn(bridgedSpec.providerId) },
+          onFinishPending = { platformController.openVerificationDialog(bridgedSpec.providerId) },
+          onSignOut = { onUnlinkExternal(bridgedSpec.providerId) },
+        )
+      }
+    }
+  }
+}
+
+@Composable
+private fun PlatformAccountRow(
+  title: String,
+  accentColor: Color,
+  subtitle: String,
+  isLinked: Boolean,
+  isPending: Boolean,
+  signInLabel: String,
+  signInTestTag: String,
+  signOutTestTag: String,
+  onSignIn: () -> Unit,
+  onFinishPending: () -> Unit,
+  onSignOut: () -> Unit,
+) {
+  Surface(
+    shape = RoundedCornerShape(12.dp),
+    color = if (isLinked) {
+      Color(0xFF00E676).copy(alpha = 0.12f)
+    } else {
+      MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
+    },
+    modifier = Modifier
+      .fillMaxWidth()
+      .border(
+        1.dp,
+        if (isLinked) Color(0xFF00E676).copy(alpha = 0.45f)
+        else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+        RoundedCornerShape(12.dp),
+      ),
+  ) {
+    Row(
+      modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+      Column(modifier = Modifier.weight(1f)) {
+        Text(
+          text = title,
+          style = MaterialTheme.typography.titleMedium,
+          color = if (isLinked) Color(0xFF00E676) else accentColor,
+        )
+        Text(
+          text = subtitle,
+          style = MaterialTheme.typography.labelSmall,
+          color = if (isLinked) Color(0xFF00E676) else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+      }
+      Spacer(Modifier.width(8.dp))
+      when {
+        isLinked -> {
+          TextButton(
+            onClick = onSignOut,
+            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+            modifier = Modifier.testTag(signOutTestTag),
           ) {
-            Column(modifier = Modifier.weight(1f)) {
-              Text(
-                text = bridgedSpec.label,
-                style = MaterialTheme.typography.labelLarge,
-                color = Color(bridgedSpec.accentHex),
-              )
-              Text(
-                text = synced?.displayName ?: "Synced automatically via Epic Account Services",
-                style = MaterialTheme.typography.labelSmall,
-                color = if (synced != null) Color(0xFF00E676) else MaterialTheme.colorScheme.onSurfaceVariant,
-              )
-            }
-            if (synced != null) {
-              TextButton(
-                onClick = { onUnlinkExternal(bridgedSpec.providerId) },
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-              ) {
-                Text("Unlink")
-              }
-            }
+            Text("Sign Out")
+          }
+        }
+        isPending -> {
+          OutlinedButton(
+            onClick = onFinishPending,
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier.testTag("finish_$signInTestTag"),
+          ) {
+            Text("Finish")
+          }
+        }
+        else -> {
+          OutlinedButton(
+            onClick = onSignIn,
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier.testTag(signInTestTag),
+          ) {
+            Text(signInLabel)
           }
         }
       }

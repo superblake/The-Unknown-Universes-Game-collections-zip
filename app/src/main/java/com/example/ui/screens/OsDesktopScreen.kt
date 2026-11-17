@@ -91,6 +91,7 @@ fun OsDesktopScreen(
   onOpenExport: () -> Unit,
   onCycleWallpaper: () -> Unit,
   onUpdateCallsign: (String) -> Unit,
+  onLinkAccount: (String, String, String) -> Unit = { _, _, _ -> },
   onUnlinkAccount: (String) -> Unit,
   onStatusMessage: (String) -> Unit,
   onSignOut: () -> Unit,
@@ -632,6 +633,7 @@ fun OsDesktopScreen(
         isGoogleSigningIn = isGoogleSigningIn,
         onSignInGoogle = onSignInGoogle,
         onSignOutGoogle = onSignOut,
+        onLinkExternal = onLinkAccount,
         onUnlinkExternal = onUnlinkAccount,
         onStatusMessage = onStatusMessage,
       )

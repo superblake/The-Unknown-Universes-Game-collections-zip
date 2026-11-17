@@ -93,6 +93,13 @@ class UniverseCloudSync(
       } else {
         emptyList()
       }
+      val guestLinks = if (userId != localGuestId) {
+        dao.getLinkedAccountsOnce(localGuestId).map {
+          it.copy(id = "${userId}_${it.providerId}", userId = userId)
+        }
+      } else {
+        emptyList()
+      }
 
       val now = System.currentTimeMillis()
       val defaultCallsign = FirestoreSyncCodec.sanitizeCallsign(
@@ -209,6 +216,9 @@ class UniverseCloudSync(
 
       // Merge Linked Accounts
       val mergedLinksMap = linkedMapOf<String, LinkedAccount>()
+      guestLinks.filter { isSupportedProviderId(it.providerId) }.forEach {
+        mergedLinksMap[it.providerId] = it
+      }
       localLinks.values.filter { isSupportedProviderId(it.providerId) }.forEach {
         mergedLinksMap[it.providerId] = it.copy(id = "${userId}_${it.providerId}", userId = userId)
       }
