@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -53,12 +56,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.data.model.RigAsset
 import com.example.data.model.UniverseCatalog
+import com.example.export.Bo3BoneMappingMode
+import com.example.export.Bo3ExportOptions
+import com.example.export.Bo3ModToolsExporter
+import com.example.export.PortablePackageGenerator
 import com.example.ui.rig.RigEvaluator
 import com.example.ui.rig.drawRigCharacter
 import kotlinx.coroutines.delay
@@ -84,7 +92,9 @@ fun ForgeRigScreen(
     keyframeFrames: List<Long>,
     isCompleted: Boolean,
   ) -> Unit,
+  onStatusMessage: (String) -> Unit = {},
 ) {
+  val context = LocalContext.current
   val currentRig = rigs.firstOrNull { it.id == activeRigId } ?: rigs.firstOrNull()
 
   var rigName by remember(currentRig?.id) { mutableStateOf(currentRig?.name ?: "Custom Rig") }
@@ -108,6 +118,23 @@ fun ForgeRigScreen(
   var currentFrame by remember { mutableFloatStateOf(0f) }
   var showBonesOverlay by remember { mutableStateOf(true) }
   var showNewRigDialog by remember { mutableStateOf(false) }
+  var showRigExportDialog by remember { mutableStateOf(false) }
+  var bo3ExportMode by remember { mutableStateOf(Bo3BoneMappingMode.TREYARCH_CHARACTER) }
+  var pendingRigExportText by remember { mutableStateOf("") }
+
+  val rigExportLauncher =
+    rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { uri ->
+      if (uri != null) {
+        try {
+          context.contentResolver.openOutputStream(uri)?.use { out ->
+            out.write(pendingRigExportText.toByteArray(Charsets.UTF_8))
+          }
+          onStatusMessage("Rig export saved successfully!")
+        } catch (e: Exception) {
+          onStatusMessage("Rig export failed: ${e.localizedMessage}")
+        }
+      }
+    }
 
   LaunchedEffect(isPlaying, playbackSpeed) {
     while (isPlaying) {
@@ -484,9 +511,103 @@ fun ForgeRigScreen(
             Spacer(Modifier.width(8.dp))
             Text(stringResource(R.string.save_rig_cloud), style = MaterialTheme.typography.labelLarge)
           }
+
+          OutlinedButton(
+            onClick = { showRigExportDialog = true },
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth().height(48.dp).testTag("forge_export_bo3_btn"),
+          ) {
+            Icon(AppIcons.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Export Rig (BO3 Mod Tools / Blender)", style = MaterialTheme.typography.labelLarge)
+          }
         }
       }
     }
+  }
+
+  if (showRigExportDialog) {
+    val snapshotRig = RigAsset(
+      id = currentRig?.id ?: "draft_rig",
+      userId = currentRig?.userId.orEmpty(),
+      name = rigName,
+      archetype = archetype,
+      activeClip = activeClip,
+      ikEnabled = ikEnabled,
+      rigScale = rigScale.toDouble(),
+      playbackSpeed = playbackSpeed.toDouble(),
+      poseAngles = poseMap.toMap(),
+      keyframeFrames = keyframes,
+      isCompleted = true,
+    )
+    val slug = Bo3ModToolsExporter.sanitizeAssetSlug(snapshotRig.name)
+    val clipSlug = Bo3ModToolsExporter.sanitizeAssetSlug(snapshotRig.activeClip, "idle")
+    val bo3Opts = Bo3ExportOptions(boneMode = bo3ExportMode)
+    AlertDialog(
+      onDismissRequest = { showRigExportDialog = false },
+      title = { Text("Export ${snapshotRig.name}") },
+      text = {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          Text(
+            text = "Choose a BO3 Mod Tools skeleton target and export format:",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+          Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+          ) {
+            Bo3BoneMappingMode.entries.forEach { mode ->
+              FilterChip(
+                selected = bo3ExportMode == mode,
+                onClick = { bo3ExportMode = mode },
+                label = { Text(mode.label) },
+              )
+            }
+          }
+          Button(
+            onClick = {
+              pendingRigExportText = Bo3ModToolsExporter.generateXModelExport(snapshotRig, bo3Opts)
+              showRigExportDialog = false
+              rigExportLauncher.launch("${slug}_rig.xmodel_export")
+            },
+            modifier = Modifier.fillMaxWidth().height(48.dp).testTag("dialog_export_xmodel_btn"),
+          ) { Text(".XMODEL_EXPORT (BO3 Rig & Mesh)") }
+          OutlinedButton(
+            onClick = {
+              pendingRigExportText = Bo3ModToolsExporter.generateXAnimExport(snapshotRig, bo3Opts)
+              showRigExportDialog = false
+              rigExportLauncher.launch("${slug}_${clipSlug}.xanim_export")
+            },
+            modifier = Modifier.fillMaxWidth().height(48.dp).testTag("dialog_export_xanim_btn"),
+          ) { Text(".XANIM_EXPORT (BO3 Animation)") }
+          OutlinedButton(
+            onClick = {
+              pendingRigExportText = Bo3ModToolsExporter.generateCoDBlenderBo3Script(snapshotRig, bo3Opts)
+              showRigExportDialog = false
+              rigExportLauncher.launch("${slug}_bo3_blender.py")
+            },
+            modifier = Modifier.fillMaxWidth().height(48.dp).testTag("dialog_export_cod_blender_btn"),
+          ) { Text("CoD-Blender BO3 Script (.PY)") }
+          OutlinedButton(
+            onClick = {
+              val text = PortablePackageGenerator.generateBlenderRigScript(snapshotRig)
+              val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_SUBJECT, "${snapshotRig.name} — UnknownBlend Rig")
+                putExtra(Intent.EXTRA_TEXT, text)
+              }
+              showRigExportDialog = false
+              context.startActivity(Intent.createChooser(shareIntent, "Share Blender .PY Script"))
+            },
+            modifier = Modifier.fillMaxWidth().height(48.dp).testTag("dialog_share_blender_py_btn"),
+          ) { Text("Share Standard Blender .PY") }
+        }
+      },
+      confirmButton = {
+        TextButton(onClick = { showRigExportDialog = false }) { Text("Close") }
+      },
+    )
   }
 
   if (showNewRigDialog) {

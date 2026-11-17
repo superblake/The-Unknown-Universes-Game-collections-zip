@@ -170,31 +170,4 @@ class ExampleRobolectricTest {
     composeRule.onNodeWithTag("sign_out_xbox").assertIsDisplayed()
     composeRule.onNodeWithTag("sign_out_psn").assertIsDisplayed()
   }
-
-  @Test
-  fun `auth screen detects linked platform sessions and expands other logins`() {
-    val links = listOf(
-      com.example.data.model.LinkedAccount(
-        id = "local_steam",
-        userId = "local_operator",
-        providerId = "steam",
-        displayName = "SteamBlake",
-        externalSubject = "76561198000000000",
-      ),
-    )
-    composeRule.setContent {
-      UnknownUniversesTheme(darkTheme = true) {
-        AuthScreen(
-          linkedAccounts = links,
-          onBootLocalOperator = {},
-        )
-      }
-    }
-    composeRule.onNodeWithTag("auth_other_logins_card").performScrollTo().assertIsDisplayed()
-    composeRule.onNodeWithText("1 platform login(s) detected on device").assertIsDisplayed()
-    composeRule.onNodeWithText("Steam: SteamBlake").assertIsDisplayed()
-    composeRule.onNodeWithTag("toggle_other_logins_btn").performClick()
-    composeRule.onNodeWithTag("auth_sign_out_steam").performScrollTo().assertIsDisplayed()
-    composeRule.onNodeWithTag("auth_login_xbox").performScrollTo().assertIsDisplayed()
-  }
 }

@@ -46,7 +46,15 @@ data class ExternalOAuthProviderSpec(
 
   fun isConfigured(context: Context? = null): Boolean {
     val v = configuredValue(context)
-    return v.isNotEmpty() && !v.startsWith("MY_")
+    if (v.isEmpty() || v.startsWith("MY_") || v.contains(' ')) return false
+    if (v.equals("Neargooglelogin", ignoreCase = true)) return false
+    return when (protocol) {
+      OAuthProtocol.STEAM_OPENID_2 -> {
+        val uri = runCatching { v.toUri() }.getOrNull() ?: return false
+        (uri.scheme == "https" || uri.scheme == "http") && !uri.host.isNullOrBlank()
+      }
+      OAuthProtocol.OAUTH2_PKCE -> v.length >= 8
+    }
   }
 
   fun redirectUri(): String = "unknownuniverses://auth/$id"

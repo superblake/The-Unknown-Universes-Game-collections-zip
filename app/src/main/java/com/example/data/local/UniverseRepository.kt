@@ -389,6 +389,7 @@ class UniverseRepository(
         externalSubject = externalSubject.trim().take(128).ifEmpty { providerId },
         linkedAtMillis = System.currentTimeMillis(),
       )
+      dao.deleteLinkedAccount(userId, providerId)
       dao.upsertLinkedAccount(account)
       mirrorCloud(userId) { it.pushLinkedAccount(account) }
       Result.success(Unit)
@@ -485,6 +486,65 @@ class UniverseRepository(
       val cloudNote = if (isCloudSyncAvailableFor(userId)) " & synced to Cloud" else ""
       Result.success(
         "$modeLabel save (${targetProfile.callsign}: ${resolvedArmory.size} modules, ${resolvedRigs.size} rigs)$cloudNote",
+      )
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      Result.failure(e)
+    }
+  }
+
+  suspend fun importSteamWorkshopPreview(
+    userId: String,
+    preview: com.example.export.SteamWorkshopImportPreview,
+    importModulePreset: Boolean = true,
+    importRigPreset: Boolean = true,
+  ): Result<String> {
+    return try {
+      val now = System.currentTimeMillis()
+      val itemsToSave = buildList {
+        addAll(preview.armoryItems.map { it.copy(userId = userId, isCustom = true, updatedAtMillis = now) })
+        if (preview.armoryItems.isEmpty() && importModulePreset) {
+          preview.generatedModule?.let {
+            add(it.copy(userId = userId, isCustom = true, updatedAtMillis = now))
+          }
+        }
+      }
+      val rigsToSave = buildList {
+        addAll(preview.customRigs.map { it.copy(userId = userId, updatedAtMillis = now) })
+        if (preview.customRigs.isEmpty() && importRigPreset) {
+          preview.generatedRig?.let {
+            add(it.copy(userId = userId, updatedAtMillis = now))
+          }
+        }
+      }
+
+      if (itemsToSave.isEmpty() && rigsToSave.isEmpty()) {
+        return Result.failure(IllegalStateException("Select at least one Armory Module or Rig to import."))
+      }
+
+      if (itemsToSave.isNotEmpty()) {
+        dao.upsertArmoryItems(itemsToSave)
+      }
+      if (rigsToSave.isNotEmpty()) {
+        dao.upsertRigs(rigsToSave)
+        val firstRig = rigsToSave.first()
+        val profile = dao.getProfileOnce(userId)
+        if (profile != null) {
+          val updatedProfile = profile.copy(activeRigId = firstRig.id, updatedAtMillis = now)
+          dao.upsertProfile(updatedProfile)
+          mirrorCloud(userId) { it.pushProfile(updatedProfile) }
+        }
+      }
+
+      mirrorCloud(userId) { sync ->
+        itemsToSave.forEach { sync.pushArmoryItem(it) }
+        rigsToSave.forEach { sync.pushRigAsset(it) }
+      }
+
+      val cloudNote = if (isCloudSyncAvailableFor(userId)) " & synced to Cloud" else ""
+      Result.success(
+        "Steam Workshop imported '${preview.title}': ${itemsToSave.size} module(s), ${rigsToSave.size} rig(s)$cloudNote",
       )
     } catch (e: CancellationException) {
       throw e

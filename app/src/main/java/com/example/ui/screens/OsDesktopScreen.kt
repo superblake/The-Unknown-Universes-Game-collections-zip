@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
+import com.example.export.SteamWorkshopImportPreview
 import com.example.ui.theme.AppIcons
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -82,6 +83,7 @@ fun OsDesktopScreen(
   onRequestSaveExportJson: ((String) -> Unit) -> Unit = {},
   onParseSaveJson: (String) -> Result<SaveBundlePreview> = { Result.failure(IllegalStateException("Unavailable")) },
   onConfirmSaveImport: (SaveBundlePreview, Boolean) -> Unit = { _, _ -> },
+  onConfirmWorkshopImport: (SteamWorkshopImportPreview, Boolean, Boolean) -> Unit = { _, _, _ -> },
   activeWallpaperPath: String?,
   onSelectUniverse: (String) -> Unit,
   onSelectMode: (String) -> Unit,
@@ -636,6 +638,19 @@ fun OsDesktopScreen(
         onLinkExternal = onLinkAccount,
         onUnlinkExternal = onUnlinkAccount,
         onStatusMessage = onStatusMessage,
+      )
+    }
+
+    // Steam Workshop Export & Import Card
+    item {
+      SteamWorkshopCard(
+        profile = profile,
+        armory = armory,
+        rigs = rigs,
+        linkedSteamAccount = linkedAccounts.firstOrNull { it.providerId == "steam" },
+        onConfirmWorkshopImport = onConfirmWorkshopImport,
+        onStatusMessage = onStatusMessage,
+        onOpenBo3Export = onOpenExport,
       )
     }
   }

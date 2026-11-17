@@ -17,4 +17,15 @@
     <string name="share_save_btn">Share Save</string>
     <string name="import_save_btn">Import (.JSON)</string>
     <string name="paste_save_btn">Paste JSON</string>
+    <string name="export_bo3_xmodel_btn">Export .XMODEL_EXPORT (BO3 Rig &amp; Mesh)</string>
+    <string name="export_bo3_xanim_btn">Export .XANIM_EXPORT (BO3 Animation)</string>
+    <string name="export_bo3_gdt_btn">Export BO3 .GDT Asset Definition</string>
+    <string name="export_bo3_blender_btn">Export CoD-Blender BO3 Script (.PY)</string>
+    <string name="steam_workshop_title">STEAM WORKSHOP &amp; MOD LOADER</string>
+    <string name="steam_workshop_fetch_btn">Fetch Steam Workshop Item</string>
+    <string name="steam_workshop_import_file_btn">Import .VDF / .JSON</string>
+    <string name="steam_workshop_paste_btn">Paste Workshop Code</string>
+    <string name="steam_workshop_export_vdf_btn">Export SteamCMD .VDF</string>
+    <string name="steam_workshop_export_json_btn">Export Workshop .JSON</string>
+    <string name="steam_workshop_share_btn">Share Steam Workshop Pack</string>
 </resources>

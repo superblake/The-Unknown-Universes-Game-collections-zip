@@ -148,7 +148,7 @@ fun CrossPlatformAccountsCard(
         }
       }
 
-      // Official Console & Mobile Account Portals: Apple (iOS) & Xbox (Microsoft)
+      // Console & Mobile Account Portals: Apple (iOS), Xbox (Microsoft), PlayStation, Nintendo, Ubisoft
       PlatformOAuthManager.platformPortalProviders.forEach { spec ->
         val linked = externalLinkedMap[spec.providerId]
         PlatformAccountRow(
@@ -184,6 +184,7 @@ fun CrossPlatformAccountsCard(
             linked != null -> "Signed in: ${linked.displayName}"
             isPending -> "Waiting for ${spec.label} login return..."
             spec.id == "steam" -> "Live Steam Community check or OpenID sign-in"
+            spec.id == "epic" -> "PC & Cross-Platform Bridge (auto-syncs PSN, Nintendo & Ubisoft via OAuth)"
             configured -> "Direct in-app OAuth ready"
             else -> "Sign in via official portal (auto-detected on return)"
           },
@@ -199,35 +200,6 @@ fun CrossPlatformAccountsCard(
       }
 
       HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
-
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-      ) {
-        Text(
-          text = "EPIC ACCOUNT BRIDGE",
-          style = MaterialTheme.typography.labelLarge,
-          color = MaterialTheme.colorScheme.tertiary,
-        )
-        OutlinedButton(
-          onClick = {
-            val res = PlatformOAuthManager.openEpicConnectionsPortal(context)
-            if (res.isFailure) {
-              onStatusMessage(res.exceptionOrNull()?.localizedMessage ?: "Unable to open browser")
-            }
-          },
-          shape = RoundedCornerShape(10.dp),
-          modifier = Modifier.testTag("open_epic_connections_btn"),
-        ) {
-          Text("Epic Connections", style = MaterialTheme.typography.labelSmall)
-        }
-      }
-      Text(
-        text = "Sign in directly with PlayStation, Nintendo & Ubisoft below, or link them all via Epic Connections.",
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-      )
 
       PlatformOAuthManager.epicBridgedPlatforms.forEach { bridgedSpec ->
         val synced = externalLinkedMap[bridgedSpec.providerId]

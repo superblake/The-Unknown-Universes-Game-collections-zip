@@ -19,16 +19,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Share
 import com.example.ui.theme.AppIcons
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -50,6 +53,9 @@ import com.example.data.model.ArmoryItem
 import com.example.data.model.OperatorProfile
 import com.example.data.model.RigAsset
 import com.example.data.model.UniverseCatalog
+import com.example.export.Bo3BoneMappingMode
+import com.example.export.Bo3ExportOptions
+import com.example.export.Bo3ModToolsExporter
 import com.example.export.PortablePackageGenerator
 
 @Composable
@@ -70,11 +76,36 @@ fun ExportCompatScreen(
   val activeRig = rigs.firstOrNull { it.id == profile.activeRigId } ?: rigs.firstOrNull()
   val activeConsole = UniverseCatalog.consoleById(profile.consolePreset)
 
+  var bo3BoneMode by remember { mutableStateOf(Bo3BoneMappingMode.TREYARCH_CHARACTER) }
+  var bo3UseInches by remember { mutableStateOf(true) }
+  var bo3Fps by remember { mutableStateOf(30) }
+  var bo3IncludeNotetracks by remember { mutableStateOf(true) }
+  val bo3Options = remember(bo3BoneMode, bo3UseInches, bo3Fps, bo3IncludeNotetracks) {
+    Bo3ExportOptions(
+      boneMode = bo3BoneMode,
+      useBo3Inches = bo3UseInches,
+      fps = bo3Fps,
+      includeNotetracks = bo3IncludeNotetracks,
+    )
+  }
+
   var previewKind by remember { mutableStateOf("html") }
-  val previewText = remember(profile, armory, activeRig, previewKind) {
+  val previewText = remember(profile, armory, activeRig, previewKind, bo3Options) {
     when (previewKind) {
       "py" ->
         if (activeRig != null) PortablePackageGenerator.generateBlenderRigScript(activeRig)
+        else "# Create a rig in ForgeRig Studio first"
+      "xmodel" ->
+        if (activeRig != null) Bo3ModToolsExporter.generateXModelExport(activeRig, bo3Options)
+        else "// Create a rig in ForgeRig Studio first"
+      "xanim" ->
+        if (activeRig != null) Bo3ModToolsExporter.generateXAnimExport(activeRig, bo3Options)
+        else "// Create a rig in ForgeRig Studio first"
+      "gdt" ->
+        if (activeRig != null) Bo3ModToolsExporter.generateGdtPackage(profile, armory, activeRig, bo3Options)
+        else "// Create a rig in ForgeRig Studio first"
+      "bo3_py" ->
+        if (activeRig != null) Bo3ModToolsExporter.generateCoDBlenderBo3Script(activeRig, bo3Options)
         else "# Create a rig in ForgeRig Studio first"
       "json" -> PortablePackageGenerator.generatePortableJsonBundle(profile, armory, rigs)
       else -> PortablePackageGenerator.generatePlayableHtmlPackage(profile, armory, activeRig)
@@ -96,12 +127,15 @@ fun ExportCompatScreen(
       }
     }
 
-  LazyColumn(
-    modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
-    contentPadding = PaddingValues(16.dp),
+  Column(
+    modifier = Modifier
+      .fillMaxSize()
+      .verticalScroll(rememberScrollState())
+      .background(MaterialTheme.colorScheme.background)
+      .padding(16.dp)
+      .testTag("export_compat_list"),
     verticalArrangement = Arrangement.spacedBy(14.dp),
   ) {
-    item {
       Surface(
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
@@ -122,9 +156,7 @@ fun ExportCompatScreen(
           )
         }
       }
-    }
 
-    item {
       CloudSyncAndSaveCard(
         callsign = profile.callsign,
         cloudSyncState = cloudSyncState,
@@ -135,10 +167,8 @@ fun ExportCompatScreen(
         onConfirmSaveImport = onConfirmSaveImport,
         onStatusMessage = onStatusMessage,
       )
-    }
 
     // Console / iOS / PC Target Presets
-    item {
       Text("TARGET CONTROLLER & BROWSER PROFILE", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
       Spacer(Modifier.height(8.dp))
       Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -187,10 +217,8 @@ fun ExportCompatScreen(
           }
         }
       }
-    }
 
     // Download Actions
-    item {
       Surface(
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
@@ -268,25 +296,196 @@ fun ExportCompatScreen(
           }
         }
       }
-    }
+
+    // Call of Duty: Black Ops 3 Mod Tools Exporter
+      val rigSlug = activeRig?.let { Bo3ModToolsExporter.sanitizeAssetSlug(it.name) } ?: "unknown_rig"
+      val clipSlug = activeRig?.let { Bo3ModToolsExporter.sanitizeAssetSlug(it.activeClip, "idle") } ?: "idle"
+      Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth()
+          .border(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.55f), RoundedCornerShape(18.dp))
+          .testTag("bo3_mod_tools_card"),
+      ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          Text(
+            text = "BO3 MOD TOOLS EXPORTER (APE / RADIANT)",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.tertiary,
+          )
+          Text(
+            text = "Export real Treyarch Black Ops 3 Mod Tools assets from ${activeRig?.name ?: "your active ForgeRig"} — ASCII .XMODEL_EXPORT (v6), .XANIM_EXPORT (v3), APE .GDT asset entries, and CoD-Blender scripts.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+
+          Text("SKELETON BONE MAPPING", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+          Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+          ) {
+            Bo3BoneMappingMode.entries.forEach { mode ->
+              FilterChip(
+                selected = bo3BoneMode == mode,
+                onClick = { bo3BoneMode = mode },
+                label = { Text(mode.label) },
+                modifier = Modifier.testTag("bo3_bone_mode_${mode.id}"),
+              )
+            }
+          }
+          Text(
+            text = bo3BoneMode.description,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+
+          Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+          ) {
+            FilterChip(
+              selected = bo3UseInches,
+              onClick = { bo3UseInches = true },
+              label = { Text("BO3 Inches (39.37x)") },
+              modifier = Modifier.testTag("bo3_scale_inches_chip"),
+            )
+            FilterChip(
+              selected = !bo3UseInches,
+              onClick = { bo3UseInches = false },
+              label = { Text("Meters (1.0x)") },
+              modifier = Modifier.testTag("bo3_scale_meters_chip"),
+            )
+            FilterChip(
+              selected = bo3Fps == 30,
+              onClick = { bo3Fps = 30 },
+              label = { Text("30 FPS") },
+              modifier = Modifier.testTag("bo3_fps_30_chip"),
+            )
+            FilterChip(
+              selected = bo3Fps == 60,
+              onClick = { bo3Fps = 60 },
+              label = { Text("60 FPS") },
+              modifier = Modifier.testTag("bo3_fps_60_chip"),
+            )
+          }
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Text("Include XANIM Notetracks", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+            Switch(
+              checked = bo3IncludeNotetracks,
+              onCheckedChange = { bo3IncludeNotetracks = it },
+              modifier = Modifier.testTag("bo3_notetracks_switch"),
+            )
+          }
+
+          Button(
+            onClick = {
+              if (activeRig != null) {
+                pendingFileContent = Bo3ModToolsExporter.generateXModelExport(activeRig, bo3Options)
+                previewKind = "xmodel"
+                createDocumentLauncher.launch("${rigSlug}_rig.xmodel_export")
+              } else {
+                onStatusMessage("Open ForgeRig Studio first to select a rig.")
+              }
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().height(48.dp).testTag("download_bo3_xmodel_btn"),
+          ) {
+            Icon(AppIcons.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.export_bo3_xmodel_btn), style = MaterialTheme.typography.labelLarge)
+          }
+
+          OutlinedButton(
+            onClick = {
+              if (activeRig != null) {
+                pendingFileContent = Bo3ModToolsExporter.generateXAnimExport(activeRig, bo3Options)
+                previewKind = "xanim"
+                createDocumentLauncher.launch("${rigSlug}_${clipSlug}.xanim_export")
+              } else {
+                onStatusMessage("Open ForgeRig Studio first to select a rig.")
+              }
+            },
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().height(48.dp).testTag("download_bo3_xanim_btn"),
+          ) {
+            Icon(AppIcons.Animation, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.export_bo3_xanim_btn), style = MaterialTheme.typography.labelLarge)
+          }
+
+          OutlinedButton(
+            onClick = {
+              if (activeRig != null) {
+                pendingFileContent = Bo3ModToolsExporter.generateGdtPackage(profile, armory, activeRig, bo3Options)
+                previewKind = "gdt"
+                createDocumentLauncher.launch("${rigSlug}_bo3_assets.gdt")
+              } else {
+                onStatusMessage("Open ForgeRig Studio first to select a rig.")
+              }
+            },
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().height(48.dp).testTag("download_bo3_gdt_btn"),
+          ) {
+            Icon(AppIcons.Code, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.export_bo3_gdt_btn), style = MaterialTheme.typography.labelLarge)
+          }
+
+          OutlinedButton(
+            onClick = {
+              if (activeRig != null) {
+                pendingFileContent = Bo3ModToolsExporter.generateCoDBlenderBo3Script(activeRig, bo3Options)
+                previewKind = "bo3_py"
+                createDocumentLauncher.launch("${rigSlug}_bo3_blender.py")
+              } else {
+                onStatusMessage("Open ForgeRig Studio first to select a rig.")
+              }
+            },
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().height(48.dp).testTag("download_bo3_blender_btn"),
+          ) {
+            Icon(AppIcons.Code, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(stringResource(R.string.export_bo3_blender_btn), style = MaterialTheme.typography.labelLarge)
+          }
+        }
+      }
 
     // Live Source Code Preview
-    item {
       Surface(
         shape = RoundedCornerShape(16.dp),
         color = Color(0xFF05070D),
         modifier = Modifier.fillMaxWidth()
-          .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp)),
+          .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp))
+          .testTag("preview_code_card"),
       ) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("html" to "HTML5 Build", "py" to "Blender .PY", "json" to "Manifest .JSON").forEach { (k, label) ->
+          Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+          ) {
+            listOf(
+              "html" to "HTML5 Build",
+              "py" to "Blender .PY",
+              "xmodel" to "BO3 .XMODEL",
+              "xanim" to "BO3 .XANIM",
+              "gdt" to "BO3 .GDT",
+              "bo3_py" to "CoD-Blender .PY",
+              "json" to "Manifest .JSON",
+            ).forEach { (k, label) ->
               OutlinedButton(
                 onClick = { previewKind = k },
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.outlinedButtonColors(
                   containerColor = if (previewKind == k) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else Color.Transparent,
                 ),
+                modifier = Modifier.testTag("preview_tab_$k"),
               ) {
                 Text(label, style = MaterialTheme.typography.labelSmall)
               }
@@ -299,6 +498,5 @@ fun ExportCompatScreen(
           )
         }
       }
-    }
   }
 }

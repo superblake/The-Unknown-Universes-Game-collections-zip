@@ -143,13 +143,41 @@ class PlatformOAuthTest {
   @Test
   fun runtimeClientIdOverride_persistsAndEnablesOAuthConfig() {
     val context = ApplicationProvider.getApplicationContext<Context>()
+    val placeholderEpicSpec = ExternalOAuthProviderSpec(
+      id = "epic",
+      label = "Epic Games",
+      platformGroup = "PC",
+      protocol = OAuthProtocol.OAUTH2_PKCE,
+      authEndpoint = "https://www.epicgames.com/id/authorize",
+      tokenEndpoint = "https://api.epicgames.dev/epic/oauth/v2/token",
+      scope = "basic_profile",
+      secretKeyName = "EPIC_CLIENT_ID",
+      accentHex = 0xFFFFFFFF,
+      configValueProvider = { "Neargooglelogin" },
+    )
+    PlatformOAuthManager.saveRuntimeClientId(context, "epic", "")
+    assertFalse(placeholderEpicSpec.isConfigured(context))
+
+    val invalidSteamSpec = ExternalOAuthProviderSpec(
+      id = "steam",
+      label = "Steam",
+      platformGroup = "PC",
+      protocol = OAuthProtocol.STEAM_OPENID_2,
+      authEndpoint = "https://steamcommunity.com/openid/login",
+      tokenEndpoint = "https://steamcommunity.com/openid/login",
+      scope = "",
+      secretKeyName = "STEAM_OPENID_RETURN_URL",
+      accentHex = 0xFFFFFFFF,
+      configValueProvider = { "Neargooglelogin" },
+    )
+    assertFalse(invalidSteamSpec.isConfigured(context))
+
     PlatformOAuthManager.saveRuntimeClientId(context, "epic", "epic_custom_client_xyz")
-    val epicSpec = PlatformOAuthManager.externalOAuthProviders.first { it.id == "epic" }
-    assertTrue(epicSpec.isConfigured(context))
-    assertEquals("epic_custom_client_xyz", epicSpec.configuredValue(context))
+    assertTrue(placeholderEpicSpec.isConfigured(context))
+    assertEquals("epic_custom_client_xyz", placeholderEpicSpec.configuredValue(context))
 
     PlatformOAuthManager.saveRuntimeClientId(context, "epic", "")
-    assertFalse(epicSpec.isConfigured(context))
+    assertFalse(placeholderEpicSpec.isConfigured(context))
     PlatformOAuthManager.clearPendingAuth(context)
     assertNull(PlatformOAuthManager.restorePendingAuth(context))
   }

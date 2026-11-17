@@ -1,15 +1,11 @@
 package com.example.ui.auth
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -32,7 +28,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,59 +50,21 @@ import androidx.compose.ui.unit.dp
 import androidx.credentials.CredentialManager
 import com.example.BuildConfig
 import com.example.R
-import com.example.data.model.LinkedAccount
 import com.example.ui.theme.AppIcons
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AuthScreen(
   initialCallsign: String = "VanguardPrime",
-  linkedAccounts: List<LinkedAccount> = emptyList(),
-  externalAuthNotice: String? = null,
-  externalAuthError: String? = null,
-  onLinkExternalAccount: (providerId: String, displayName: String, externalSubject: String) -> Unit = { _, _, _ -> },
-  onUnlinkExternalAccount: (providerId: String) -> Unit = {},
   onBootLocalOperator: (callsign: String) -> Unit,
 ) {
   var callsign by remember(initialCallsign) { mutableStateOf(initialCallsign) }
   var validationError by remember { mutableStateOf<String?>(null) }
   var authNotice by remember { mutableStateOf<String?>(null) }
   var isGoogleSigningIn by remember { mutableStateOf(false) }
-  var showOtherLogins by remember { mutableStateOf(false) }
 
   val context = LocalContext.current
   val coroutineScope = rememberCoroutineScope()
   val credentialManager = remember(context) { CredentialManager.create(context) }
-  val linkedByProvider = remember(linkedAccounts) { linkedAccounts.associateBy { it.providerId } }
-
-  LaunchedEffect(externalAuthNotice) {
-    if (!externalAuthNotice.isNullOrBlank()) {
-      authNotice = externalAuthNotice
-      validationError = null
-    }
-  }
-  LaunchedEffect(externalAuthError) {
-    if (!externalAuthError.isNullOrBlank()) {
-      validationError = externalAuthError
-    }
-  }
-
-  val platformController = rememberPlatformSignInController(
-    onAccountLinked = { providerId, displayName, externalSubject ->
-      onLinkExternalAccount(providerId, displayName, externalSubject)
-      val metaLabel = PlatformOAuthManager.findPlatformMeta(providerId)?.label ?: providerId
-      validationError = null
-      authNotice = "Signed in with $metaLabel ($displayName). Tap Boot UnknownOS to enter."
-      if (callsign.trim() == "VanguardPrime" || callsign.trim().length < 2) {
-        val candidate = displayName.substringBefore(" (via ").trim().take(30)
-        if (candidate.length >= 2) callsign = candidate
-      }
-    },
-    onStatusMessage = { msg ->
-      validationError = null
-      authNotice = msg
-    },
-  )
 
   val handleGoogleSignInSuccess: (String?) -> Unit = { googleName ->
     isGoogleSigningIn = false
@@ -317,154 +274,6 @@ fun AuthScreen(
                   text = "Sign in with Google",
                   style = MaterialTheme.typography.labelLarge,
                 )
-              }
-            }
-
-            // Other Platform Logins & Detected Linked Sessions
-            Surface(
-              shape = RoundedCornerShape(14.dp),
-              color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-              modifier = Modifier
-                .fillMaxWidth()
-                .border(
-                  1.dp,
-                  if (linkedAccounts.isNotEmpty()) Color(0xFF00E676).copy(alpha = 0.45f)
-                  else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
-                  RoundedCornerShape(14.dp),
-                )
-                .testTag("auth_other_logins_card"),
-            ) {
-              Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-              ) {
-                Row(
-                  modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { showOtherLogins = !showOtherLogins }
-                    .testTag("toggle_other_logins_btn"),
-                  verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                  Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                      text = "Other Platform Logins",
-                      style = MaterialTheme.typography.titleSmall,
-                      color = if (linkedAccounts.isNotEmpty()) Color(0xFF00E676) else MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                      text = if (linkedAccounts.isNotEmpty()) {
-                        "${linkedAccounts.size} platform login(s) detected on device"
-                      } else {
-                        "Apple, Xbox, Steam, Epic, PSN, Nintendo, Ubisoft, GOG, EA & more"
-                      },
-                      style = MaterialTheme.typography.labelSmall,
-                      color = if (linkedAccounts.isNotEmpty()) Color(0xFF00E676) else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                  }
-                  TextButton(onClick = { showOtherLogins = !showOtherLogins }) {
-                    Text(if (showOtherLogins) "Hide" else "Manage")
-                  }
-                }
-
-                if (linkedAccounts.isNotEmpty()) {
-                  FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                  ) {
-                    linkedAccounts.forEach { acc ->
-                      val label = PlatformOAuthManager.findPlatformMeta(acc.providerId)?.label
-                        ?.substringBefore(" (")
-                        ?: acc.providerId
-                      Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = Color(0xFF00E676).copy(alpha = 0.14f),
-                        modifier = Modifier.border(
-                          1.dp,
-                          Color(0xFF00E676).copy(alpha = 0.4f),
-                          RoundedCornerShape(8.dp),
-                        ),
-                      ) {
-                        Text(
-                          text = "$label: ${acc.displayName}",
-                          style = MaterialTheme.typography.labelSmall,
-                          color = Color(0xFF00E676),
-                          modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        )
-                      }
-                    }
-                  }
-                }
-
-                AnimatedVisibility(visible = showOtherLogins) {
-                  Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PlatformOAuthManager.allUnifiedPlatforms().forEach { meta ->
-                      val linked = linkedByProvider[meta.providerId]
-                      val isPending = platformController.pendingAuth?.providerId == meta.providerId
-                      Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = if (linked != null) {
-                          Color(0xFF00E676).copy(alpha = 0.12f)
-                        } else {
-                          MaterialTheme.colorScheme.surface.copy(alpha = 0.65f)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                      ) {
-                        Row(
-                          modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                          verticalAlignment = Alignment.CenterVertically,
-                          horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                          Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                              text = meta.label,
-                              style = MaterialTheme.typography.labelLarge,
-                              color = if (linked != null) Color(0xFF00E676) else Color(meta.accentHex),
-                            )
-                            Text(
-                              text = when {
-                                linked != null -> "Signed in: ${linked.displayName}"
-                                isPending -> "Waiting for browser return..."
-                                else -> meta.subtitle
-                              },
-                              style = MaterialTheme.typography.labelSmall,
-                              color = if (linked != null) Color(0xFF00E676) else MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                          }
-                          Spacer(Modifier.width(8.dp))
-                          when {
-                            linked != null -> {
-                              TextButton(
-                                onClick = { onUnlinkExternalAccount(meta.providerId) },
-                                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                                modifier = Modifier.testTag("auth_sign_out_${meta.providerId}"),
-                              ) {
-                                Text("Sign Out")
-                              }
-                            }
-                            isPending -> {
-                              OutlinedButton(
-                                onClick = { platformController.openVerificationDialog(meta.providerId) },
-                                shape = RoundedCornerShape(8.dp),
-                              ) {
-                                Text("Finish")
-                              }
-                            }
-                            else -> {
-                              OutlinedButton(
-                                onClick = { platformController.startSignIn(meta.providerId) },
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.testTag("auth_login_${meta.providerId}"),
-                              ) {
-                                Text("Sign In")
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
               }
             }
 

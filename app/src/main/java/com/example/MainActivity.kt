@@ -75,7 +75,6 @@ import com.example.ui.theme.UnknownUniversesTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
   private val pendingOAuthRedirect = MutableStateFlow<Uri?>(null)
@@ -165,58 +164,10 @@ fun AppNavigation(
   }
 
   val currentUserId = signedInGoogleUid ?: LOCAL_OPERATOR_ID
-  val repository = remember(context) { UniverseRepository(context.applicationContext) }
-  val detectedBootLinks by remember(currentUserId, repository) {
-    repository.observeLinkedAccounts(currentUserId)
-  }.collectAsStateWithLifecycle(initialValue = emptyList())
-  var authExternalNotice by remember { mutableStateOf<String?>(null) }
-  var authExternalError by remember { mutableStateOf<String?>(null) }
-  val bootOAuthRedirectUri by pendingOAuthRedirect.collectAsStateWithLifecycle()
-
-  LaunchedEffect(bootOAuthRedirectUri, isSessionActive, currentUserId) {
-    if (!isSessionActive) {
-      val uri = bootOAuthRedirectUri ?: return@LaunchedEffect
-      onConsumeRedirect()
-      when (val outcome = PlatformOAuthManager.handleRedirectUri(context, uri)) {
-        is OAuthCallbackResult.Linked -> {
-          repository.saveLinkedAccount(currentUserId, outcome.providerId, outcome.displayName, outcome.externalSubject)
-          outcome.bridgedAccounts.forEach { bridged ->
-            repository.saveLinkedAccount(currentUserId, bridged.providerId, bridged.displayName, bridged.externalSubject)
-          }
-          authExternalError = null
-          authExternalNotice = if (outcome.bridgedAccounts.isEmpty()) {
-            "Signed in with ${outcome.displayName}. Tap Boot UnknownOS to enter."
-          } else {
-            "Signed in with ${outcome.displayName} (+${outcome.bridgedAccounts.size} bridged accounts)."
-          }
-        }
-        is OAuthCallbackResult.Failed -> {
-          authExternalError = outcome.message
-        }
-        null -> Unit
-      }
-    }
-  }
 
   if (!isSessionActive) {
     AuthScreen(
       initialCallsign = activeCallsign,
-      linkedAccounts = detectedBootLinks,
-      externalAuthNotice = authExternalNotice,
-      externalAuthError = authExternalError,
-      onLinkExternalAccount = { providerId, displayName, externalSubject ->
-        scope.launch {
-          repository.ensureStarterData(currentUserId, activeCallsign)
-          repository.saveLinkedAccount(currentUserId, providerId, displayName, externalSubject)
-        }
-      },
-      onUnlinkExternalAccount = { providerId ->
-        scope.launch {
-          repository.unlinkAccount(currentUserId, providerId)
-          authExternalError = null
-          authExternalNotice = "Signed out of $providerId."
-        }
-      },
       onBootLocalOperator = { callsign ->
         activeCallsign = callsign
         prefs.edit {
@@ -462,6 +413,7 @@ fun UnknownOsShell(
                   onRequestSaveExportJson = viewModel::exportSaveJson,
                   onParseSaveJson = viewModel::parseSavePreview,
                   onConfirmSaveImport = viewModel::importSavePreview,
+                  onConfirmWorkshopImport = viewModel::importSteamWorkshopPreview,
                   activeWallpaperPath = activeWallpaperPath,
                   onSelectUniverse = viewModel::selectUniverse,
                   onSelectMode = viewModel::selectMode,
@@ -503,6 +455,7 @@ fun UnknownOsShell(
                   activeRigId = state.profile.activeRigId,
                   onSelectRig = viewModel::selectActiveRig,
                   onSaveRig = viewModel::saveRig,
+                  onStatusMessage = viewModel::showBanner,
                 )
 
                 OsWorkspaceTab.ARMORY -> ArmoryScreen(

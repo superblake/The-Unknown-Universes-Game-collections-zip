@@ -180,6 +180,26 @@ class UniverseViewModel(
     }
   }
 
+  fun importSteamWorkshopPreview(
+    preview: com.example.export.SteamWorkshopImportPreview,
+    importModulePreset: Boolean = true,
+    importRigPreset: Boolean = true,
+  ) {
+    viewModelScope.launch {
+      val res = repository.importSteamWorkshopPreview(
+        userId = currentUserId,
+        preview = preview,
+        importModulePreset = importModulePreset,
+        importRigPreset = importRigPreset,
+      )
+      _statusBanner.value = if (res.isSuccess) {
+        res.getOrThrow()
+      } else {
+        res.exceptionOrNull()?.localizedMessage ?: "Steam Workshop import failed"
+      }
+    }
+  }
+
   fun selectUniverse(universeId: String) {
     viewModelScope.launch {
       val world = UniverseCatalog.worldById(universeId)
