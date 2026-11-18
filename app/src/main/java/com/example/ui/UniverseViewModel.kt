@@ -12,6 +12,7 @@ import com.example.data.model.ArmoryItem
 import com.example.data.model.BattlePassVersion
 import com.example.data.model.ChallengeState
 import com.example.data.model.CharacterCustomization
+import com.example.data.model.GearSlot
 import com.example.data.model.LevelCustomization
 import com.example.data.model.LinkedAccount
 import com.example.data.model.MatchProgressionReport
@@ -445,6 +446,54 @@ class UniverseViewModel(
   fun refreshCompletedChallenges() {
     progressionStore?.resetCompletedChallengesForReplay()
     _statusBanner.value = "Completed challenges reset for replay!"
+  }
+
+  fun upgradeEquipment(slotId: String) {
+    progressionStore?.upgradeEquipment(slotId)
+    _statusBanner.value = "Upgraded Equipment in $slotId slot!"
+  }
+
+  fun prestigeEquipment(slotId: String) {
+    val store = progressionStore ?: return
+    val res = store.prestigeEquipment(slotId)
+    if (res.isFailure) {
+      _statusBanner.value = res.exceptionOrNull()?.message ?: "Cannot prestige equipment"
+      return
+    }
+    val reward = res.getOrThrow()
+    viewModelScope.launch {
+      if (reward > 0L) repository.adjustOperatorEssence(currentUserId, reward)
+      _statusBanner.value = "Equipment Prestiged! (+$reward Essence)"
+    }
+  }
+
+  fun equipEquipment(slotId: String, itemId: String) {
+    progressionStore?.equipEquipment(slotId, itemId)
+    _statusBanner.value = "Equipped $itemId in $slotId slot!"
+  }
+
+  fun upgradeGear(slot: GearSlot) {
+    progressionStore?.upgradeGear(slot)
+    _statusBanner.value = "Upgraded ${slot.displayName}!"
+  }
+
+  fun prestigeGear() {
+    progressionStore?.prestigeGear()
+    _statusBanner.value = "All Gear Prestiged!"
+  }
+
+  fun unlockSkill(nodeId: String, currentEssence: Long) {
+    val store = progressionStore ?: return
+    val res = store.unlockSkillNode(nodeId, currentEssence)
+    if (res.isFailure) {
+      _statusBanner.value = res.exceptionOrNull()?.message ?: "Cannot unlock skill"
+      return
+    }
+    val cost = res.getOrThrow()
+    viewModelScope.launch {
+      if (cost > 0L) repository.adjustOperatorEssence(currentUserId, -cost)
+      _statusBanner.value = "Skill Node Unlocked! (-$cost Essence)"
+    }
   }
 
   fun recordArenaProgression(report: MatchProgressionReport) {

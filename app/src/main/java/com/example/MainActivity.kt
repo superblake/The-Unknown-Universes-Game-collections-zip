@@ -517,6 +517,12 @@ fun UnknownOsShell(
                   onClaimPassTier = viewModel::claimPassTier,
                   onClaimChallenge = viewModel::claimChallengeReward,
                   onRefreshChallenges = viewModel::refreshCompletedChallenges,
+                  onUpgradeEquipment = viewModel::upgradeEquipment,
+                  onPrestigeEquipment = viewModel::prestigeEquipment,
+                  onEquipEquipment = viewModel::equipEquipment,
+                  onUpgradeGear = viewModel::upgradeGear,
+                  onPrestigeGear = viewModel::prestigeGear,
+                  onUnlockSkill = { nodeId -> viewModel.unlockSkill(nodeId, state.profile.totalEssence) },
                 )
 
                 OsWorkspaceTab.MEDIA_VAULT -> MediaVaultScreen(

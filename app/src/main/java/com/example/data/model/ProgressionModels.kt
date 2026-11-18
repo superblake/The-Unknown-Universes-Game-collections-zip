@@ -125,6 +125,32 @@ data class GearState(
   val colorHex: Long = 0xFF00E5FF,
 )
 
+enum class EquipmentSlotType(val id: String, val displayName: String) {
+  LETHAL("lethal", "Lethal Equipment"),
+  TACTICAL("tactical", "Tactical Equipment"),
+}
+
+@Immutable
+data class EquipmentItemSpec(
+  val id: String,
+  val name: String,
+  val slotType: EquipmentSlotType,
+  val description: String,
+  val baseDamageOrEffect: Float,
+  val cooldownSeconds: Float,
+  val defaultColorHex: Long,
+)
+
+@Immutable
+data class EquipmentState(
+  val slotId: String,
+  val equippedItemId: String,
+  val level: Int = 1,
+  val prestige: Int = 0,
+  val xp: Long = 0L,
+  val variantId: String = "standard",
+)
+
 @Immutable
 data class LevelCustomization(
   val skyThemeId: String = "default_sector",
@@ -291,6 +317,10 @@ data class OperatorProgressionState(
   val claimedChallenges: Set<String> = emptySet(),
   val challengePrestige: Int = 0,
   val skillNodes: Map<String, SkillNode> = ProgressionCatalog.defaultSkillNodes(),
+  val equipmentMap: Map<String, EquipmentState> = mapOf(
+    "lethal" to EquipmentState("lethal", "lethal_frag", 1, 0, 0L, "standard"),
+    "tactical" to EquipmentState("tactical", "tactical_stim", 1, 0, 0L, "standard"),
+  ),
   val wonderWeaponsPickedTotal: Long = 0L,
 ) {
   val playerLevel: Int
@@ -304,6 +334,9 @@ data class OperatorProgressionState(
   fun weaponLevel(weaponId: String): Int = ProgressionCatalog.weaponLevelForXp(weaponXp(weaponId))
 
   fun weaponPrestige(weaponId: String): Int = weaponPrestigeMap[weaponId] ?: 0
+
+  fun equipmentState(slotId: String): EquipmentState =
+    equipmentMap[slotId] ?: EquipmentState(slotId, if (slotId == "lethal") "lethal_frag" else "tactical_stim", 1, 0, 0L, "standard")
 }
 
 object ProgressionCatalog {
@@ -650,5 +683,28 @@ object ProgressionCatalog {
       lvl++
     }
     return 1L to 1L
+  }
+
+  val equipmentItems: List<EquipmentItemSpec> = listOf(
+    EquipmentItemSpec("lethal_frag", "Frag Grenade", EquipmentSlotType.LETHAL, "High explosive shrapnel grenade with wide blast radius.", 160f, 6.0f, 0xFFFF5722),
+    EquipmentItemSpec("lethal_molotov", "Napalm Molotov", EquipmentSlotType.LETHAL, "Deploys a fiery hazard zone burning hordes over time.", 120f, 8.0f, 0xFFFF9800),
+    EquipmentItemSpec("lethal_c4", "Remote C4 Satchel", EquipmentSlotType.LETHAL, "Detonated manually for heavy explosive breaching damage.", 240f, 12.0f, 0xFFE53935),
+    EquipmentItemSpec("lethal_cluster", "Arc Cluster Mine", EquipmentSlotType.LETHAL, "Deploys homing arc sub-munitions seeking elite targets.", 190f, 10.0f, 0xFF7C4DFF),
+    EquipmentItemSpec("tactical_stim", "Nano-Stim Injector", EquipmentSlotType.TACTICAL, "Restores 60 shield instantly and boosts movement speed.", 60f, 5.0f, 0xFF00E5FF),
+    EquipmentItemSpec("tactical_emp", "EMP Shockwave", EquipmentSlotType.TACTICAL, "Disables enemy energy barriers and stuns nearby targets.", 90f, 9.0f, 0xFF00B0FF),
+    EquipmentItemSpec("tactical_decoy", "Holographic Decoy", EquipmentSlotType.TACTICAL, "Projects an decoy emitter that draws zombie aggro.", 0f, 14.0f, 0xFF1DE9B6),
+    EquipmentItemSpec("tactical_insertion", "Chrono Beacon", EquipmentSlotType.TACTICAL, "Spawns a revival checkpoint and continuous shield aura.", 110f, 20.0f, 0xFF651FFF),
+  )
+
+  fun equipmentLevelForXp(xp: Long): Int {
+    var lvl = 1
+    var remaining = xp.coerceAtLeast(0L)
+    while (lvl < 60) {
+      val need = 120L + (lvl - 1) * 45L
+      if (remaining < need) break
+      remaining -= need
+      lvl++
+    }
+    return lvl
   }
 }

@@ -63,6 +63,9 @@ import com.example.data.model.WeaponCustomization
 enum class ArmorySection(val label: String, val tag: String) {
   MODS("Mods", "mods"),
   WEAPONS("Weapons", "weapons"),
+  GEAR("Gear", "gear"),
+  EQUIPMENT("Equipment", "equipment"),
+  SKILLS("Skill Tree", "skills"),
   CHARACTER("Character", "character"),
   LEVELS("Levels", "levels"),
   PASS_CHALLENGES("Pass & Challenges", "pass"),
@@ -94,6 +97,12 @@ fun ArmoryScreen(
   onClaimPassTier: (BattlePassVersion, Int) -> Unit = { _, _ -> },
   onClaimChallenge: (String) -> Unit = {},
   onRefreshChallenges: () -> Unit = {},
+  onUpgradeEquipment: (String) -> Unit = {},
+  onPrestigeEquipment: (String) -> Unit = {},
+  onEquipEquipment: (String, String) -> Unit = { _, _ -> },
+  onUpgradeGear: (com.example.data.model.GearSlot) -> Unit = {},
+  onPrestigeGear: () -> Unit = {},
+  onUnlockSkill: (String) -> Unit = {},
 ) {
   val categories = listOf("all", "perk", "power", "upgrade", "consumable")
   var selectedSection by remember { mutableStateOf(ArmorySection.MODS) }
@@ -239,6 +248,25 @@ fun ArmoryScreen(
           onClaimPassTier = onClaimPassTier,
           onClaimChallenge = onClaimChallenge,
           onRefreshChallenges = onRefreshChallenges,
+        )
+
+        ArmorySection.GEAR -> GearCustomizationTab(
+          progression = progression,
+          onUpgradeGear = onUpgradeGear,
+          onPrestigeGear = onPrestigeGear,
+        )
+
+        ArmorySection.EQUIPMENT -> EquipmentCustomizationTab(
+          progression = progression,
+          onUpgradeEquipment = onUpgradeEquipment,
+          onPrestigeEquipment = onPrestigeEquipment,
+          onEquipEquipment = onEquipEquipment,
+        )
+
+        ArmorySection.SKILLS -> SkillTreeTab(
+          progression = progression,
+          totalEssence = totalEssence,
+          onUnlockSkill = onUnlockSkill,
         )
       }
     }

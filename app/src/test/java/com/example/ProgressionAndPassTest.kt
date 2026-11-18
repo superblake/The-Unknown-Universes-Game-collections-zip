@@ -14,6 +14,8 @@ import androidx.test.core.app.ApplicationProvider
 import com.example.data.local.AppSettings
 import com.example.data.local.ProgressionStore
 import com.example.data.model.BattlePassVersion
+import com.example.data.model.EquipmentSlotType
+import com.example.data.model.GearSlot
 import com.example.data.model.MatchProgressionReport
 import com.example.data.model.OperatorProfile
 import com.example.data.model.ProgressionCatalog
@@ -278,6 +280,102 @@ class ProgressionAndPassTest {
     composeRule.onNodeWithTag("arena_level_weapon_hud").assertTextContains("LV 1", substring = true)
     composeRule.onNodeWithTag("arena_level_weapon_hud").assertTextContains("V2", substring = true)
     composeRule.onNodeWithTag("sandbox_spawn_wonder_btn").assertIsDisplayed()
+  }
+
+  @Test
+  fun equipmentAndGear_upgradesLevelsAndPrestiges() {
+    val store = ProgressionStore(context, "test_op")
+    assertEquals(1, store.current.equipmentState("lethal").level)
+    assertEquals(1, store.current.equipmentState("tactical").level)
+
+    // Upgrade lethal equipment
+    store.upgradeEquipment("lethal")
+    assertEquals(2, store.current.equipmentState("lethal").level)
+
+    // Equip different lethal item
+    store.equipEquipment("lethal", "lethal_c4")
+    assertEquals("lethal_c4", store.current.equipmentState("lethal").equippedItemId)
+
+    // Gear upgrade and prestige
+    val helmet = store.current.gearMap[GearSlot.HELMET.id]
+    assertNotNull(helmet)
+    assertEquals(1, helmet!!.level)
+    store.upgradeGear(GearSlot.HELMET)
+    assertEquals(2, store.current.gearMap[GearSlot.HELMET.id]?.level)
+
+    // Skill tree unlock
+    val skillRes = store.unlockSkillNode("sk_shield_1", 1000L)
+    assertTrue(skillRes.isSuccess)
+    assertTrue(store.current.skillNodes["sk_shield_1"]?.unlocked == true)
+
+    // Verify persistence across reload
+    val reloaded = ProgressionStore(context, "test_op").current
+    assertEquals(2, reloaded.equipmentState("lethal").level)
+    assertEquals("lethal_c4", reloaded.equipmentState("lethal").equippedItemId)
+    assertEquals(2, reloaded.gearMap[GearSlot.HELMET.id]?.level)
+    assertTrue(reloaded.skillNodes["sk_shield_1"]?.unlocked == true)
+  }
+
+  @Test
+  fun packAPunchAndEquipment_inArenaSim() {
+    val store = ProgressionStore(context, "test_op")
+    val world = UniverseCatalog.worldById("sector_zero")
+    val loadout = ArenaLoadoutStats.fromArmory(emptyList(), Color.Cyan, store.current)
+    val sim = ArenaSimState(world, "zombies", loadout, false, AppSettings(), store.current)
+
+    assertEquals(1, sim.hudPackTier)
+    sim.upgradePackAPunch()
+    assertEquals(2, sim.hudPackTier)
+    sim.upgradePackAPunch()
+    assertEquals(3, sim.hudPackTier)
+
+    // Trigger lethal equipment in arena
+    sim.triggerLethal()
+    assertTrue(sim.lethalCd > 0f)
+
+    // Trigger tactical equipment in arena
+    sim.triggerTactical()
+    assertTrue(sim.tacticalCd > 0f)
+  }
+
+  @Test
+  fun armoryScreen_equipmentGearAndSkillTabsRender() {
+    val store = ProgressionStore(context, "test_op")
+    composeRule.setContent {
+      var prog by rememberStateOf(store.current)
+      UnknownUniversesTheme(darkTheme = true) {
+        ArmoryScreen(
+          armory = emptyList(),
+          totalEssence = 2500L,
+          onToggleEquip = {},
+          onUpgradeItem = {},
+          onCreateCustomItem = { _, _, _, _, _, _, _ -> },
+          onDeleteItem = {},
+          progression = prog,
+          onUpgradeEquipment = { slot ->
+            store.upgradeEquipment(slot)
+            prog = store.current
+          },
+          onUpgradeGear = { slot ->
+            store.upgradeGear(slot)
+            prog = store.current
+          },
+          onUnlockSkill = { id ->
+            store.unlockSkillNode(id, 2500L)
+            prog = store.current
+          },
+        )
+      }
+    }
+
+    composeRule.onNodeWithTag("armory_tab_equipment").performClick()
+    composeRule.onNodeWithTag("eq_level_lethal").assertIsDisplayed()
+
+    composeRule.onNodeWithTag("armory_tab_gear").performClick()
+    composeRule.onNodeWithTag("gear_prestige_badge").assertIsDisplayed()
+
+    composeRule.onNodeWithTag("armory_tab_skills").performClick()
+    composeRule.onNodeWithTag("skills_unlocked_badge").assertIsDisplayed()
   }
 }
 

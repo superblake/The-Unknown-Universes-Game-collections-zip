@@ -24,8 +24,9 @@ class ProgressionStore(
   context: Context,
   userId: String,
 ) {
+  private val appContext: Context = context.applicationContext
   private val safeUserId = userId.replace(Regex("[^a-zA-Z0-9_-]"), "_").ifBlank { "local_operator" }
-  private val prefs: SharedPreferences = context.applicationContext.getSharedPreferences(
+  private val prefs: SharedPreferences = appContext.getSharedPreferences(
     "${PREFS_PREFIX}_$safeUserId",
     Context.MODE_PRIVATE,
   )
@@ -71,6 +72,32 @@ class ProgressionStore(
     if (cur.gearPrestige >= 30) return
     val resetGear = cur.gearMap.mapValues { (_, g) -> g.copy(level = 1, prestige = g.prestige + 1) }
     save(cur.copy(gearMap = resetGear, gearPrestige = cur.gearPrestige + 1))
+  }
+
+  fun upgradeEquipment(slotId: String) {
+    val cur = current
+    val eq = cur.equipmentMap[slotId] ?: com.example.data.model.EquipmentState(slotId, if (slotId == "lethal") "lethal_frag" else "tactical_stim", 1, 0, 0L, "standard")
+    if (eq.level >= 60) return
+    val nextEq = eq.copy(level = eq.level + 1)
+    save(cur.copy(equipmentMap = cur.equipmentMap + (slotId to nextEq)))
+  }
+
+  fun prestigeEquipment(slotId: String): Result<Long> {
+    val cur = current
+    val eq = cur.equipmentMap[slotId] ?: return Result.failure(IllegalStateException("Equipment not found"))
+    if (eq.level < 60 || eq.prestige >= 30) {
+      return Result.failure(IllegalStateException("Must reach Level 60 to Prestige Equipment (Max 30)"))
+    }
+    val nextEq = eq.copy(level = 1, prestige = eq.prestige + 1, xp = 0L)
+    save(cur.copy(equipmentMap = cur.equipmentMap + (slotId to nextEq)))
+    return Result.success(500L)
+  }
+
+  fun equipEquipment(slotId: String, itemId: String) {
+    val cur = current
+    val eq = cur.equipmentMap[slotId] ?: com.example.data.model.EquipmentState(slotId, itemId, 1, 0, 0L, "standard")
+    val nextEq = eq.copy(equippedItemId = itemId)
+    save(cur.copy(equipmentMap = cur.equipmentMap + (slotId to nextEq)))
   }
 
   fun unlockSkillNode(nodeId: String, currentEssence: Long): Result<Long> {
@@ -306,6 +333,17 @@ class ProgressionStore(
           })
         }
       })
+      put("equipmentMap", JSONObject().apply {
+        next.equipmentMap.forEach { (k, eq) ->
+          put(k, JSONObject().apply {
+            put("equippedItemId", eq.equippedItemId)
+            put("level", eq.level)
+            put("prestige", eq.prestige)
+            put("xp", eq.xp)
+            put("variantId", eq.variantId)
+          })
+        }
+      })
       put("skillNodes", JSONObject().apply {
         next.skillNodes.forEach { (k, node) ->
           put(k, JSONObject().apply {
@@ -350,11 +388,41 @@ class ProgressionStore(
         put("floorAccentHex", next.levelCustom.floorAccentHex)
       })
     }
-    prefs.edit { putString(KEY_STATE_JSON, root.toString()) }
+    val jsonString = root.toString()
+    prefs.edit {
+      putString(KEY_STATE_JSON, jsonString)
+      putString(KEY_STATE_JSON_LEGACY, jsonString)
+    }
   }
 
   private fun load(): OperatorProgressionState {
-    val raw = prefs.getString(KEY_STATE_JSON, null) ?: return OperatorProgressionState()
+    var raw = prefs.getString(KEY_STATE_JSON, null)
+      ?: prefs.getString(KEY_STATE_JSON_LEGACY, null)
+      ?: prefs.getString("progression_state", null)
+
+    if (raw.isNullOrBlank()) {
+      val candidates = listOf(
+        "${PREFS_PREFIX}_local_operator",
+        "${PREFS_PREFIX}_local",
+        "${PREFS_PREFIX}_default",
+        PREFS_PREFIX,
+      )
+      for (c in candidates) {
+        val p = appContext.getSharedPreferences(c, Context.MODE_PRIVATE)
+        val s = p.getString(KEY_STATE_JSON, null)
+          ?: p.getString(KEY_STATE_JSON_LEGACY, null)
+          ?: p.getString("progression_state", null)
+        if (!s.isNullOrBlank()) {
+          raw = s
+          prefs.edit {
+            putString(KEY_STATE_JSON, s)
+            putString(KEY_STATE_JSON_LEGACY, s)
+          }
+          break
+        }
+      }
+    }
+    if (raw.isNullOrBlank()) return OperatorProgressionState()
     return runCatching {
       val root = JSONObject(raw)
       val unlockedArr = root.optJSONArray("unlockedPasses")
@@ -401,6 +469,26 @@ class ProgressionStore(
               level = gObj.optInt("level", 1),
               prestige = gObj.optInt("prestige", 0),
               colorHex = gObj.optLong("colorHex", 0xFF00E5FF),
+            )
+          }
+        }
+      }
+
+      val equipmentMap = mapOf(
+        "lethal" to com.example.data.model.EquipmentState("lethal", "lethal_frag", 1, 0, 0L, "standard"),
+        "tactical" to com.example.data.model.EquipmentState("tactical", "tactical_stim", 1, 0, 0L, "standard"),
+      ).toMutableMap()
+      root.optJSONObject("equipmentMap")?.let { obj ->
+        obj.keys().forEach { k ->
+          val eObj = obj.optJSONObject(k)
+          if (eObj != null) {
+            equipmentMap[k] = com.example.data.model.EquipmentState(
+              slotId = k,
+              equippedItemId = eObj.optString("equippedItemId", if (k == "lethal") "lethal_frag" else "tactical_stim"),
+              level = eObj.optInt("level", 1),
+              prestige = eObj.optInt("prestige", 0),
+              xp = eObj.optLong("xp", 0L),
+              variantId = eObj.optString("variantId", "standard"),
             )
           }
         }
@@ -474,6 +562,7 @@ class ProgressionStore(
         weaponPrestigeMap = wpnPrestige,
         gearMap = gearMap,
         gearPrestige = root.optInt("gearPrestige", 0),
+        equipmentMap = equipmentMap,
         weaponCustom = wc,
         characterCustom = cc,
         levelCustom = lc,
@@ -495,5 +584,6 @@ class ProgressionStore(
   companion object {
     const val PREFS_PREFIX = "unknown_os_progression"
     private const val KEY_STATE_JSON = "progression_json_v2"
+    private const val KEY_STATE_JSON_LEGACY = "progression_json"
   }
 }

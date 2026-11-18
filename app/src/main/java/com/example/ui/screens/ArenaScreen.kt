@@ -884,7 +884,7 @@ fun ArenaScreen(
             )
           }
           Spacer(Modifier.height(6.dp))
-          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Button(
               onClick = {
                 triggerHaptic()
@@ -894,8 +894,8 @@ fun ArenaScreen(
               shape = RoundedCornerShape(12.dp),
               modifier = Modifier.height(btnHeight).testTag("arena_fire_btn"),
             ) {
-              Icon(AppIcons.MyLocation, contentDescription = "Fire", modifier = Modifier.size(18.dp))
-              Spacer(Modifier.width(4.dp))
+              Icon(AppIcons.MyLocation, contentDescription = "Fire", modifier = Modifier.size(16.dp))
+              Spacer(Modifier.width(3.dp))
               Text("FIRE")
             }
             Button(
@@ -908,13 +908,27 @@ fun ArenaScreen(
               shape = RoundedCornerShape(12.dp),
               modifier = Modifier.height(btnHeight).testTag("arena_power_btn"),
             ) {
-              Icon(AppIcons.FlashOn, contentDescription = "Power", modifier = Modifier.size(18.dp))
-              Spacer(Modifier.width(4.dp))
+              Icon(AppIcons.FlashOn, contentDescription = "Power", modifier = Modifier.size(16.dp))
+              Spacer(Modifier.width(3.dp))
               Text(if (sim.hudPowerCdSec == 0) "POWER" else "${sim.hudPowerCdSec}s")
+            }
+            Button(
+              onClick = {
+                triggerHaptic()
+                sim.upgradePackAPunch()
+              },
+              colors = ButtonDefaults.buttonColors(
+                containerColor = if (sim.hudPackTier >= 3) Color(0xFFFFD54F) else Color(0xFFE040FB),
+                contentColor = Color.Black,
+              ),
+              shape = RoundedCornerShape(12.dp),
+              modifier = Modifier.height(btnHeight).testTag("arena_pack_btn"),
+            ) {
+              Text("PACK ${formatRoundRoman(sim.hudPackTier.toLong())}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
             }
           }
           Spacer(Modifier.height(6.dp))
-          Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+          Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             OutlinedButton(
               onClick = {
                 triggerHaptic()
@@ -929,15 +943,24 @@ fun ArenaScreen(
             OutlinedButton(
               onClick = {
                 triggerHaptic()
-                sim.triggerConsumable()
+                sim.triggerLethal()
               },
-              enabled = sim.hudConsumableCdSec == 0 && hasConsumable,
+              enabled = sim.hudLethalCdSec == 0,
               shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.height(btnHeight).testTag("arena_consumable_btn"),
+              modifier = Modifier.height(btnHeight).testTag("arena_lethal_btn"),
             ) {
-              Icon(AppIcons.MedicalServices, contentDescription = "Consumable", modifier = Modifier.size(15.dp))
-              Spacer(Modifier.width(3.dp))
-              Text(if (sim.hudConsumableCdSec == 0) "STIM" else "${sim.hudConsumableCdSec}s", style = MaterialTheme.typography.labelSmall)
+              Text(if (sim.hudLethalCdSec == 0) sim.hudLethalName else "${sim.hudLethalCdSec}s", style = MaterialTheme.typography.labelSmall)
+            }
+            OutlinedButton(
+              onClick = {
+                triggerHaptic()
+                sim.triggerTactical()
+              },
+              enabled = sim.hudTacticalCdSec == 0,
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.height(btnHeight).testTag("arena_tactical_btn"),
+            ) {
+              Text(if (sim.hudTacticalCdSec == 0) sim.hudTacticalName else "${sim.hudTacticalCdSec}s", style = MaterialTheme.typography.labelSmall)
             }
             OutlinedButton(
               onClick = {

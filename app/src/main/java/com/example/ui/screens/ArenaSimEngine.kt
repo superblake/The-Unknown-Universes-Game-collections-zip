@@ -255,6 +255,8 @@ class ArenaSimState(
   var powerCd = 0f
   var consumableCd = 0f
   var interactCd = 0f
+  var lethalCd = 0f
+  var tacticalCd = 0f
   var dashCd = 0f
   var dashInvulnTicks = 0f
   var overdriveTicks = 0f
@@ -296,6 +298,16 @@ class ArenaSimState(
   var hudPowerCdSec by mutableIntStateOf(0)
   var hudConsumableCdSec by mutableIntStateOf(0)
   var hudInteractCdSec by mutableIntStateOf(0)
+  var hudLethalCdSec by mutableIntStateOf(0)
+  var hudTacticalCdSec by mutableIntStateOf(0)
+  val equippedLethalItem: com.example.data.model.EquipmentItemSpec
+    get() = ProgressionCatalog.equipmentItems.firstOrNull { it.id == progression.equipmentState("lethal").equippedItemId } ?: ProgressionCatalog.equipmentItems[0]
+  val equippedTacticalItem: com.example.data.model.EquipmentItemSpec
+    get() = ProgressionCatalog.equipmentItems.firstOrNull { it.id == progression.equipmentState("tactical").equippedItemId } ?: ProgressionCatalog.equipmentItems[4]
+  val hudLethalName: String
+    get() = equippedLethalItem.name.substringBefore(" ").uppercase()
+  val hudTacticalName: String
+    get() = equippedTacticalItem.name.substringBefore(" ").uppercase()
   var hudDashReady by mutableStateOf(true)
   var hudOverdriveActive by mutableStateOf(false)
   var hudActiveDropText by mutableStateOf<String?>(null)
@@ -606,15 +618,28 @@ class ArenaSimState(
 
     val shots = (loadout.multiShot + loadout.weaponExtraSpread + (packLevel - 1) + if (overdriveTicks > 0f) 1 else 0).coerceAtMost(7)
     val spread = if (shots > 4) 0.13f else 0.16f
-    val dmg = (packLevel + loadout.weaponBonusDamage + if (overdriveTicks > 0f) 1 else 0) * critBoost * instagibBoost
+    val packDamageMult = when (packLevel) {
+      3 -> 4
+      2 -> 2
+      else -> 1
+    }
+    val dmg = ((packLevel + loadout.weaponBonusDamage) * packDamageMult + if (overdriveTicks > 0f) 1 else 0) * critBoost * instagibBoost
     val pierce = (packLevel - 1 + loadout.weaponExtraPierce).coerceAtLeast(0)
-    val boltColor = when {
-      instaKillTicks > 0f -> Color(0xFFFF3D71)
-      critBoost > 1 -> Color(0xFFFFD54F)
-      packLevel >= 3 -> Color(0xFFFFD54F)
-      packLevel == 2 -> Color(0xFFE040FB)
-      overdriveTicks > 0f -> Color(0xFFFFAB40)
+    val weaponDefaultColor = when (loadout.weaponSpec.id) {
+      "wpn_pulse_carbine" -> Color(0xFF00E5FF)
+      "wpn_plasma_scatter" -> Color(0xFF7C4DFF)
+      "wpn_starblade_lancer" -> Color(0xFFFFD54F)
+      "wpn_chrono_repeater" -> Color(0xFF00E676)
+      "wpn_hellbreaker_cannon" -> Color(0xFFFF3D71)
       else -> loadout.tracerColor
+    }
+    val boltColor = when {
+      instaKillTicks > 0f -> Color(0xFFFF1744)
+      critBoost > 1 -> Color(0xFFFFD700)
+      packLevel == 3 -> Color(0xFFFFAB00)
+      packLevel == 2 -> Color(0xFFE040FB)
+      overdriveTicks > 0f -> Color(0xFFFF6D00)
+      else -> weaponDefaultColor
     }
     val speed = loadout.projectileSpeed + packLevel * 0.002f
     for (i in 0 until shots) {
@@ -719,10 +744,15 @@ class ArenaSimState(
 
   fun triggerWorldInteract() {
     if (hudRunEnded || interactCd > 0f) return
-    interactCd = 420f
+    interactCd = 360f
     overdriveTicks = 300f
     pulseRingRadius = 0.05f
     val scoreMult = if (doubleEssenceTicks > 0f) 2L else 1L
+
+    if (modeId == "zombies" || world.id == "sector_zero") {
+      upgradePackAPunch()
+      return
+    }
 
     when (world.id) {
       "chrono_vault" -> {
@@ -801,6 +831,75 @@ class ArenaSimState(
     overdriveTicks = maxOf(overdriveTicks, 180f)
     pulseRingRadius = 0.04f
     postCallout("OMNI-SURGE: +${loadout.consumableHeal} ARMOR & CD RESET")
+  }
+
+  fun upgradePackAPunch() {
+    if (hudRunEnded) return
+    if (hudPackTier < 3) {
+      hudPackTier++
+      val roman = formatRoundRoman(hudPackTier.toLong())
+      overdriveTicks = 240f
+      pulseRingRadius = 0.05f
+      postCallout("PACK-A-PUNCH TIER $roman! (x${hudPackTier * 2} DAMAGE)")
+    } else {
+      hudShield = (hudShield + 50).coerceAtMost(loadout.maxShield)
+      postCallout("PACK-A-PUNCH OVERDRIVE! (+50 ARMOR)")
+    }
+  }
+
+  fun triggerLethal() {
+    if (hudRunEnded || lethalCd > 0f) return
+    val eqState = progression.equipmentState("lethal")
+    val levelBonus = eqState.level * 2
+    val prestigeBonus = eqState.prestige * 5
+    val baseCd = equippedLethalItem.cooldownSeconds * 60f
+    lethalCd = baseCd
+    pulseRingRadius = 0.05f
+
+    val blastX = (playerX + aimX * 0.18f).coerceIn(0.08f, 0.92f)
+    val blastY = (playerY + aimY * 0.18f).coerceIn(0.12f, 0.88f)
+    val blastRadiusSq = 0.20f * 0.20f
+    val lethalDmg = (equippedLethalItem.baseDamageOrEffect / 30f).toInt() + levelBonus / 5 + prestigeBonus
+
+    arcs.add(ArenaArcLine(playerX, playerY, blastX, blastY, Color(equippedLethalItem.defaultColorHex), 20f))
+    for (i in 0 until 12) {
+      val a = (i / 12f) * 2f * kotlin.math.PI.toFloat()
+      sparks.add(HitSpark(blastX + kotlin.math.cos(a) * 0.04f, blastY + kotlin.math.sin(a) * 0.04f, Color(equippedLethalItem.defaultColorHex), 25f))
+    }
+
+    val scoreMult = if (doubleEssenceTicks > 0f) 2L else 1L
+    val iter = hostiles.iterator()
+    while (iter.hasNext()) {
+      val h = iter.next()
+      val dx = h.x - blastX
+      val dy = h.y - blastY
+      if (dx * dx + dy * dy <= blastRadiusSq) {
+        h.hp -= lethalDmg
+        addSparkIfAllowed(h.x, h.y, Color(equippedLethalItem.defaultColorHex), 18f)
+        if (h.hp <= 0) {
+          iter.remove()
+          onHostileDefeated(h, scoreMult)
+        }
+      }
+    }
+    postCallout("${equippedLethalItem.name.uppercase()} DETONATED! (${lethalDmg} DMG)")
+  }
+
+  fun triggerTactical() {
+    if (hudRunEnded || tacticalCd > 0f) return
+    val eqState = progression.equipmentState("tactical")
+    val baseCd = equippedTacticalItem.cooldownSeconds * 60f
+    tacticalCd = baseCd
+    val healAmount = (equippedTacticalItem.baseDamageOrEffect.toInt() + eqState.level * 2).coerceAtLeast(35)
+    hudShield = (hudShield + healAmount).coerceAtMost(loadout.maxShield)
+    overdriveTicks = maxOf(overdriveTicks, 180f)
+    pulseRingRadius = 0.04f
+
+    if (equippedTacticalItem.id == "tactical_emp" || equippedTacticalItem.id == "tactical_decoy") {
+      stasisTicks = maxOf(stasisTicks, 120f)
+    }
+
+    postCallout("${equippedTacticalItem.name.uppercase()}: +$healAmount SHIELD")
   }
 
   fun triggerDash() {
@@ -940,6 +1039,16 @@ class ArenaSimState(
     if (powerCd > 0f) powerCd = (powerCd - dt).coerceAtLeast(0f)
     if (consumableCd > 0f) consumableCd = (consumableCd - dt).coerceAtLeast(0f)
     if (interactCd > 0f) interactCd = (interactCd - dt).coerceAtLeast(0f)
+    if (lethalCd > 0f) {
+      lethalCd = (lethalCd - dt).coerceAtLeast(0f)
+      val sec = (lethalCd / 60f).toInt() + 1
+      if (hudLethalCdSec != (if (lethalCd <= 0f) 0 else sec)) hudLethalCdSec = if (lethalCd <= 0f) 0 else sec
+    }
+    if (tacticalCd > 0f) {
+      tacticalCd = (tacticalCd - dt).coerceAtLeast(0f)
+      val sec = (tacticalCd / 60f).toInt() + 1
+      if (hudTacticalCdSec != (if (tacticalCd <= 0f) 0 else sec)) hudTacticalCdSec = if (tacticalCd <= 0f) 0 else sec
+    }
     if (dashCd > 0f) dashCd = (dashCd - dt).coerceAtLeast(0f)
     if (dashInvulnTicks > 0f) dashInvulnTicks = (dashInvulnTicks - dt).coerceAtLeast(0f)
     if (overdriveTicks > 0f) overdriveTicks = (overdriveTicks - dt).coerceAtLeast(0f)

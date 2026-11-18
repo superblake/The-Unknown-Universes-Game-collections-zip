@@ -40,12 +40,18 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.model.CharacterCustomization
+import com.example.data.model.GearSlot
+import com.example.data.model.GearState
 import com.example.data.model.LevelCustomization
 import com.example.data.model.OperatorProgressionState
 import com.example.data.model.ProgressionCatalog
 import com.example.data.model.RigAsset
+import com.example.data.model.SkillNode
 import com.example.data.model.UniverseCatalog
 import com.example.data.model.WeaponCustomization
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import com.example.ui.rig.RigEvaluator
 import com.example.ui.rig.drawRigCharacter
 import java.util.Locale
@@ -522,6 +528,365 @@ fun LevelCustomizationTab(
             tag = "mutator_boss_rush",
             onCheckedChange = { c -> onUpdateLevelCustom { it.copy(bossRushMutator = c) } },
           )
+        }
+      }
+    }
+  }
+}
+
+@Composable
+fun EquipmentCustomizationTab(
+  progression: OperatorProgressionState,
+  onUpgradeEquipment: (String) -> Unit,
+  onPrestigeEquipment: (String) -> Unit,
+  onEquipEquipment: (String, String) -> Unit,
+) {
+  LazyColumn(
+    modifier = Modifier.fillMaxSize(),
+    contentPadding = PaddingValues(16.dp),
+    verticalArrangement = Arrangement.spacedBy(16.dp),
+  ) {
+    item {
+      Text("TACTICAL & LETHAL EQUIPMENT LOADOUT", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+      Text("Equip, upgrade to level 60, and prestige up to P30 for tactical combat dominance.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+
+    items(com.example.data.model.EquipmentSlotType.entries, key = { it.id }) { slotType ->
+      val eqState = progression.equipmentState(slotType.id)
+      val itemsForSlot = ProgressionCatalog.equipmentItems.filter { it.slotType == slotType }
+      val equippedItem = itemsForSlot.firstOrNull { it.id == eqState.equippedItemId } ?: itemsForSlot.first()
+
+      Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth().border(1.5.dp, Color(equippedItem.defaultColorHex).copy(alpha = 0.7f), RoundedCornerShape(16.dp)),
+      ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(slotType.displayName, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+              Text(equippedItem.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+              Text(equippedItem.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = Color(equippedItem.defaultColorHex).copy(alpha = 0.2f),
+            ) {
+              Text(
+                text = "LVL ${eqState.level}/60 ${if (eqState.prestige > 0) "• P${eqState.prestige}" else ""}",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color(equippedItem.defaultColorHex),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp).testTag("eq_level_${slotType.id}"),
+              )
+            }
+          }
+
+          LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(itemsForSlot, key = { it.id }) { item ->
+              val isSelected = item.id == eqState.equippedItemId
+              FilterChip(
+                selected = isSelected,
+                onClick = { onEquipEquipment(slotType.id, item.id) },
+                label = { Text(item.name) },
+                modifier = Modifier.testTag("equip_item_${item.id}"),
+              )
+            }
+          }
+
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Surface(
+              onClick = { onUpgradeEquipment(slotType.id) },
+              shape = RoundedCornerShape(10.dp),
+              color = MaterialTheme.colorScheme.primaryContainer,
+              modifier = Modifier.weight(1f).testTag("upgrade_eq_${slotType.id}"),
+            ) {
+              Text(
+                text = "Upgrade Level (${eqState.level}/60)",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.padding(vertical = 10.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+              )
+            }
+            if (eqState.level >= 60 && eqState.prestige < 30) {
+              Surface(
+                onClick = { onPrestigeEquipment(slotType.id) },
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                modifier = Modifier.weight(1f).testTag("prestige_eq_${slotType.id}"),
+              ) {
+                Text(
+                  text = "Prestige (${eqState.prestige}/30)",
+                  style = MaterialTheme.typography.labelMedium,
+                  fontWeight = FontWeight.Bold,
+                  color = MaterialTheme.colorScheme.onTertiaryContainer,
+                  modifier = Modifier.padding(vertical = 10.dp),
+                  textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+fun GearCustomizationTab(
+  progression: OperatorProgressionState,
+  onUpgradeGear: (GearSlot) -> Unit,
+  onPrestigeGear: () -> Unit,
+) {
+  LazyColumn(
+    modifier = Modifier.fillMaxSize(),
+    contentPadding = PaddingValues(16.dp),
+    verticalArrangement = Arrangement.spacedBy(16.dp),
+  ) {
+    item {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Column(modifier = Modifier.weight(1f)) {
+          Text("OPERATOR GEAR SUITE", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+          Text(
+            text = "Upgrade 5 gear modules up to Level 50 & Prestige up to P30.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+        Surface(
+          shape = RoundedCornerShape(10.dp),
+          color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.18f),
+        ) {
+          Text(
+            text = "GEAR PRESTIGE: P${progression.gearPrestige}/30",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.tertiary,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp).testTag("gear_prestige_badge"),
+          )
+        }
+      }
+    }
+
+    if (progression.gearPrestige < 30) {
+      item {
+        val allMaxed = GearSlot.entries.all { (progression.gearMap[it.id]?.level ?: 1) >= 50 }
+        Surface(
+          onClick = { if (allMaxed) onPrestigeGear() },
+          shape = RoundedCornerShape(12.dp),
+          color = if (allMaxed) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+          modifier = Modifier.fillMaxWidth().testTag("gear_prestige_action_btn"),
+        ) {
+          Text(
+            text = if (allMaxed) "PRESTIGE ALL GEAR (Ascend to P${progression.gearPrestige + 1})" else "Reach Level 50 on all 5 Gear Slots to Prestige",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = if (allMaxed) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(vertical = 12.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+          )
+        }
+      }
+    }
+
+    items(GearSlot.entries, key = { it.id }) { slot ->
+      val gear = progression.gearMap[slot.id] ?: GearState(slot)
+      val slotDesc = when (slot) {
+        GearSlot.HELMET -> "+Target HUD tracking & +${gear.level * 2}% Precision headshot critical damage"
+        GearSlot.CHEST -> "+${gear.level * 3} Max Shield armor & +${gear.level / 10} Armor siphon"
+        GearSlot.GLOVES -> "+${(gear.level * 0.4f)}% Volley fire rate & +${gear.level / 8} Melee claw strike"
+        GearSlot.BOOTS -> "+${(gear.level * 0.35f)}% Sprint speed & -${(gear.level * 0.4f)}% Dash recovery cooldown"
+        GearSlot.BACK_RIG -> "+Jump apex hangtime & +${(gear.level * 0.5f)}s Wonder Weapon duration"
+      }
+
+      Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth().border(1.5.dp, Color(gear.colorHex).copy(alpha = 0.7f), RoundedCornerShape(16.dp)),
+      ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(slot.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+              Text(slotDesc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = Color(gear.colorHex).copy(alpha = 0.2f),
+            ) {
+              Text(
+                text = "LVL ${gear.level}/50 ${if (gear.prestige > 0) "• P${gear.prestige}" else ""}",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color(gear.colorHex),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp).testTag("gear_level_${slot.id}"),
+              )
+            }
+          }
+
+          LinearProgressIndicator(
+            progress = { (gear.level.toFloat() / 50f).coerceIn(0f, 1f) },
+            color = Color(gear.colorHex),
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+          )
+
+          Surface(
+            onClick = { onUpgradeGear(slot) },
+            enabled = gear.level < 50,
+            shape = RoundedCornerShape(10.dp),
+            color = if (gear.level < 50) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.fillMaxWidth().testTag("upgrade_gear_${slot.id}"),
+          ) {
+            Text(
+              text = if (gear.level < 50) "Upgrade to Level ${gear.level + 1}" else "MAX LEVEL (50/50)",
+              style = MaterialTheme.typography.labelMedium,
+              fontWeight = FontWeight.Bold,
+              color = if (gear.level < 50) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+              modifier = Modifier.padding(vertical = 10.dp),
+              textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+fun SkillTreeTab(
+  progression: OperatorProgressionState,
+  totalEssence: Long,
+  onUnlockSkill: (String) -> Unit,
+) {
+  var selectedCategory by remember { mutableStateOf("ALL") }
+  val categories = listOf("ALL", "COMBAT", "SURVIVAL", "ENGINEERING", "WONDER")
+  val nodes = progression.skillNodes.values.toList()
+  val filtered = if (selectedCategory == "ALL") nodes else nodes.filter { it.category == selectedCategory }
+  val unlockedCount = nodes.count { it.unlocked }
+
+  LazyColumn(
+    modifier = Modifier.fillMaxSize(),
+    contentPadding = PaddingValues(16.dp),
+    verticalArrangement = Arrangement.spacedBy(14.dp),
+  ) {
+    item {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Column(modifier = Modifier.weight(1f)) {
+          Text("OPERATOR SKILL TREE", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+          Text(
+            text = "Unlock permanent combat, survival, and engineering traits with Essence.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+        Surface(
+          shape = RoundedCornerShape(10.dp),
+          color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+        ) {
+          Text(
+            text = "$unlockedCount / ${nodes.size} UNLOCKED",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp).testTag("skills_unlocked_badge"),
+          )
+        }
+      }
+    }
+
+    item {
+      LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(categories) { cat ->
+          FilterChip(
+            selected = selectedCategory == cat,
+            onClick = { selectedCategory = cat },
+            label = { Text(cat) },
+            modifier = Modifier.testTag("skill_cat_$cat"),
+          )
+        }
+      }
+    }
+
+    items(filtered, key = { it.id }) { node ->
+      val accent = when (node.category) {
+        "COMBAT" -> Color(0xFFFF5252)
+        "SURVIVAL" -> Color(0xFF00E5FF)
+        "ENGINEERING" -> Color(0xFFFFD54F)
+        else -> Color(0xFFE040FB)
+      }
+      Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier
+          .fillMaxWidth()
+          .border(
+            width = if (node.unlocked) 1.5.dp else 1.dp,
+            color = if (node.unlocked) accent else MaterialTheme.colorScheme.outline,
+            shape = RoundedCornerShape(14.dp),
+          ),
+      ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(node.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+              Text(node.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = if (node.unlocked) accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant,
+            ) {
+              Text(
+                text = if (node.unlocked) "ACTIVE" else "${node.costEssence} ESS",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = if (node.unlocked) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+              )
+            }
+          }
+
+          if (!node.unlocked) {
+            val canAfford = totalEssence >= node.costEssence
+            Surface(
+              onClick = { onUnlockSkill(node.id) },
+              enabled = canAfford,
+              shape = RoundedCornerShape(10.dp),
+              color = if (canAfford) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+              modifier = Modifier.fillMaxWidth().testTag("unlock_skill_${node.id}"),
+            ) {
+              Text(
+                text = if (canAfford) "Unlock Skill (${node.costEssence} Essence)" else "Need ${node.costEssence - totalEssence} More Essence",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (canAfford) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.padding(vertical = 10.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+              )
+            }
+          }
         }
       }
     }
