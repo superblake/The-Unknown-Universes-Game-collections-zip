@@ -67,6 +67,146 @@ enum class WonderWeaponKind(
   ),
 }
 
+enum class PowerTier(
+  val level: Int,
+  val label: String,
+  val colorHex: Long,
+  val multiplier: Float,
+) {
+  STANDARD(1, "Standard", 0xFF90A4AE, 1.0f),
+  TACTICAL(2, "Tactical", 0xFF00E5FF, 1.25f),
+  RARE(3, "Rare", 0xFF448AFF, 1.55f),
+  EPIC(4, "Epic", 0xFF7C4DFF, 1.9f),
+  LEGENDARY(5, "Legendary", 0xFFFFAB40, 2.35f),
+  MYTHIC(6, "Mythic", 0xFFFF3D71, 2.9f),
+  ASCENDANT(7, "Ascendant", 0xFF00E676, 3.6f),
+  COSMIC(8, "Cosmic", 0xFFE040FB, 4.4f),
+  CELESTIAL(9, "Celestial", 0xFFFFD54F, 5.4f),
+  OMEGA(10, "Omega", 0xFFFFFFFF, 6.8f);
+
+  companion object {
+    fun fromLevel(tier: Int): PowerTier =
+      entries.firstOrNull { it.level == tier.coerceIn(1, 10) } ?: OMEGA
+  }
+}
+
+enum class LobbyPartyMode(
+  val id: String,
+  val displayName: String,
+  val shortLabel: String,
+  val squadSize: Int,
+  val defaultLobbySize: Int,
+  val summary: String,
+) {
+  SOLO(
+    id = "solo",
+    displayName = "Solo Lobby",
+    shortLabel = "SOLO",
+    squadSize = 1,
+    defaultLobbySize = 1,
+    summary = "Lone wolf 1-player squad (supports 1P solo or over-8 FFA lobbies)",
+  ),
+  DUOS(
+    id = "duos",
+    displayName = "Duos Lobby",
+    shortLabel = "DUOS",
+    squadSize = 2,
+    defaultLobbySize = 2,
+    summary = "2-operator strike team paired with an AI tactical partner",
+  ),
+  SQUADS(
+    id = "squads",
+    displayName = "Squad Lobby",
+    shortLabel = "SQUADS",
+    squadSize = 4,
+    defaultLobbySize = 4,
+    summary = "4-operator fireteam auto-filled by AI Squad Bots when needed",
+  ),
+}
+
+enum class BotDifficulty(
+  val id: String,
+  val label: String,
+  val damageScale: Float,
+  val fireRateScale: Float,
+) {
+  RECRUIT("recruit", "Recruit AI", 0.85f, 0.80f),
+  OPERATIVE("operative", "Operative AI", 1.15f, 1.0f),
+  VETERAN("veteran", "Veteran AI", 1.50f, 1.25f),
+  APEX("apex", "Apex Omega AI", 2.0f, 1.55f),
+}
+
+@Immutable
+data class LobbyBotMember(
+  val id: String,
+  val callsign: String,
+  val squadIndex: Int,
+  val isAlliedSquadmate: Boolean,
+  val isHumanPlayer: Boolean,
+  val archetype: String,
+  val accentHex: Long,
+  val level: Int,
+  val prestige: Int,
+)
+
+@Immutable
+data class LobbyConfig(
+  val partyMode: LobbyPartyMode = LobbyPartyMode.SQUADS,
+  val targetPlayers: Int = 12,
+  val autoFillBots: Boolean = true,
+  val botDifficulty: BotDifficulty = BotDifficulty.OPERATIVE,
+  val humanPlayersOnline: Int = 1,
+) {
+  val isOverEightLobby: Boolean get() = targetPlayers > 8
+  val activeBotCount: Int
+    get() = if (autoFillBots) (targetPlayers - humanPlayersOnline).coerceAtLeast(0) else 0
+}
+
+enum class GearSlot(val id: String, val displayName: String) {
+  HELMET("helmet", "Tactical Helmet"),
+  CHEST("chest", "Chassis Plate"),
+  GLOVES("gloves", "Gauntlet Gloves"),
+  BOOTS("boots", "Exo Boots"),
+  BACK_RIG("back_rig", "Back-Rig Jump-Pack"),
+}
+
+@Immutable
+data class GearState(
+  val slot: GearSlot,
+  val level: Int = 1,
+  val prestige: Int = 0,
+  val xp: Long = 0L,
+  val tier: Int = 1,
+  val colorHex: Long = 0xFF00E5FF,
+)
+
+enum class EquipmentSlotType(val id: String, val displayName: String) {
+  LETHAL("lethal", "Lethal Equipment"),
+  TACTICAL("tactical", "Tactical Equipment"),
+}
+
+@Immutable
+data class EquipmentItemSpec(
+  val id: String,
+  val name: String,
+  val slotType: EquipmentSlotType,
+  val description: String,
+  val baseDamageOrEffect: Float,
+  val cooldownSeconds: Float,
+  val defaultColorHex: Long,
+)
+
+@Immutable
+data class EquipmentState(
+  val slotId: String,
+  val equippedItemId: String,
+  val level: Int = 1,
+  val prestige: Int = 0,
+  val xp: Long = 0L,
+  val variantId: String = "standard",
+  val tier: Int = 1,
+)
+
 @Immutable
 data class WeaponSpec(
   val id: String,
@@ -109,48 +249,6 @@ data class CharacterCustomization(
   val accentArmorHex: Long = 0xFFFFAB40,
 )
 
-enum class GearSlot(val id: String, val displayName: String) {
-  HELMET("helmet", "Tactical Helmet"),
-  CHEST("chest", "Chassis Plate"),
-  GLOVES("gloves", "Gauntlet Gloves"),
-  BOOTS("boots", "Exo Boots"),
-  BACK_RIG("back_rig", "Back-Rig Jump-Pack"),
-}
-
-@Immutable
-data class GearState(
-  val slot: GearSlot,
-  val level: Int = 1,
-  val prestige: Int = 0,
-  val colorHex: Long = 0xFF00E5FF,
-)
-
-enum class EquipmentSlotType(val id: String, val displayName: String) {
-  LETHAL("lethal", "Lethal Equipment"),
-  TACTICAL("tactical", "Tactical Equipment"),
-}
-
-@Immutable
-data class EquipmentItemSpec(
-  val id: String,
-  val name: String,
-  val slotType: EquipmentSlotType,
-  val description: String,
-  val baseDamageOrEffect: Float,
-  val cooldownSeconds: Float,
-  val defaultColorHex: Long,
-)
-
-@Immutable
-data class EquipmentState(
-  val slotId: String,
-  val equippedItemId: String,
-  val level: Int = 1,
-  val prestige: Int = 0,
-  val xp: Long = 0L,
-  val variantId: String = "standard",
-)
-
 @Immutable
 data class LevelCustomization(
   val skyThemeId: String = "default_sector",
@@ -173,8 +271,10 @@ data class SkillNode(
   val costEssence: Long,
   val unlocked: Boolean = false,
   val tier: Int = 1,
-  val maxTier: Int = 5,
-)
+  val maxTier: Int = 10,
+) {
+  fun nextUpgradeCost(): Long = costEssence + (tier * 250L)
+}
 
 enum class BattlePassVersion(
   val id: String,
@@ -197,7 +297,7 @@ enum class BattlePassVersion(
     subtitle = "Balanced SHD containment track — Free for all Operators",
     unlockCostEssence = 0L,
     accentHex = 0xFF00E5FF,
-    gameplayEffectSummary = "+15% Bonus Match Essence & Standard XP Progression",
+    gameplayEffectSummary = "+15% Bonus Blue Essence & Standard XP Progression",
     bonusShield = 0,
     fireRateMultiplier = 1.0f,
     cooldownMultiplier = 1.0f,
@@ -286,6 +386,48 @@ data class ChallengeState(
 }
 
 @Immutable
+data class AchievementSpec(
+  val id: String,
+  val title: String,
+  val description: String,
+  val category: String, // COMBAT, PROGRESSION, LOBBY, ARMORY, STORE
+  val target: Long,
+  val rewardBlueEssence: Long,
+  val rewardPlayerXp: Long,
+  val tierRank: Int = 1,
+)
+
+@Immutable
+data class AchievementState(
+  val spec: AchievementSpec,
+  val progress: Long,
+  val claimed: Boolean,
+) {
+  val unlocked: Boolean get() = progress >= spec.target
+  val ratio: Float get() = (progress.toFloat() / spec.target.coerceAtLeast(1L)).coerceIn(0f, 1f)
+}
+
+enum class StoreCategory(val id: String, val label: String) {
+  ALL("all", "All"),
+  BOOSTERS("boosters", "XP Boosters"),
+  TIERS("tiers", "Stronger Tiers"),
+  ARSENAL("arsenal", "Weapons & Wonder"),
+  COSMETICS("cosmetics", "Suits & Bots"),
+}
+
+@Immutable
+data class StoreItemSpec(
+  val id: String,
+  val name: String,
+  val category: StoreCategory,
+  val description: String,
+  val costBlueEssence: Long,
+  val tier: Int,
+  val accentHex: Long,
+  val repeatable: Boolean = true,
+)
+
+@Immutable
 data class MatchProgressionReport(
   val eliminations: Long,
   val bossEliminations: Long,
@@ -294,6 +436,8 @@ data class MatchProgressionReport(
   val weaponIdUsed: String,
   val extracted: Boolean,
   val weaponLevelUps: Int = 0,
+  val highestPackTierReached: Int = 1,
+  val lobbySizePlayed: Int = 1,
 )
 
 @Immutable
@@ -302,11 +446,14 @@ data class OperatorProgressionState(
   val playerPrestige: Int = 0,
   val weaponXpMap: Map<String, Long> = mapOf("wpn_pulse_carbine" to 0L),
   val weaponPrestigeMap: Map<String, Int> = emptyMap(),
+  val weaponTierMap: Map<String, Int> = ProgressionCatalog.weapons.associate { it.id to 1 },
+  val wonderTierMap: Map<String, Int> = WonderWeaponKind.entries.associate { it.id to 1 },
   val gearMap: Map<String, GearState> = GearSlot.entries.associate { it.id to GearState(it) },
   val gearPrestige: Int = 0,
   val weaponCustom: WeaponCustomization = WeaponCustomization(),
   val characterCustom: CharacterCustomization = CharacterCustomization(),
   val levelCustom: LevelCustomization = LevelCustomization(),
+  val lobbyConfig: LobbyConfig = LobbyConfig(),
   val activePassVersion: BattlePassVersion = BattlePassVersion.STANDARD_SECTOR_OPS,
   val unlockedPassVersions: Set<BattlePassVersion> = setOf(BattlePassVersion.STANDARD_SECTOR_OPS),
   val battlePassXp: Long = 0L,
@@ -318,10 +465,21 @@ data class OperatorProgressionState(
   val challengePrestige: Int = 0,
   val skillNodes: Map<String, SkillNode> = ProgressionCatalog.defaultSkillNodes(),
   val equipmentMap: Map<String, EquipmentState> = mapOf(
-    "lethal" to EquipmentState("lethal", "lethal_frag", 1, 0, 0L, "standard"),
-    "tactical" to EquipmentState("tactical", "tactical_stim", 1, 0, 0L, "standard"),
+    "lethal" to EquipmentState("lethal", "lethal_frag", 1, 0, 0L, "standard", 1),
+    "tactical" to EquipmentState("tactical", "tactical_stim", 1, 0, 0L, "standard", 1),
   ),
   val wonderWeaponsPickedTotal: Long = 0L,
+  val claimedAchievements: Set<String> = emptySet(),
+  val totalElimsLifetime: Long = 0L,
+  val totalBossesLifetime: Long = 0L,
+  val totalMatchesPlayed: Long = 0L,
+  val totalBlueEssenceSpent: Long = 0L,
+  val highestPackTierReached: Int = 1,
+  val largestLobbyPlayed: Int = 1,
+  val storePurchasesCount: Int = 0,
+  val purchasedStoreItems: Set<String> = emptySet(),
+  val xpBoosterMatchesRemaining: Int = 0,
+  val botDamageBoostPct: Int = 0,
 ) {
   val playerLevel: Int
     get() = ProgressionCatalog.levelForXp(playerXp)
@@ -335,8 +493,12 @@ data class OperatorProgressionState(
 
   fun weaponPrestige(weaponId: String): Int = weaponPrestigeMap[weaponId] ?: 0
 
+  fun weaponTier(weaponId: String): Int = (weaponTierMap[weaponId] ?: 1).coerceIn(1, 10)
+
+  fun wonderTier(wonderId: String): Int = (wonderTierMap[wonderId] ?: 1).coerceIn(1, 10)
+
   fun equipmentState(slotId: String): EquipmentState =
-    equipmentMap[slotId] ?: EquipmentState(slotId, if (slotId == "lethal") "lethal_frag" else "tactical_stim", 1, 0, 0L, "standard")
+    equipmentMap[slotId] ?: EquipmentState(slotId, if (slotId == "lethal") "lethal_frag" else "tactical_stim", 1, 0, 0L, "standard", 1)
 }
 
 object ProgressionCatalog {
@@ -413,6 +575,7 @@ object ProgressionCatalog {
     "pack_tier_gold" to "Pack-a-Tier Gold",
     "blacklight_neon" to "Blacklight Neon",
     "chrono_chrome" to "Chrono Chrome",
+    "omega_prismatic" to "Omega Celestial",
   )
 
   val optics: List<Pair<String, String>> = listOf(
@@ -481,6 +644,7 @@ object ProgressionCatalog {
     Triple("blacklight_red", "Blacklight Crimson", 0xFFFF3D71 to 0xFF7C4DFF),
     Triple("chrono_emerald", "Chrono Emerald", 0xFF00E676 to 0xFF448AFF),
     Triple("starblade_royal", "Starblade Void", 0xFFE040FB to 0xFF00E5FF),
+    Triple("omega_ascendant", "Omega Celestia", 0xFFFFFFFF to 0xFF00E5FF),
   )
 
   val visorStyles: List<Pair<String, Long>> = listOf(
@@ -513,12 +677,12 @@ object ProgressionCatalog {
   )
 
   fun defaultSkillNodes(): Map<String, SkillNode> = listOf(
-    SkillNode("sk_shield_1", "Reinforced Chassis I", "Increases max operator shield by +25.", "SURVIVAL", 400L, false, 1, 5),
-    SkillNode("sk_shield_2", "Reinforced Chassis II", "Increases max operator shield by another +35.", "SURVIVAL", 900L, false, 1, 5),
-    SkillNode("sk_damage_1", "Ballistic Lethality I", "Boosts weapon projectile base damage by +1.", "COMBAT", 500L, false, 1, 5),
-    SkillNode("sk_damage_2", "Ballistic Lethality II", "Boosts weapon projectile base damage by another +2.", "COMBAT", 1100L, false, 1, 5),
-    SkillNode("sk_cooldown_1", "Overdrive Capacitor I", "-10% cooldowns for powers and stims.", "ENGINEERING", 600L, false, 1, 5),
-    SkillNode("sk_wonder_1", "Mystery Crate Attractor", "+35% higher random Wonder Weapon drop chance.", "WONDER", 800L, false, 1, 5),
+    SkillNode("sk_shield_1", "Reinforced Chassis I", "+25 Max Shield per Tier (up to T10: +250 Shield).", "SURVIVAL", 300L, false, 1, 10),
+    SkillNode("sk_shield_2", "Reinforced Chassis II", "+35 Max Shield & +1 Regen/sec per Tier (up to T10).", "SURVIVAL", 600L, false, 1, 10),
+    SkillNode("sk_damage_1", "Ballistic Lethality I", "+2 Bolt Damage per Tier (up to T10: +20 DMG).", "COMBAT", 350L, false, 1, 10),
+    SkillNode("sk_damage_2", "Ballistic Lethality II", "+3 Bolt Damage & +1 Pierce every 2 Tiers (T1-T10).", "COMBAT", 750L, false, 1, 10),
+    SkillNode("sk_cooldown_1", "Overdrive Capacitor", "-6% Cooldowns & +3% Move Speed per Tier (up to T10).", "ENGINEERING", 450L, false, 1, 10),
+    SkillNode("sk_wonder_1", "Mystery Crate Attractor", "+30% Wonder Drop Rate & +15% Wonder Duration per Tier.", "WONDER", 550L, false, 1, 10),
   ).associateBy { it.id }
 
   val challenges: List<ChallengeSpec> = listOf(
@@ -574,15 +738,139 @@ object ProgressionCatalog {
     ),
   )
 
+  val achievements: List<AchievementSpec> = listOf(
+    AchievementSpec("ach_first_drop", "Multiverse Boot", "Complete your first Arena deployment.", "COMBAT", 1L, 300L, 400L, 1),
+    AchievementSpec("ach_slayer_100", "Containment Sweep", "Eliminate 100 hostiles across all runs.", "COMBAT", 100L, 650L, 900L, 3),
+    AchievementSpec("ach_slayer_500", "Extinction Protocol", "Eliminate 500 hostiles across the Multiverse.", "COMBAT", 500L, 1600L, 2500L, 6),
+    AchievementSpec("ach_boss_5", "Titan Breaker", "Defeat 5 Lore Bosses (Hydra, Croc, or Mech).", "COMBAT", 5L, 900L, 1400L, 4),
+    AchievementSpec("ach_boss_20", "Crucible Sovereign", "Defeat 20 Lore Bosses across any universe.", "COMBAT", 20L, 2400L, 4000L, 8),
+    AchievementSpec("ach_lvl_25", "Field Veteran", "Reach Operator Level 25.", "PROGRESSION", 25L, 500L, 800L, 2),
+    AchievementSpec("ach_lvl_100", "Centurion Prime", "Reach Operator Level 100.", "PROGRESSION", 100L, 1500L, 2500L, 5),
+    AchievementSpec("ach_lvl_500", "Halfway to Omega", "Reach Operator Level 500.", "PROGRESSION", 500L, 4000L, 6000L, 9),
+    AchievementSpec("ach_wpn_30", "MasterMarksman", "Level any primary weapon to Level 30.", "PROGRESSION", 30L, 750L, 1000L, 4),
+    AchievementSpec("ach_wpn_60", "Weapon Perfection", "Reach max Level 60 on any weapon.", "PROGRESSION", 60L, 1800L, 2200L, 7),
+    AchievementSpec("ach_over8_lobby", "Over-Capacity Ops", "Deploy into a 12+ player Mega Lobby with AI Bots.", "LOBBY", 12L, 700L, 1100L, 5),
+    AchievementSpec("ach_war_32", "Total Multiverse War", "Deploy into a maximum 32-Player Lobby.", "LOBBY", 32L, 1500L, 2200L, 8),
+    AchievementSpec("ach_pack_5", "Mythic Pacifier", "Upgrade Pack-a-Punch to Tier V+ inside an Arena.", "ARMORY", 5L, 850L, 1200L, 5),
+    AchievementSpec("ach_pack_10", "Omega Transcendence", "Reach maximum Pack-a-Punch Tier X in combat.", "ARMORY", 10L, 2500L, 3500L, 10),
+    AchievementSpec("ach_wonder_10", "Artifact Collector", "Pick up 10 Wonder Weapon crates in Arena.", "ARMORY", 10L, 900L, 1300L, 5),
+    AchievementSpec("ach_store_1", "Quartermaster Regular", "Make your first purchase in the Blue Essence Store.", "STORE", 1L, 350L, 500L, 2),
+    AchievementSpec("ach_store_5", "Syndicate Patron", "Purchase 5 upgrades from the Blue Essence Store.", "STORE", 5L, 1100L, 1600L, 6),
+    AchievementSpec("ach_spend_3k", "Blue Essence Baron", "Spend 3,000 Blue Essence on upgrades, passes, or store.", "STORE", 3000L, 1400L, 2000L, 7),
+  )
+
+  val storeItems: List<StoreItemSpec> = listOf(
+    StoreItemSpec(
+      id = "store_xp_boost_3",
+      name = "2X Hyper XP Booster (3 Matches)",
+      category = StoreCategory.BOOSTERS,
+      description = "Doubles Player, Weapon, Gear, Equipment & Battle Pass XP for your next 3 Arena runs.",
+      costBlueEssence = 350L,
+      tier = 4,
+      accentHex = 0xFF00E5FF,
+      repeatable = true,
+    ),
+    StoreItemSpec(
+      id = "store_player_xp_5k",
+      name = "Operator XP Core (+6,000 XP)",
+      category = StoreCategory.BOOSTERS,
+      description = "Instant +6,000 Operator XP injection to accelerate toward Level 1,000.",
+      costBlueEssence = 400L,
+      tier = 5,
+      accentHex = 0xFF448AFF,
+      repeatable = true,
+    ),
+    StoreItemSpec(
+      id = "store_wpn_xp_3k",
+      name = "Weapon Calibration Core (+3,000 WPN XP)",
+      category = StoreCategory.BOOSTERS,
+      description = "Injects +3,000 Weapon XP directly into your currently equipped primary firearm.",
+      costBlueEssence = 350L,
+      tier = 5,
+      accentHex = 0xFF7C4DFF,
+      repeatable = true,
+    ),
+    StoreItemSpec(
+      id = "store_bp_skip_1500",
+      name = "Battle Pass Tier Skip (+1,800 BP XP)",
+      category = StoreCategory.BOOSTERS,
+      description = "Instantly advances your Battle Pass track by +1,800 BP XP.",
+      costBlueEssence = 450L,
+      tier = 5,
+      accentHex = 0xFFFFD54F,
+      repeatable = true,
+    ),
+    StoreItemSpec(
+      id = "store_weapon_tier_up",
+      name = "Omega Weapon Tier Catalyst (+1 Tier)",
+      category = StoreCategory.TIERS,
+      description = "Elevates your equipped Weapon Rarity Tier by +1 (up to Tier 10 Omega: massive DMG & Pierce).",
+      costBlueEssence = 750L,
+      tier = 8,
+      accentHex = 0xFFFF3D71,
+      repeatable = true,
+    ),
+    StoreItemSpec(
+      id = "store_wonder_tier_up",
+      name = "Wonder Arsenal Overclock (+1 All Wonder)",
+      category = StoreCategory.TIERS,
+      description = "Upgrades ALL 6 Mystery Wonder Weapons by +1 Tier (up to Tier 10 Omega) for massive Arena power.",
+      costBlueEssence = 900L,
+      tier = 9,
+      accentHex = 0xFFE040FB,
+      repeatable = true,
+    ),
+    StoreItemSpec(
+      id = "store_gear_eq_pack",
+      name = "Gear & Equipment +5 Level Kit",
+      category = StoreCategory.ARSENAL,
+      description = "Adds +5 Levels (or Tier +1 if maxed) to ALL 5 Gear slots and Lethal/Tactical Equipment.",
+      costBlueEssence = 700L,
+      tier = 6,
+      accentHex = 0xFF00E676,
+      repeatable = true,
+    ),
+    StoreItemSpec(
+      id = "store_all_weapons_xp",
+      name = "Multiverse Armory Bundle (+2,000 ALL WPN)",
+      category = StoreCategory.ARSENAL,
+      description = "Grants +2,000 Weapon XP to EVERY primary weapon in your arsenal simultaneously.",
+      costBlueEssence = 850L,
+      tier = 7,
+      accentHex = 0xFFFFAB40,
+      repeatable = true,
+    ),
+    StoreItemSpec(
+      id = "store_bot_uplink",
+      name = "AI Bot Tactical Uplink (+15% Bot Power)",
+      category = StoreCategory.COSMETICS,
+      description = "Upgrades all allied Squad & Lobby AI Bots with +15% cumulative combat damage (stacks up to +150%).",
+      costBlueEssence = 500L,
+      tier = 6,
+      accentHex = 0xFF00E5FF,
+      repeatable = true,
+    ),
+    StoreItemSpec(
+      id = "store_omega_suit",
+      name = "Omega Celestial Suit & Camo Bundle",
+      category = StoreCategory.COSMETICS,
+      description = "Equips the Radiant Omega Celestial Armor Theme, Prismatic Camo & +1,200 Bonus Player XP.",
+      costBlueEssence = 600L,
+      tier = 10,
+      accentHex = 0xFFFFFFFF,
+      repeatable = false,
+    ),
+  )
+
   fun tiersForVersion(version: BattlePassVersion, cycle: Int = 0): List<BattlePassTierReward> {
     val baseTiers = when (version) {
       BattlePassVersion.STANDARD_SECTOR_OPS -> listOf(
-        BattlePassTierReward(1, 0L, "SHD Matte Finish", "Unlocks Sector Zero standard operator trim & +15% Essence", 200L, "CAMO"),
-        BattlePassTierReward(2, 400L, "Pulse Sight Reticle", "Precision Holo crosshair & bonus Essence cache", 280L, "OPTIC"),
+        BattlePassTierReward(1, 0L, "SHD Matte Finish", "Unlocks Sector Zero standard operator trim & +15% Blue Essence", 200L, "CAMO"),
+        BattlePassTierReward(2, 400L, "Pulse Sight Reticle", "Precision Holo crosshair & bonus Blue Essence cache", 280L, "OPTIC"),
         BattlePassTierReward(3, 950L, "Quarantine XP Surge", "+600 Weapon XP injection for your active primary", 350L, "WPN XP"),
         BattlePassTierReward(4, 1600L, "Aegis Emerald Tracer", "Unlocks bright emerald tracer bolts & badge", 420L, "TRACER"),
         BattlePassTierReward(5, 2400L, "Division Tech Cache", "Boosts Mystery Wonder Weapon salvage rewards", 550L, "CACHE"),
-        BattlePassTierReward(6, 3400L, "Vanguard Sentinel Master", "Prestige Operator Emblem + 900 Bonus Essence", 900L, "PRESTIGE"),
+        BattlePassTierReward(6, 3400L, "Vanguard Sentinel Master", "Prestige Operator Emblem + 900 Bonus Blue Essence", 900L, "PRESTIGE"),
       )
       BattlePassVersion.BLACKCELL_OVERDRIVE -> listOf(
         BattlePassTierReward(1, 0L, "Blackcell Obsidian Suit", "Instantly grants Obsidian & Gold armor trim + +22% Fire Rate", 300L, "SUIT"),
@@ -590,7 +878,7 @@ object ProgressionCatalog {
         BattlePassTierReward(3, 1050L, "Overclocked Syndicate", "Boosts Wonder Crate spawn rate +40% in all modes", 520L, "PERK"),
         BattlePassTierReward(4, 1750L, "Gilded BFG Munitions", "+800 Weapon XP + Blackcell Heavy Bore tuning", 650L, "BLUEPRINT"),
         BattlePassTierReward(5, 2600L, "Syndicate Golden Crown", "Unlocks Gold Prime visor & aura ring flare", 800L, "VISOR"),
-        BattlePassTierReward(6, 3600L, "Blackcell Overlord Tier", "Ultimate Syndicate Title + 1200 Bonus Essence", 1200L, "ULTIMATE"),
+        BattlePassTierReward(6, 3600L, "Blackcell Overlord Tier", "Ultimate Syndicate Title + 1,200 Bonus Blue Essence", 1200L, "ULTIMATE"),
       )
       BattlePassVersion.CHRONO_MULTIVERSE -> listOf(
         BattlePassTierReward(1, 0L, "Time-Warden Regalia", "Activates -30% Power/Stim Cooldowns in Arena", 300L, "PASSIVE"),
@@ -598,7 +886,7 @@ object ProgressionCatalog {
         BattlePassTierReward(3, 1050L, "7-Chevron Gate Floor", "Unlocks Cosmic Nexus Arena floor & grid styling", 520L, "LEVEL"),
         BattlePassTierReward(4, 1750L, "Librarian Artifact Surge", "+800 Weapon XP + extended Wonder Weapon duration", 650L, "WPN XP"),
         BattlePassTierReward(5, 2600L, "Chrono Zat Priority", "Higher chance to pull Chrono Zat'nik'tel pickups", 800L, "WONDER"),
-        BattlePassTierReward(6, 3600L, "Space & Time Sovereign", "Sovereign Temporal Banner + 1250 Bonus Essence", 1250L, "PRESTIGE"),
+        BattlePassTierReward(6, 3600L, "Space & Time Sovereign", "Sovereign Temporal Banner + 1,250 Bonus Blue Essence", 1250L, "PRESTIGE"),
       )
       BattlePassVersion.HELLBREAKER_SUPREME -> listOf(
         BattlePassTierReward(1, 0L, "Hellbreaker Plate", "Activates +60 Max Shield & +20% Move Speed immediately", 350L, "ARMOR"),
@@ -606,7 +894,7 @@ object ProgressionCatalog {
         BattlePassTierReward(3, 1150L, "Vampiric Glory Siphon", "Hits vs Bosses/Elites siphon +4 Shield live in Arena", 600L, "SIPHON"),
         BattlePassTierReward(4, 1900L, "Adamant Claw Temper", "+900 Weapon XP + Crucible Ember armor glow", 750L, "AURA"),
         BattlePassTierReward(5, 2800L, "BFG-9000 Arsenal Lock", "Increases Crucible BFG-9000 Wonder drop priority", 900L, "WONDER"),
-        BattlePassTierReward(6, 3800L, "Apex Warlord Ascension", "Hellbreaker Supreme Emblem + 1400 Bonus Essence", 1400L, "SUPREME"),
+        BattlePassTierReward(6, 3800L, "Apex Warlord Ascension", "Hellbreaker Supreme Emblem + 1,400 Bonus Blue Essence", 1400L, "SUPREME"),
       )
     }
     if (cycle <= 0) return baseTiers
@@ -620,6 +908,67 @@ object ProgressionCatalog {
     }
   }
 
+  private val botCallsigns = listOf(
+    "SPECTRE-01", "VALKYRIE-X", "SHD-GHOST", "AEGIS-ZERO", "MERCER-BL", "CHRONO-SG1",
+    "STARBLADE-7", "HELLFIRE-9", "NOVA-PRIME", "VIPER-ECHO", "TITAN-K9", "PHOENIX-R4",
+    "ORION-SYNC", "STRIKER-Z", "SOLARIS-15", "APEX-WRAITH", "CYBER-FANG", "PULSE-V2",
+    "HYDRA-BANE", "OMEGA-20", "KESTREL-X", "REAPER-22", "DRIFT-23", "NEXUS-24",
+    "GUARDIAN-25", "VANGUARD-26", "QUANTUM-27", "RAZOR-28", "COBALT-29", "ZENITH-30", "ASTRAL-31",
+  )
+
+  private val botArchetypes = listOf("operator", "biomorph", "starblade", "infernal")
+  private val botAccents = listOf(0xFF00E676L, 0xFF00E5FFL, 0xFFFFAB40L, 0xFFE040FBL, 0xFFFF5252L, 0xFFFFD54FL)
+
+  fun generateLobbyRoster(config: LobbyConfig, playerCallsign: String, playerLevel: Int, playerPrestige: Int): List<LobbyBotMember> {
+    val totalSlots = config.targetPlayers.coerceIn(1, 32)
+    val members = ArrayList<LobbyBotMember>(totalSlots)
+    val squadSize = config.partyMode.squadSize.coerceAtLeast(1)
+
+    members.add(
+      LobbyBotMember(
+        id = "local_player",
+        callsign = playerCallsign.ifBlank { "Vanguard" },
+        squadIndex = 1,
+        isAlliedSquadmate = true,
+        isHumanPlayer = true,
+        archetype = "operator",
+        accentHex = 0xFF00E5FFL,
+        level = playerLevel,
+        prestige = playerPrestige,
+      )
+    )
+
+    if (config.autoFillBots && totalSlots > 1) {
+      for (slotIdx in 1 until totalSlots) {
+        val squadIdx = (slotIdx / squadSize) + 1
+        val isAllied = squadIdx == 1
+        val botName = botCallsigns[(slotIdx - 1) % botCallsigns.size]
+        val botLvl = (playerLevel + ((slotIdx * 7) % 25) - 5).coerceIn(1, 1000)
+        val botPrestige = if (config.botDifficulty == BotDifficulty.APEX) (slotIdx % 10) + 1 else (slotIdx % 4)
+        members.add(
+          LobbyBotMember(
+            id = "ai_bot_$slotIdx",
+            callsign = botName,
+            squadIndex = squadIdx,
+            isAlliedSquadmate = isAllied,
+            isHumanPlayer = false,
+            archetype = botArchetypes[slotIdx % botArchetypes.size],
+            accentHex = if (isAllied) 0xFF00E676L else botAccents[slotIdx % botAccents.size],
+            level = botLvl,
+            prestige = botPrestige,
+          )
+        )
+      }
+    }
+    return members
+  }
+
+  fun tierMeta(tier: Int): PowerTier = PowerTier.fromLevel(tier)
+
+  fun tierMultiplier(tier: Int): Float = PowerTier.fromLevel(tier).multiplier
+
+  fun xpRequiredForPlayerLevel(level: Int): Long = 180L + (level - 1).coerceAtLeast(0) * 18L
+
   fun levelForXp(xp: Long): Int {
     var lvl = 1
     var remaining = xp.coerceAtLeast(0L)
@@ -632,8 +981,6 @@ object ProgressionCatalog {
     return lvl
   }
 
-  fun xpRequiredForPlayerLevel(level: Int): Long = 350L + (level - 1).coerceAtLeast(0) * 85L
-
   fun xpProgressInCurrentPlayerLevel(xp: Long): Pair<Long, Long> {
     var lvl = 1
     var remaining = xp.coerceAtLeast(0L)
@@ -643,12 +990,14 @@ object ProgressionCatalog {
       remaining -= need
       lvl++
     }
-    return 1L to 1L
+    val maxNeed = xpRequiredForPlayerLevel(999)
+    return maxNeed to maxNeed
   }
 
   fun rankTitleForLevel(level: Int, prestige: Int): String {
     val suffix = if (prestige > 0) " [P$prestige]" else ""
     val title = when {
+      level >= 800 -> "Omega Omniverse God"
       level >= 500 -> "Multiverse Sovereign"
       level >= 350 -> "Apex Continuum"
       level >= 200 -> "Crucible Warlord"
@@ -661,11 +1010,13 @@ object ProgressionCatalog {
     return "$title$suffix"
   }
 
+  fun xpRequiredForWeaponLevel(level: Int): Long = 100L + (level - 1).coerceAtLeast(0) * 26L
+
   fun weaponLevelForXp(xp: Long): Int {
     var lvl = 1
     var remaining = xp.coerceAtLeast(0L)
     while (lvl < 60) {
-      val need = 150L + (lvl - 1) * 55L
+      val need = xpRequiredForWeaponLevel(lvl)
       if (remaining < need) break
       remaining -= need
       lvl++
@@ -677,12 +1028,13 @@ object ProgressionCatalog {
     var lvl = 1
     var remaining = xp.coerceAtLeast(0L)
     while (lvl < 60) {
-      val need = 150L + (lvl - 1) * 55L
+      val need = xpRequiredForWeaponLevel(lvl)
       if (remaining < need) return remaining to need
       remaining -= need
       lvl++
     }
-    return 1L to 1L
+    val maxNeed = xpRequiredForWeaponLevel(59)
+    return maxNeed to maxNeed
   }
 
   val equipmentItems: List<EquipmentItemSpec> = listOf(
@@ -692,19 +1044,78 @@ object ProgressionCatalog {
     EquipmentItemSpec("lethal_cluster", "Arc Cluster Mine", EquipmentSlotType.LETHAL, "Deploys homing arc sub-munitions seeking elite targets.", 190f, 10.0f, 0xFF7C4DFF),
     EquipmentItemSpec("tactical_stim", "Nano-Stim Injector", EquipmentSlotType.TACTICAL, "Restores 60 shield instantly and boosts movement speed.", 60f, 5.0f, 0xFF00E5FF),
     EquipmentItemSpec("tactical_emp", "EMP Shockwave", EquipmentSlotType.TACTICAL, "Disables enemy energy barriers and stuns nearby targets.", 90f, 9.0f, 0xFF00B0FF),
-    EquipmentItemSpec("tactical_decoy", "Holographic Decoy", EquipmentSlotType.TACTICAL, "Projects an decoy emitter that draws zombie aggro.", 0f, 14.0f, 0xFF1DE9B6),
+    EquipmentItemSpec("tactical_decoy", "Holographic Decoy", EquipmentSlotType.TACTICAL, "Projects a decoy emitter that draws hostile aggro.", 0f, 14.0f, 0xFF1DE9B6),
     EquipmentItemSpec("tactical_insertion", "Chrono Beacon", EquipmentSlotType.TACTICAL, "Spawns a revival checkpoint and continuous shield aura.", 110f, 20.0f, 0xFF651FFF),
   )
+
+  fun xpRequiredForEquipmentLevel(level: Int): Long = 90L + (level - 1).coerceAtLeast(0) * 22L
+
+  fun totalXpForEquipmentLevel(targetLevel: Int): Long {
+    var sum = 0L
+    for (lvl in 1 until targetLevel.coerceIn(1, 60)) {
+      sum += xpRequiredForEquipmentLevel(lvl)
+    }
+    return sum
+  }
 
   fun equipmentLevelForXp(xp: Long): Int {
     var lvl = 1
     var remaining = xp.coerceAtLeast(0L)
     while (lvl < 60) {
-      val need = 120L + (lvl - 1) * 45L
+      val need = xpRequiredForEquipmentLevel(lvl)
       if (remaining < need) break
       remaining -= need
       lvl++
     }
     return lvl
   }
+
+  fun xpProgressInCurrentEquipmentLevel(xp: Long): Pair<Long, Long> {
+    var lvl = 1
+    var remaining = xp.coerceAtLeast(0L)
+    while (lvl < 60) {
+      val need = xpRequiredForEquipmentLevel(lvl)
+      if (remaining < need) return remaining to need
+      remaining -= need
+      lvl++
+    }
+    val maxNeed = xpRequiredForEquipmentLevel(59)
+    return maxNeed to maxNeed
+  }
+
+  fun xpRequiredForGearLevel(level: Int): Long = 85L + (level - 1).coerceAtLeast(0) * 20L
+
+  fun totalXpForGearLevel(targetLevel: Int): Long {
+    var sum = 0L
+    for (lvl in 1 until targetLevel.coerceIn(1, 50)) {
+      sum += xpRequiredForGearLevel(lvl)
+    }
+    return sum
+  }
+
+  fun gearLevelForXp(xp: Long): Int {
+    var lvl = 1
+    var remaining = xp.coerceAtLeast(0L)
+    while (lvl < 50) {
+      val need = xpRequiredForGearLevel(lvl)
+      if (remaining < need) break
+      remaining -= need
+      lvl++
+    }
+    return lvl
+  }
+
+  fun xpProgressInCurrentGearLevel(xp: Long): Pair<Long, Long> {
+    var lvl = 1
+    var remaining = xp.coerceAtLeast(0L)
+    while (lvl < 50) {
+      val need = xpRequiredForGearLevel(lvl)
+      if (remaining < need) return remaining to need
+      remaining -= need
+      lvl++
+    }
+    val maxNeed = xpRequiredForGearLevel(49)
+    return maxNeed to maxNeed
+  }
 }
+

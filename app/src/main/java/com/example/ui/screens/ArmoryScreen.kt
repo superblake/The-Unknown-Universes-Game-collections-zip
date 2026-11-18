@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
 import com.example.R
+import com.example.data.model.AchievementState
 import com.example.data.model.ArmoryItem
 import com.example.data.model.BattlePassVersion
 import com.example.data.model.ChallengeState
@@ -69,6 +70,8 @@ enum class ArmorySection(val label: String, val tag: String) {
   CHARACTER("Character", "character"),
   LEVELS("Levels", "levels"),
   PASS_CHALLENGES("Pass & Challenges", "pass"),
+  STORE("Store", "store"),
+  ACHIEVEMENTS("Achievements", "achievements"),
 }
 
 @Composable
@@ -89,6 +92,7 @@ fun ArmoryScreen(
   onDeleteItem: (String) -> Unit,
   progression: OperatorProgressionState = OperatorProgressionState(),
   challenges: List<ChallengeState> = ProgressionCatalog.challenges.map { ChallengeState(it, 0L, false) },
+  achievements: List<AchievementState> = emptyList(),
   activeRig: RigAsset? = null,
   onUpdateWeaponCustom: ((WeaponCustomization) -> WeaponCustomization) -> Unit = {},
   onUpdateCharacterCustom: ((CharacterCustomization) -> CharacterCustomization) -> Unit = {},
@@ -98,11 +102,19 @@ fun ArmoryScreen(
   onClaimChallenge: (String) -> Unit = {},
   onRefreshChallenges: () -> Unit = {},
   onUpgradeEquipment: (String) -> Unit = {},
+  onUpgradeEquipmentTier: (String) -> Unit = {},
   onPrestigeEquipment: (String) -> Unit = {},
   onEquipEquipment: (String, String) -> Unit = { _, _ -> },
   onUpgradeGear: (com.example.data.model.GearSlot) -> Unit = {},
+  onUpgradeGearTier: (com.example.data.model.GearSlot) -> Unit = {},
   onPrestigeGear: () -> Unit = {},
   onUnlockSkill: (String) -> Unit = {},
+  onUpgradeWeaponTier: (String) -> Unit = {},
+  onUpgradeWonderTier: (String) -> Unit = {},
+  onPrestigePlayer: () -> Unit = {},
+  onPrestigeWeapon: (String) -> Unit = {},
+  onPurchaseStoreItem: (String) -> Unit = {},
+  onClaimAchievement: (String) -> Unit = {},
 ) {
   val categories = listOf("all", "perk", "power", "upgrade", "consumable")
   var selectedSection by remember { mutableStateOf(ArmorySection.MODS) }
@@ -137,14 +149,14 @@ fun ArmoryScreen(
           }
           Surface(
             shape = RoundedCornerShape(10.dp),
-            color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.16f),
+            color = Color(0xFF00E5FF).copy(alpha = 0.16f),
           ) {
             Text(
-              text = "$totalEssence ESSENCE",
+              text = "$totalEssence BLUE ESSENCE",
               style = MaterialTheme.typography.labelLarge,
               fontWeight = FontWeight.Bold,
-              color = MaterialTheme.colorScheme.tertiary,
-              modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+              color = Color(0xFF00E5FF),
+              modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp).testTag("armory_blue_essence_badge"),
             )
           }
         }
@@ -227,12 +239,17 @@ fun ArmoryScreen(
         ArmorySection.WEAPONS -> WeaponCustomizationTab(
           progression = progression,
           onUpdateWeaponCustom = onUpdateWeaponCustom,
+          totalBlueEssence = totalEssence,
+          onUpgradeWeaponTier = onUpgradeWeaponTier,
+          onUpgradeWonderTier = onUpgradeWonderTier,
+          onPrestigeWeapon = onPrestigeWeapon,
         )
 
         ArmorySection.CHARACTER -> CharacterCustomizationTab(
           progression = progression,
           activeRig = activeRig,
           onUpdateCharacterCustom = onUpdateCharacterCustom,
+          onPrestigePlayer = onPrestigePlayer,
         )
 
         ArmorySection.LEVELS -> LevelCustomizationTab(
@@ -254,6 +271,8 @@ fun ArmoryScreen(
           progression = progression,
           onUpgradeGear = onUpgradeGear,
           onPrestigeGear = onPrestigeGear,
+          totalBlueEssence = totalEssence,
+          onUpgradeGearTier = onUpgradeGearTier,
         )
 
         ArmorySection.EQUIPMENT -> EquipmentCustomizationTab(
@@ -261,12 +280,25 @@ fun ArmoryScreen(
           onUpgradeEquipment = onUpgradeEquipment,
           onPrestigeEquipment = onPrestigeEquipment,
           onEquipEquipment = onEquipEquipment,
+          totalBlueEssence = totalEssence,
+          onUpgradeEquipmentTier = onUpgradeEquipmentTier,
         )
 
         ArmorySection.SKILLS -> SkillTreeTab(
           progression = progression,
           totalEssence = totalEssence,
           onUnlockSkill = onUnlockSkill,
+        )
+
+        ArmorySection.STORE -> BlueEssenceStoreTab(
+          progression = progression,
+          totalBlueEssence = totalEssence,
+          onPurchaseItem = onPurchaseStoreItem,
+        )
+
+        ArmorySection.ACHIEVEMENTS -> AchievementsMenuTab(
+          achievements = achievements,
+          onClaimAchievement = onClaimAchievement,
         )
       }
     }
@@ -292,8 +324,10 @@ private fun ArmoryModuleCard(
   onDelete: (() -> Unit)?,
 ) {
   val accent = parseHexSafe(item.accentColorHex, MaterialTheme.colorScheme.primary)
+  val effectiveMaxTier = maxOf(item.maxTier, 10L)
   val upgradeCost = item.tier * 300L
-  val canUpgrade = item.tier < item.maxTier && totalEssence >= upgradeCost
+  val canUpgrade = item.tier < effectiveMaxTier && totalEssence >= upgradeCost
+  val tierMeta = ProgressionCatalog.tierMeta(item.tier.toInt())
 
   Surface(
     shape = RoundedCornerShape(16.dp),
@@ -362,14 +396,14 @@ private fun ArmoryModuleCard(
       Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Column(modifier = Modifier.weight(1f)) {
           Text(
-            text = "Tier ${item.tier}/${item.maxTier} • Power ${item.powerValue}" +
+            text = "Tier ${item.tier}/$effectiveMaxTier (${tierMeta.label}) • Power ${item.powerValue}" +
               if (item.cooldownSec > 0) " • CD ${item.cooldownSec}s" else "",
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = Color(tierMeta.colorHex),
           )
           Spacer(Modifier.height(4.dp))
           LinearProgressIndicator(
-            progress = { item.tier.toFloat() / item.maxTier.toFloat().coerceAtLeast(1f) },
+            progress = { item.tier.toFloat() / effectiveMaxTier.toFloat().coerceAtLeast(1f) },
             color = accent,
             trackColor = MaterialTheme.colorScheme.surfaceVariant,
             modifier = Modifier.fillMaxWidth().height(6.dp),
@@ -384,7 +418,7 @@ private fun ArmoryModuleCard(
         ) {
           Icon(AppIcons.ArrowUpward, contentDescription = null, modifier = Modifier.size(16.dp))
           Spacer(Modifier.width(4.dp))
-          Text(if (item.tier >= item.maxTier) "MAX" else "$upgradeCost")
+          Text(if (item.tier >= effectiveMaxTier) "MAX" else "$upgradeCost B.ESS")
         }
       }
     }
@@ -444,8 +478,8 @@ private fun ForgeArmoryItemDialog(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
           OutlinedTextField(
             value = powerStr,
-            onValueChange = { powerStr = it.filter { c -> c.isDigit() }.take(3) },
-            label = { Text("Power (1-500)") },
+            onValueChange = { powerStr = it.filter { c -> c.isDigit() }.take(4) },
+            label = { Text("Power (1-1500)") },
             singleLine = true,
             modifier = Modifier.weight(1f),
           )

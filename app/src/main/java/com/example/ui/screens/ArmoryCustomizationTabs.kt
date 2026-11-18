@@ -21,9 +21,12 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -38,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.data.model.CharacterCustomization
 import com.example.data.model.GearSlot
@@ -46,9 +50,9 @@ import com.example.data.model.LevelCustomization
 import com.example.data.model.OperatorProgressionState
 import com.example.data.model.ProgressionCatalog
 import com.example.data.model.RigAsset
-import com.example.data.model.SkillNode
 import com.example.data.model.UniverseCatalog
 import com.example.data.model.WeaponCustomization
+import com.example.data.model.WonderWeaponKind
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
@@ -76,11 +80,19 @@ private val titleBadges: List<String> = listOf(
 fun WeaponCustomizationTab(
   progression: OperatorProgressionState,
   onUpdateWeaponCustom: ((WeaponCustomization) -> WeaponCustomization) -> Unit,
+  totalBlueEssence: Long = 0L,
+  onUpgradeWeaponTier: (String) -> Unit = {},
+  onUpgradeWonderTier: (String) -> Unit = {},
+  onPrestigeWeapon: (String) -> Unit = {},
 ) {
   val wc = progression.weaponCustom
   val equippedWeapon = ProgressionCatalog.weaponById(wc.equippedWeaponId)
   val wpnXp = progression.weaponXp(equippedWeapon.id)
   val wpnLevel = progression.weaponLevel(equippedWeapon.id)
+  val wpnPrestige = progression.weaponPrestige(equippedWeapon.id)
+  val wpnTier = progression.weaponTier(equippedWeapon.id)
+  val wpnTierMeta = ProgressionCatalog.tierMeta(wpnTier)
+  val tierCost = wpnTier * 450L
   val (wpnCur, wpnNeed) = ProgressionCatalog.xpProgressInCurrentWeaponLevel(wpnXp)
 
   LazyColumn(
@@ -106,17 +118,31 @@ fun WeaponCustomizationTab(
               Text(equippedWeapon.name, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
               Text("${equippedWeapon.universeOrigin} • ${equippedWeapon.summary}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Surface(
-              shape = RoundedCornerShape(8.dp),
-              color = Color(wc.tracerColorHex).copy(alpha = 0.2f),
-            ) {
-              Text(
-                text = "W.LV $wpnLevel/30",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color(wc.tracerColorHex),
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp).testTag("weapon_level_badge"),
-              )
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+              Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(wc.tracerColorHex).copy(alpha = 0.2f),
+              ) {
+                Text(
+                  text = "W.LV $wpnLevel/60 • P$wpnPrestige/30",
+                  style = MaterialTheme.typography.labelMedium,
+                  fontWeight = FontWeight.Bold,
+                  color = Color(wc.tracerColorHex),
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp).testTag("weapon_level_badge"),
+                )
+              }
+              Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(wpnTierMeta.colorHex).copy(alpha = 0.18f),
+              ) {
+                Text(
+                  text = "TIER $wpnTier/10 (${wpnTierMeta.label})",
+                  style = MaterialTheme.typography.labelSmall,
+                  fontWeight = FontWeight.Bold,
+                  color = Color(wpnTierMeta.colorHex),
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp).testTag("weapon_tier_badge"),
+                )
+              }
             }
           }
           LinearProgressIndicator(
@@ -126,10 +152,33 @@ fun WeaponCustomizationTab(
             modifier = Modifier.fillMaxWidth().height(7.dp).clip(RoundedCornerShape(4.dp)),
           )
           Text(
-            text = "Weapon XP: $wpnCur / $wpnNeed to W.Lv.${(wpnLevel + 1).coerceAtMost(30)} • +${((wpnLevel - 1) / 5)} Level Damage Bonus",
+            text = "Weapon XP: $wpnCur / $wpnNeed to W.Lv.${(wpnLevel + 1).coerceAtMost(60)} • +${(wpnLevel - 1) / 3} Level DMG • Tier x${String.format(Locale.US, "%.2f", wpnTierMeta.multiplier)}",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+              onClick = { onUpgradeWeaponTier(equippedWeapon.id) },
+              enabled = wpnTier < 10 && totalBlueEssence >= tierCost,
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_weapon_tier_btn"),
+            ) {
+              Text(
+                text = if (wpnTier >= 10) "MAX TIER 10 (OMEGA)" else "Upgrade Tier ($tierCost Blue Essence)",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+              )
+            }
+            if (wpnLevel >= 60 && wpnPrestige < 30) {
+              OutlinedButton(
+                onClick = { onPrestigeWeapon(equippedWeapon.id) },
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.height(48.dp).testTag("prestige_weapon_btn"),
+              ) {
+                Text("Prestige (+1000 Blue Essence)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+              }
+            }
+          }
         }
       }
     }
@@ -205,12 +254,92 @@ fun WeaponCustomizationTab(
 
     item {
       CustomizationChipGroup(
+        title = "MUZZLE ATTACHMENT",
+        options = ProgressionCatalog.muzzles,
+        selectedId = wc.muzzleId,
+        tagPrefix = "muzzle",
+        onSelect = { id -> onUpdateWeaponCustom { it.copy(muzzleId = id) } },
+      )
+    }
+
+    item {
+      CustomizationChipGroup(
+        title = "UNDERBARREL & MAGS",
+        options = ProgressionCatalog.magazines,
+        selectedId = wc.magazineId,
+        tagPrefix = "mag",
+        onSelect = { id -> onUpdateWeaponCustom { it.copy(magazineId = id) } },
+      )
+    }
+
+    item {
+      CustomizationChipGroup(
+        title = "STOCK & GRIP",
+        options = ProgressionCatalog.stocks,
+        selectedId = wc.stockId,
+        tagPrefix = "stock",
+        onSelect = { id -> onUpdateWeaponCustom { it.copy(stockId = id) } },
+      )
+    }
+
+    item {
+      CustomizationChipGroup(
+        title = "LASER DESIGNATOR",
+        options = ProgressionCatalog.lasers,
+        selectedId = wc.laserId,
+        tagPrefix = "laser",
+        onSelect = { id -> onUpdateWeaponCustom { it.copy(laserId = id) } },
+      )
+    }
+
+    item {
+      CustomizationChipGroup(
         title = "AMMO MOD CORE",
         options = ProgressionCatalog.ammoMods,
         selectedId = wc.ammoModId,
         tagPrefix = "ammo",
         onSelect = { id -> onUpdateWeaponCustom { it.copy(ammoModId = id) } },
       )
+    }
+
+    item {
+      Text("WONDER WEAPON TIERS (T1–T10 OMEGA)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+      Spacer(Modifier.height(6.dp))
+      LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        items(WonderWeaponKind.entries, key = { it.id }) { kind ->
+          val wt = progression.wonderTier(kind.id)
+          val wMeta = ProgressionCatalog.tierMeta(wt)
+          val wCost = wt * 500L
+          Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surface,
+            modifier = Modifier
+              .width(220.dp)
+              .border(1.5.dp, Color(kind.accentHex).copy(alpha = 0.7f), RoundedCornerShape(14.dp)),
+          ) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+              Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(kind.shortTag, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(kind.accentHex))
+                Text("T$wt/10 • ${wMeta.label}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(wMeta.colorHex))
+              }
+              Text(kind.displayName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+              Text(kind.description, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+              OutlinedButton(
+                onClick = { onUpgradeWonderTier(kind.id) },
+                enabled = wt < 10 && totalBlueEssence >= wCost,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth().height(40.dp).testTag("upgrade_wonder_${kind.id}"),
+              ) {
+                Text(
+                  text = if (wt >= 10) "MAX T10 OMEGA" else "Tier +1 ($wCost Blue Essence)",
+                  style = MaterialTheme.typography.labelSmall,
+                  fontWeight = FontWeight.Bold,
+                )
+              }
+            }
+          }
+        }
+      }
     }
 
     item {
@@ -250,6 +379,7 @@ fun CharacterCustomizationTab(
   progression: OperatorProgressionState,
   activeRig: RigAsset?,
   onUpdateCharacterCustom: ((CharacterCustomization) -> CharacterCustomization) -> Unit,
+  onPrestigePlayer: () -> Unit = {},
 ) {
   val cc = progression.characterCustom
   val (xpCur, xpNeed) = ProgressionCatalog.xpProgressInCurrentPlayerLevel(progression.playerXp)
@@ -288,6 +418,7 @@ fun CharacterCustomizationTab(
                 clip = "idle",
                 frame = 12f,
                 ikEnabled = true,
+                animationSpeedMultiplier = cc.animationSpeedMultiplier,
               )
               drawRigCharacter(
                 skeleton = skel,
@@ -305,7 +436,12 @@ fun CharacterCustomizationTab(
           }
 
           Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("LEVEL ${progression.playerLevel} • ${progression.playerRankTitle}", style = MaterialTheme.typography.titleMedium, color = Color(cc.primaryArmorHex), modifier = Modifier.testTag("player_level_rank_text"))
+            Text(
+              text = "LV ${progression.playerLevel}/1000 • P${progression.playerPrestige}/30 • ${progression.playerRankTitle}",
+              style = MaterialTheme.typography.titleMedium,
+              color = Color(cc.primaryArmorHex),
+              modifier = Modifier.testTag("player_level_rank_text"),
+            )
             Text("Title Badge: ${cc.titleBadge}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             LinearProgressIndicator(
               progress = { (xpCur.toFloat() / xpNeed.coerceAtLeast(1L)).coerceIn(0f, 1f) },
@@ -313,12 +449,44 @@ fun CharacterCustomizationTab(
               trackColor = MaterialTheme.colorScheme.surfaceVariant,
               modifier = Modifier.fillMaxWidth().height(7.dp).clip(RoundedCornerShape(4.dp)),
             )
+            val shieldBonus = ((progression.playerLevel - 1) * 2).coerceAtMost(600) + progression.playerPrestige * 25
             Text(
-              text = "XP: $xpCur / $xpNeed • Passive Shield: +${((progression.playerLevel - 1) * 3).coerceAtMost(90)}",
+              text = "XP: $xpCur / $xpNeed • Passive Shield: +$shieldBonus",
               style = MaterialTheme.typography.labelSmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (progression.playerLevel >= 1000 && progression.playerPrestige < 30) {
+              Button(
+                onClick = onPrestigePlayer,
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth().height(42.dp).testTag("prestige_player_btn"),
+              ) {
+                Text("Prestige Operator (+${(progression.playerPrestige + 1) * 2500L} Blue Essence)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+              }
+            }
           }
+        }
+      }
+    }
+
+    item {
+      Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp)),
+      ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          Text(
+            text = "RIGGING MOVEMENT SPEED: ${String.format(Locale.US, "%.2fx", cc.animationSpeedMultiplier)}",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+          )
+          Slider(
+            value = cc.animationSpeedMultiplier.coerceIn(0.5f, 2.5f),
+            onValueChange = { spd -> onUpdateCharacterCustom { it.copy(animationSpeedMultiplier = spd.coerceIn(0.5f, 2.5f)) } },
+            valueRange = 0.5f..2.5f,
+            modifier = Modifier.testTag("character_rig_speed_slider"),
+          )
         }
       }
     }
@@ -540,6 +708,8 @@ fun EquipmentCustomizationTab(
   onUpgradeEquipment: (String) -> Unit,
   onPrestigeEquipment: (String) -> Unit,
   onEquipEquipment: (String, String) -> Unit,
+  totalBlueEssence: Long = 0L,
+  onUpgradeEquipmentTier: (String) -> Unit = {},
 ) {
   LazyColumn(
     modifier = Modifier.fillMaxSize(),
@@ -548,13 +718,16 @@ fun EquipmentCustomizationTab(
   ) {
     item {
       Text("TACTICAL & LETHAL EQUIPMENT LOADOUT", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-      Text("Equip, upgrade to level 60, and prestige up to P30 for tactical combat dominance.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      Text("Equip, level to 60 via XP or Armory upgrades, ascend Tier 1–10 Omega, and Prestige up to P30.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 
     items(com.example.data.model.EquipmentSlotType.entries, key = { it.id }) { slotType ->
       val eqState = progression.equipmentState(slotType.id)
       val itemsForSlot = ProgressionCatalog.equipmentItems.filter { it.slotType == slotType }
       val equippedItem = itemsForSlot.firstOrNull { it.id == eqState.equippedItemId } ?: itemsForSlot.first()
+      val (eqXpCur, eqXpNeed) = ProgressionCatalog.xpProgressInCurrentEquipmentLevel(eqState.xp)
+      val eqTierMeta = ProgressionCatalog.tierMeta(eqState.tier)
+      val eqTierCost = eqState.tier * 350L
 
       Surface(
         shape = RoundedCornerShape(16.dp),
@@ -568,7 +741,7 @@ fun EquipmentCustomizationTab(
             verticalAlignment = Alignment.CenterVertically,
           ) {
             Column(modifier = Modifier.weight(1f)) {
-              Text(slotType.displayName, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+              Text("${slotType.displayName} • T${eqState.tier}/10 (${eqTierMeta.label})", style = MaterialTheme.typography.labelMedium, color = Color(eqTierMeta.colorHex))
               Text(equippedItem.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
               Text(equippedItem.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -586,6 +759,18 @@ fun EquipmentCustomizationTab(
             }
           }
 
+          LinearProgressIndicator(
+            progress = { (eqXpCur.toFloat() / eqXpNeed.coerceAtLeast(1L)).coerceIn(0f, 1f) },
+            color = Color(equippedItem.defaultColorHex),
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+          )
+          Text(
+            text = "Equipment XP: $eqXpCur / $eqXpNeed • Tier Multiplier: x${String.format(Locale.US, "%.2f", eqTierMeta.multiplier)}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+
           LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(itemsForSlot, key = { it.id }) { item ->
               val isSelected = item.id == eqState.equippedItemId
@@ -598,7 +783,7 @@ fun EquipmentCustomizationTab(
             }
           }
 
-          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Surface(
               onClick = { onUpgradeEquipment(slotType.id) },
               shape = RoundedCornerShape(10.dp),
@@ -606,12 +791,24 @@ fun EquipmentCustomizationTab(
               modifier = Modifier.weight(1f).testTag("upgrade_eq_${slotType.id}"),
             ) {
               Text(
-                text = "Upgrade Level (${eqState.level}/60)",
+                text = "Level +1 (${eqState.level}/60)",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier.padding(vertical = 10.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                textAlign = TextAlign.Center,
+              )
+            }
+            OutlinedButton(
+              onClick = { onUpgradeEquipmentTier(slotType.id) },
+              enabled = eqState.tier < 10 && totalBlueEssence >= eqTierCost,
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(44.dp).testTag("upgrade_eq_tier_${slotType.id}"),
+            ) {
+              Text(
+                text = if (eqState.tier >= 10) "T10 OMEGA" else "Tier +1 ($eqTierCost B.ESS)",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
               )
             }
             if (eqState.level >= 60 && eqState.prestige < 30) {
@@ -627,7 +824,7 @@ fun EquipmentCustomizationTab(
                   fontWeight = FontWeight.Bold,
                   color = MaterialTheme.colorScheme.onTertiaryContainer,
                   modifier = Modifier.padding(vertical = 10.dp),
-                  textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                  textAlign = TextAlign.Center,
                 )
               }
             }
@@ -643,6 +840,8 @@ fun GearCustomizationTab(
   progression: OperatorProgressionState,
   onUpgradeGear: (GearSlot) -> Unit,
   onPrestigeGear: () -> Unit,
+  totalBlueEssence: Long = 0L,
+  onUpgradeGearTier: (GearSlot) -> Unit = {},
 ) {
   LazyColumn(
     modifier = Modifier.fillMaxSize(),
@@ -658,7 +857,7 @@ fun GearCustomizationTab(
         Column(modifier = Modifier.weight(1f)) {
           Text("OPERATOR GEAR SUITE", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
           Text(
-            text = "Upgrade 5 gear modules up to Level 50 & Prestige up to P30.",
+            text = "Level 5 gear modules up to 50 via combat XP or upgrades, ascend Tiers 1–10, and Prestige to P30.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
@@ -693,7 +892,7 @@ fun GearCustomizationTab(
             fontWeight = FontWeight.Bold,
             color = if (allMaxed) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(vertical = 12.dp),
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            textAlign = TextAlign.Center,
           )
         }
       }
@@ -701,11 +900,14 @@ fun GearCustomizationTab(
 
     items(GearSlot.entries, key = { it.id }) { slot ->
       val gear = progression.gearMap[slot.id] ?: GearState(slot)
+      val gearTierMeta = ProgressionCatalog.tierMeta(gear.tier)
+      val gearTierCost = gear.tier * 400L
+      val (gXpCur, gXpNeed) = ProgressionCatalog.xpProgressInCurrentGearLevel(gear.xp)
       val slotDesc = when (slot) {
-        GearSlot.HELMET -> "+Target HUD tracking & +${gear.level * 2}% Precision headshot critical damage"
-        GearSlot.CHEST -> "+${gear.level * 3} Max Shield armor & +${gear.level / 10} Armor siphon"
+        GearSlot.HELMET -> "+Target HUD tracking & +${gear.level * 2}% Precision critical damage"
+        GearSlot.CHEST -> "+${gear.level * 3} Max Shield armor & +${gear.level / 8} Armor siphon"
         GearSlot.GLOVES -> "+${(gear.level * 0.4f)}% Volley fire rate & +${gear.level / 8} Melee claw strike"
-        GearSlot.BOOTS -> "+${(gear.level * 0.35f)}% Sprint speed & -${(gear.level * 0.4f)}% Dash recovery cooldown"
+        GearSlot.BOOTS -> "+${(gear.level * 0.35f)}% Sprint speed & -${(gear.level * 0.4f)}% Dash cooldown"
         GearSlot.BACK_RIG -> "+Jump apex hangtime & +${(gear.level * 0.5f)}s Wonder Weapon duration"
       }
 
@@ -721,7 +923,7 @@ fun GearCustomizationTab(
             verticalAlignment = Alignment.CenterVertically,
           ) {
             Column(modifier = Modifier.weight(1f)) {
-              Text(slot.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+              Text("${slot.displayName} • Tier ${gear.tier}/10 (${gearTierMeta.label})", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
               Text(slotDesc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Surface(
@@ -739,27 +941,46 @@ fun GearCustomizationTab(
           }
 
           LinearProgressIndicator(
-            progress = { (gear.level.toFloat() / 50f).coerceIn(0f, 1f) },
+            progress = { (gXpCur.toFloat() / gXpNeed.coerceAtLeast(1L)).coerceIn(0f, 1f) },
             color = Color(gear.colorHex),
             trackColor = MaterialTheme.colorScheme.surfaceVariant,
             modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
           )
+          Text(
+            text = "Gear XP: $gXpCur / $gXpNeed • Tier Bonus x${String.format(Locale.US, "%.2f", gearTierMeta.multiplier)}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
 
-          Surface(
-            onClick = { onUpgradeGear(slot) },
-            enabled = gear.level < 50,
-            shape = RoundedCornerShape(10.dp),
-            color = if (gear.level < 50) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.fillMaxWidth().testTag("upgrade_gear_${slot.id}"),
-          ) {
-            Text(
-              text = if (gear.level < 50) "Upgrade to Level ${gear.level + 1}" else "MAX LEVEL (50/50)",
-              style = MaterialTheme.typography.labelMedium,
-              fontWeight = FontWeight.Bold,
-              color = if (gear.level < 50) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-              modifier = Modifier.padding(vertical = 10.dp),
-              textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-            )
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Surface(
+              onClick = { if (gear.level < 50) onUpgradeGear(slot) },
+              enabled = gear.level < 50,
+              shape = RoundedCornerShape(10.dp),
+              color = if (gear.level < 50) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+              modifier = Modifier.weight(1f).testTag("upgrade_gear_${slot.id}"),
+            ) {
+              Text(
+                text = if (gear.level < 50) "Level +1 (${gear.level}/50)" else "MAX LVL (50/50)",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = if (gear.level < 50) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 10.dp),
+                textAlign = TextAlign.Center,
+              )
+            }
+            OutlinedButton(
+              onClick = { onUpgradeGearTier(slot) },
+              enabled = gear.tier < 10 && totalBlueEssence >= gearTierCost,
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(44.dp).testTag("upgrade_gear_tier_${slot.id}"),
+            ) {
+              Text(
+                text = if (gear.tier >= 10) "T10 OMEGA" else "Tier +1 ($gearTierCost B.ESS)",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+              )
+            }
           }
         }
       }
@@ -791,9 +1012,9 @@ fun SkillTreeTab(
         verticalAlignment = Alignment.CenterVertically,
       ) {
         Column(modifier = Modifier.weight(1f)) {
-          Text("OPERATOR SKILL TREE", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+          Text("OPERATOR SKILL TREE (TIERS 1–10)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
           Text(
-            text = "Unlock permanent combat, survival, and engineering traits with Essence.",
+            text = "Unlock permanent traits and ascend them from Tier 1 to Tier 10 Omega with Blue Essence.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
@@ -833,6 +1054,10 @@ fun SkillTreeTab(
         "ENGINEERING" -> Color(0xFFFFD54F)
         else -> Color(0xFFE040FB)
       }
+      val tierMeta = ProgressionCatalog.tierMeta(node.tier)
+      val nextCost = if (!node.unlocked) node.costEssence else node.nextUpgradeCost()
+      val isMaxTier = node.unlocked && node.tier >= node.maxTier
+
       Surface(
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surface,
@@ -856,20 +1081,20 @@ fun SkillTreeTab(
             }
             Surface(
               shape = RoundedCornerShape(8.dp),
-              color = if (node.unlocked) accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant,
+              color = if (node.unlocked) Color(tierMeta.colorHex).copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant,
             ) {
               Text(
-                text = if (node.unlocked) "ACTIVE" else "${node.costEssence} ESS",
+                text = if (node.unlocked) "TIER ${node.tier}/${node.maxTier} • ${tierMeta.label.uppercase()}" else "${node.costEssence} B.ESS",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
-                color = if (node.unlocked) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (node.unlocked) Color(tierMeta.colorHex) else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
               )
             }
           }
 
-          if (!node.unlocked) {
-            val canAfford = totalEssence >= node.costEssence
+          if (!isMaxTier) {
+            val canAfford = totalEssence >= nextCost
             Surface(
               onClick = { onUnlockSkill(node.id) },
               enabled = canAfford,
@@ -878,14 +1103,25 @@ fun SkillTreeTab(
               modifier = Modifier.fillMaxWidth().testTag("unlock_skill_${node.id}"),
             ) {
               Text(
-                text = if (canAfford) "Unlock Skill (${node.costEssence} Essence)" else "Need ${node.costEssence - totalEssence} More Essence",
+                text = when {
+                  !node.unlocked && canAfford -> "Unlock Skill (${nextCost} Blue Essence)"
+                  node.unlocked && canAfford -> "Upgrade to Tier ${node.tier + 1} (${nextCost} Blue Essence)"
+                  else -> "Need ${nextCost - totalEssence} More Blue Essence"
+                },
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
                 color = if (canAfford) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                 modifier = Modifier.padding(vertical = 10.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                textAlign = TextAlign.Center,
               )
             }
+          } else {
+            Text(
+              text = "MAX TIER ${node.maxTier} OMEGA ACTIVE",
+              style = MaterialTheme.typography.labelSmall,
+              fontWeight = FontWeight.Bold,
+              color = Color(0xFF00E676),
+            )
           }
         }
       }

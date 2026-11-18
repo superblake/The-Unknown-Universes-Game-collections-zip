@@ -8,6 +8,7 @@ import com.example.data.local.ProgressionStore
 import com.example.data.local.SaveBundlePreview
 import com.example.data.local.SaveDataSerializer
 import com.example.data.local.UniverseRepository
+import com.example.data.model.AchievementState
 import com.example.data.model.ArmoryItem
 import com.example.data.model.BattlePassVersion
 import com.example.data.model.ChallengeState
@@ -15,6 +16,7 @@ import com.example.data.model.CharacterCustomization
 import com.example.data.model.GearSlot
 import com.example.data.model.LevelCustomization
 import com.example.data.model.LinkedAccount
+import com.example.data.model.LobbyConfig
 import com.example.data.model.MatchProgressionReport
 import com.example.data.model.MatchRecord
 import com.example.data.model.OperatorProfile
@@ -88,6 +90,19 @@ class UniverseViewModel(
         started = SharingStarted.WhileSubscribed(5000L),
         initialValue = progressionStore?.challengeStates()
           ?: ProgressionCatalog.challenges.map { ChallengeState(it, 0L, false) },
+      )
+
+  val achievementStates: StateFlow<List<AchievementState>> =
+    progressionState
+      .map { state ->
+        progressionStore?.achievementStates(state)
+          ?: ProgressionCatalog.achievements.map { AchievementState(it, 0L, false) }
+      }
+      .stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000L),
+        initialValue = progressionStore?.achievementStates()
+          ?: ProgressionCatalog.achievements.map { AchievementState(it, 0L, false) },
       )
 
   private var cloudListenerJob: Job? = null
@@ -393,6 +408,10 @@ class UniverseViewModel(
     progressionStore?.updateLevelCustomization(transform)
   }
 
+  fun updateLobbyConfig(transform: (LobbyConfig) -> LobbyConfig) {
+    progressionStore?.updateLobbyConfig(transform)
+  }
+
   fun activateOrUnlockPass(version: BattlePassVersion, currentEssence: Long) {
     val store = progressionStore ?: return
     val res = store.activateOrUnlockPassVersion(version, currentEssence)
@@ -423,7 +442,7 @@ class UniverseViewModel(
       if (rewardEssence > 0L) {
         repository.adjustOperatorEssence(currentUserId, rewardEssence)
       }
-      _statusBanner.value = "Claimed Tier $tier (+$rewardEssence Essence)"
+      _statusBanner.value = "Claimed Tier $tier (+$rewardEssence Blue Essence)"
     }
   }
 
@@ -439,7 +458,7 @@ class UniverseViewModel(
       if (essenceGain > 0L) {
         repository.adjustOperatorEssence(currentUserId, essenceGain)
       }
-      _statusBanner.value = "Challenge Complete! +$essenceGain Essence • +$playerXpGain XP • +$bpXpGain BP XP"
+      _statusBanner.value = "Challenge Complete! +$essenceGain Blue Essence • +$playerXpGain XP • +$bpXpGain BP XP"
     }
   }
 
@@ -453,6 +472,21 @@ class UniverseViewModel(
     _statusBanner.value = "Upgraded Equipment in $slotId slot!"
   }
 
+  fun upgradeEquipmentTier(slotId: String, currentBlueEssence: Long) {
+    val store = progressionStore ?: return
+    val res = store.upgradeEquipmentTier(slotId, currentBlueEssence)
+    if (res.isFailure) {
+      _statusBanner.value = res.exceptionOrNull()?.message ?: "Cannot upgrade Equipment Tier"
+      return
+    }
+    val cost = res.getOrThrow()
+    viewModelScope.launch {
+      if (cost > 0L) repository.adjustOperatorEssence(currentUserId, -cost)
+      val nextTier = progressionState.value.equipmentState(slotId).tier
+      _statusBanner.value = "Equipment Tier ${ProgressionCatalog.tierMeta(nextTier).label} (T$nextTier/10)!"
+    }
+  }
+
   fun prestigeEquipment(slotId: String) {
     val store = progressionStore ?: return
     val res = store.prestigeEquipment(slotId)
@@ -463,7 +497,7 @@ class UniverseViewModel(
     val reward = res.getOrThrow()
     viewModelScope.launch {
       if (reward > 0L) repository.adjustOperatorEssence(currentUserId, reward)
-      _statusBanner.value = "Equipment Prestiged! (+$reward Essence)"
+      _statusBanner.value = "Equipment Prestiged! (+$reward Blue Essence)"
     }
   }
 
@@ -477,6 +511,21 @@ class UniverseViewModel(
     _statusBanner.value = "Upgraded ${slot.displayName}!"
   }
 
+  fun upgradeGearTier(slot: GearSlot, currentBlueEssence: Long) {
+    val store = progressionStore ?: return
+    val res = store.upgradeGearTier(slot, currentBlueEssence)
+    if (res.isFailure) {
+      _statusBanner.value = res.exceptionOrNull()?.message ?: "Cannot upgrade Gear Tier"
+      return
+    }
+    val cost = res.getOrThrow()
+    viewModelScope.launch {
+      if (cost > 0L) repository.adjustOperatorEssence(currentUserId, -cost)
+      val nextTier = progressionState.value.gearMap[slot.id]?.tier ?: 1
+      _statusBanner.value = "${slot.displayName} Tier ${ProgressionCatalog.tierMeta(nextTier).label} (T$nextTier/10)!"
+    }
+  }
+
   fun prestigeGear() {
     progressionStore?.prestigeGear()
     _statusBanner.value = "All Gear Prestiged!"
@@ -486,13 +535,102 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     val res = store.unlockSkillNode(nodeId, currentEssence)
     if (res.isFailure) {
-      _statusBanner.value = res.exceptionOrNull()?.message ?: "Cannot unlock skill"
+      _statusBanner.value = res.exceptionOrNull()?.message ?: "Cannot upgrade skill"
       return
     }
     val cost = res.getOrThrow()
+    val tier = progressionState.value.skillNodes[nodeId]?.tier ?: 1
     viewModelScope.launch {
       if (cost > 0L) repository.adjustOperatorEssence(currentUserId, -cost)
-      _statusBanner.value = "Skill Node Unlocked! (-$cost Essence)"
+      _statusBanner.value = "Skill Tier $tier/10 Active! (-$cost Blue Essence)"
+    }
+  }
+
+  fun upgradeWeaponTier(weaponId: String, currentBlueEssence: Long) {
+    val store = progressionStore ?: return
+    val res = store.upgradeWeaponTier(weaponId, currentBlueEssence)
+    if (res.isFailure) {
+      _statusBanner.value = res.exceptionOrNull()?.message ?: "Cannot upgrade Weapon Tier"
+      return
+    }
+    val cost = res.getOrThrow()
+    val nextTier = progressionState.value.weaponTier(weaponId)
+    viewModelScope.launch {
+      if (cost > 0L) repository.adjustOperatorEssence(currentUserId, -cost)
+      _statusBanner.value = "${ProgressionCatalog.weaponById(weaponId).name} Tier $nextTier/10 (${ProgressionCatalog.tierMeta(nextTier).label})!"
+    }
+  }
+
+  fun upgradeWonderTier(wonderId: String, currentBlueEssence: Long) {
+    val store = progressionStore ?: return
+    val res = store.upgradeWonderTier(wonderId, currentBlueEssence)
+    if (res.isFailure) {
+      _statusBanner.value = res.exceptionOrNull()?.message ?: "Cannot upgrade Wonder Tier"
+      return
+    }
+    val cost = res.getOrThrow()
+    val nextTier = progressionState.value.wonderTier(wonderId)
+    viewModelScope.launch {
+      if (cost > 0L) repository.adjustOperatorEssence(currentUserId, -cost)
+      _statusBanner.value = "Wonder Weapon upgraded to Tier $nextTier/10 (${ProgressionCatalog.tierMeta(nextTier).label})!"
+    }
+  }
+
+  fun prestigePlayer() {
+    val store = progressionStore ?: return
+    val res = store.prestigePlayer()
+    if (res.isFailure) {
+      _statusBanner.value = res.exceptionOrNull()?.message ?: "Cannot prestige operator"
+      return
+    }
+    val reward = res.getOrThrow()
+    viewModelScope.launch {
+      if (reward > 0L) repository.adjustOperatorEssence(currentUserId, reward)
+      _statusBanner.value = "Operator Prestiged to P${progressionState.value.playerPrestige}! (+$reward Blue Essence)"
+    }
+  }
+
+  fun prestigeWeapon(weaponId: String) {
+    val store = progressionStore ?: return
+    val res = store.prestigeWeapon(weaponId)
+    if (res.isFailure) {
+      _statusBanner.value = res.exceptionOrNull()?.message ?: "Cannot prestige weapon"
+      return
+    }
+    val reward = res.getOrThrow()
+    viewModelScope.launch {
+      if (reward > 0L) repository.adjustOperatorEssence(currentUserId, reward)
+      _statusBanner.value = "Weapon Prestiged to P${progressionState.value.weaponPrestige(weaponId)}! (+$reward Blue Essence)"
+    }
+  }
+
+  fun claimAchievement(achievementId: String) {
+    val store = progressionStore ?: return
+    val res = store.claimAchievement(achievementId)
+    if (res.isFailure) {
+      _statusBanner.value = res.exceptionOrNull()?.message ?: "Cannot claim achievement"
+      return
+    }
+    val (blueEssenceReward, xpReward) = res.getOrThrow()
+    viewModelScope.launch {
+      if (blueEssenceReward > 0L) repository.adjustOperatorEssence(currentUserId, blueEssenceReward)
+      _statusBanner.value = "Achievement Unlocked! +$blueEssenceReward Blue Essence • +$xpReward XP"
+    }
+  }
+
+  fun purchaseStoreItem(itemId: String, currentBlueEssence: Long) {
+    val store = progressionStore ?: return
+    val res = store.purchaseStoreItem(itemId, currentBlueEssence)
+    if (res.isFailure) {
+      _statusBanner.value = res.exceptionOrNull()?.message ?: "Store purchase failed"
+      return
+    }
+    val purchase = res.getOrThrow()
+    viewModelScope.launch {
+      if (purchase.costBlueEssence > 0L) {
+        repository.adjustOperatorEssence(currentUserId, -purchase.costBlueEssence)
+      }
+      _statusBanner.value = "Store: ${purchase.summary} (-${purchase.costBlueEssence} Blue Essence)"
     }
   }
 
@@ -535,7 +673,7 @@ class UniverseViewModel(
       _statusBanner.value =
         if (res.isSuccess) {
           val suffix = if (repository.isCloudSyncAvailableFor(currentUserId)) " & synced to Cloud" else ""
-          "Match saved! +$essenceEarned Essence earned$suffix"
+          "Match saved! +$essenceEarned Blue Essence earned$suffix"
         } else {
           res.exceptionOrNull()?.localizedMessage ?: "Failed to save match"
         }

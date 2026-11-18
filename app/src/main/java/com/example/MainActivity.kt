@@ -67,8 +67,10 @@ import com.example.ui.auth.PlatformOAuthManager
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
+import com.example.ui.screens.AchievementsDialog
 import com.example.ui.screens.ArenaScreen
 import com.example.ui.screens.ArmoryScreen
+import com.example.ui.screens.BlueEssenceStoreDialog
 import com.example.ui.screens.ExportCompatScreen
 import com.example.ui.screens.ForgeRigScreen
 import com.example.ui.screens.MediaVaultScreen
@@ -268,11 +270,14 @@ fun UnknownOsShell(
   val cloudSyncState by viewModel.cloudSyncState.collectAsStateWithLifecycle()
   val progression by viewModel.progressionState.collectAsStateWithLifecycle()
   val challenges by viewModel.challengeStates.collectAsStateWithLifecycle()
+  val achievements by viewModel.achievementStates.collectAsStateWithLifecycle()
   val activeTab by viewModel.activeTab.collectAsStateWithLifecycle()
   val statusBanner by viewModel.statusBanner.collectAsStateWithLifecycle()
   val oauthRedirectUri by pendingOAuthRedirect.collectAsStateWithLifecycle()
   val snackbarHostState = remember { SnackbarHostState() }
   val isCloudSignedIn = runCatching { Firebase.auth.currentUser?.uid == currentUserId }.getOrDefault(false)
+  var showStoreDialog by remember { mutableStateOf(false) }
+  var showAchievementsDialog by remember { mutableStateOf(false) }
 
   val handleDesktopGoogleSuccess: (String?) -> Unit = { name ->
     isGoogleSigningIn = false
@@ -459,6 +464,10 @@ fun UnknownOsShell(
                   onStatusMessage = viewModel::showBanner,
                   onOpenSettings = onOpenSettings,
                   progression = progression,
+                  achievements = achievements,
+                  onUpdateLobby = viewModel::updateLobbyConfig,
+                  onOpenStore = { showStoreDialog = true },
+                  onOpenAchievements = { showAchievementsDialog = true },
                   onSignOut = onLockSession,
                 )
 
@@ -507,6 +516,7 @@ fun UnknownOsShell(
                   onDeleteItem = viewModel::deleteCustomArmoryItem,
                   progression = progression,
                   challenges = challenges,
+                  achievements = achievements,
                   activeRig = state.rigs.firstOrNull { it.id == state.profile.activeRigId } ?: state.rigs.firstOrNull(),
                   onUpdateWeaponCustom = viewModel::updateWeaponCustomization,
                   onUpdateCharacterCustom = viewModel::updateCharacterCustomization,
@@ -518,11 +528,19 @@ fun UnknownOsShell(
                   onClaimChallenge = viewModel::claimChallengeReward,
                   onRefreshChallenges = viewModel::refreshCompletedChallenges,
                   onUpgradeEquipment = viewModel::upgradeEquipment,
+                  onUpgradeEquipmentTier = { slot -> viewModel.upgradeEquipmentTier(slot, state.profile.totalEssence) },
                   onPrestigeEquipment = viewModel::prestigeEquipment,
                   onEquipEquipment = viewModel::equipEquipment,
                   onUpgradeGear = viewModel::upgradeGear,
+                  onUpgradeGearTier = { slot -> viewModel.upgradeGearTier(slot, state.profile.totalEssence) },
                   onPrestigeGear = viewModel::prestigeGear,
                   onUnlockSkill = { nodeId -> viewModel.unlockSkill(nodeId, state.profile.totalEssence) },
+                  onUpgradeWeaponTier = { wId -> viewModel.upgradeWeaponTier(wId, state.profile.totalEssence) },
+                  onUpgradeWonderTier = { wId -> viewModel.upgradeWonderTier(wId, state.profile.totalEssence) },
+                  onPrestigePlayer = viewModel::prestigePlayer,
+                  onPrestigeWeapon = viewModel::prestigeWeapon,
+                  onPurchaseStoreItem = { itemId -> viewModel.purchaseStoreItem(itemId, state.profile.totalEssence) },
+                  onClaimAchievement = viewModel::claimAchievement,
                 )
 
                 OsWorkspaceTab.MEDIA_VAULT -> MediaVaultScreen(
@@ -550,6 +568,24 @@ fun UnknownOsShell(
           }
         }
       }
+    }
+
+    val readyProfile = (uiState as? UniverseUiState.Ready)?.profile
+    if (showStoreDialog && readyProfile != null) {
+      BlueEssenceStoreDialog(
+        progression = progression,
+        totalBlueEssence = readyProfile.totalEssence,
+        onPurchaseItem = { itemId -> viewModel.purchaseStoreItem(itemId, readyProfile.totalEssence) },
+        onDismiss = { showStoreDialog = false },
+      )
+    }
+
+    if (showAchievementsDialog) {
+      AchievementsDialog(
+        achievements = achievements,
+        onClaimAchievement = viewModel::claimAchievement,
+        onDismiss = { showAchievementsDialog = false },
+      )
     }
   }
 }

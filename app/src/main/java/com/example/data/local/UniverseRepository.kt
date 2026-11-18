@@ -192,9 +192,9 @@ class UniverseRepository(
         universeTag = universeTag.trim().take(40).ifEmpty { "UnknownOS" },
         description = description.trim().take(240),
         tier = 1L,
-        maxTier = 5L,
+        maxTier = 10L,
         cooldownSec = cooldownSec.coerceIn(0L, 120L),
-        powerValue = powerValue.coerceIn(1L, 500L),
+        powerValue = powerValue.coerceIn(1L, 1500L),
         accentColorHex = accentColorHex.trim().take(10).ifEmpty { "#00E5FF" },
         equipped = equipped,
         isCustom = isCustom,
@@ -236,11 +236,12 @@ class UniverseRepository(
     currentEssence: Long,
   ): Result<Unit> {
     require(item.id.isNotBlank()) { "ArmoryItem id required" }
-    if (item.tier >= item.maxTier) {
-      return Result.failure(IllegalStateException("Already at max Tier ${item.maxTier}"))
+    val effectiveMaxTier = maxOf(item.maxTier, 10L)
+    if (item.tier >= effectiveMaxTier) {
+      return Result.failure(IllegalStateException("Already at max Tier $effectiveMaxTier"))
     }
     if (currentEssence < upgradeCost) {
-      return Result.failure(IllegalStateException("Need $upgradeCost Essence to upgrade"))
+      return Result.failure(IllegalStateException("Need $upgradeCost Blue Essence to upgrade"))
     }
     return try {
       val now = System.currentTimeMillis()
@@ -249,7 +250,8 @@ class UniverseRepository(
       val updatedItem = item.copy(
         userId = userId,
         tier = item.tier + 1L,
-        powerValue = (item.powerValue + 35L).coerceAtMost(500L),
+        maxTier = effectiveMaxTier,
+        powerValue = (item.powerValue + 75L).coerceAtMost(1500L),
         updatedAtMillis = now,
       )
       val updatedProfile = profile.copy(
@@ -615,7 +617,7 @@ class UniverseRepository(
       universeTag = "Sector Zero",
       description = "Reinforces kinetic armor shielding (+40 Max Shield per tier).",
       tier = 1L,
-      maxTier = 5L,
+      maxTier = 10L,
       cooldownSec = 0L,
       powerValue = 140L,
       accentColorHex = "#FF3D71",
@@ -632,7 +634,7 @@ class UniverseRepository(
       universeTag = "Sector Zero",
       description = "Accelerates dash cadence, reload speed, and movement agility.",
       tier = 1L,
-      maxTier = 5L,
+      maxTier = 10L,
       cooldownSec = 0L,
       powerValue = 125L,
       accentColorHex = "#00E676",
@@ -649,7 +651,7 @@ class UniverseRepository(
       universeTag = "Blacklight Conduit",
       description = "Unleashes radial bio-electric tendrils that stun and clear nearby hostiles.",
       tier = 2L,
-      maxTier = 5L,
+      maxTier = 10L,
       cooldownSec = 6L,
       powerValue = 220L,
       accentColorHex = "#7C4DFF",
@@ -666,7 +668,7 @@ class UniverseRepository(
       universeTag = "Aegis & Starblade",
       description = "Telekinetic blast wave paired with twin-core saber deflection.",
       tier = 1L,
-      maxTier = 5L,
+      maxTier = 10L,
       cooldownSec = 8L,
       powerValue = 250L,
       accentColorHex = "#00E5FF",
@@ -683,7 +685,7 @@ class UniverseRepository(
       universeTag = "Chrono-Vault",
       description = "Locks hostile waves inside a golden time-dilation field for 4 seconds.",
       tier = 1L,
-      maxTier = 5L,
+      maxTier = 10L,
       cooldownSec = 12L,
       powerValue = 190L,
       accentColorHex = "#FFD54F",
@@ -700,7 +702,7 @@ class UniverseRepository(
       universeTag = "Sector Zero",
       description = "Supercharges primary energy blaster fire rate and multishot spread.",
       tier = 2L,
-      maxTier = 5L,
+      maxTier = 10L,
       cooldownSec = 0L,
       powerValue = 210L,
       accentColorHex = "#FFAB40",
@@ -717,7 +719,7 @@ class UniverseRepository(
       universeTag = "Hellbreaker",
       description = "Converts close-range dashes into armor-piercing fury strikes.",
       tier = 1L,
-      maxTier = 5L,
+      maxTier = 10L,
       cooldownSec = 0L,
       powerValue = 180L,
       accentColorHex = "#FF5252",
@@ -734,7 +736,7 @@ class UniverseRepository(
       universeTag = "UnknownOS",
       description = "Instant tactical consumable: restores shields and resets all Power cooldowns.",
       tier = 1L,
-      maxTier = 5L,
+      maxTier = 10L,
       cooldownSec = 15L,
       powerValue = 300L,
       accentColorHex = "#00E5FF",

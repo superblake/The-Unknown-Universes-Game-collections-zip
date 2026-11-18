@@ -57,8 +57,10 @@ import com.example.BuildConfig
 import com.example.R
 import com.example.data.local.CloudSyncState
 import com.example.data.local.SaveBundlePreview
+import com.example.data.model.AchievementState
 import com.example.data.model.ArmoryItem
 import com.example.data.model.LinkedAccount
+import com.example.data.model.LobbyConfig
 import com.example.data.model.MatchRecord
 import com.example.data.model.OperatorProfile
 import com.example.data.model.OperatorProgressionState
@@ -100,6 +102,10 @@ fun OsDesktopScreen(
   onStatusMessage: (String) -> Unit,
   onOpenSettings: () -> Unit = {},
   progression: OperatorProgressionState = OperatorProgressionState(),
+  achievements: List<AchievementState> = emptyList(),
+  onUpdateLobby: ((LobbyConfig) -> LobbyConfig) -> Unit = {},
+  onOpenStore: () -> Unit = {},
+  onOpenAchievements: () -> Unit = {},
   onSignOut: () -> Unit,
 ) {
   val activeWorld = UniverseCatalog.worldById(profile.activeUniverseId)
@@ -109,7 +115,9 @@ fun OsDesktopScreen(
   val equippedCount = armory.count { it.equipped }
 
   var showCallsignDialog by remember { mutableStateOf(false) }
+  var showLobbyRosterDialog by remember { mutableStateOf(false) }
   var callsignDraft by remember(profile.callsign) { mutableStateOf(profile.callsign) }
+  val claimableAchievements = achievements.count { it.unlocked && !it.claimed }
 
   val wallpaperBitmap = rememberAssetImageBitmap(activeWallpaperPath, maxDim = 960)
   val wallpaperGradient = when (profile.osWallpaperIndex.toInt() % 4) {
@@ -196,9 +204,10 @@ fun OsDesktopScreen(
                 modifier = Modifier.testTag("os_level_rank_badge"),
               )
               Text(
-                text = "Essence: ${profile.totalEssence} • ${progression.activePassVersion.title.substringBefore(":")} • Best: ${profile.highScore} • ${activeConsole.label}",
+                text = "Blue Essence: ${profile.totalEssence} • ${progression.activePassVersion.title.substringBefore(":")} • Best: ${profile.highScore} • ${activeConsole.label}",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = Color(0xFF00E5FF),
+                modifier = Modifier.testTag("os_blue_essence_text"),
               )
             }
 
@@ -248,6 +257,18 @@ fun OsDesktopScreen(
               onClick = onLaunchArena,
             )
             OsDockChip(
+              modifier = Modifier.weight(1f).testTag("os_dock_store"),
+              label = "STORE",
+              accent = Color(0xFF00E5FF),
+              onClick = onOpenStore,
+            )
+            OsDockChip(
+              modifier = Modifier.weight(1f).testTag("os_dock_achievements"),
+              label = if (claimableAchievements > 0) "ACH ($claimableAchievements)" else "ACHIEVE",
+              accent = Color(0xFFFFD54F),
+              onClick = onOpenAchievements,
+            )
+            OsDockChip(
               modifier = Modifier.weight(1f),
               label = "BLENDER",
               accent = Color(0xFFFF8F00),
@@ -256,7 +277,7 @@ fun OsDesktopScreen(
             OsDockChip(
               modifier = Modifier.weight(1f),
               label = "VAULT",
-              accent = Color(0xFF00E5FF),
+              accent = Color(0xFFE040FB),
               onClick = onOpenMediaVault,
             )
             OsDockChip(
@@ -427,6 +448,69 @@ fun OsDesktopScreen(
           value = activeConsole.id.substringBefore("_").uppercase(),
           accent = Color(0xFF00E676),
         )
+      }
+    }
+
+    // Solo / Duos / Squads + Over-8-Player Lobby & AI Bots Card
+    item {
+      LobbyQuickCard(
+        lobbyConfig = progression.lobbyConfig,
+        playerCallsign = profile.callsign,
+        playerLevel = progression.playerLevel,
+        playerPrestige = progression.playerPrestige,
+        accentColor = Color(activeWorld.accentHex),
+        onUpdateLobby = onUpdateLobby,
+        onOpenFullRoster = { showLobbyRosterDialog = true },
+      )
+    }
+
+    // Blue Essence Store & Achievements Menu Quick Row
+    item {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+      ) {
+        Surface(
+          onClick = onOpenStore,
+          shape = RoundedCornerShape(16.dp),
+          color = MaterialTheme.colorScheme.surface,
+          modifier = Modifier
+            .weight(1f)
+            .border(1.5.dp, Color(0xFF00E5FF).copy(alpha = 0.65f), RoundedCornerShape(16.dp))
+            .testTag("os_store_card"),
+        ) {
+          Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("BLUE ESSENCE STORE", style = MaterialTheme.typography.titleSmall, color = Color(0xFF00E5FF))
+            Text(
+              text = "${profile.totalEssence} Blue Essence • XP Boosters, Tier Catalysts & Bot Uplinks",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              maxLines = 2,
+              overflow = TextOverflow.Ellipsis,
+            )
+          }
+        }
+        Surface(
+          onClick = onOpenAchievements,
+          shape = RoundedCornerShape(16.dp),
+          color = MaterialTheme.colorScheme.surface,
+          modifier = Modifier
+            .weight(1f)
+            .border(1.5.dp, Color(0xFFFFD54F).copy(alpha = 0.65f), RoundedCornerShape(16.dp))
+            .testTag("os_achievements_card"),
+        ) {
+          Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            val unlockedAch = achievements.count { it.unlocked }
+            Text("ACHIEVEMENTS ($unlockedAch/${achievements.size.coerceAtLeast(18)})", style = MaterialTheme.typography.titleSmall, color = Color(0xFFFFD54F))
+            Text(
+              text = if (claimableAchievements > 0) "$claimableAchievements reward(s) ready to claim!" else "Earn Blue Essence & Operator XP milestones",
+              style = MaterialTheme.typography.bodySmall,
+              color = if (claimableAchievements > 0) Color(0xFF00E676) else MaterialTheme.colorScheme.onSurfaceVariant,
+              maxLines = 2,
+              overflow = TextOverflow.Ellipsis,
+            )
+          }
+        }
       }
     }
 
@@ -747,6 +831,17 @@ fun OsDesktopScreen(
       dismissButton = {
         TextButton(onClick = { showCallsignDialog = false }) { Text("Cancel") }
       },
+    )
+  }
+
+  if (showLobbyRosterDialog) {
+    LobbyAndBotsDialog(
+      lobbyConfig = progression.lobbyConfig,
+      playerCallsign = profile.callsign,
+      playerLevel = progression.playerLevel,
+      playerPrestige = progression.playerPrestige,
+      onUpdateLobby = onUpdateLobby,
+      onDismiss = { showLobbyRosterDialog = false },
     )
   }
 }

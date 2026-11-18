@@ -315,7 +315,7 @@ fun CloudSyncAndSaveCard(
       text = {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
           Text(
-            text = "Source v${preview.sourceAppVersion} • Essence: ${preview.totalEssence} • High Score: ${preview.highScore} • Best Wave: ${preview.highestWave}",
+            text = "Source v${preview.sourceAppVersion} • Blue Essence: ${preview.totalEssence} • High Score: ${preview.highScore} • Best Wave: ${preview.highestWave}",
             style = MaterialTheme.typography.bodyMedium,
           )
           Text(

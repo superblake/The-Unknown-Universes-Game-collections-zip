@@ -29,7 +29,7 @@ data class ArmoryItem(
   val universeTag: String = "Sector Zero",
   val description: String = "",
   val tier: Long = 1L,
-  val maxTier: Long = 5L,
+  val maxTier: Long = 10L,
   val cooldownSec: Long = 0L,
   val powerValue: Long = 100L,
   val accentColorHex: String = "#00E5FF",

@@ -54,8 +54,9 @@ fun PassAndChallengesTab(
   }
   val isPreviewUnlocked = progression.unlockedPassVersions.contains(previewPass)
   val isPreviewActive = progression.activePassVersion == previewPass
-  val passTiers = ProgressionCatalog.tiersForVersion(previewPass)
-  val maxTierXp = passTiers.lastOrNull()?.bpXpRequired?.coerceAtLeast(1L) ?: 2500L
+  val passCycle = progression.battlePassPrestige
+  val passTiers = ProgressionCatalog.tiersForVersion(previewPass, passCycle)
+  val maxTierXp = passTiers.lastOrNull()?.bpXpRequired?.coerceAtLeast(1L) ?: 3400L
   val previewAccent = Color(previewPass.accentHex)
 
   LazyColumn(
@@ -95,7 +96,7 @@ fun PassAndChallengesTab(
                   text = when {
                     active -> "ACTIVE"
                     unlocked -> "OWNED"
-                    else -> "${version.unlockCostEssence} ESSENCE"
+                    else -> "${version.unlockCostEssence} BLUE ESSENCE"
                   },
                   style = MaterialTheme.typography.labelSmall,
                   fontWeight = FontWeight.Bold,
@@ -163,16 +164,16 @@ fun PassAndChallengesTab(
             modifier = Modifier.fillMaxWidth().height(7.dp).clip(RoundedCornerShape(4.dp)),
           )
           Text(
-            text = "Season Battle Pass XP: ${progression.battlePassXp} / $maxTierXp",
+            text = "Infinite Battle Pass XP: ${progression.battlePassXp} / $maxTierXp • BP Prestige P${progression.battlePassPrestige}/30 (Cycle #${progression.bpCycleCount + 1})",
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = previewAccent,
           )
         }
       }
     }
 
-    items(passTiers, key = { "${previewPass.id}_${it.tier}" }) { tierSpec ->
-      val key = "${previewPass.id}_${tierSpec.tier}"
+    items(passTiers, key = { "${previewPass.id}_c${passCycle}_t${it.tier}" }) { tierSpec ->
+      val key = "${previewPass.id}_c${passCycle}_t${tierSpec.tier}"
       val claimed = progression.claimedPassTiers.contains(key)
       val unlocked = isPreviewUnlocked && progression.battlePassXp >= tierSpec.bpXpRequired
       Surface(
@@ -193,7 +194,7 @@ fun PassAndChallengesTab(
             )
             Text(tierSpec.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
-              text = "Req: ${tierSpec.bpXpRequired} BP XP • Reward: +${tierSpec.rewardEssence} Essence",
+              text = "Req: ${tierSpec.bpXpRequired} BP XP • Reward: +${tierSpec.rewardEssence} Blue Essence",
               style = MaterialTheme.typography.labelSmall,
               color = previewAccent,
             )
@@ -225,7 +226,7 @@ fun PassAndChallengesTab(
         verticalAlignment = Alignment.CenterVertically,
       ) {
         Text(
-          text = "DAILY & SEASON CHALLENGES",
+          text = "INFINITE CHALLENGES • P${progression.challengePrestige}/30",
           style = MaterialTheme.typography.titleMedium,
           color = MaterialTheme.colorScheme.primary,
         )
@@ -277,7 +278,7 @@ fun PassAndChallengesTab(
             modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
           )
           Text(
-            text = "Rewards: +${ch.spec.rewardEssence} Essence • +${ch.spec.rewardPlayerXp} Player XP • +${ch.spec.rewardBpXp} BP XP",
+            text = "Rewards: +${ch.spec.rewardEssence} Blue Essence • +${ch.spec.rewardPlayerXp} Player XP • +${ch.spec.rewardBpXp} BP XP",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.tertiary,
           )

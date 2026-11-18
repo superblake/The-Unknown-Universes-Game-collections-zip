@@ -257,7 +257,7 @@ fun ArenaScreen(
                 color = Color.White,
               )
               Text(
-                text = "LV ${loadout.playerLevel} • ${loadout.weaponSpec.name} (W.Lv.${loadout.weaponLevel}) • ${loadout.activePassVersion.title.substringBefore(":")}",
+                text = "LV ${loadout.playerLevel} • ${loadout.weaponSpec.name} (W.Lv.${loadout.weaponLevel} T${loadout.weaponTier}) • ${loadout.activePassVersion.title.substringBefore(":")} • ${progression.lobbyConfig.partyMode.shortLabel} ${progression.lobbyConfig.targetPlayers}P (${sim.hudBotCount} BOTS)",
                 style = MaterialTheme.typography.labelSmall,
                 color = Color(loadout.activePassVersion.accentHex),
                 modifier = Modifier.testTag("arena_level_weapon_hud"),
@@ -578,6 +578,43 @@ fun ArenaScreen(
           )
         }
 
+        // AI Lobby Bot Combatants (Allied Squadmates & Rival Bots)
+        for (i in 0 until sim.arenaBots.size) {
+          val bot = sim.arenaBots[i]
+          if (bot.hp <= 0) continue
+          val botOrigin = Offset(bot.x * w, bot.y * h)
+          val botRingCol = if (bot.isAllied) palette.safeExfil else palette.dropBuff
+          drawCircle(
+            color = botRingCol.copy(alpha = 0.72f),
+            radius = 20f,
+            center = botOrigin,
+            style = Stroke(width = 2.4f),
+          )
+          val botSkel = RigEvaluator.evaluate(
+            origin = botOrigin,
+            scalePx = 56f,
+            poseAngles = UniverseCatalog.defaultPoseMap(),
+            clip = if (settings.reduceMotion) "idle" else "sprint",
+            frame = if (settings.reduceMotion) 0f else (sim.frameTick + i * 11f),
+            ikEnabled = true,
+            animationSpeedMultiplier = progression.characterCustom.animationSpeedMultiplier,
+          )
+          drawRigCharacter(
+            skeleton = botSkel,
+            archetype = bot.archetype,
+            primaryColor = bot.color,
+            secondaryColor = botRingCol,
+            showBonesOverlay = false,
+            capePathScratch = capePathScratch,
+            torsoPathScratch = torsoPathScratch,
+            packTier = 1,
+            isDashing = false,
+            dynamicGlow = glowOn,
+            highContrast = highContrast,
+            cloakOverride = false,
+          )
+        }
+
         // Custom Optic Aim Reticle Indicator
         val retPos = if (sim.touchAimActive) {
           Offset(sim.touchAimX * w, sim.touchAimY * h)
@@ -616,6 +653,7 @@ fun ArenaScreen(
           clip = playerClip,
           frame = if (settings.reduceMotion) 0f else sim.frameTick,
           ikEnabled = activeRig?.ikEnabled ?: true,
+          animationSpeedMultiplier = progression.characterCustom.animationSpeedMultiplier,
         )
         val visorHex = ProgressionCatalog.visorStyles
           .firstOrNull { it.first == progression.characterCustom.visorStyleId }
@@ -656,6 +694,15 @@ fun ArenaScreen(
               color = if (e.isBoss) palette.boss else palette.hostile,
               radius = if (e.isBoss) 3.8f else 2.5f,
               center = Offset(radarCenter.x + (e.x - 0.5f) * radarR * 1.6f, radarCenter.y + (e.y - 0.5f) * radarR * 1.6f),
+            )
+          }
+          for (i in 0 until sim.arenaBots.size) {
+            val bot = sim.arenaBots[i]
+            if (bot.hp <= 0) continue
+            drawCircle(
+              color = if (bot.isAllied) palette.safeExfil else palette.dropBuff,
+              radius = 2.4f,
+              center = Offset(radarCenter.x + (bot.x - 0.5f) * radarR * 1.6f, radarCenter.y + (bot.y - 0.5f) * radarR * 1.6f),
             )
           }
         }
@@ -736,12 +783,13 @@ fun ArenaScreen(
               ) { Text("+Boss", style = MaterialTheme.typography.labelSmall) }
               OutlinedButton(
                 onClick = {
-                  sim.hudPackTier = 3
-                  sim.postCallout("SANDBOX PACK-A-TIER III MAXED!")
+                  sim.hudPackTier = 10
+                  sim.maxPackTierReached = 10
+                  sim.postCallout("SANDBOX PACK-A-TIER X (OMEGA) MAXED!")
                 },
                 modifier = Modifier.height(36.dp),
                 shape = RoundedCornerShape(8.dp),
-              ) { Text("Tier III", style = MaterialTheme.typography.labelSmall) }
+              ) { Text("Tier X", style = MaterialTheme.typography.labelSmall) }
               OutlinedButton(
                 onClick = { sim.spawnRandomWonderWeapon() },
                 modifier = Modifier.height(36.dp).testTag("sandbox_spawn_wonder_btn"),
@@ -799,7 +847,7 @@ fun ArenaScreen(
               shape = RoundedCornerShape(14.dp),
               modifier = Modifier.height(52.dp).testTag("save_match_result_btn"),
             ) {
-              Text("Claim Essence & Save Run", style = MaterialTheme.typography.labelLarge)
+              Text("Claim Blue Essence & Save Run", style = MaterialTheme.typography.labelLarge)
             }
           }
         }
@@ -918,7 +966,12 @@ fun ArenaScreen(
                 sim.upgradePackAPunch()
               },
               colors = ButtonDefaults.buttonColors(
-                containerColor = if (sim.hudPackTier >= 3) Color(0xFFFFD54F) else Color(0xFFE040FB),
+                containerColor = when {
+                  sim.hudPackTier >= 10 -> Color(0xFF00E5FF)
+                  sim.hudPackTier >= 5 -> Color(0xFFFFD54F)
+                  sim.hudPackTier >= 3 -> Color(0xFFFFAB40)
+                  else -> Color(0xFFE040FB)
+                },
                 contentColor = Color.Black,
               ),
               shape = RoundedCornerShape(12.dp),

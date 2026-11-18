@@ -27,7 +27,7 @@ import kotlin.math.sqrt
 import kotlin.random.Random
 
 enum class ArenaDropKind(val badge: String, val label: String, val color: Color) {
-  DOUBLE_ESSENCE("2X", "DOUBLE ESSENCE (2X)", Color(0xFFFFD54F)),
+  DOUBLE_ESSENCE("2X", "DOUBLE BLUE ESSENCE (2X)", Color(0xFFFFD54F)),
   INSTA_KILL("IK", "INSTA-KILL ACTIVE!", Color(0xFFFF3D71)),
   NUKE("NK", "TACTICAL NUKE DETONATED!", Color(0xFF00E5FF)),
   MAX_ARMOR("MX", "MAX ARMOR REFILLED!", Color(0xFF00E676)),
@@ -97,6 +97,20 @@ data class ArenaWonderPickup(
   var life: Float = 960f,
 )
 
+data class ArenaBot(
+  val id: String,
+  val callsign: String,
+  val isAllied: Boolean,
+  val archetype: String,
+  val color: Color,
+  var x: Float,
+  var y: Float,
+  var hp: Int,
+  val maxHp: Int,
+  var fireCdTicks: Float,
+  var roamAngle: Float,
+)
+
 data class ArenaLoadoutStats(
   val maxShield: Int,
   val moveBoost: Float,
@@ -120,6 +134,8 @@ data class ArenaLoadoutStats(
   val activePerksSummary: String,
   val weaponSpec: WeaponSpec = ProgressionCatalog.weapons.first(),
   val weaponLevel: Int = 1,
+  val weaponTier: Int = 1,
+  val weaponTierMultiplier: Float = 1.0f,
   val weaponBonusDamage: Int = 0,
   val weaponExtraSpread: Int = 0,
   val weaponExtraPierce: Int = 0,
@@ -128,6 +144,10 @@ data class ArenaLoadoutStats(
   val ammoModId: String = "standard_core",
   val playerLevel: Int = 1,
   val activePassVersion: BattlePassVersion = BattlePassVersion.STANDARD_SECTOR_OPS,
+  val wonderDropSkillMult: Float = 1.0f,
+  val wonderDurSkillMult: Float = 1.0f,
+  val critDamageGearBonus: Float = 1.0f,
+  val skillDashCdMult: Float = 1.0f,
 ) {
   companion object {
     fun fromArmory(
@@ -144,8 +164,30 @@ data class ArenaLoadoutStats(
       val pass = progression.activePassVersion
       val weapon = ProgressionCatalog.weaponById(progression.weaponCustom.equippedWeaponId)
       val wpnLevel = progression.weaponLevel(weapon.id)
+      val wpnPrestige = progression.weaponPrestige(weapon.id)
+      val wpnTier = progression.weaponTier(weapon.id)
+      val wpnTierMult = ProgressionCatalog.tierMultiplier(wpnTier)
       val playerLvl = progression.playerLevel
+      val playerPrestige = progression.playerPrestige
       val wc = progression.weaponCustom
+
+      // Skill Tree Nodes (Tier 1..10)
+      val skShield1 = progression.skillNodes["sk_shield_1"]?.takeIf { it.unlocked }?.tier ?: 0
+      val skShield2 = progression.skillNodes["sk_shield_2"]?.takeIf { it.unlocked }?.tier ?: 0
+      val skDmg1 = progression.skillNodes["sk_damage_1"]?.takeIf { it.unlocked }?.tier ?: 0
+      val skDmg2 = progression.skillNodes["sk_damage_2"]?.takeIf { it.unlocked }?.tier ?: 0
+      val skCd = progression.skillNodes["sk_cooldown_1"]?.takeIf { it.unlocked }?.tier ?: 0
+      val skWonder = progression.skillNodes["sk_wonder_1"]?.takeIf { it.unlocked }?.tier ?: 0
+
+      // Gear Bonuses (Level 1..50, Tier 1..10, Prestige 0..30)
+      val helmet = progression.gearMap[com.example.data.model.GearSlot.HELMET.id]
+      val chest = progression.gearMap[com.example.data.model.GearSlot.CHEST.id]
+      val gloves = progression.gearMap[com.example.data.model.GearSlot.GLOVES.id]
+      val boots = progression.gearMap[com.example.data.model.GearSlot.BOOTS.id]
+      val backRig = progression.gearMap[com.example.data.model.GearSlot.BACK_RIG.id]
+
+      val chestShield = ((chest?.level ?: 1) - 1) * 3 + (((chest?.tier ?: 1) - 1) * 18) + progression.gearPrestige * 15
+      val skillShield = skShield1 * 25 + skShield2 * 35
 
       val juggBonus = perks.sumOf { p ->
         if (p.id == "perk_juggernaut" || p.name.contains("Juggernaut", ignoreCase = true) || p.name.contains("Aegis", ignoreCase = true)) {
@@ -154,42 +196,52 @@ data class ArenaLoadoutStats(
           (p.tier * 20).toInt()
         }
       }
-      val levelShieldBonus = ((playerLvl - 1) * 3).coerceAtMost(90)
-      val maxShield = 100 + juggBonus + levelShieldBonus + pass.bonusShield
+      val levelShieldBonus = ((playerLvl - 1) * 2).coerceAtMost(600) + playerPrestige * 25
+      val maxShield = 100 + juggBonus + levelShieldBonus + pass.bonusShield + chestShield + skillShield
 
       val speedPerkCount = perks.sumOf { p ->
         if (p.id == "perk_overdrive" || p.name.contains("Speed", ignoreCase = true) || p.name.contains("Stamina", ignoreCase = true)) {
           p.tier.toInt()
         } else 0
       }
-      val moveBoost = (1f + speedPerkCount * 0.14f + (perks.size * 0.05f) + pass.moveSpeedBonus).coerceAtMost(2.05f)
-      val multiShot = (1 + upgrades.sumOf { (it.tier / 2).toInt().coerceAtLeast(1) } + (weapon.baseSpreadCount - 1)).coerceAtMost(5)
+      val bootsMoveBonus = (((boots?.level ?: 1) - 1) * 0.0035f) + ((boots?.tier ?: 1) - 1) * 0.02f
+      val stockMoveBonus = if (wc.stockId == "lightweight_skeleton") 0.08f else 0f
+      val moveBoost = (1f + speedPerkCount * 0.14f + (perks.size * 0.05f) + pass.moveSpeedBonus + skCd * 0.03f + bootsMoveBonus + stockMoveBonus).coerceAtMost(2.5f)
+      val magExtraSpread = if (wc.magazineId == "extended_mag_2") 1 else 0
+      val multiShot = (1 + upgrades.sumOf { (it.tier / 2).toInt().coerceAtLeast(1) } + (weapon.baseSpreadCount - 1) + magExtraSpread).coerceAtMost(6)
       val packItem = upgrades.firstOrNull { it.id == "upgrade_packtier" || it.name.contains("Pack", ignoreCase = true) }
       val initialPackTier = when {
         packItem == null -> 1
-        packItem.tier >= 4 -> 3
-        packItem.tier >= 2 -> 2
-        else -> 1
+        else -> (1 + (packItem.tier.toInt() / 2)).coerceIn(1, 6)
       }
       val clawItem = upgrades.firstOrNull { it.id == "upgrade_claws" || it.name.contains("Claw", ignoreCase = true) || it.name.contains("Melee", ignoreCase = true) }
       val primaryPower = powers.firstOrNull()
-      val powerCdSec = ((primaryPower?.cooldownSec?.toFloat() ?: 6f) * pass.cooldownMultiplier).coerceIn(1.5f, 30f)
-      val customBonusDmg = ((primaryPower?.powerValue ?: 180L) / 70L).toInt().coerceIn(2, 8)
+      val skillCdMult = (1f - skCd * 0.06f).coerceIn(0.35f, 1.0f)
+      val powerCdSec = ((primaryPower?.cooldownSec?.toFloat() ?: 6f) * pass.cooldownMultiplier * skillCdMult).coerceIn(1.2f, 30f)
+      val customBonusDmg = ((primaryPower?.powerValue ?: 180L) / 70L).toInt().coerceIn(2, 16)
       val powerTierBonus = ((primaryPower?.tier ?: 1L) - 1L).toInt()
       val powerColor = primaryPower?.accentColorHex?.let { parseHexSafe(it, fallbackAccent) } ?: fallbackAccent
 
       val primaryConsumable = consumables.firstOrNull()
-      val cHeal = (45 + ((primaryConsumable?.tier ?: 1L) * 18L) + ((primaryConsumable?.powerValue ?: 100L) / 15L)).toInt().coerceAtMost(220)
-      val cCdSec = ((primaryConsumable?.cooldownSec?.toFloat() ?: 12f) * pass.cooldownMultiplier).coerceIn(3f, 35f)
+      val cHeal = (45 + ((primaryConsumable?.tier ?: 1L) * 18L) + ((primaryConsumable?.powerValue ?: 100L) / 15L)).toInt().coerceAtMost(360)
+      val cCdSec = ((primaryConsumable?.cooldownSec?.toFloat() ?: 12f) * pass.cooldownMultiplier * skillCdMult).coerceIn(2.5f, 35f)
 
-      val barrelBonusDmg = if (wc.barrelId == "heavy_bore") 1 else 0
+      val barrelBonusDmg = if (wc.barrelId == "heavy_bore") 2 else 0
+      val muzzleBonusDmg = if (wc.muzzleId == "heavy_compensator" || wc.muzzleId == "monolithic_suppressor") 1 else 0
       val barrelExtraSpread = if (wc.barrelId == "spread_choke") 1 else 0
-      val barrelSpeedMult = if (wc.barrelId == "overclocked_rifling") 1.18f else 1.0f
+      val barrelSpeedMult = if (wc.barrelId == "overclocked_rifling") 1.22f else 1.0f
 
-      val levelDmgBonus = ((wpnLevel - 1) / 5).coerceAtMost(4)
-      val levelCadenceReduction = ((wpnLevel - 1) * 0.12f).coerceAtMost(2.5f)
+      val levelDmgBonus = ((wpnLevel - 1) / 3) + (wpnPrestige * 2)
+      val skillDmgBonus = skDmg1 * 2 + skDmg2 * 3
+      val rawTotalWpnDmg = ((weapon.baseDamage - 1).coerceAtLeast(0) + barrelBonusDmg + muzzleBonusDmg + levelDmgBonus + skillDmgBonus) * wpnTierMult
+      val glovesRateBonus = ((gloves?.level ?: 1) - 1) * 0.04f + ((gloves?.tier ?: 1) - 1) * 0.25f
+      val levelCadenceReduction = (((wpnLevel - 1) * 0.08f) + glovesRateBonus).coerceAtMost(4.5f)
       val rawCadence = (weapon.baseCadenceTicks - speedPerkCount * 0.9f - levelCadenceReduction) / pass.fireRateMultiplier
-      val fireCadence = rawCadence.coerceIn(4.5f, 15.0f)
+      val fireCadence = rawCadence.coerceIn(3.5f, 15.0f)
+
+      val wonderDropSkillMult = 1f + skWonder * 0.30f
+      val wonderDurSkillMult = 1f + skWonder * 0.15f + (((backRig?.level ?: 1) - 1) * 0.01f) + ((backRig?.tier ?: 1) - 1) * 0.08f
+      val critDmgGearBonus = 1f + (((helmet?.level ?: 1) - 1) * 0.02f) + ((helmet?.tier ?: 1) - 1) * 0.12f
 
       return ArenaLoadoutStats(
         maxShield = maxShield,
@@ -197,31 +249,37 @@ data class ArenaLoadoutStats(
         multiShot = multiShot,
         initialPackTier = initialPackTier,
         hasClawEdge = clawItem != null,
-        clawTier = clawItem?.tier?.toInt() ?: 0,
+        clawTier = (clawItem?.tier?.toInt() ?: 0) + ((gloves?.level ?: 1) / 10),
         powerCooldownTicks = powerCdSec * 60f,
         activePowerId = primaryPower?.id ?: "surge",
         activePowerName = primaryPower?.name?.uppercase() ?: "MULTIVERSE SURGE",
         activePowerColor = powerColor,
-        activePowerRadius = (0.27f + powerTierBonus * 0.03f).coerceAtMost(0.42f),
+        activePowerRadius = (0.27f + powerTierBonus * 0.03f).coerceAtMost(0.48f),
         activePowerDamage = customBonusDmg + powerTierBonus,
         hasTendrilPower = powers.any { it.id == "power_tendril" || it.name.contains("Tendril", ignoreCase = true) || it.name.contains("Bio", ignoreCase = true) },
         hasRepulsePower = powers.any { it.id == "power_repulse" || it.name.contains("Repulse", ignoreCase = true) || it.name.contains("Force", ignoreCase = true) },
         hasChevronPower = powers.any { it.id == "power_chevron" || it.name.contains("Chevron", ignoreCase = true) || it.name.contains("Chrono", ignoreCase = true) || it.name.contains("Stasis", ignoreCase = true) },
-        passiveRegenPerSec = 1.5f + perks.size * 1.0f,
+        passiveRegenPerSec = 1.5f + perks.size * 1.0f + skShield2 * 1.0f + ((chest?.tier ?: 1) - 1) * 0.4f,
         consumableHeal = cHeal,
         consumableCooldownTicks = cCdSec * 60f,
         fireCadenceTicks = fireCadence,
         activePerksSummary = perks.take(2).joinToString(" • ") { it.name.substringBefore(" ") },
         weaponSpec = weapon,
         weaponLevel = wpnLevel,
-        weaponBonusDamage = (weapon.baseDamage - 1).coerceAtLeast(0) + barrelBonusDmg + levelDmgBonus,
+        weaponTier = wpnTier,
+        weaponTierMultiplier = wpnTierMult,
+        weaponBonusDamage = rawTotalWpnDmg.roundToInt().coerceAtLeast(1),
         weaponExtraSpread = barrelExtraSpread,
-        weaponExtraPierce = weapon.basePierce + ((wpnLevel - 1) / 6),
-        projectileSpeed = weapon.baseProjectileSpeed * barrelSpeedMult * (1f + ((wpnLevel - 1) * 0.01f).coerceAtMost(0.25f)),
+        weaponExtraPierce = weapon.basePierce + ((wpnLevel - 1) / 6) + (skDmg2 / 2) + ((wpnTier - 1) / 3),
+        projectileSpeed = weapon.baseProjectileSpeed * barrelSpeedMult * (1f + ((wpnLevel - 1) * 0.008f).coerceAtMost(0.35f)),
         tracerColor = Color(wc.tracerColorHex),
         ammoModId = wc.ammoModId,
         playerLevel = playerLvl,
         activePassVersion = pass,
+        wonderDropSkillMult = wonderDropSkillMult,
+        wonderDurSkillMult = wonderDurSkillMult,
+        critDamageGearBonus = critDmgGearBonus,
+        skillDashCdMult = skillCdMult,
       )
     }
   }
@@ -276,12 +334,14 @@ class ArenaSimState(
   var playerShotCounter = 0
 
   val hostiles = ArrayList<ArenaHostile>(24)
-  val bolts = ArrayList<ArenaBolt>(48)
+  val bolts = ArrayList<ArenaBolt>(64)
   val intels = ArrayList<ArenaIntel>(4)
   val drops = ArrayList<ArenaDrop>(8)
   val wonderPickups = ArrayList<ArenaWonderPickup>(4)
   val sparks = ArrayList<HitSpark>(32)
   val arcs = ArrayList<ArenaArcLine>(16)
+  val arenaBots = ArrayList<ArenaBot>(16)
+  var maxPackTierReached = loadout.initialPackTier
 
   // Low-frequency HUD Snapshot States (Compose HUD recomposes ONLY when discrete values change!)
   var hudShield by mutableIntStateOf(loadout.maxShield)
@@ -293,6 +353,7 @@ class ArenaSimState(
   var hudActiveWonder by mutableStateOf<WonderWeaponKind?>(null)
   var hudWonderSecLeft by mutableIntStateOf(0)
   var hudPackTier by mutableIntStateOf(loadout.initialPackTier)
+  var hudBotCount by mutableIntStateOf(progression.lobbyConfig.activeBotCount)
   var hudIntelCollected by mutableIntStateOf(0)
   var hudChevronsLocked by mutableIntStateOf(1)
   var hudPowerCdSec by mutableIntStateOf(0)
@@ -323,7 +384,39 @@ class ArenaSimState(
   private val secondaryColor = Color(world.secondaryHex)
 
   init {
+    spawnLobbyBots()
     spawnWave(1L)
+  }
+
+  private fun spawnLobbyBots() {
+    arenaBots.clear()
+    val roster = ProgressionCatalog.generateLobbyRoster(
+      config = progression.lobbyConfig,
+      playerCallsign = "Vanguard",
+      playerLevel = progression.playerLevel,
+      playerPrestige = progression.playerPrestige,
+    )
+    val bots = roster.filter { !it.isHumanPlayer }.take(16)
+    hudBotCount = progression.lobbyConfig.activeBotCount
+    bots.forEachIndexed { idx, member ->
+      val angle = idx * (2f * PI.toFloat() / bots.size.coerceAtLeast(1))
+      val dist = if (member.isAlliedSquadmate) 0.14f else 0.30f
+      arenaBots.add(
+        ArenaBot(
+          id = member.id,
+          callsign = member.callsign,
+          isAllied = member.isAlliedSquadmate,
+          archetype = member.archetype,
+          color = Color(member.accentHex),
+          x = (playerX + cos(angle) * dist).coerceIn(0.08f, 0.92f),
+          y = (playerY + sin(angle) * dist).coerceIn(0.14f, 0.86f),
+          hp = 120 + member.level / 2,
+          maxHp = 120 + member.level / 2,
+          fireCdTicks = 28f + (idx * 7f) % 24f,
+          roamAngle = angle,
+        )
+      )
+    }
   }
 
   fun postCallout(text: String) {
@@ -338,6 +431,8 @@ class ArenaSimState(
     wonderPickupsCollected = hudWonderPickedCount,
     weaponIdUsed = loadout.weaponSpec.id,
     extracted = hudExtractedSuccess || modeId == "sandbox",
+    highestPackTierReached = maxOf(maxPackTierReached, hudPackTier),
+    lobbySizePlayed = progression.lobbyConfig.targetPlayers,
   )
 
   private fun addSparkIfAllowed(x: Float, y: Float, color: Color, life: Float) {
@@ -512,6 +607,19 @@ class ArenaSimState(
     }
   }
 
+  private fun packDamageMultiplier(tier: Int): Int = when (tier.coerceIn(1, 10)) {
+    1 -> 1
+    2 -> 2
+    3 -> 4
+    4 -> 6
+    5 -> 9
+    6 -> 12
+    7 -> 16
+    8 -> 20
+    9 -> 25
+    else -> 32
+  }
+
   fun fireVolley(forceManual: Boolean = false) {
     if (hudRunEnded) return
     if (!touchAimActive) {
@@ -519,14 +627,15 @@ class ArenaSimState(
     }
     playerShotCounter++
     val baseAngle = atan2(aimY, aimX)
-    val packLevel = hudPackTier.coerceIn(1, 3)
+    val packLevel = hudPackTier.coerceIn(1, 10)
     val wonder = activeWonderWeapon
-    val critBoost = if (progression.levelCustom.critSurgeMutator && playerShotCounter % 3 == 0) 2 else 1
+    val critBoost = if (progression.levelCustom.critSurgeMutator && playerShotCounter % 3 == 0) 2f else 1f
     val instagibBoost = if (progression.levelCustom.instagibMutator) 2 else 1
 
     if (wonder != null) {
       val wonderCol = Color(wonder.accentHex)
-      val wonderDmg = (wonder.baseDamage + packLevel - 1) * critBoost * instagibBoost
+      val wonderTierMult = ProgressionCatalog.tierMultiplier(progression.wonderTier(wonder.id))
+      val wonderDmg = ((wonder.baseDamage + packLevel * 2) * wonderTierMult * critBoost * loadout.critDamageGearBonus * instagibBoost).roundToInt().coerceAtLeast(1)
       when (wonder) {
         WonderWeaponKind.STARBLADE_BOOMERANG -> {
           for (i in 0 until 6) {
@@ -616,32 +725,32 @@ class ArenaSimState(
       return
     }
 
-    val shots = (loadout.multiShot + loadout.weaponExtraSpread + (packLevel - 1) + if (overdriveTicks > 0f) 1 else 0).coerceAtMost(7)
-    val spread = if (shots > 4) 0.13f else 0.16f
-    val packDamageMult = when (packLevel) {
-      3 -> 4
-      2 -> 2
-      else -> 1
-    }
-    val dmg = ((packLevel + loadout.weaponBonusDamage) * packDamageMult + if (overdriveTicks > 0f) 1 else 0) * critBoost * instagibBoost
+    val shots = (loadout.multiShot + loadout.weaponExtraSpread + ((packLevel - 1) / 2).coerceAtMost(4) + if (overdriveTicks > 0f) 1 else 0).coerceAtMost(8)
+    val spread = if (shots > 4) 0.12f else 0.16f
+    val packDamageMult = packDamageMultiplier(packLevel)
+    val baseDmg = ((packLevel + loadout.weaponBonusDamage) * packDamageMult + if (overdriveTicks > 0f) 2 else 0)
+    val dmg = (baseDmg * critBoost * loadout.critDamageGearBonus * instagibBoost).roundToInt().coerceAtLeast(1)
     val pierce = (packLevel - 1 + loadout.weaponExtraPierce).coerceAtLeast(0)
     val weaponDefaultColor = when (loadout.weaponSpec.id) {
       "wpn_pulse_carbine" -> Color(0xFF00E5FF)
       "wpn_plasma_scatter" -> Color(0xFF7C4DFF)
-      "wpn_starblade_lancer" -> Color(0xFFFFD54F)
-      "wpn_chrono_repeater" -> Color(0xFF00E676)
-      "wpn_hellbreaker_cannon" -> Color(0xFFFF3D71)
+      "wpn_starblade_lancer" -> Color(0xFFE040FB)
+      "wpn_chrono_repeater" -> Color(0xFFFFD54F)
+      "wpn_crucible_cannon", "wpn_hellbreaker_cannon" -> Color(0xFFFF3D71)
       else -> loadout.tracerColor
     }
     val boltColor = when {
       instaKillTicks > 0f -> Color(0xFFFF1744)
-      critBoost > 1 -> Color(0xFFFFD700)
-      packLevel == 3 -> Color(0xFFFFAB00)
+      critBoost > 1f -> Color(0xFFFFD700)
+      packLevel >= 9 -> Color(0xFFFFFFFF)
+      packLevel >= 7 -> Color(0xFF00E676)
+      packLevel >= 5 -> Color(0xFFFF3D71)
+      packLevel >= 3 -> Color(0xFFFFAB00)
       packLevel == 2 -> Color(0xFFE040FB)
       overdriveTicks > 0f -> Color(0xFFFF6D00)
       else -> weaponDefaultColor
     }
-    val speed = loadout.projectileSpeed + packLevel * 0.002f
+    val speed = loadout.projectileSpeed + (packLevel * 0.0018f).coerceAtMost(0.015f)
     for (i in 0 until shots) {
       val offset = (i - (shots - 1) / 2f) * spread
       val a = baseAngle + offset
@@ -777,12 +886,11 @@ class ArenaSimState(
         }
       }
       "sector_zero" -> {
-        if (hudPackTier < 3) {
-          hudPackTier++
-          postCallout("PACK-A-TIER ${formatRoundRoman(hudPackTier.toLong())} UPGRADED!")
+        if (hudPackTier < 10) {
+          upgradePackAPunch()
         } else {
-          hudShield = (hudShield + 40).coerceAtMost(loadout.maxShield)
-          postCallout("MYSTERY CACHE OVERDRIVE! (+40 ARMOR)")
+          hudShield = (hudShield + 50).coerceAtMost(loadout.maxShield)
+          postCallout("OMEGA CACHE OVERDRIVE! (+50 ARMOR)")
         }
       }
       "blacklight_conduit" -> {
@@ -835,31 +943,33 @@ class ArenaSimState(
 
   fun upgradePackAPunch() {
     if (hudRunEnded) return
-    if (hudPackTier < 3) {
+    if (hudPackTier < 10) {
       hudPackTier++
+      maxPackTierReached = maxOf(maxPackTierReached, hudPackTier)
       val roman = formatRoundRoman(hudPackTier.toLong())
       overdriveTicks = 240f
       pulseRingRadius = 0.05f
-      postCallout("PACK-A-PUNCH TIER $roman! (x${hudPackTier * 2} DAMAGE)")
+      postCallout("PACK-A-PUNCH TIER $roman! (x${packDamageMultiplier(hudPackTier)} DAMAGE)")
     } else {
-      hudShield = (hudShield + 50).coerceAtMost(loadout.maxShield)
-      postCallout("PACK-A-PUNCH OVERDRIVE! (+50 ARMOR)")
+      hudShield = (hudShield + 75).coerceAtMost(loadout.maxShield)
+      postCallout("OMEGA PACK TIER X OVERDRIVE! (+75 ARMOR)")
     }
   }
 
   fun triggerLethal() {
     if (hudRunEnded || lethalCd > 0f) return
     val eqState = progression.equipmentState("lethal")
+    val eqTierMult = ProgressionCatalog.tierMultiplier(eqState.tier)
     val levelBonus = eqState.level * 2
     val prestigeBonus = eqState.prestige * 5
-    val baseCd = equippedLethalItem.cooldownSeconds * 60f
+    val baseCd = equippedLethalItem.cooldownSeconds * 60f * loadout.skillDashCdMult
     lethalCd = baseCd
     pulseRingRadius = 0.05f
 
     val blastX = (playerX + aimX * 0.18f).coerceIn(0.08f, 0.92f)
     val blastY = (playerY + aimY * 0.18f).coerceIn(0.12f, 0.88f)
     val blastRadiusSq = 0.20f * 0.20f
-    val lethalDmg = (equippedLethalItem.baseDamageOrEffect / 30f).toInt() + levelBonus / 5 + prestigeBonus
+    val lethalDmg = (((equippedLethalItem.baseDamageOrEffect / 30f).toInt() + levelBonus / 4 + prestigeBonus) * eqTierMult).roundToInt().coerceAtLeast(2)
 
     arcs.add(ArenaArcLine(playerX, playerY, blastX, blastY, Color(equippedLethalItem.defaultColorHex), 20f))
     for (i in 0 until 12) {
@@ -980,21 +1090,21 @@ class ArenaSimState(
   }
 
   fun collectWonderPickup(kind: WonderWeaponKind) {
-    val durMult = if (progression.activePassVersion == BattlePassVersion.CHRONO_MULTIVERSE) 1.30f else 1.0f
+    val durMult = (if (progression.activePassVersion == BattlePassVersion.CHRONO_MULTIVERSE) 1.30f else 1.0f) * loadout.wonderDurSkillMult
     activeWonderWeapon = kind
     wonderWeaponTicks = kind.durationTicks * durMult
     hudActiveWonder = kind
     hudWonderSecLeft = (wonderWeaponTicks / 60f).roundToInt()
     hudWonderPickedCount++
     pulseRingRadius = 0.05f
-    postCallout("EQUIPPED ${kind.displayName.uppercase()}!")
+    postCallout("EQUIPPED ${kind.displayName.uppercase()} (T${progression.wonderTier(kind.id)})!")
   }
 
   private fun applyDrop(drop: ArenaDrop) {
     when (drop.kind) {
       ArenaDropKind.DOUBLE_ESSENCE -> {
         doubleEssenceTicks = 600f
-        postCallout("2X ESSENCE ACTIVE (10s)")
+        postCallout("2X BLUE ESSENCE ACTIVE (10s)")
       }
       ArenaDropKind.INSTA_KILL -> {
         instaKillTicks = 480f
@@ -1106,6 +1216,62 @@ class ArenaSimState(
       if (fireAutoTicker <= 0f) {
         fireVolley()
         fireAutoTicker = if (overdriveTicks > 0f) loadout.fireCadenceTicks * 0.65f else loadout.fireCadenceTicks
+      }
+    }
+
+    // AI Squad & Lobby Bots Movement and Tactical Fire
+    if (arenaBots.isNotEmpty()) {
+      val botDiff = progression.lobbyConfig.botDifficulty
+      val botDmgMult = botDiff.damageScale * (1f + progression.botDamageBoostPct / 100f)
+      for (bi in 0 until arenaBots.size) {
+        val bot = arenaBots[bi]
+        bot.roamAngle = (bot.roamAngle + 0.015f * dt) % (2f * PI.toFloat())
+        val targetX: Float
+        val targetY: Float
+        var nearestHostile: ArenaHostile? = null
+        var bestDistSq = Float.MAX_VALUE
+        for (hi in 0 until hostiles.size) {
+          val h = hostiles[hi]
+          val dx = h.x - bot.x
+          val dy = h.y - bot.y
+          val dSq = dx * dx + dy * dy
+          if (dSq < bestDistSq) {
+            bestDistSq = dSq
+            nearestHostile = h
+          }
+        }
+        if (bot.isAllied) {
+          targetX = (playerX + cos(bot.roamAngle + bi) * 0.14f).coerceIn(0.08f, 0.92f)
+          targetY = (playerY + sin(bot.roamAngle + bi) * 0.14f).coerceIn(0.14f, 0.86f)
+        } else {
+          targetX = (0.5f + cos(bot.roamAngle + bi) * 0.34f).coerceIn(0.08f, 0.92f)
+          targetY = (0.5f + sin(bot.roamAngle + bi) * 0.34f).coerceIn(0.14f, 0.86f)
+        }
+        val moveDx = targetX - bot.x
+        val moveDy = targetY - bot.y
+        bot.x = (bot.x + moveDx * 0.03f * dt).coerceIn(0.07f, 0.93f)
+        bot.y = (bot.y + moveDy * 0.03f * dt).coerceIn(0.12f, 0.88f)
+
+        bot.fireCdTicks -= dt * botDiff.fireRateScale
+        if (bot.fireCdTicks <= 0f && nearestHostile != null && bolts.size < 60) {
+          bot.fireCdTicks = 36f
+          val aimDx = nearestHostile.x - bot.x
+          val aimDy = nearestHostile.y - bot.y
+          val dist = sqrt(aimDx * aimDx + aimDy * aimDy).coerceAtLeast(0.001f)
+          bolts.add(
+            ArenaBolt(
+              x = bot.x,
+              y = bot.y,
+              vx = (aimDx / dist) * 0.022f,
+              vy = (aimDy / dist) * 0.022f,
+              life = 45f,
+              isSupercharged = bot.isAllied,
+              pierceLeft = 0,
+              damage = (2f * botDmgMult).roundToInt().coerceAtLeast(1),
+              color = bot.color,
+            )
+          )
+        }
       }
     }
 
@@ -1378,9 +1544,9 @@ class ArenaSimState(
     if (hudOverdriveActive != ov) hudOverdriveActive = ov
 
     val dropTag = when {
-      instaKillTicks > 0f && doubleEssenceTicks > 0f -> "2X ESSENCE • INSTA-KILL"
+      instaKillTicks > 0f && doubleEssenceTicks > 0f -> "2X BLUE ESSENCE • INSTA-KILL"
       instaKillTicks > 0f -> "INSTA-KILL (${(instaKillTicks / 60f).toInt() + 1}s)"
-      doubleEssenceTicks > 0f -> "2X ESSENCE (${(doubleEssenceTicks / 60f).toInt() + 1}s)"
+      doubleEssenceTicks > 0f -> "2X BLUE ESSENCE (${(doubleEssenceTicks / 60f).toInt() + 1}s)"
       else -> null
     }
     if (hudActiveDropText != dropTag) hudActiveDropText = dropTag

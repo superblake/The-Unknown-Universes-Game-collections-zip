@@ -138,7 +138,7 @@ object UniverseCatalog {
       label = "Zombies Wave",
       shortTag = "ZMB",
       summary = "Round-based survival with Mystery Cache, Perk Cores, and Pack-a-Tier upgrades.",
-      winCondition = "Survive escalating waves & stack Essence multipliers",
+      winCondition = "Survive escalating waves & stack Blue Essence multipliers",
       accentHex = 0xFF00E676,
     ),
     GameModeSpec(
