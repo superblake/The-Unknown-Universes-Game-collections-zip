@@ -61,11 +61,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.data.local.AppSettings
+import com.example.data.local.ColorBlindMode
 import com.example.data.local.GraphicsQuality
 import com.example.data.local.ParticleDensity
 import com.example.data.local.resolveArenaPalette
 import com.example.data.model.ArmoryItem
+import com.example.data.model.MatchProgressionReport
 import com.example.data.model.OperatorProfile
+import com.example.data.model.OperatorProgressionState
+import com.example.data.model.ProgressionCatalog
 import com.example.data.model.RigAsset
 import com.example.data.model.UniverseCatalog
 import com.example.ui.rig.RigEvaluator
@@ -83,8 +87,10 @@ fun ArenaScreen(
   armory: List<ArmoryItem>,
   rigs: List<RigAsset>,
   settings: AppSettings = AppSettings(),
+  progression: OperatorProgressionState = OperatorProgressionState(),
   isPausedForSettings: Boolean = false,
   onOpenSettings: () -> Unit = {},
+  onRecordProgression: (MatchProgressionReport) -> Unit = {},
   onSaveMatchAndExit: (score: Long, wave: Long, eliminations: Long, extracted: Boolean, durationSec: Long) -> Unit,
 ) {
   val world = remember(profile.activeUniverseId) { UniverseCatalog.worldById(profile.activeUniverseId) }
@@ -94,8 +100,8 @@ fun ArenaScreen(
     rigs.firstOrNull { it.id == profile.activeRigId } ?: rigs.firstOrNull()
   }
 
-  val loadout = remember(armory, world.accentHex) {
-    ArenaLoadoutStats.fromArmory(armory, Color(world.accentHex))
+  val loadout = remember(armory, world.accentHex, progression) {
+    ArenaLoadoutStats.fromArmory(armory, Color(world.accentHex), progression)
   }
   val hasConsumable = remember(armory) { armory.any { it.equipped && it.category == "consumable" } }
 
@@ -106,6 +112,7 @@ fun ArenaScreen(
       loadout = loadout,
       hasConsumableEquipped = hasConsumable,
       initialSettings = settings,
+      progression = progression,
     )
   }
 
@@ -249,6 +256,12 @@ fun ArenaScreen(
                 style = MaterialTheme.typography.labelSmall,
                 color = Color.White,
               )
+              Text(
+                text = "LV ${loadout.playerLevel} • ${loadout.weaponSpec.name} (W.Lv.${loadout.weaponLevel}) • ${loadout.activePassVersion.title.substringBefore(":")}",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(loadout.activePassVersion.accentHex),
+                modifier = Modifier.testTag("arena_level_weapon_hud"),
+              )
             }
           }
 
@@ -283,6 +296,7 @@ fun ArenaScreen(
             OutlinedButton(
               onClick = {
                 sim.hudRunEnded = true
+                onRecordProgression(sim.buildProgressionReport())
                 onSaveMatchAndExit(
                   sim.hudScore,
                   sim.hudWave,
@@ -301,7 +315,7 @@ fun ArenaScreen(
           }
         }
 
-        // Segmented Shield Bar + Active Perks & Drops Strip
+        // Segmented Shield Bar + Active Wonder Weapon / Drops Strip
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
           Box(
             modifier = Modifier
@@ -318,8 +332,23 @@ fun ArenaScreen(
                 .background(if (sim.hudOverdriveActive) palette.dropBuff else palette.playerAccent)
             )
           }
+          val activeWonder = sim.hudActiveWonder
           val dropText = sim.hudActiveDropText
-          if (dropText != null) {
+          if (activeWonder != null) {
+            Surface(
+              shape = RoundedCornerShape(6.dp),
+              color = Color(activeWonder.accentHex).copy(alpha = 0.22f),
+              modifier = Modifier.border(1.dp, Color(activeWonder.accentHex), RoundedCornerShape(6.dp)).testTag("arena_wonder_badge"),
+            ) {
+              Text(
+                text = "WONDER: ${activeWonder.shortTag} (${sim.hudWonderSecLeft}s)",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color(activeWonder.accentHex),
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+              )
+            }
+          } else if (dropText != null) {
             Text(
               text = dropText,
               style = MaterialTheme.typography.labelSmall,
@@ -384,6 +413,11 @@ fun ArenaScreen(
           reduceFlashes = settings.reduceFlashes,
           highContrast = highContrast,
           lowGraphics = settings.graphicsQuality == GraphicsQuality.LOW,
+          skyThemeId = progression.levelCustom.skyThemeId,
+          gridStyleId = progression.levelCustom.gridStyleId,
+          floorAccentOverride = if (settings.colorBlindMode == ColorBlindMode.NONE && !highContrast) {
+            Color(progression.levelCustom.floorAccentHex)
+          } else null,
         )
 
         if (mode.id == "br") {
@@ -439,6 +473,26 @@ fun ArenaScreen(
           if (glowOn) drawCircle(dCol.copy(alpha = 0.24f + pulse * 0.18f), radius = 18f, center = pos)
           drawCircle(dCol, radius = if (highContrast) 12f else 10f, center = pos, style = Stroke(width = 3f))
           drawCircle(Color.White, radius = 4f, center = pos)
+        }
+
+        // Random Mystery Wonder Weapon Pickups (Glowing Diamond/Cube Beacon)
+        for (i in 0 until sim.wonderPickups.size) {
+          val wp = sim.wonderPickups[i]
+          val pos = Offset(wp.x * w, wp.y * h)
+          val wCol = Color(wp.kind.accentHex)
+          if (glowOn) drawCircle(wCol.copy(alpha = 0.28f + pulse * 0.22f), radius = 22f, center = pos)
+          drawRect(
+            color = Color(0xFF0A1222),
+            topLeft = Offset(pos.x - 11f, pos.y - 11f),
+            size = Size(22f, 22f),
+          )
+          drawRect(
+            color = wCol,
+            topLeft = Offset(pos.x - 11f, pos.y - 11f),
+            size = Size(22f, 22f),
+            style = Stroke(width = 3f),
+          )
+          drawCircle(Color.White, radius = 4.5f, center = pos)
         }
 
         if (sim.pulseRingRadius > 0f && !settings.reduceFlashes) {
@@ -524,16 +578,31 @@ fun ArenaScreen(
           )
         }
 
-        // Subtle Aim Reticle Indicator
+        // Custom Optic Aim Reticle Indicator
         val retPos = if (sim.touchAimActive) {
           Offset(sim.touchAimX * w, sim.touchAimY * h)
         } else {
           Offset((sim.playerX + sim.aimX * 0.085f) * w, (sim.playerY + sim.aimY * 0.085f) * h)
         }
-        drawCircle(palette.playerAccent.copy(alpha = 0.8f), radius = if (highContrast) 11f else 9f, center = retPos, style = Stroke(width = 2.5f))
-        drawCircle(Color.White.copy(alpha = 0.9f), radius = 2.5f, center = retPos)
+        val opticCol = if (settings.colorBlindMode == ColorBlindMode.NONE && !highContrast) {
+          Color(progression.weaponCustom.tracerColorHex)
+        } else palette.playerAccent
+        when (progression.weaponCustom.opticId) {
+          "isac_thermal" -> {
+            drawLine(opticCol, Offset(retPos.x - 11f, retPos.y), Offset(retPos.x + 11f, retPos.y), strokeWidth = 2.2f)
+            drawLine(opticCol, Offset(retPos.x, retPos.y - 11f), Offset(retPos.x, retPos.y + 11f), strokeWidth = 2.2f)
+          }
+          "starblade_reflex" -> {
+            drawCircle(opticCol.copy(alpha = 0.85f), radius = 12f, center = retPos, style = Stroke(width = 2.5f))
+            drawCircle(Color.White, radius = 4f, center = retPos, style = Stroke(width = 1.8f))
+          }
+          else -> {
+            drawCircle(opticCol.copy(alpha = 0.8f), radius = if (highContrast) 11f else 9f, center = retPos, style = Stroke(width = 2.5f))
+            drawCircle(Color.White.copy(alpha = 0.9f), radius = 2.5f, center = retPos)
+          }
+        }
 
-        // Player Custom Rig Character
+        // Player Custom Rig Character with Character Customization
         val isMoving = (sim.joyDx * sim.joyDx + sim.joyDy * sim.joyDy) > 0.0064f
         val playerClip = when {
           settings.reduceMotion -> "idle"
@@ -548,11 +617,20 @@ fun ArenaScreen(
           frame = if (settings.reduceMotion) 0f else sim.frameTick,
           ikEnabled = activeRig?.ikEnabled ?: true,
         )
+        val visorHex = ProgressionCatalog.visorStyles
+          .firstOrNull { it.first == progression.characterCustom.visorStyleId }
+          ?.second ?: progression.characterCustom.accentArmorHex
+        val customPrimary = if (settings.colorBlindMode == ColorBlindMode.NONE && !highContrast) {
+          Color(progression.characterCustom.primaryArmorHex)
+        } else palette.playerAccent
+        val customSecondary = if (settings.colorBlindMode == ColorBlindMode.NONE && !highContrast) {
+          Color(progression.characterCustom.accentArmorHex)
+        } else palette.playerSecondary
         drawRigCharacter(
           skeleton = skel,
           archetype = activeRig?.archetype ?: "operator",
-          primaryColor = palette.playerAccent,
-          secondaryColor = palette.playerSecondary,
+          primaryColor = customPrimary,
+          secondaryColor = customSecondary,
           showBonesOverlay = false,
           capePathScratch = capePathScratch,
           torsoPathScratch = torsoPathScratch,
@@ -560,6 +638,9 @@ fun ArenaScreen(
           isDashing = sim.dashInvulnTicks > 0f,
           dynamicGlow = glowOn,
           highContrast = highContrast,
+          cloakOverride = progression.characterCustom.cloakEnabled,
+          visorColorOverride = if (settings.colorBlindMode == ColorBlindMode.NONE && !highContrast) Color(visorHex) else null,
+          auraTrailId = progression.characterCustom.auraTrailId,
         )
 
         // Corner Tactical Mini-Radar (hidden if disabled or Simplified HUD active)
@@ -662,6 +743,11 @@ fun ArenaScreen(
                 shape = RoundedCornerShape(8.dp),
               ) { Text("Tier III", style = MaterialTheme.typography.labelSmall) }
               OutlinedButton(
+                onClick = { sim.spawnRandomWonderWeapon() },
+                modifier = Modifier.height(36.dp).testTag("sandbox_spawn_wonder_btn"),
+                shape = RoundedCornerShape(8.dp),
+              ) { Text("+Wonder", style = MaterialTheme.typography.labelSmall) }
+              OutlinedButton(
                 onClick = {
                   sim.powerCd = 0f
                   sim.interactCd = 0f
@@ -701,6 +787,7 @@ fun ArenaScreen(
             Spacer(Modifier.height(18.dp))
             Button(
               onClick = {
+                onRecordProgression(sim.buildProgressionReport())
                 onSaveMatchAndExit(
                   sim.hudScore,
                   sim.hudWave,

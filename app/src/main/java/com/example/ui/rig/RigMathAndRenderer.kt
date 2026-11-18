@@ -218,10 +218,14 @@ fun DrawScope.drawRigCharacter(
   isDashing: Boolean = false,
   dynamicGlow: Boolean = true,
   highContrast: Boolean = false,
+  cloakOverride: Boolean? = null,
+  visorColorOverride: Color? = null,
+  auraTrailId: String = "none",
 ) {
   val bodyStroke = if (highContrast) 13f else 11f
   val armorColor =
-    when (archetype) {
+    if (visorColorOverride != null || cloakOverride != null) primaryColor
+    else when (archetype) {
       "biomorph" -> Color(0xFF9C27B0)
       "infernal" -> Color(0xFFFF5252)
       "chrono" -> Color(0xFFFFD54F)
@@ -230,13 +234,26 @@ fun DrawScope.drawRigCharacter(
     }
   val underSuit = if (highContrast) Color(0xFF050810) else Color(0xFF131B2E)
 
-  // Ground shadow + aura ring
+  // Ground shadow + aura ring + Character Aura Trail
   val footY = maxOf(skeleton.lFoot.y, skeleton.rFoot.y)
   drawOval(
     color = Color.Black.copy(alpha = 0.52f),
     topLeft = Offset(skeleton.pelvis.x - 46f, footY - 7f),
     size = androidx.compose.ui.geometry.Size(92f, 18f),
   )
+  if (auraTrailId != "none") {
+    val auraCol = when (auraTrailId) {
+      "chrono_spark" -> Color(0xFF448AFF)
+      "infernal_flare" -> Color(0xFFFF3D71)
+      else -> secondaryColor
+    }
+    drawOval(
+      color = auraCol.copy(alpha = 0.35f),
+      topLeft = Offset(skeleton.pelvis.x - 44f, footY - 9f),
+      size = androidx.compose.ui.geometry.Size(88f, 20f),
+      style = Stroke(width = 3.5f),
+    )
+  }
   if (dynamicGlow || highContrast || isDashing) {
     drawOval(
       color = (if (highContrast) Color.White else armorColor).copy(alpha = if (highContrast) 0.85f else if (isDashing) 0.55f else 0.22f),
@@ -246,12 +263,13 @@ fun DrawScope.drawRigCharacter(
     )
   }
 
-  // Flowing trenchcoat / hero cape behind torso for biomorph, chrono, and starblade
-  if (archetype == "chrono" || archetype == "starblade" || archetype == "biomorph") {
+  // Flowing trenchcoat / hero cape behind torso
+  val showCloak = cloakOverride ?: (archetype == "chrono" || archetype == "starblade" || archetype == "biomorph")
+  if (showCloak) {
     val capeColor = when (archetype) {
       "biomorph" -> Color(0xFF3A0E24)
       "chrono" -> Color(0xFF1D2C4D)
-      else -> Color(0xFF102A43)
+      else -> armorColor.copy(alpha = 0.28f)
     }
     val capePath = (capePathScratch ?: Path()).apply {
       reset()
@@ -360,7 +378,7 @@ fun DrawScope.drawRigCharacter(
     else -> {
       drawLine(Color(0xFF607D8B), skeleton.rElbow, skeleton.weaponTip, strokeWidth = 6.5f, cap = StrokeCap.Round)
       drawLine(Color(0xFFCFD8DC), skeleton.rHand, skeleton.weaponTip, strokeWidth = 4.5f, cap = StrokeCap.Round)
-      drawCircle(Color(0xFFFF8F00), radius = 4f, center = skeleton.weaponTip)
+      drawCircle(secondaryColor, radius = 4f, center = skeleton.weaponTip)
     }
   }
 
@@ -371,7 +389,7 @@ fun DrawScope.drawRigCharacter(
     drawLine(Color(0xFFFFAB40), Offset(skeleton.head.x - 9f, skeleton.head.y - 14f), Offset(skeleton.head.x + 9f, skeleton.head.y - 14f), strokeWidth = 3.5f, cap = StrokeCap.Round)
   }
   drawLine(
-    color = secondaryColor,
+    color = visorColorOverride ?: secondaryColor,
     start = Offset(skeleton.head.x - 6f, skeleton.head.y - 2f),
     end = Offset(skeleton.head.x + 11f, skeleton.head.y - 2f),
     strokeWidth = 5f,

@@ -4,15 +4,24 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.CloudSyncState
+import com.example.data.local.ProgressionStore
 import com.example.data.local.SaveBundlePreview
 import com.example.data.local.SaveDataSerializer
 import com.example.data.local.UniverseRepository
 import com.example.data.model.ArmoryItem
+import com.example.data.model.BattlePassVersion
+import com.example.data.model.ChallengeState
+import com.example.data.model.CharacterCustomization
+import com.example.data.model.LevelCustomization
 import com.example.data.model.LinkedAccount
+import com.example.data.model.MatchProgressionReport
 import com.example.data.model.MatchRecord
 import com.example.data.model.OperatorProfile
+import com.example.data.model.OperatorProgressionState
+import com.example.data.model.ProgressionCatalog
 import com.example.data.model.RigAsset
 import com.example.data.model.UniverseCatalog
+import com.example.data.model.WeaponCustomization
 import com.example.data.remote.extractFirestoreRootError
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
@@ -24,6 +33,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -52,6 +62,7 @@ class UniverseViewModel(
   private val repository: UniverseRepository,
   private val currentUserId: String,
   private val defaultDisplayName: String?,
+  private val progressionStore: ProgressionStore? = null,
 ) : ViewModel() {
 
   private val _activeTab = MutableStateFlow(OsWorkspaceTab.OS_DESKTOP)
@@ -61,6 +72,22 @@ class UniverseViewModel(
   val statusBanner: StateFlow<String?> = _statusBanner.asStateFlow()
 
   val cloudSyncState: StateFlow<CloudSyncState> = repository.cloudSyncState
+
+  val progressionState: StateFlow<OperatorProgressionState> =
+    progressionStore?.state ?: MutableStateFlow(OperatorProgressionState()).asStateFlow()
+
+  val challengeStates: StateFlow<List<ChallengeState>> =
+    progressionState
+      .map { state ->
+        progressionStore?.challengeStates(state)
+          ?: ProgressionCatalog.challenges.map { ChallengeState(it, 0L, false) }
+      }
+      .stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000L),
+        initialValue = progressionStore?.challengeStates()
+          ?: ProgressionCatalog.challenges.map { ChallengeState(it, 0L, false) },
+      )
 
   private var cloudListenerJob: Job? = null
 
@@ -353,6 +380,82 @@ class UniverseViewModel(
     }
   }
 
+  fun updateWeaponCustomization(transform: (WeaponCustomization) -> WeaponCustomization) {
+    progressionStore?.updateWeaponCustomization(transform)
+  }
+
+  fun updateCharacterCustomization(transform: (CharacterCustomization) -> CharacterCustomization) {
+    progressionStore?.updateCharacterCustomization(transform)
+  }
+
+  fun updateLevelCustomization(transform: (LevelCustomization) -> LevelCustomization) {
+    progressionStore?.updateLevelCustomization(transform)
+  }
+
+  fun activateOrUnlockPass(version: BattlePassVersion, currentEssence: Long) {
+    val store = progressionStore ?: return
+    val res = store.activateOrUnlockPassVersion(version, currentEssence)
+    if (res.isFailure) {
+      _statusBanner.value = res.exceptionOrNull()?.message ?: "Could not unlock Battle Pass"
+      return
+    }
+    val spent = res.getOrThrow()
+    viewModelScope.launch {
+      if (spent > 0L) {
+        repository.adjustOperatorEssence(currentUserId, -spent)
+        _statusBanner.value = "Unlocked & Mounted ${version.title}!"
+      } else {
+        _statusBanner.value = "Mounted ${version.title}"
+      }
+    }
+  }
+
+  fun claimPassTier(version: BattlePassVersion, tier: Int) {
+    val store = progressionStore ?: return
+    val res = store.claimPassTier(version, tier)
+    if (res.isFailure) {
+      _statusBanner.value = res.exceptionOrNull()?.message ?: "Cannot claim tier"
+      return
+    }
+    val rewardEssence = res.getOrThrow()
+    viewModelScope.launch {
+      if (rewardEssence > 0L) {
+        repository.adjustOperatorEssence(currentUserId, rewardEssence)
+      }
+      _statusBanner.value = "Claimed Tier $tier (+$rewardEssence Essence)"
+    }
+  }
+
+  fun claimChallengeReward(challengeId: String) {
+    val store = progressionStore ?: return
+    val res = store.claimChallengeReward(challengeId)
+    if (res.isFailure) {
+      _statusBanner.value = res.exceptionOrNull()?.message ?: "Cannot claim challenge"
+      return
+    }
+    val (essenceGain, playerXpGain, bpXpGain) = res.getOrThrow()
+    viewModelScope.launch {
+      if (essenceGain > 0L) {
+        repository.adjustOperatorEssence(currentUserId, essenceGain)
+      }
+      _statusBanner.value = "Challenge Complete! +$essenceGain Essence • +$playerXpGain XP • +$bpXpGain BP XP"
+    }
+  }
+
+  fun refreshCompletedChallenges() {
+    progressionStore?.resetCompletedChallengesForReplay()
+    _statusBanner.value = "Completed challenges reset for replay!"
+  }
+
+  fun recordArenaProgression(report: MatchProgressionReport) {
+    val store = progressionStore ?: return
+    val (xpGained, playerLvlUps, wpnLvlUps) = store.recordMatchProgression(report)
+    val notes = mutableListOf("+$xpGained XP")
+    if (playerLvlUps > 0L) notes.add("PLAYER LV UP (+$playerLvlUps)")
+    if (wpnLvlUps > 0L) notes.add("WEAPON LV UP (+$wpnLvlUps)")
+    _statusBanner.value = notes.joinToString(" • ")
+  }
+
   fun submitMatchResult(
     profile: OperatorProfile,
     universeId: String,
@@ -363,7 +466,9 @@ class UniverseViewModel(
     extracted: Boolean,
     durationSec: Long,
   ) {
-    val essenceEarned = (score / 10L).coerceAtLeast(150L) + if (extracted) 350L else 0L
+    val passMult = progressionState.value.activePassVersion.essenceMultiplier
+    val baseEssence = (score / 10L).coerceAtLeast(150L) + if (extracted) 350L else 0L
+    val essenceEarned = (baseEssence * passMult).toLong()
     viewModelScope.launch {
       val res =
         repository.recordMatchResult(

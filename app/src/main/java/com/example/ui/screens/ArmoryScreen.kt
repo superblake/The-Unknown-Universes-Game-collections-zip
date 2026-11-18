@@ -46,10 +46,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
 import com.example.R
 import com.example.data.model.ArmoryItem
+import com.example.data.model.BattlePassVersion
+import com.example.data.model.ChallengeState
+import com.example.data.model.CharacterCustomization
+import com.example.data.model.LevelCustomization
+import com.example.data.model.OperatorProgressionState
+import com.example.data.model.ProgressionCatalog
+import com.example.data.model.RigAsset
+import com.example.data.model.WeaponCustomization
+
+enum class ArmorySection(val label: String, val tag: String) {
+  MODS("Mods", "mods"),
+  WEAPONS("Weapons", "weapons"),
+  CHARACTER("Character", "character"),
+  LEVELS("Levels", "levels"),
+  PASS_CHALLENGES("Pass & Challenges", "pass"),
+}
 
 @Composable
 fun ArmoryScreen(
@@ -67,101 +84,162 @@ fun ArmoryScreen(
     accentHex: String,
   ) -> Unit,
   onDeleteItem: (String) -> Unit,
+  progression: OperatorProgressionState = OperatorProgressionState(),
+  challenges: List<ChallengeState> = ProgressionCatalog.challenges.map { ChallengeState(it, 0L, false) },
+  activeRig: RigAsset? = null,
+  onUpdateWeaponCustom: ((WeaponCustomization) -> WeaponCustomization) -> Unit = {},
+  onUpdateCharacterCustom: ((CharacterCustomization) -> CharacterCustomization) -> Unit = {},
+  onUpdateLevelCustom: ((LevelCustomization) -> LevelCustomization) -> Unit = {},
+  onSelectOrUnlockPass: (BattlePassVersion) -> Unit = {},
+  onClaimPassTier: (BattlePassVersion, Int) -> Unit = { _, _ -> },
+  onClaimChallenge: (String) -> Unit = {},
+  onRefreshChallenges: () -> Unit = {},
 ) {
   val categories = listOf("all", "perk", "power", "upgrade", "consumable")
+  var selectedSection by remember { mutableStateOf(ArmorySection.MODS) }
   var selectedCategory by remember { mutableStateOf("all") }
   var showCreateDialog by remember { mutableStateOf(false) }
 
   val filtered =
     if (selectedCategory == "all") armory else armory.filter { it.category == selectedCategory }
 
-  Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-    LazyColumn(
-      modifier = Modifier.fillMaxSize(),
-      contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 92.dp),
-      verticalArrangement = Arrangement.spacedBy(12.dp),
+  Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    // Persistent Top Armory Header + Section Switcher
+    Surface(
+      color = MaterialTheme.colorScheme.surface,
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(start = 16.dp, end = 16.dp, top = 12.dp)
+        .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp)),
     ) {
-      item {
-        Surface(
-          shape = RoundedCornerShape(16.dp),
-          color = MaterialTheme.colorScheme.surface,
-          modifier = Modifier.fillMaxWidth()
-            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp)),
+      Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically,
         ) {
-          Row(
-            modifier = Modifier.padding(14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+          Column(modifier = Modifier.weight(1f)) {
+            Text("MULTIVERSE ARMORY", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
+            Text(
+              text = "Lv.${progression.playerLevel} ${progression.playerRankTitle} • ${progression.activePassVersion.title.substringBefore(":")}",
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.primary,
+            )
+          }
+          Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.16f),
           ) {
-            Column {
-              Text("MULTIVERSE ARMORY", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
-              Text("Equip & Pack-a-Tier Perks, Powers, Upgrades & Consumables", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Surface(
-              shape = RoundedCornerShape(10.dp),
-              color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.16f),
-            ) {
-              Text(
-                text = "$totalEssence ESSENCE",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.tertiary,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-              )
-            }
+            Text(
+              text = "$totalEssence ESSENCE",
+              style = MaterialTheme.typography.labelLarge,
+              fontWeight = FontWeight.Bold,
+              color = MaterialTheme.colorScheme.tertiary,
+              modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            )
           }
         }
-      }
 
-      item {
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          items(categories) { cat ->
+          items(ArmorySection.entries, key = { it.tag }) { sec ->
             FilterChip(
-              selected = selectedCategory == cat,
-              onClick = { selectedCategory = cat },
-              label = {
-                Text(
-                  text = when (cat) {
-                    "all" -> "All (${armory.size})"
-                    "perk" -> "Perks"
-                    "power" -> "Powers"
-                    "upgrade" -> "Upgrades"
-                    else -> "Consumables"
-                  }
-                )
-              },
-              modifier = Modifier.testTag("armory_filter_$cat"),
+              selected = selectedSection == sec,
+              onClick = { selectedSection = sec },
+              label = { Text(sec.label) },
+              modifier = Modifier.testTag("armory_tab_${sec.tag}"),
             )
           }
         }
       }
-
-      items(filtered, key = { it.id }) { item ->
-        ArmoryModuleCard(
-          item = item,
-          totalEssence = totalEssence,
-          onToggleEquip = { onToggleEquip(item) },
-          onUpgrade = { onUpgradeItem(item) },
-          onDelete = if (item.isCustom) ({ onDeleteItem(item.id) }) else null,
-        )
-      }
     }
 
-    FloatingActionButton(
-      onClick = { showCreateDialog = true },
-      containerColor = MaterialTheme.colorScheme.primary,
-      contentColor = MaterialTheme.colorScheme.onPrimary,
-      modifier = Modifier
-        .align(Alignment.BottomEnd)
-        .padding(16.dp)
-        .testTag("forge_custom_module_fab"),
-    ) {
-      Row(
-        modifier = Modifier.padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-      ) {
-        Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.forge_custom_module))
-        Spacer(Modifier.width(6.dp))
-        Text("Forge Module", style = MaterialTheme.typography.labelLarge)
+    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+      when (selectedSection) {
+        ArmorySection.MODS -> {
+          LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 92.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+          ) {
+            item {
+              LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(categories) { cat ->
+                  FilterChip(
+                    selected = selectedCategory == cat,
+                    onClick = { selectedCategory = cat },
+                    label = {
+                      Text(
+                        text = when (cat) {
+                          "all" -> "All (${armory.size})"
+                          "perk" -> "Perks"
+                          "power" -> "Powers"
+                          "upgrade" -> "Upgrades"
+                          else -> "Consumables"
+                        }
+                      )
+                    },
+                    modifier = Modifier.testTag("armory_filter_$cat"),
+                  )
+                }
+              }
+            }
+
+            items(filtered, key = { it.id }) { item ->
+              ArmoryModuleCard(
+                item = item,
+                totalEssence = totalEssence,
+                onToggleEquip = { onToggleEquip(item) },
+                onUpgrade = { onUpgradeItem(item) },
+                onDelete = if (item.isCustom) ({ onDeleteItem(item.id) }) else null,
+              )
+            }
+          }
+
+          FloatingActionButton(
+            onClick = { showCreateDialog = true },
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            modifier = Modifier
+              .align(Alignment.BottomEnd)
+              .padding(16.dp)
+              .testTag("forge_custom_module_fab"),
+          ) {
+            Row(
+              modifier = Modifier.padding(horizontal = 14.dp),
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.forge_custom_module))
+              Spacer(Modifier.width(6.dp))
+              Text("Forge Module", style = MaterialTheme.typography.labelLarge)
+            }
+          }
+        }
+
+        ArmorySection.WEAPONS -> WeaponCustomizationTab(
+          progression = progression,
+          onUpdateWeaponCustom = onUpdateWeaponCustom,
+        )
+
+        ArmorySection.CHARACTER -> CharacterCustomizationTab(
+          progression = progression,
+          activeRig = activeRig,
+          onUpdateCharacterCustom = onUpdateCharacterCustom,
+        )
+
+        ArmorySection.LEVELS -> LevelCustomizationTab(
+          progression = progression,
+          onUpdateLevelCustom = onUpdateLevelCustom,
+        )
+
+        ArmorySection.PASS_CHALLENGES -> PassAndChallengesTab(
+          progression = progression,
+          challenges = challenges,
+          totalEssence = totalEssence,
+          onSelectOrUnlockPass = onSelectOrUnlockPass,
+          onClaimPassTier = onClaimPassTier,
+          onClaimChallenge = onClaimChallenge,
+          onRefreshChallenges = onRefreshChallenges,
+        )
       }
     }
   }

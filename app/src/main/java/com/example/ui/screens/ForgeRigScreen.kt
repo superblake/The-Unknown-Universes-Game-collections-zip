@@ -66,6 +66,8 @@ import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.data.local.AppSettings
 import com.example.data.local.GraphicsQuality
+import com.example.data.model.OperatorProgressionState
+import com.example.data.model.ProgressionCatalog
 import com.example.data.model.RigAsset
 import com.example.data.model.UniverseCatalog
 import com.example.export.Bo3BoneMappingMode
@@ -97,6 +99,7 @@ fun ForgeRigScreen(
     isCompleted: Boolean,
   ) -> Unit,
   settings: AppSettings = AppSettings(),
+  progression: OperatorProgressionState = OperatorProgressionState(),
   onStatusMessage: (String) -> Unit = {},
 ) {
   val context = LocalContext.current
@@ -305,17 +308,23 @@ fun ForgeRigScreen(
               frame = currentFrame,
               ikEnabled = ikEnabled,
             )
+            val visorHex = ProgressionCatalog.visorStyles
+              .firstOrNull { it.first == progression.characterCustom.visorStyleId }
+              ?.second ?: progression.characterCustom.accentArmorHex
             drawRigCharacter(
               skeleton = skel,
               archetype = archetype,
-              primaryColor = Color(0xFF00E5FF),
-              secondaryColor = Color(0xFFFFAB40),
+              primaryColor = Color(progression.characterCustom.primaryArmorHex),
+              secondaryColor = Color(progression.characterCustom.accentArmorHex),
               showBonesOverlay = showBonesOverlay,
               selectedBoneId = selectedBoneId,
               capePathScratch = capePathScratch,
               torsoPathScratch = torsoPathScratch,
               dynamicGlow = settings.dynamicGlowEffects && settings.graphicsQuality != GraphicsQuality.LOW,
               highContrast = settings.effectiveHighContrast,
+              cloakOverride = progression.characterCustom.cloakEnabled,
+              visorColorOverride = Color(visorHex),
+              auraTrailId = progression.characterCustom.auraTrailId,
             )
 
             // Blender-style Top-Right XYZ Orientation Gizmo

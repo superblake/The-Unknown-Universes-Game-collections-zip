@@ -17,24 +17,31 @@ class ArenaBackdropCache {
   private var cachedH: Float = -1f
   private var cachedBrush: Brush? = null
 
-  fun brushFor(worldId: String, w: Float, h: Float): Brush {
+  fun brushFor(worldId: String, skyThemeId: String, w: Float, h: Float): Brush {
+    val key = "$worldId|$skyThemeId"
     val existing = cachedBrush
-    if (existing != null && cachedWorldId == worldId && cachedW == w && cachedH == h) {
+    if (existing != null && cachedWorldId == key && cachedW == w && cachedH == h) {
       return existing
     }
-    val bgTop = when (worldId) {
-      "sector_zero" -> Color(0xFF0A121C)
-      "blacklight_conduit" -> Color(0xFF100822)
-      "hellbreaker_citadel" -> Color(0xFF1E0809)
-      "chrono_vault" -> Color(0xFF081229)
-      else -> Color(0xFF060C1D)
+    val bgTop = when (skyThemeId) {
+      "blood_moon" -> Color(0xFF2B0712)
+      "cryo_tundra" -> Color(0xFF061E2C)
+      "golden_nexus" -> Color(0xFF261D07)
+      "neon_void" -> Color(0xFF17082E)
+      else -> when (worldId) {
+        "sector_zero" -> Color(0xFF0A121C)
+        "blacklight_conduit" -> Color(0xFF100822)
+        "hellbreaker_citadel" -> Color(0xFF1E0809)
+        "chrono_vault" -> Color(0xFF081229)
+        else -> Color(0xFF060C1D)
+      }
     }
     val created = Brush.radialGradient(
       colors = listOf(bgTop, Color(0xFF05070E)),
       center = Offset(w * 0.5f, h * 0.5f),
       radius = maxOf(w, h).coerceAtLeast(1f) * 0.78f,
     )
-    cachedWorldId = worldId
+    cachedWorldId = key
     cachedW = w
     cachedH = h
     cachedBrush = created
@@ -56,6 +63,9 @@ fun DrawScope.drawWorldArenaBackdrop(
   reduceFlashes: Boolean = false,
   highContrast: Boolean = false,
   lowGraphics: Boolean = false,
+  skyThemeId: String = "default_sector",
+  gridStyleId: String = "tactical_square",
+  floorAccentOverride: Color? = null,
 ) {
   val w = size.width
   val h = size.height
@@ -65,7 +75,7 @@ fun DrawScope.drawWorldArenaBackdrop(
   if (highContrast) {
     drawRect(color = Color(0xFF020307))
   } else {
-    val bgBrush = backdropCache?.brushFor(worldId, w, h) ?: run {
+    val bgBrush = backdropCache?.brushFor(worldId, skyThemeId, w, h) ?: run {
       val bgTop = when (worldId) {
         "sector_zero" -> Color(0xFF0A121C)
         "blacklight_conduit" -> Color(0xFF100822)
@@ -82,11 +92,14 @@ fun DrawScope.drawWorldArenaBackdrop(
     drawRect(brush = bgBrush)
   }
 
-  // Tactical sector grid
-  if (showTacticalGrid) {
-    val step = if (lowGraphics) 84f else 56f
-    val gridAlpha = if (overdriveActive && !reduceFlashes) 0.16f else 0.08f
-    val gridColor = accentColor.copy(alpha = gridAlpha)
+  // Tactical sector grid (respects Level Customization gridStyleId)
+  if (showTacticalGrid && gridStyleId != "minimal_clean") {
+    val step = when {
+      lowGraphics || gridStyleId == "hex_vault" -> 86f
+      else -> 56f
+    }
+    val gridAlpha = if (overdriveActive && !reduceFlashes) 0.16f else 0.09f
+    val gridColor = (floorAccentOverride ?: accentColor).copy(alpha = gridAlpha)
     var gx = 0f
     while (gx < w) {
       drawLine(gridColor, Offset(gx, 0f), Offset(gx, h), strokeWidth = 1f)

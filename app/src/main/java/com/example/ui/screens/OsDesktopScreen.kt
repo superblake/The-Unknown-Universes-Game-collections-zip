@@ -61,7 +61,9 @@ import com.example.data.model.ArmoryItem
 import com.example.data.model.LinkedAccount
 import com.example.data.model.MatchRecord
 import com.example.data.model.OperatorProfile
+import com.example.data.model.OperatorProgressionState
 import com.example.data.model.OriginalVaultCatalog
+import com.example.data.model.ProgressionCatalog
 import com.example.data.model.RigAsset
 import com.example.data.model.UniverseCatalog
 import com.example.data.model.UniverseWorld
@@ -97,6 +99,7 @@ fun OsDesktopScreen(
   onUnlinkAccount: (String) -> Unit,
   onStatusMessage: (String) -> Unit,
   onOpenSettings: () -> Unit = {},
+  progression: OperatorProgressionState = OperatorProgressionState(),
   onSignOut: () -> Unit,
 ) {
   val activeWorld = UniverseCatalog.worldById(profile.activeUniverseId)
@@ -185,8 +188,15 @@ fun OsDesktopScreen(
                   )
                 }
               }
+              val activeWeapon = ProgressionCatalog.weaponById(progression.weaponCustom.equippedWeaponId)
               Text(
-                text = "ID: ${BuildConfig.APPLICATION_ID} • Essence: ${profile.totalEssence} • Best: ${profile.highScore} • ${activeConsole.label}",
+                text = "LV ${progression.playerLevel} (${progression.playerRankTitle}) • ${activeWeapon.name} W.Lv.${progression.weaponLevel(activeWeapon.id)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(progression.activePassVersion.accentHex),
+                modifier = Modifier.testTag("os_level_rank_badge"),
+              )
+              Text(
+                text = "Essence: ${profile.totalEssence} • ${progression.activePassVersion.title.substringBefore(":")} • Best: ${profile.highScore} • ${activeConsole.label}",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
               )

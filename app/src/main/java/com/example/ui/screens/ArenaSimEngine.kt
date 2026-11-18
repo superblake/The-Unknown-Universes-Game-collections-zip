@@ -11,10 +11,17 @@ import androidx.compose.ui.graphics.Color
 import com.example.data.local.AppSettings
 import com.example.data.local.ParticleDensity
 import com.example.data.model.ArmoryItem
+import com.example.data.model.BattlePassVersion
+import com.example.data.model.MatchProgressionReport
+import com.example.data.model.OperatorProgressionState
+import com.example.data.model.ProgressionCatalog
 import com.example.data.model.UniverseWorld
+import com.example.data.model.WeaponSpec
+import com.example.data.model.WonderWeaponKind
 import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
@@ -37,6 +44,7 @@ data class ArenaHostile(
   val archetype: String = "standard",
   val bossName: String = "",
   var rangedCooldownTicks: Float = 90f,
+  var cryoSlowTicks: Float = 0f,
 )
 
 data class ArenaBolt(
@@ -82,6 +90,13 @@ data class ArenaArcLine(
   var life: Float = 14f,
 )
 
+data class ArenaWonderPickup(
+  val x: Float,
+  val y: Float,
+  val kind: WonderWeaponKind,
+  var life: Float = 960f,
+)
+
 data class ArenaLoadoutStats(
   val maxShield: Int,
   val moveBoost: Float,
@@ -103,14 +118,34 @@ data class ArenaLoadoutStats(
   val consumableCooldownTicks: Float,
   val fireCadenceTicks: Float,
   val activePerksSummary: String,
+  val weaponSpec: WeaponSpec = ProgressionCatalog.weapons.first(),
+  val weaponLevel: Int = 1,
+  val weaponBonusDamage: Int = 0,
+  val weaponExtraSpread: Int = 0,
+  val weaponExtraPierce: Int = 0,
+  val projectileSpeed: Float = 0.020f,
+  val tracerColor: Color = Color(0xFF00E5FF),
+  val ammoModId: String = "standard_core",
+  val playerLevel: Int = 1,
+  val activePassVersion: BattlePassVersion = BattlePassVersion.STANDARD_SECTOR_OPS,
 ) {
   companion object {
-    fun fromArmory(armory: List<ArmoryItem>, fallbackAccent: Color): ArenaLoadoutStats {
+    fun fromArmory(
+      armory: List<ArmoryItem>,
+      fallbackAccent: Color,
+      progression: OperatorProgressionState = OperatorProgressionState(),
+    ): ArenaLoadoutStats {
       val equipped = armory.filter { it.equipped }
       val perks = equipped.filter { it.category == "perk" }
       val powers = equipped.filter { it.category == "power" }
       val upgrades = equipped.filter { it.category == "upgrade" }
       val consumables = equipped.filter { it.category == "consumable" }
+
+      val pass = progression.activePassVersion
+      val weapon = ProgressionCatalog.weaponById(progression.weaponCustom.equippedWeaponId)
+      val wpnLevel = progression.weaponLevel(weapon.id)
+      val playerLvl = progression.playerLevel
+      val wc = progression.weaponCustom
 
       val juggBonus = perks.sumOf { p ->
         if (p.id == "perk_juggernaut" || p.name.contains("Juggernaut", ignoreCase = true) || p.name.contains("Aegis", ignoreCase = true)) {
@@ -119,14 +154,16 @@ data class ArenaLoadoutStats(
           (p.tier * 20).toInt()
         }
       }
-      val maxShield = 100 + juggBonus
+      val levelShieldBonus = ((playerLvl - 1) * 3).coerceAtMost(90)
+      val maxShield = 100 + juggBonus + levelShieldBonus + pass.bonusShield
+
       val speedPerkCount = perks.sumOf { p ->
         if (p.id == "perk_overdrive" || p.name.contains("Speed", ignoreCase = true) || p.name.contains("Stamina", ignoreCase = true)) {
           p.tier.toInt()
         } else 0
       }
-      val moveBoost = (1f + speedPerkCount * 0.14f + (perks.size * 0.05f)).coerceAtMost(1.85f)
-      val multiShot = (1 + upgrades.sumOf { (it.tier / 2).toInt().coerceAtLeast(1) }).coerceAtMost(4)
+      val moveBoost = (1f + speedPerkCount * 0.14f + (perks.size * 0.05f) + pass.moveSpeedBonus).coerceAtMost(2.05f)
+      val multiShot = (1 + upgrades.sumOf { (it.tier / 2).toInt().coerceAtLeast(1) } + (weapon.baseSpreadCount - 1)).coerceAtMost(5)
       val packItem = upgrades.firstOrNull { it.id == "upgrade_packtier" || it.name.contains("Pack", ignoreCase = true) }
       val initialPackTier = when {
         packItem == null -> 1
@@ -136,15 +173,23 @@ data class ArenaLoadoutStats(
       }
       val clawItem = upgrades.firstOrNull { it.id == "upgrade_claws" || it.name.contains("Claw", ignoreCase = true) || it.name.contains("Melee", ignoreCase = true) }
       val primaryPower = powers.firstOrNull()
-      val powerCdSec = (primaryPower?.cooldownSec?.toFloat() ?: 6f).coerceIn(2f, 30f)
+      val powerCdSec = ((primaryPower?.cooldownSec?.toFloat() ?: 6f) * pass.cooldownMultiplier).coerceIn(1.5f, 30f)
       val customBonusDmg = ((primaryPower?.powerValue ?: 180L) / 70L).toInt().coerceIn(2, 8)
       val powerTierBonus = ((primaryPower?.tier ?: 1L) - 1L).toInt()
       val powerColor = primaryPower?.accentColorHex?.let { parseHexSafe(it, fallbackAccent) } ?: fallbackAccent
 
       val primaryConsumable = consumables.firstOrNull()
       val cHeal = (45 + ((primaryConsumable?.tier ?: 1L) * 18L) + ((primaryConsumable?.powerValue ?: 100L) / 15L)).toInt().coerceAtMost(220)
-      val cCdSec = (primaryConsumable?.cooldownSec?.toFloat() ?: 12f).coerceIn(4f, 35f)
-      val fireCadence = (11.5f - speedPerkCount * 1.1f).coerceIn(5.5f, 12f)
+      val cCdSec = ((primaryConsumable?.cooldownSec?.toFloat() ?: 12f) * pass.cooldownMultiplier).coerceIn(3f, 35f)
+
+      val barrelBonusDmg = if (wc.barrelId == "heavy_bore") 1 else 0
+      val barrelExtraSpread = if (wc.barrelId == "spread_choke") 1 else 0
+      val barrelSpeedMult = if (wc.barrelId == "overclocked_rifling") 1.18f else 1.0f
+
+      val levelDmgBonus = ((wpnLevel - 1) / 5).coerceAtMost(4)
+      val levelCadenceReduction = ((wpnLevel - 1) * 0.12f).coerceAtMost(2.5f)
+      val rawCadence = (weapon.baseCadenceTicks - speedPerkCount * 0.9f - levelCadenceReduction) / pass.fireRateMultiplier
+      val fireCadence = rawCadence.coerceIn(4.5f, 15.0f)
 
       return ArenaLoadoutStats(
         maxShield = maxShield,
@@ -167,6 +212,16 @@ data class ArenaLoadoutStats(
         consumableCooldownTicks = cCdSec * 60f,
         fireCadenceTicks = fireCadence,
         activePerksSummary = perks.take(2).joinToString(" • ") { it.name.substringBefore(" ") },
+        weaponSpec = weapon,
+        weaponLevel = wpnLevel,
+        weaponBonusDamage = (weapon.baseDamage - 1).coerceAtLeast(0) + barrelBonusDmg + levelDmgBonus,
+        weaponExtraSpread = barrelExtraSpread,
+        weaponExtraPierce = weapon.basePierce + ((wpnLevel - 1) / 6),
+        projectileSpeed = weapon.baseProjectileSpeed * barrelSpeedMult * (1f + ((wpnLevel - 1) * 0.01f).coerceAtMost(0.25f)),
+        tracerColor = Color(wc.tracerColorHex),
+        ammoModId = wc.ammoModId,
+        playerLevel = playerLvl,
+        activePassVersion = pass,
       )
     }
   }
@@ -179,6 +234,7 @@ class ArenaSimState(
   val loadout: ArenaLoadoutStats,
   val hasConsumableEquipped: Boolean,
   initialSettings: AppSettings = AppSettings(),
+  val progression: OperatorProgressionState = OperatorProgressionState(),
 ) {
   var liveSettings: AppSettings = initialSettings
   // High-frequency Canvas state (read ONLY inside Canvas drawScope / simulation loop)
@@ -213,11 +269,15 @@ class ArenaSimState(
   var regenAccum = 0f
   var brDamageAccum = 0f
   var meleeDamageAccum = 0f
+  var activeWonderWeapon: WonderWeaponKind? = null
+  var wonderWeaponTicks = 0f
+  var playerShotCounter = 0
 
   val hostiles = ArrayList<ArenaHostile>(24)
   val bolts = ArrayList<ArenaBolt>(48)
   val intels = ArrayList<ArenaIntel>(4)
   val drops = ArrayList<ArenaDrop>(8)
+  val wonderPickups = ArrayList<ArenaWonderPickup>(4)
   val sparks = ArrayList<HitSpark>(32)
   val arcs = ArrayList<ArenaArcLine>(16)
 
@@ -226,6 +286,10 @@ class ArenaSimState(
   var hudScore by mutableLongStateOf(0L)
   var hudWave by mutableLongStateOf(1L)
   var hudElims by mutableLongStateOf(0L)
+  var hudBossElims by mutableLongStateOf(0L)
+  var hudWonderPickedCount by mutableIntStateOf(0)
+  var hudActiveWonder by mutableStateOf<WonderWeaponKind?>(null)
+  var hudWonderSecLeft by mutableIntStateOf(0)
   var hudPackTier by mutableIntStateOf(loadout.initialPackTier)
   var hudIntelCollected by mutableIntStateOf(0)
   var hudChevronsLocked by mutableIntStateOf(1)
@@ -255,6 +319,15 @@ class ArenaSimState(
     calloutTicks = 120f
   }
 
+  fun buildProgressionReport(): MatchProgressionReport = MatchProgressionReport(
+    eliminations = hudElims,
+    bossEliminations = hudBossElims,
+    waveReached = hudWave,
+    wonderPickupsCollected = hudWonderPickedCount,
+    weaponIdUsed = loadout.weaponSpec.id,
+    extracted = hudExtractedSuccess || modeId == "sandbox",
+  )
+
   private fun addSparkIfAllowed(x: Float, y: Float, color: Color, life: Float) {
     val cap = when {
       liveSettings.particleDensity == ParticleDensity.OFF -> 0
@@ -266,13 +339,16 @@ class ArenaSimState(
   }
 
   fun spawnWave(w: Long) {
-    val count = if (modeId == "sandbox") 4 else (3 + w * 2).toInt().coerceAtMost(18)
+    val lc = progression.levelCustom
+    val rawCount = if (modeId == "sandbox") 4 else (3 + w * 2).toInt().coerceAtMost(18)
+    val count = (rawCount * lc.enemyDensityMultiplier).roundToInt().coerceIn(2, 24)
     for (i in 0 until count) {
       val angle = Random.nextFloat() * 2f * PI.toFloat()
       val r = 0.43f
       val isElite = (i == 0 && w >= 2)
       val archetype = chooseArchetype(world.id, w, i)
-      val baseHp = 1 + (w.toInt() / 2) + if (archetype == "mech") 2 else if (isElite) 2 else 0
+      val rawHp = 1 + (w.toInt() / 2) + if (archetype == "mech") 2 else if (isElite) 2 else 0
+      val baseHp = if (lc.instagibMutator) 1 else rawHp
       val spd = when (archetype) {
         "rusher" -> (0.0023f + w * 0.00024f).coerceAtMost(0.0052f)
         "mech" -> (0.0010f + w * 0.00014f).coerceAtMost(0.0026f)
@@ -292,8 +368,8 @@ class ArenaSimState(
       )
     }
 
-    // Spawn Creator Lore Boss every 3rd wave (or on wave 4 in BR)
-    if (w % 3L == 0L || (modeId == "br" && w == 4L)) {
+    // Spawn Creator Lore Boss every 3rd wave (or every wave with Boss Rush Mutator / wave 4 BR)
+    if (lc.bossRushMutator || w % 3L == 0L || (modeId == "br" && w == 4L)) {
       spawnBossForWorld(w)
     }
 
@@ -302,6 +378,31 @@ class ArenaSimState(
       intels.add(ArenaIntel(0.80f, 0.30f))
       intels.add(ArenaIntel(0.76f, 0.78f))
     }
+  }
+
+  fun spawnRandomWonderWeapon(
+    x: Float = (0.28f + Random.nextFloat() * 0.44f),
+    y: Float = (0.28f + Random.nextFloat() * 0.44f),
+    fixedKind: WonderWeaponKind? = null,
+  ): WonderWeaponKind {
+    val chosen = fixedKind ?: pickWeightedWonderKind()
+    if (wonderPickups.size >= 4) {
+      wonderPickups.removeAt(0)
+    }
+    wonderPickups.add(ArenaWonderPickup(x.coerceIn(0.12f, 0.88f), y.coerceIn(0.16f, 0.84f), chosen))
+    postCallout("WONDER CRATE: ${chosen.displayName.uppercase()}!")
+    return chosen
+  }
+
+  private fun pickWeightedWonderKind(): WonderWeaponKind {
+    val pass = progression.activePassVersion
+    if (pass == BattlePassVersion.CHRONO_MULTIVERSE && Random.nextFloat() < 0.40f) {
+      return WonderWeaponKind.CHRONO_ZAT
+    }
+    if (pass == BattlePassVersion.HELLBREAKER_SUPREME && Random.nextFloat() < 0.40f) {
+      return WonderWeaponKind.CRUCIBLE_BFG
+    }
+    return WonderWeaponKind.entries[Random.nextInt(WonderWeaponKind.entries.size)]
   }
 
   fun spawnBossForWorld(w: Long) {
@@ -404,19 +505,118 @@ class ArenaSimState(
     if (!touchAimActive) {
       autoAimTowardNearestIfNeeded()
     }
+    playerShotCounter++
     val baseAngle = atan2(aimY, aimX)
     val packLevel = hudPackTier.coerceIn(1, 3)
-    val shots = (loadout.multiShot + (packLevel - 1) + if (overdriveTicks > 0f) 1 else 0).coerceAtMost(6)
+    val wonder = activeWonderWeapon
+    val critBoost = if (progression.levelCustom.critSurgeMutator && playerShotCounter % 3 == 0) 2 else 1
+    val instagibBoost = if (progression.levelCustom.instagibMutator) 2 else 1
+
+    if (wonder != null) {
+      val wonderCol = Color(wonder.accentHex)
+      val wonderDmg = (wonder.baseDamage + packLevel - 1) * critBoost * instagibBoost
+      when (wonder) {
+        WonderWeaponKind.STARBLADE_BOOMERANG -> {
+          for (i in 0 until 6) {
+            val a = baseAngle + i * (2f * PI.toFloat() / 6f)
+            bolts.add(
+              ArenaBolt(
+                x = playerX,
+                y = playerY,
+                vx = cos(a) * 0.024f,
+                vy = sin(a) * 0.024f,
+                life = 52f,
+                isSupercharged = true,
+                pierceLeft = 3,
+                damage = wonderDmg,
+                color = wonderCol,
+              )
+            )
+          }
+        }
+        WonderWeaponKind.RAY_NOVA_MK3 -> {
+          for (offset in listOf(-0.08f, 0.08f)) {
+            val a = baseAngle + offset
+            bolts.add(
+              ArenaBolt(
+                x = playerX,
+                y = playerY,
+                vx = cos(a) * 0.026f,
+                vy = sin(a) * 0.026f,
+                life = 60f,
+                isSupercharged = true,
+                pierceLeft = 2,
+                damage = wonderDmg,
+                color = wonderCol,
+              )
+            )
+          }
+        }
+        WonderWeaponKind.CRUCIBLE_BFG -> {
+          bolts.add(
+            ArenaBolt(
+              x = playerX,
+              y = playerY,
+              vx = cos(baseAngle) * 0.017f,
+              vy = sin(baseAngle) * 0.017f,
+              life = 68f,
+              isSupercharged = true,
+              pierceLeft = 5,
+              damage = wonderDmg + 2,
+              color = wonderCol,
+            )
+          )
+        }
+        WonderWeaponKind.BLACKLIGHT_WHIP -> {
+          bolts.add(
+            ArenaBolt(
+              x = playerX,
+              y = playerY,
+              vx = cos(baseAngle) * 0.029f,
+              vy = sin(baseAngle) * 0.029f,
+              life = 45f,
+              isSupercharged = true,
+              pierceLeft = 99,
+              damage = wonderDmg,
+              color = wonderCol,
+            )
+          )
+        }
+        WonderWeaponKind.LIBERTY_WUNDERWAFFE, WonderWeaponKind.CHRONO_ZAT -> {
+          bolts.add(
+            ArenaBolt(
+              x = playerX,
+              y = playerY,
+              vx = cos(baseAngle) * 0.027f,
+              vy = sin(baseAngle) * 0.027f,
+              life = 55f,
+              isSupercharged = true,
+              pierceLeft = 1,
+              damage = wonderDmg,
+              color = wonderCol,
+            )
+          )
+        }
+      }
+      if (forceManual) {
+        fireAutoTicker = loadout.fireCadenceTicks * 0.55f
+      }
+      return
+    }
+
+    val shots = (loadout.multiShot + loadout.weaponExtraSpread + (packLevel - 1) + if (overdriveTicks > 0f) 1 else 0).coerceAtMost(7)
     val spread = if (shots > 4) 0.13f else 0.16f
-    val dmg = packLevel + if (overdriveTicks > 0f) 1 else 0
-    val pierce = (packLevel - 1).coerceAtLeast(0)
+    val dmg = (packLevel + loadout.weaponBonusDamage + if (overdriveTicks > 0f) 1 else 0) * critBoost * instagibBoost
+    val pierce = (packLevel - 1 + loadout.weaponExtraPierce).coerceAtLeast(0)
     val boltColor = when {
       instaKillTicks > 0f -> Color(0xFFFF3D71)
+      critBoost > 1 -> Color(0xFFFFD54F)
       packLevel >= 3 -> Color(0xFFFFD54F)
       packLevel == 2 -> Color(0xFFE040FB)
       overdriveTicks > 0f -> Color(0xFFFFAB40)
-      else -> accentColor
+      else -> loadout.tracerColor
     }
+    val speed = loadout.projectileSpeed + packLevel * 0.002f
     for (i in 0 until shots) {
       val offset = (i - (shots - 1) / 2f) * spread
       val a = baseAngle + offset
@@ -424,10 +624,10 @@ class ArenaSimState(
         ArenaBolt(
           x = playerX,
           y = playerY,
-          vx = cos(a) * (0.019f + packLevel * 0.002f),
-          vy = sin(a) * (0.019f + packLevel * 0.002f),
-          life = 56f,
-          isSupercharged = overdriveTicks > 0f || packLevel >= 2,
+          vx = cos(a) * speed,
+          vy = sin(a) * speed,
+          life = 58f,
+          isSupercharged = overdriveTicks > 0f || packLevel >= 2 || critBoost > 1,
           pierceLeft = pierce,
           damage = dmg,
           color = boltColor,
@@ -605,12 +805,14 @@ class ArenaSimState(
 
   fun triggerDash() {
     if (hudRunEnded || dashCd > 0f) return
-    dashCd = if (loadout.hasClawEdge) 40f else 50f
-    dashInvulnTicks = 24f
+    val baseDashCd = if (loadout.hasClawEdge) 40f else 50f
+    dashCd = if (progression.levelCustom.lowGravityDash) baseDashCd * 0.6f else baseDashCd
+    dashInvulnTicks = if (progression.levelCustom.lowGravityDash) 32f else 24f
+    val dashDist = if (progression.levelCustom.lowGravityDash) 0.19f else 0.14f
     val oldX = playerX
     val oldY = playerY
-    playerX = (playerX + aimX * 0.14f).coerceIn(0.06f, 0.94f)
-    playerY = (playerY + aimY * 0.14f).coerceIn(0.10f, 0.90f)
+    playerX = (playerX + aimX * dashDist).coerceIn(0.06f, 0.94f)
+    playerY = (playerY + aimY * dashDist).coerceIn(0.10f, 0.90f)
     arcs.add(ArenaArcLine(oldX, oldY, playerX, playerY, accentColor, 14f))
 
     if (loadout.hasClawEdge) {
@@ -635,6 +837,10 @@ class ArenaSimState(
 
   private fun onHostileDefeated(h: ArenaHostile, scoreMult: Long) {
     hudElims++
+    if (h.isBoss) hudBossElims++
+    if (loadout.ammoModId == "vampiric_bio") {
+      hudShield = (hudShield + 2).coerceAtMost(loadout.maxShield)
+    }
     val base = when {
       h.isBoss -> 500L
       h.isElite -> 160L
@@ -660,6 +866,29 @@ class ArenaSimState(
       val kind = ArenaDropKind.entries[Random.nextInt(ArenaDropKind.entries.size)]
       drops.add(ArenaDrop(h.x, h.y, kind))
     }
+
+    // Random Wonder Weapon Pickups (scaled by Battle Pass edition + Level Mutator)
+    val wonderBoost = progression.activePassVersion.wonderDropBonusMultiplier *
+      (if (progression.levelCustom.wonderDropBoost) 2.2f else 1.0f)
+    val wonderChance = when {
+      h.isBoss -> 1.0f
+      h.isElite -> (0.38f * wonderBoost).coerceAtMost(0.95f)
+      else -> (0.07f * wonderBoost).coerceAtMost(0.45f)
+    }
+    if (Random.nextFloat() < wonderChance) {
+      spawnRandomWonderWeapon(h.x, h.y)
+    }
+  }
+
+  fun collectWonderPickup(kind: WonderWeaponKind) {
+    val durMult = if (progression.activePassVersion == BattlePassVersion.CHRONO_MULTIVERSE) 1.30f else 1.0f
+    activeWonderWeapon = kind
+    wonderWeaponTicks = kind.durationTicks * durMult
+    hudActiveWonder = kind
+    hudWonderSecLeft = (wonderWeaponTicks / 60f).roundToInt()
+    hudWonderPickedCount++
+    pulseRingRadius = 0.05f
+    postCallout("EQUIPPED ${kind.displayName.uppercase()}!")
   }
 
   private fun applyDrop(drop: ArenaDrop) {
@@ -718,6 +947,17 @@ class ArenaSimState(
     if (doubleEssenceTicks > 0f) doubleEssenceTicks = (doubleEssenceTicks - dt).coerceAtLeast(0f)
     if (instaKillTicks > 0f) instaKillTicks = (instaKillTicks - dt).coerceAtLeast(0f)
     if (damageFlashTicks > 0f) damageFlashTicks = (damageFlashTicks - dt).coerceAtLeast(0f)
+    if (wonderWeaponTicks > 0f) {
+      wonderWeaponTicks = (wonderWeaponTicks - dt).coerceAtLeast(0f)
+      if (wonderWeaponTicks <= 0f) {
+        activeWonderWeapon = null
+        hudActiveWonder = null
+        hudWonderSecLeft = 0
+      } else {
+        val sec = (wonderWeaponTicks / 60f).toInt() + 1
+        if (hudWonderSecLeft != sec) hudWonderSecLeft = sec
+      }
+    }
 
     if (calloutTicks > 0f) {
       calloutTicks = (calloutTicks - dt).coerceAtLeast(0f)
@@ -805,6 +1045,21 @@ class ArenaSimState(
       }
     }
 
+    // Wonder Weapon Pickups update & collection
+    val wIter = wonderPickups.iterator()
+    while (wIter.hasNext()) {
+      val wp = wIter.next()
+      wp.life -= dt
+      val dx = wp.x - playerX
+      val dy = wp.y - playerY
+      if (dx * dx + dy * dy <= 0.06f * 0.06f) {
+        wIter.remove()
+        collectWonderPickup(wp.kind)
+      } else if (wp.life <= 0f) {
+        wIter.remove()
+      }
+    }
+
     // Bolts update + enemy shot hits player
     val bIter = bolts.iterator()
     while (bIter.hasNext()) {
@@ -871,12 +1126,14 @@ class ArenaSimState(
     while (hIter.hasNext()) {
       val h = hIter.next()
       if (stasisTicks <= 0f) {
+        if (h.cryoSlowTicks > 0f) h.cryoSlowTicks = (h.cryoSlowTicks - dt).coerceAtLeast(0f)
+        val slowMult = if (h.cryoSlowTicks > 0f) 0.42f else 1.0f
         val dx = playerX - h.x
         val dy = playerY - h.y
         val dSq = dx * dx + dy * dy
         val d = sqrt(dSq).coerceAtLeast(0.001f)
-        h.x += (dx / d) * h.speed * paceDt
-        h.y += (dy / d) * h.speed * paceDt
+        h.x += (dx / d) * h.speed * slowMult * paceDt
+        h.y += (dy / d) * h.speed * slowMult * paceDt
 
         // Ranged troopers/mechs/bosses shoot telegraphed orbs
         if ((h.archetype == "trooper" || h.archetype == "mech" || h.isBoss) && d > 0.15f) {
@@ -925,6 +1182,53 @@ class ArenaSimState(
           val dmg = if (instaKillTicks > 0f && !h.isBoss) 999 else b.damage
           h.hp -= dmg
           addSparkIfAllowed(h.x, h.y, b.color, 14f)
+
+          // Hellbreaker Supreme Pass Glory Siphon vs Elites/Bosses
+          val siphon = loadout.activePassVersion.glorySiphonPerBossHit
+          if (siphon > 0 && (h.isBoss || h.isElite)) {
+            hudShield = (hudShield + siphon).coerceAtMost(loadout.maxShield)
+          }
+
+          // Ammo Mod & Wonder Weapon Special On-Hit Mechanics
+          if (loadout.ammoModId == "cryo_stasis" || activeWonderWeapon == WonderWeaponKind.CHRONO_ZAT) {
+            h.cryoSlowTicks = if (activeWonderWeapon == WonderWeaponKind.CHRONO_ZAT) 150f else 90f
+          }
+          if (activeWonderWeapon == WonderWeaponKind.BLACKLIGHT_WHIP) {
+            hudShield = (hudShield + 2).coerceAtMost(loadout.maxShield)
+          }
+          if (activeWonderWeapon == WonderWeaponKind.LIBERTY_WUNDERWAFFE ||
+            (loadout.ammoModId == "arc_chain" && playerShotCounter % 3 == 0)
+          ) {
+            var chains = 0
+            val maxChains = if (activeWonderWeapon == WonderWeaponKind.LIBERTY_WUNDERWAFFE) 4 else 2
+            for (j in 0 until hostiles.size) {
+              if (chains >= maxChains) break
+              val other = hostiles[j]
+              if (other === h || other.hp <= 0) continue
+              val ox = other.x - h.x
+              val oy = other.y - h.y
+              if (ox * ox + oy * oy <= 0.24f * 0.24f) {
+                other.hp -= 2
+                arcs.add(ArenaArcLine(h.x, h.y, other.x, other.y, Color(0xFF00E5FF), 14f))
+                chains++
+              }
+            }
+          }
+          if (activeWonderWeapon == WonderWeaponKind.CRUCIBLE_BFG || activeWonderWeapon == WonderWeaponKind.RAY_NOVA_MK3) {
+            val splashRadiusSq = if (activeWonderWeapon == WonderWeaponKind.CRUCIBLE_BFG) 0.22f * 0.22f else 0.14f * 0.14f
+            val splashDmg = if (activeWonderWeapon == WonderWeaponKind.CRUCIBLE_BFG) 3 else 2
+            for (j in 0 until hostiles.size) {
+              val other = hostiles[j]
+              if (other === h || other.hp <= 0) continue
+              val ox = other.x - h.x
+              val oy = other.y - h.y
+              if (ox * ox + oy * oy <= splashRadiusSq) {
+                other.hp -= splashDmg
+                addSparkIfAllowed(other.x, other.y, Color(activeWonderWeapon!!.accentHex), 12f)
+              }
+            }
+          }
+
           if (b.pierceLeft > 0) {
             b.pierceLeft--
           } else {

@@ -55,6 +55,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.data.local.AppSettings
 import com.example.data.local.AppSettingsStore
+import com.example.data.local.ProgressionStore
 import com.example.data.local.UniverseRepository
 import com.example.ui.OsWorkspaceTab
 import com.example.ui.UniverseUiState
@@ -257,6 +258,7 @@ fun UnknownOsShell(
           repository = UniverseRepository(app),
           currentUserId = currentUserId,
           defaultDisplayName = displayName,
+          progressionStore = ProgressionStore(app, currentUserId),
         )
       }
     },
@@ -264,6 +266,8 @@ fun UnknownOsShell(
 
   val uiState by viewModel.uiState.collectAsStateWithLifecycle()
   val cloudSyncState by viewModel.cloudSyncState.collectAsStateWithLifecycle()
+  val progression by viewModel.progressionState.collectAsStateWithLifecycle()
+  val challenges by viewModel.challengeStates.collectAsStateWithLifecycle()
   val activeTab by viewModel.activeTab.collectAsStateWithLifecycle()
   val statusBanner by viewModel.statusBanner.collectAsStateWithLifecycle()
   val oauthRedirectUri by pendingOAuthRedirect.collectAsStateWithLifecycle()
@@ -454,6 +458,7 @@ fun UnknownOsShell(
                   onUnlinkAccount = viewModel::unlinkExternalAccount,
                   onStatusMessage = viewModel::showBanner,
                   onOpenSettings = onOpenSettings,
+                  progression = progression,
                   onSignOut = onLockSession,
                 )
 
@@ -462,8 +467,10 @@ fun UnknownOsShell(
                   armory = state.armory,
                   rigs = state.rigs,
                   settings = appSettings,
+                  progression = progression,
                   isPausedForSettings = isSettingsOpen,
                   onOpenSettings = onOpenSettings,
+                  onRecordProgression = viewModel::recordArenaProgression,
                   onSaveMatchAndExit = { score, wave, elims, extracted, durationSec ->
                     viewModel.submitMatchResult(
                       profile = state.profile,
@@ -485,6 +492,7 @@ fun UnknownOsShell(
                   onSelectRig = viewModel::selectActiveRig,
                   onSaveRig = viewModel::saveRig,
                   settings = appSettings,
+                  progression = progression,
                   onStatusMessage = viewModel::showBanner,
                 )
 
@@ -497,6 +505,18 @@ fun UnknownOsShell(
                   },
                   onCreateCustomItem = viewModel::createCustomArmoryItem,
                   onDeleteItem = viewModel::deleteCustomArmoryItem,
+                  progression = progression,
+                  challenges = challenges,
+                  activeRig = state.rigs.firstOrNull { it.id == state.profile.activeRigId } ?: state.rigs.firstOrNull(),
+                  onUpdateWeaponCustom = viewModel::updateWeaponCustomization,
+                  onUpdateCharacterCustom = viewModel::updateCharacterCustomization,
+                  onUpdateLevelCustom = viewModel::updateLevelCustomization,
+                  onSelectOrUnlockPass = { version ->
+                    viewModel.activateOrUnlockPass(version, state.profile.totalEssence)
+                  },
+                  onClaimPassTier = viewModel::claimPassTier,
+                  onClaimChallenge = viewModel::claimChallengeReward,
+                  onRefreshChallenges = viewModel::refreshCompletedChallenges,
                 )
 
                 OsWorkspaceTab.MEDIA_VAULT -> MediaVaultScreen(

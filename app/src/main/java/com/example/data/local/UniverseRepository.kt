@@ -270,6 +270,26 @@ class UniverseRepository(
     }
   }
 
+  suspend fun adjustOperatorEssence(userId: String, delta: Long): Result<Long> {
+    return try {
+      val now = System.currentTimeMillis()
+      val profile = dao.getProfileOnce(userId)
+        ?: return Result.failure(IllegalStateException("Operator profile not found"))
+      val nextEssence = (profile.totalEssence + delta).coerceIn(0L, 999_999_999L)
+      val updatedProfile = profile.copy(
+        totalEssence = nextEssence,
+        updatedAtMillis = now,
+      )
+      dao.upsertProfile(updatedProfile)
+      mirrorCloud(userId) { it.pushProfile(updatedProfile) }
+      Result.success(nextEssence)
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      Result.failure(e)
+    }
+  }
+
   suspend fun deleteArmoryItem(userId: String, itemId: String): Result<Unit> {
     return try {
       dao.deleteArmoryItem(userId, itemId)
