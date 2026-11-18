@@ -52,8 +52,9 @@ object RigEvaluator {
     clip: String,
     frame: Float,
     ikEnabled: Boolean,
+    animationSpeedMultiplier: Float = 1.0f,
   ): EvaluatedSkeleton {
-    val t = (frame / 60f) * (2f * PI.toFloat())
+    val t = (frame / 60f) * (2f * PI.toFloat()) * animationSpeedMultiplier.coerceIn(0.5f, 2.0f)
 
     var bobYOff = 0f
     var torsoOff = 0f

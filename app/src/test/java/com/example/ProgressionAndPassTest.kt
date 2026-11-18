@@ -98,27 +98,27 @@ class ProgressionAndPassTest {
     assertEquals(600L, blackcellRes.getOrThrow())
     val statsBlackcell = ArenaLoadoutStats.fromArmory(emptyList(), Color.Cyan, store.current)
     assertTrue(statsBlackcell.fireCadenceTicks < statsStd.fireCadenceTicks)
-    assertEquals(115, statsBlackcell.maxShield)
+    assertEquals(125, statsBlackcell.maxShield)
 
     // Unlock V3 Chrono-Vault (costs 750)
     val chronoRes = store.activateOrUnlockPassVersion(BattlePassVersion.CHRONO_MULTIVERSE, 1500L)
     assertTrue(chronoRes.isSuccess)
     val statsChrono = ArenaLoadoutStats.fromArmory(emptyList(), Color.Cyan, store.current)
     assertTrue(statsChrono.powerCooldownTicks < statsStd.powerCooldownTicks)
-    assertEquals(120, statsChrono.maxShield)
+    assertEquals(135, statsChrono.maxShield)
 
     // Unlock V4 Hellbreaker Supreme (costs 900)
     val hellRes = store.activateOrUnlockPassVersion(BattlePassVersion.HELLBREAKER_SUPREME, 1500L)
     assertTrue(hellRes.isSuccess)
     val statsHell = ArenaLoadoutStats.fromArmory(emptyList(), Color.Cyan, store.current)
-    assertEquals(140, statsHell.maxShield)
+    assertEquals(160, statsHell.maxShield)
     assertTrue(statsHell.moveBoost > statsStd.moveBoost)
-    assertEquals(3, BattlePassVersion.HELLBREAKER_SUPREME.glorySiphonPerBossHit)
+    assertEquals(4, BattlePassVersion.HELLBREAKER_SUPREME.glorySiphonPerBossHit)
 
     // Claim Tier 1 reward on Hellbreaker Supreme (requires 0 BP XP)
     val tier1Res = store.claimPassTier(BattlePassVersion.HELLBREAKER_SUPREME, 1)
     assertTrue(tier1Res.isSuccess)
-    assertEquals(300L, tier1Res.getOrThrow())
+    assertEquals(350L, tier1Res.getOrThrow())
   }
 
   @Test

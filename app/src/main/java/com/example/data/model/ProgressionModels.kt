@@ -18,7 +18,7 @@ enum class WonderWeaponKind(
     description = "Twin piercing crimson-plasma orbs with explosive splash impact.",
     accentHex = 0xFFFF3D71,
     durationTicks = 1320f,
-    baseDamage = 4,
+    baseDamage = 5,
   ),
   LIBERTY_WUNDERWAFFE(
     id = "ww_wunderwaffe",
@@ -27,7 +27,7 @@ enum class WonderWeaponKind(
     description = "High-voltage bolts chain arc lightning to up to 4 nearby hostiles.",
     accentHex = 0xFF00E5FF,
     durationTicks = 1200f,
-    baseDamage = 3,
+    baseDamage = 4,
   ),
   BLACKLIGHT_WHIP(
     id = "ww_blacklight_whip",
@@ -36,7 +36,7 @@ enum class WonderWeaponKind(
     description = "Infinitely piercing crimson bio-lance that siphons +2 Shield per hit.",
     accentHex = 0xFFE040FB,
     durationTicks = 1200f,
-    baseDamage = 3,
+    baseDamage = 4,
   ),
   CRUCIBLE_BFG(
     id = "ww_crucible_bfg",
@@ -45,7 +45,7 @@ enum class WonderWeaponKind(
     description = "Superheated molten core that melts bosses and vaporizes surrounding waves.",
     accentHex = 0xFF00E676,
     durationTicks = 1080f,
-    baseDamage = 6,
+    baseDamage = 8,
   ),
   CHRONO_ZAT(
     id = "ww_zat_stasis",
@@ -54,7 +54,7 @@ enum class WonderWeaponKind(
     description = "Stargate energy arcs freeze struck enemies in temporal stasis.",
     accentHex = 0xFFFFD54F,
     durationTicks = 1260f,
-    baseDamage = 3,
+    baseDamage = 4,
   ),
   STARBLADE_BOOMERANG(
     id = "ww_starblade_saber",
@@ -63,7 +63,7 @@ enum class WonderWeaponKind(
     description = "360-degree radial cosmic saber fan that shreds incoming rushes.",
     accentHex = 0xFF448AFF,
     durationTicks = 1200f,
-    baseDamage = 4,
+    baseDamage = 5,
   ),
 }
 
@@ -87,6 +87,12 @@ data class WeaponCustomization(
   val camoId: String = "cyber_matte",
   val opticId: String = "holo_cyan",
   val barrelId: String = "standard_barrel",
+  val muzzleId: String = "standard_muzzle",
+  val underbarrelId: String = "none_underbarrel",
+  val magazineId: String = "extended_mag_1",
+  val stockId: String = "tactical_stock",
+  val rearGripId: String = "stippled_grip",
+  val laserId: String = "none_laser",
   val ammoModId: String = "standard_core",
   val tracerColorHex: Long = 0xFF00E5FF,
 )
@@ -96,10 +102,27 @@ data class CharacterCustomization(
   val suitThemeId: String = "vanguard_cyber",
   val visorStyleId: String = "cyan_visor",
   val auraTrailId: String = "none",
+  val animationSpeedMultiplier: Float = 1.0f,
   val cloakEnabled: Boolean = true,
   val titleBadge: String = "Multiverse Operative",
   val primaryArmorHex: Long = 0xFF00E5FF,
   val accentArmorHex: Long = 0xFFFFAB40,
+)
+
+enum class GearSlot(val id: String, val displayName: String) {
+  HELMET("helmet", "Tactical Helmet"),
+  CHEST("chest", "Chassis Plate"),
+  GLOVES("gloves", "Gauntlet Gloves"),
+  BOOTS("boots", "Exo Boots"),
+  BACK_RIG("back_rig", "Back-Rig Jump-Pack"),
+}
+
+@Immutable
+data class GearState(
+  val slot: GearSlot,
+  val level: Int = 1,
+  val prestige: Int = 0,
+  val colorHex: Long = 0xFF00E5FF,
 )
 
 @Immutable
@@ -113,6 +136,18 @@ data class LevelCustomization(
   val lowGravityDash: Boolean = false,
   val bossRushMutator: Boolean = false,
   val floorAccentHex: Long = 0xFF00E5FF,
+)
+
+@Immutable
+data class SkillNode(
+  val id: String,
+  val title: String,
+  val description: String,
+  val category: String, // COMBAT, SURVIVAL, ENGINEERING, WONDER
+  val costEssence: Long,
+  val unlocked: Boolean = false,
+  val tier: Int = 1,
+  val maxTier: Int = 5,
 )
 
 enum class BattlePassVersion(
@@ -151,14 +186,14 @@ enum class BattlePassVersion(
     subtitle = "Elite Gold & Obsidian Syndicate Edition",
     unlockCostEssence = 600L,
     accentHex = 0xFFFFD54F,
-    gameplayEffectSummary = "+18% Fire Rate, +35% Wonder Weapon Drop Chance & +25% BP XP",
-    bonusShield = 15,
-    fireRateMultiplier = 1.18f,
-    cooldownMultiplier = 0.95f,
-    moveSpeedBonus = 0.05f,
-    essenceMultiplier = 1.25f,
-    wonderDropBonusMultiplier = 1.35f,
-    glorySiphonPerBossHit = 0,
+    gameplayEffectSummary = "+22% Fire Rate, +40% Wonder Weapon Drop Chance & +30% BP XP",
+    bonusShield = 25,
+    fireRateMultiplier = 1.22f,
+    cooldownMultiplier = 0.90f,
+    moveSpeedBonus = 0.08f,
+    essenceMultiplier = 1.30f,
+    wonderDropBonusMultiplier = 1.40f,
+    glorySiphonPerBossHit = 1,
   ),
   CHRONO_MULTIVERSE(
     id = "bp_chrono",
@@ -166,14 +201,14 @@ enum class BattlePassVersion(
     subtitle = "Space & Time 7-Chevron Temporal Edition",
     unlockCostEssence = 750L,
     accentHex = 0xFF7C4DFF,
-    gameplayEffectSummary = "-25% Power/Stim Cooldowns & Extended Wonder Weapon Duration",
-    bonusShield = 20,
-    fireRateMultiplier = 1.08f,
-    cooldownMultiplier = 0.75f,
-    moveSpeedBonus = 0.08f,
-    essenceMultiplier = 1.20f,
-    wonderDropBonusMultiplier = 1.20f,
-    glorySiphonPerBossHit = 0,
+    gameplayEffectSummary = "-30% Power/Stim Cooldowns & Extended Wonder Duration",
+    bonusShield = 35,
+    fireRateMultiplier = 1.12f,
+    cooldownMultiplier = 0.70f,
+    moveSpeedBonus = 0.12f,
+    essenceMultiplier = 1.25f,
+    wonderDropBonusMultiplier = 1.30f,
+    glorySiphonPerBossHit = 2,
   ),
   HELLBREAKER_SUPREME(
     id = "bp_hellbreaker",
@@ -181,14 +216,14 @@ enum class BattlePassVersion(
     subtitle = "Mythic Crucible & Bio-Claw Ultimate Edition",
     unlockCostEssence = 900L,
     accentHex = 0xFFFF3D71,
-    gameplayEffectSummary = "+40 Max Shield, +15% Move Speed & +3 Armor Siphon vs Elites/Bosses",
-    bonusShield = 40,
-    fireRateMultiplier = 1.10f,
-    cooldownMultiplier = 0.90f,
-    moveSpeedBonus = 0.15f,
-    essenceMultiplier = 1.30f,
-    wonderDropBonusMultiplier = 1.25f,
-    glorySiphonPerBossHit = 3,
+    gameplayEffectSummary = "+60 Max Shield, +20% Move Speed & +4 Armor Siphon vs Bosses",
+    bonusShield = 60,
+    fireRateMultiplier = 1.15f,
+    cooldownMultiplier = 0.85f,
+    moveSpeedBonus = 0.20f,
+    essenceMultiplier = 1.40f,
+    wonderDropBonusMultiplier = 1.35f,
+    glorySiphonPerBossHit = 4,
   ),
 }
 
@@ -238,27 +273,37 @@ data class MatchProgressionReport(
 @Immutable
 data class OperatorProgressionState(
   val playerXp: Long = 0L,
+  val playerPrestige: Int = 0,
   val weaponXpMap: Map<String, Long> = mapOf("wpn_pulse_carbine" to 0L),
+  val weaponPrestigeMap: Map<String, Int> = emptyMap(),
+  val gearMap: Map<String, GearState> = GearSlot.entries.associate { it.id to GearState(it) },
+  val gearPrestige: Int = 0,
   val weaponCustom: WeaponCustomization = WeaponCustomization(),
   val characterCustom: CharacterCustomization = CharacterCustomization(),
   val levelCustom: LevelCustomization = LevelCustomization(),
   val activePassVersion: BattlePassVersion = BattlePassVersion.STANDARD_SECTOR_OPS,
   val unlockedPassVersions: Set<BattlePassVersion> = setOf(BattlePassVersion.STANDARD_SECTOR_OPS),
   val battlePassXp: Long = 0L,
-  val claimedPassTiers: Set<String> = emptySet(), // key = "${version.id}_$tier"
+  val battlePassPrestige: Int = 0,
+  val bpCycleCount: Int = 0,
+  val claimedPassTiers: Set<String> = emptySet(),
   val challengeProgress: Map<String, Long> = emptyMap(),
   val claimedChallenges: Set<String> = emptySet(),
+  val challengePrestige: Int = 0,
+  val skillNodes: Map<String, SkillNode> = ProgressionCatalog.defaultSkillNodes(),
   val wonderWeaponsPickedTotal: Long = 0L,
 ) {
   val playerLevel: Int
     get() = ProgressionCatalog.levelForXp(playerXp)
 
   val playerRankTitle: String
-    get() = ProgressionCatalog.rankTitleForLevel(playerLevel)
+    get() = ProgressionCatalog.rankTitleForLevel(playerLevel, playerPrestige)
 
   fun weaponXp(weaponId: String): Long = weaponXpMap[weaponId] ?: 0L
 
   fun weaponLevel(weaponId: String): Int = ProgressionCatalog.weaponLevelForXp(weaponXp(weaponId))
+
+  fun weaponPrestige(weaponId: String): Int = weaponPrestigeMap[weaponId] ?: 0
 }
 
 object ProgressionCatalog {
@@ -269,11 +314,11 @@ object ProgressionCatalog {
       name = "SHD Pulse Carbine",
       universeOrigin = "Sector Zero",
       summary = "Balanced high-velocity energy carbine with crisp handling.",
-      baseDamage = 1,
-      baseCadenceTicks = 10.5f,
-      baseProjectileSpeed = 0.020f,
+      baseDamage = 2,
+      baseCadenceTicks = 10.0f,
+      baseProjectileSpeed = 0.022f,
       baseSpreadCount = 1,
-      basePierce = 0,
+      basePierce = 1,
       defaultTracerHex = 0xFF00E5FF,
     ),
     WeaponSpec(
@@ -281,9 +326,9 @@ object ProgressionCatalog {
       name = "Blacklight Scattergun",
       universeOrigin = "Blacklight Conduit",
       summary = "Wide 3-bolt plasma spread for crowd control & close encounters.",
-      baseDamage = 1,
-      baseCadenceTicks = 13.5f,
-      baseProjectileSpeed = 0.018f,
+      baseDamage = 2,
+      baseCadenceTicks = 13.0f,
+      baseProjectileSpeed = 0.019f,
       baseSpreadCount = 3,
       basePierce = 0,
       defaultTracerHex = 0xFF7C4DFF,
@@ -293,11 +338,11 @@ object ProgressionCatalog {
       name = "Starblade Nova Lancer",
       universeOrigin = "Aegis & Starblade",
       summary = "Piercing twin-core rail lance that slices through lined hostiles.",
-      baseDamage = 2,
-      baseCadenceTicks = 12.0f,
-      baseProjectileSpeed = 0.026f,
+      baseDamage = 3,
+      baseCadenceTicks = 11.5f,
+      baseProjectileSpeed = 0.028f,
       baseSpreadCount = 1,
-      basePierce = 2,
+      basePierce = 3,
       defaultTracerHex = 0xFFE040FB,
     ),
     WeaponSpec(
@@ -305,11 +350,11 @@ object ProgressionCatalog {
       name = "Hellbreaker Heavy Cannon",
       universeOrigin = "Hellbreaker Citadel",
       summary = "Heavy molten slugs engineered to crack Mechs & Hydra bosses.",
-      baseDamage = 3,
-      baseCadenceTicks = 15.0f,
-      baseProjectileSpeed = 0.019f,
+      baseDamage = 4,
+      baseCadenceTicks = 14.5f,
+      baseProjectileSpeed = 0.020f,
       baseSpreadCount = 1,
-      basePierce = 1,
+      basePierce = 2,
       defaultTracerHex = 0xFFFF5252,
     ),
     WeaponSpec(
@@ -317,11 +362,11 @@ object ProgressionCatalog {
       name = "Chrono-Vault Repeater",
       universeOrigin = "Chrono-Vault",
       summary = "Rapid-cycle temporal repeater firing twin golden bolts at high cadence.",
-      baseDamage = 1,
-      baseCadenceTicks = 8.0f,
-      baseProjectileSpeed = 0.023f,
+      baseDamage = 2,
+      baseCadenceTicks = 7.5f,
+      baseProjectileSpeed = 0.025f,
       baseSpreadCount = 2,
-      basePierce = 0,
+      basePierce = 1,
       defaultTracerHex = 0xFFFFD54F,
     ),
   )
@@ -346,9 +391,48 @@ object ProgressionCatalog {
 
   val barrels: List<Pair<String, String>> = listOf(
     "standard_barrel" to "Standard Barrel",
-    "overclocked_rifling" to "Overclocked (+18% Bolt Speed)",
+    "overclocked_rifling" to "Overclocked (+22% Bolt Speed)",
     "spread_choke" to "Spread Choke (+1 Extra Bolt)",
-    "heavy_bore" to "Heavy Bore (+1 Base Damage)",
+    "heavy_bore" to "Heavy Bore (+2 Base Damage)",
+  )
+
+  val muzzles: List<Pair<String, String>> = listOf(
+    "standard_muzzle" to "Standard Flash Hider",
+    "tactical_brake" to "Tactical Muzzle Brake",
+    "monolithic_suppressor" to "Monolithic Suppressor",
+    "heavy_compensator" to "Heavy Recoil Compensator",
+  )
+
+  val underbarrels: List<Pair<String, String>> = listOf(
+    "none_underbarrel" to "No Attachment",
+    "foregrip_vertical" to "Vertical Foregrip",
+    "ranger_grip" to "Ranger Stabilizer",
+    "bipod_mount" to "Heavy Bipod Mount",
+  )
+
+  val magazines: List<Pair<String, String>> = listOf(
+    "extended_mag_1" to "Standard Mag",
+    "extended_mag_2" to "Extended Drum Mag (+Spread)",
+    "fast_mag" to "Speed Reload Mag",
+    "composite_mag" to "Composite Energy Cell",
+  )
+
+  val stocks: List<Pair<String, String>> = listOf(
+    "tactical_stock" to "Tactical Stock",
+    "heavy_padded_stock" to "Heavy Padded Buffer",
+    "lightweight_skeleton" to "Skeletonized Dash Stock",
+  )
+
+  val rearGrips: List<Pair<String, String>> = listOf(
+    "stippled_grip" to "Stippled Combat Grip",
+    "rubberized_grip" to "Rubberized Recoil Grip",
+    "tactical_tape" to "Tactical Friction Tape",
+  )
+
+  val lasers: List<Pair<String, String>> = listOf(
+    "none_laser" to "No Laser",
+    "tactical_laser_5mw" to "5mW Tactical Laser",
+    "infrared_designator" to "IR Target Designator",
   )
 
   val ammoMods: List<Pair<String, String>> = listOf(
@@ -394,6 +478,15 @@ object ProgressionCatalog {
     "hex_vault" to "Wide Vault Grid",
     "minimal_clean" to "Clean Floor",
   )
+
+  fun defaultSkillNodes(): Map<String, SkillNode> = listOf(
+    SkillNode("sk_shield_1", "Reinforced Chassis I", "Increases max operator shield by +25.", "SURVIVAL", 400L, false, 1, 5),
+    SkillNode("sk_shield_2", "Reinforced Chassis II", "Increases max operator shield by another +35.", "SURVIVAL", 900L, false, 1, 5),
+    SkillNode("sk_damage_1", "Ballistic Lethality I", "Boosts weapon projectile base damage by +1.", "COMBAT", 500L, false, 1, 5),
+    SkillNode("sk_damage_2", "Ballistic Lethality II", "Boosts weapon projectile base damage by another +2.", "COMBAT", 1100L, false, 1, 5),
+    SkillNode("sk_cooldown_1", "Overdrive Capacitor I", "-10% cooldowns for powers and stims.", "ENGINEERING", 600L, false, 1, 5),
+    SkillNode("sk_wonder_1", "Mystery Crate Attractor", "+35% higher random Wonder Weapon drop chance.", "WONDER", 800L, false, 1, 5),
+  ).associateBy { it.id }
 
   val challenges: List<ChallengeSpec> = listOf(
     ChallengeSpec(
@@ -448,45 +541,56 @@ object ProgressionCatalog {
     ),
   )
 
-  fun tiersForVersion(version: BattlePassVersion): List<BattlePassTierReward> = when (version) {
-    BattlePassVersion.STANDARD_SECTOR_OPS -> listOf(
-      BattlePassTierReward(1, 0L, "SHD Matte Finish", "Unlocks Sector Zero standard operator trim & +15% Essence", 200L, "CAMO"),
-      BattlePassTierReward(2, 300L, "Pulse Sight Reticle", "Precision Holo crosshair & bonus Essence cache", 250L, "OPTIC"),
-      BattlePassTierReward(3, 700L, "Quarantine XP Surge", "+400 Weapon XP injection for your active primary", 300L, "WPN XP"),
-      BattlePassTierReward(4, 1200L, "Aegis Emerald Tracer", "Unlocks bright emerald tracer bolts & badge", 350L, "TRACER"),
-      BattlePassTierReward(5, 1800L, "Division Tech Cache", "Boosts Mystery Wonder Weapon salvage rewards", 450L, "CACHE"),
-      BattlePassTierReward(6, 2500L, "Vanguard Sentinel Master", "Prestige Operator Emblem + 700 Bonus Essence", 700L, "PRESTIGE"),
-    )
-    BattlePassVersion.BLACKCELL_OVERDRIVE -> listOf(
-      BattlePassTierReward(1, 0L, "Blackcell Obsidian Suit", "Instantly grants Obsidian & Gold armor trim + +18% Fire Rate", 250L, "SUIT"),
-      BattlePassTierReward(2, 350L, "Molten Damascus Camo", "Blackcell animated gold-vein finish & tracer color", 350L, "CAMO"),
-      BattlePassTierReward(3, 800L, "Overclocked Syndicate", "Boosts Wonder Crate spawn rate +35% in all modes", 450L, "PERK"),
-      BattlePassTierReward(4, 1300L, "Gilded BFG Munitions", "+500 Weapon XP + Blackcell Heavy Bore tuning", 500L, "BLUEPRINT"),
-      BattlePassTierReward(5, 1900L, "Syndicate Golden Crown", "Unlocks Gold Prime visor & aura ring flare", 650L, "VISOR"),
-      BattlePassTierReward(6, 2600L, "Blackcell Overlord Tier", "Ultimate Syndicate Title + 900 Bonus Essence", 900L, "ULTIMATE"),
-    )
-    BattlePassVersion.CHRONO_MULTIVERSE -> listOf(
-      BattlePassTierReward(1, 0L, "Time-Warden Regalia", "Activates -25% Power/Stim Cooldowns in Arena", 250L, "PASSIVE"),
-      BattlePassTierReward(2, 350L, "Cryo-Stasis Munitions", "Unlocks Chrono Freeze bolt coloration & stasis aura", 350L, "AMMO"),
-      BattlePassTierReward(3, 800L, "7-Chevron Gate Floor", "Unlocks Cosmic Nexus Arena floor & grid styling", 450L, "LEVEL"),
-      BattlePassTierReward(4, 1300L, "Librarian Artifact Surge", "+500 Weapon XP + extended Wonder Weapon duration", 550L, "WPN XP"),
-      BattlePassTierReward(5, 1900L, "Chrono Zat Priority", "Higher chance to pull Chrono Zat'nik'tel pickups", 650L, "WONDER"),
-      BattlePassTierReward(6, 2600L, "Space & Time Sovereign", "Sovereign Temporal Banner + 950 Bonus Essence", 950L, "PRESTIGE"),
-    )
-    BattlePassVersion.HELLBREAKER_SUPREME -> listOf(
-      BattlePassTierReward(1, 0L, "Hellbreaker Plate", "Activates +40 Max Shield & +15% Move Speed immediately", 300L, "ARMOR"),
-      BattlePassTierReward(2, 400L, "Blood Moon Arena Kit", "Unlocks Crimson Crucible sky/floor theme & tracers", 400L, "LEVEL"),
-      BattlePassTierReward(3, 900L, "Vampiric Glory Siphon", "Hits vs Bosses/Elites siphon +3 Shield live in Arena", 500L, "SIPHON"),
-      BattlePassTierReward(4, 1450L, "Adamant Claw Temper", "+600 Weapon XP + Crucible Ember armor glow", 600L, "AURA"),
-      BattlePassTierReward(5, 2050L, "BFG-9000 Arsenal Lock", "Increases Crucible BFG-9000 Wonder drop priority", 750L, "WONDER"),
-      BattlePassTierReward(6, 2800L, "Apex Warlord Ascension", "Hellbreaker Supreme Emblem + 1100 Bonus Essence", 1100L, "SUPREME"),
-    )
+  fun tiersForVersion(version: BattlePassVersion, cycle: Int = 0): List<BattlePassTierReward> {
+    val baseTiers = when (version) {
+      BattlePassVersion.STANDARD_SECTOR_OPS -> listOf(
+        BattlePassTierReward(1, 0L, "SHD Matte Finish", "Unlocks Sector Zero standard operator trim & +15% Essence", 200L, "CAMO"),
+        BattlePassTierReward(2, 400L, "Pulse Sight Reticle", "Precision Holo crosshair & bonus Essence cache", 280L, "OPTIC"),
+        BattlePassTierReward(3, 950L, "Quarantine XP Surge", "+600 Weapon XP injection for your active primary", 350L, "WPN XP"),
+        BattlePassTierReward(4, 1600L, "Aegis Emerald Tracer", "Unlocks bright emerald tracer bolts & badge", 420L, "TRACER"),
+        BattlePassTierReward(5, 2400L, "Division Tech Cache", "Boosts Mystery Wonder Weapon salvage rewards", 550L, "CACHE"),
+        BattlePassTierReward(6, 3400L, "Vanguard Sentinel Master", "Prestige Operator Emblem + 900 Bonus Essence", 900L, "PRESTIGE"),
+      )
+      BattlePassVersion.BLACKCELL_OVERDRIVE -> listOf(
+        BattlePassTierReward(1, 0L, "Blackcell Obsidian Suit", "Instantly grants Obsidian & Gold armor trim + +22% Fire Rate", 300L, "SUIT"),
+        BattlePassTierReward(2, 450L, "Molten Damascus Camo", "Blackcell animated gold-vein finish & tracer color", 400L, "CAMO"),
+        BattlePassTierReward(3, 1050L, "Overclocked Syndicate", "Boosts Wonder Crate spawn rate +40% in all modes", 520L, "PERK"),
+        BattlePassTierReward(4, 1750L, "Gilded BFG Munitions", "+800 Weapon XP + Blackcell Heavy Bore tuning", 650L, "BLUEPRINT"),
+        BattlePassTierReward(5, 2600L, "Syndicate Golden Crown", "Unlocks Gold Prime visor & aura ring flare", 800L, "VISOR"),
+        BattlePassTierReward(6, 3600L, "Blackcell Overlord Tier", "Ultimate Syndicate Title + 1200 Bonus Essence", 1200L, "ULTIMATE"),
+      )
+      BattlePassVersion.CHRONO_MULTIVERSE -> listOf(
+        BattlePassTierReward(1, 0L, "Time-Warden Regalia", "Activates -30% Power/Stim Cooldowns in Arena", 300L, "PASSIVE"),
+        BattlePassTierReward(2, 450L, "Cryo-Stasis Munitions", "Unlocks Chrono Freeze bolt coloration & stasis aura", 400L, "AMMO"),
+        BattlePassTierReward(3, 1050L, "7-Chevron Gate Floor", "Unlocks Cosmic Nexus Arena floor & grid styling", 520L, "LEVEL"),
+        BattlePassTierReward(4, 1750L, "Librarian Artifact Surge", "+800 Weapon XP + extended Wonder Weapon duration", 650L, "WPN XP"),
+        BattlePassTierReward(5, 2600L, "Chrono Zat Priority", "Higher chance to pull Chrono Zat'nik'tel pickups", 800L, "WONDER"),
+        BattlePassTierReward(6, 3600L, "Space & Time Sovereign", "Sovereign Temporal Banner + 1250 Bonus Essence", 1250L, "PRESTIGE"),
+      )
+      BattlePassVersion.HELLBREAKER_SUPREME -> listOf(
+        BattlePassTierReward(1, 0L, "Hellbreaker Plate", "Activates +60 Max Shield & +20% Move Speed immediately", 350L, "ARMOR"),
+        BattlePassTierReward(2, 500L, "Blood Moon Arena Kit", "Unlocks Crimson Crucible sky/floor theme & tracers", 480L, "LEVEL"),
+        BattlePassTierReward(3, 1150L, "Vampiric Glory Siphon", "Hits vs Bosses/Elites siphon +4 Shield live in Arena", 600L, "SIPHON"),
+        BattlePassTierReward(4, 1900L, "Adamant Claw Temper", "+900 Weapon XP + Crucible Ember armor glow", 750L, "AURA"),
+        BattlePassTierReward(5, 2800L, "BFG-9000 Arsenal Lock", "Increases Crucible BFG-9000 Wonder drop priority", 900L, "WONDER"),
+        BattlePassTierReward(6, 3800L, "Apex Warlord Ascension", "Hellbreaker Supreme Emblem + 1400 Bonus Essence", 1400L, "SUPREME"),
+      )
+    }
+    if (cycle <= 0) return baseTiers
+    return baseTiers.map { t ->
+      t.copy(
+        tier = t.tier + cycle * 6,
+        bpXpRequired = t.bpXpRequired + (cycle * 3800L),
+        title = "${t.title} [Prestige C$cycle]",
+        rewardEssence = t.rewardEssence + cycle * 300L,
+      )
+    }
   }
 
   fun levelForXp(xp: Long): Int {
     var lvl = 1
     var remaining = xp.coerceAtLeast(0L)
-    while (lvl < 100) {
+    while (lvl < 1000) {
       val need = xpRequiredForPlayerLevel(lvl)
       if (remaining < need) break
       remaining -= need
@@ -495,12 +599,12 @@ object ProgressionCatalog {
     return lvl
   }
 
-  fun xpRequiredForPlayerLevel(level: Int): Long = 400L + (level - 1).coerceAtLeast(0) * 120L
+  fun xpRequiredForPlayerLevel(level: Int): Long = 350L + (level - 1).coerceAtLeast(0) * 85L
 
   fun xpProgressInCurrentPlayerLevel(xp: Long): Pair<Long, Long> {
     var lvl = 1
     var remaining = xp.coerceAtLeast(0L)
-    while (lvl < 100) {
+    while (lvl < 1000) {
       val need = xpRequiredForPlayerLevel(lvl)
       if (remaining < need) return remaining to need
       remaining -= need
@@ -509,21 +613,26 @@ object ProgressionCatalog {
     return 1L to 1L
   }
 
-  fun rankTitleForLevel(level: Int): String = when {
-    level >= 50 -> "Multiverse Sovereign"
-    level >= 35 -> "Apex Continuum"
-    level >= 22 -> "Crucible Warlord"
-    level >= 12 -> "Conduit Prime"
-    level >= 6 -> "Vanguard Operative"
-    level >= 3 -> "SHD Field Agent"
-    else -> "UnknownOS Recruit"
+  fun rankTitleForLevel(level: Int, prestige: Int): String {
+    val suffix = if (prestige > 0) " [P$prestige]" else ""
+    val title = when {
+      level >= 500 -> "Multiverse Sovereign"
+      level >= 350 -> "Apex Continuum"
+      level >= 200 -> "Crucible Warlord"
+      level >= 100 -> "Conduit Prime"
+      level >= 50 -> "Vanguard Commander"
+      level >= 20 -> "SHD Elite Operative"
+      level >= 5 -> "Field Agent"
+      else -> "UnknownOS Recruit"
+    }
+    return "$title$suffix"
   }
 
   fun weaponLevelForXp(xp: Long): Int {
     var lvl = 1
     var remaining = xp.coerceAtLeast(0L)
-    while (lvl < 30) {
-      val need = 180L + (lvl - 1) * 80L
+    while (lvl < 60) {
+      val need = 150L + (lvl - 1) * 55L
       if (remaining < need) break
       remaining -= need
       lvl++
@@ -534,8 +643,8 @@ object ProgressionCatalog {
   fun xpProgressInCurrentWeaponLevel(xp: Long): Pair<Long, Long> {
     var lvl = 1
     var remaining = xp.coerceAtLeast(0L)
-    while (lvl < 30) {
-      val need = 180L + (lvl - 1) * 80L
+    while (lvl < 60) {
+      val need = 150L + (lvl - 1) * 55L
       if (remaining < need) return remaining to need
       remaining -= need
       lvl++
