@@ -53,6 +53,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.example.data.local.AppSettings
+import com.example.data.local.AppSettingsStore
 import com.example.data.local.UniverseRepository
 import com.example.ui.OsWorkspaceTab
 import com.example.ui.UniverseUiState
@@ -70,6 +72,7 @@ import com.example.ui.screens.ExportCompatScreen
 import com.example.ui.screens.ForgeRigScreen
 import com.example.ui.screens.MediaVaultScreen
 import com.example.ui.screens.OsDesktopScreen
+import com.example.ui.screens.SettingsDialog
 import com.example.ui.theme.AppIcons
 import com.example.ui.theme.UnknownUniversesTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -84,12 +87,10 @@ class MainActivity : ComponentActivity() {
     pendingOAuthRedirect.value = intent?.data
     enableEdgeToEdge()
     setContent {
-      UnknownUniversesTheme(darkTheme = true) {
-        AppNavigation(
-          pendingOAuthRedirect = pendingOAuthRedirect.asStateFlow(),
-          onConsumeRedirect = { pendingOAuthRedirect.value = null },
-        )
-      }
+      AppNavigation(
+        pendingOAuthRedirect = pendingOAuthRedirect.asStateFlow(),
+        onConsumeRedirect = { pendingOAuthRedirect.value = null },
+      )
     }
   }
 
@@ -117,6 +118,9 @@ fun AppNavigation(
   val prefs = remember(context) {
     context.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
   }
+  val settingsStore = remember(context) { AppSettingsStore(context) }
+  val appSettings by settingsStore.settings.collectAsStateWithLifecycle()
+  var showSettingsDialog by remember { mutableStateOf(false) }
 
   val googleSessionUser by GoogleSignInHelper.sessionUser.collectAsStateWithLifecycle()
   LaunchedEffect(Unit) {
@@ -165,43 +169,61 @@ fun AppNavigation(
 
   val currentUserId = signedInGoogleUid ?: LOCAL_OPERATOR_ID
 
-  if (!isSessionActive) {
-    AuthScreen(
-      initialCallsign = activeCallsign,
-      onBootLocalOperator = { callsign ->
-        activeCallsign = callsign
-        prefs.edit {
-          putBoolean(KEY_SESSION_ACTIVE, true)
-          putString(KEY_LAST_CALLSIGN, callsign)
-        }
-        isSessionActive = true
-      },
-    )
-  } else {
-    key(currentUserId) {
-      UnknownOsShell(
-        currentUserId = currentUserId,
-        displayName = activeCallsign,
-        googleAccountLabel = googleAccountLabel,
-        activeWallpaperPath = activeWallpaperPath,
-        onSetWallpaperPath = { path ->
-          activeWallpaperPath = path
+  UnknownUniversesTheme(
+    darkTheme = appSettings.effectiveDarkTheme,
+    settings = appSettings,
+  ) {
+    if (!isSessionActive) {
+      AuthScreen(
+        initialCallsign = activeCallsign,
+        onBootLocalOperator = { callsign ->
+          activeCallsign = callsign
           prefs.edit {
-            if (path == null) remove(KEY_VAULT_WALLPAPER)
-            else putString(KEY_VAULT_WALLPAPER, path)
+            putBoolean(KEY_SESSION_ACTIVE, true)
+            putString(KEY_LAST_CALLSIGN, callsign)
           }
+          isSessionActive = true
         },
-        pendingOAuthRedirect = pendingOAuthRedirect,
-        onConsumeRedirect = onConsumeRedirect,
-        onLockSession = {
-          prefs.edit { putBoolean(KEY_SESSION_ACTIVE, false) }
-          GoogleSignInHelper.signOut(
-            context = context,
-            credentialManager = credentialManager,
-            scope = scope,
-            onSignOutComplete = { isSessionActive = false },
-          )
-        },
+      )
+    } else {
+      key(currentUserId) {
+        UnknownOsShell(
+          currentUserId = currentUserId,
+          displayName = activeCallsign,
+          googleAccountLabel = googleAccountLabel,
+          activeWallpaperPath = activeWallpaperPath,
+          appSettings = appSettings,
+          isSettingsOpen = showSettingsDialog,
+          onOpenSettings = { showSettingsDialog = true },
+          onSetWallpaperPath = { path ->
+            activeWallpaperPath = path
+            prefs.edit {
+              if (path == null) remove(KEY_VAULT_WALLPAPER)
+              else putString(KEY_VAULT_WALLPAPER, path)
+            }
+          },
+          pendingOAuthRedirect = pendingOAuthRedirect,
+          onConsumeRedirect = onConsumeRedirect,
+          onLockSession = {
+            prefs.edit { putBoolean(KEY_SESSION_ACTIVE, false) }
+            GoogleSignInHelper.signOut(
+              context = context,
+              credentialManager = credentialManager,
+              scope = scope,
+              onSignOutComplete = { isSessionActive = false },
+            )
+          },
+        )
+      }
+    }
+
+    if (showSettingsDialog) {
+      SettingsDialog(
+        settings = appSettings,
+        onUpdateSettings = { transform -> settingsStore.update(transform) },
+        onReplaceSettings = { next -> settingsStore.replace(next) },
+        onResetDefaults = { settingsStore.resetDefaults() },
+        onDismiss = { showSettingsDialog = false },
       )
     }
   }
@@ -213,6 +235,9 @@ fun UnknownOsShell(
   displayName: String?,
   googleAccountLabel: String?,
   activeWallpaperPath: String?,
+  appSettings: AppSettings = AppSettings(),
+  isSettingsOpen: Boolean = false,
+  onOpenSettings: () -> Unit = {},
   onSetWallpaperPath: (String?) -> Unit,
   pendingOAuthRedirect: StateFlow<Uri?>,
   onConsumeRedirect: () -> Unit,
@@ -428,6 +453,7 @@ fun UnknownOsShell(
                   },
                   onUnlinkAccount = viewModel::unlinkExternalAccount,
                   onStatusMessage = viewModel::showBanner,
+                  onOpenSettings = onOpenSettings,
                   onSignOut = onLockSession,
                 )
 
@@ -435,6 +461,9 @@ fun UnknownOsShell(
                   profile = state.profile,
                   armory = state.armory,
                   rigs = state.rigs,
+                  settings = appSettings,
+                  isPausedForSettings = isSettingsOpen,
+                  onOpenSettings = onOpenSettings,
                   onSaveMatchAndExit = { score, wave, elims, extracted, durationSec ->
                     viewModel.submitMatchResult(
                       profile = state.profile,
@@ -455,6 +484,7 @@ fun UnknownOsShell(
                   activeRigId = state.profile.activeRigId,
                   onSelectRig = viewModel::selectActiveRig,
                   onSaveRig = viewModel::saveRig,
+                  settings = appSettings,
                   onStatusMessage = viewModel::showBanner,
                 )
 

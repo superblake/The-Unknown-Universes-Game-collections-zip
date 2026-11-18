@@ -84,3 +84,25 @@ val AppTypography = Typography(
     letterSpacing = 0.3.sp,
   ),
 )
+
+fun scaledTypography(scale: Float): Typography {
+  val s = scale.coerceIn(1.0f, 1.45f)
+  if (s <= 1.01f) return AppTypography
+  fun TextStyle.scaled(): TextStyle = copy(
+    fontSize = (fontSize.value * s).sp,
+    lineHeight = (lineHeight.value * s).sp,
+  )
+  return Typography(
+    displaySmall = AppTypography.displaySmall.scaled(),
+    headlineMedium = AppTypography.headlineMedium.scaled(),
+    headlineSmall = AppTypography.headlineSmall.scaled(),
+    titleLarge = AppTypography.titleLarge.scaled(),
+    titleMedium = AppTypography.titleMedium.scaled(),
+    bodyLarge = AppTypography.bodyLarge.scaled(),
+    bodyMedium = AppTypography.bodyMedium.scaled(),
+    labelLarge = AppTypography.labelLarge.scaled(),
+    labelMedium = AppTypography.labelMedium.scaled(),
+    labelSmall = AppTypography.labelSmall.scaled(),
+  )
+}
+

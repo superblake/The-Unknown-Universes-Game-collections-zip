@@ -28,4 +28,7 @@
     <string name="steam_workshop_export_vdf_btn">Export SteamCMD .VDF</string>
     <string name="steam_workshop_export_json_btn">Export Workshop .JSON</string>
     <string name="steam_workshop_share_btn">Share Steam Workshop Pack</string>
+    <string name="cd_open_settings">Open Controls, Performance, Visual &amp; Accessibility Settings</string>
+    <string name="settings_title">SETTINGS &amp; ACCESSIBILITY</string>
+    <string name="settings_subtitle">Controls, Performance, Visuals, Health &amp; Disability Support</string>
 </resources>

@@ -16,8 +16,13 @@ import com.example.export.Bo3ExportOptions
 import com.example.export.Bo3ModToolsExporter
 import com.example.export.PortablePackageGenerator
 import com.example.ui.rig.RigEvaluator
+import com.example.ui.screens.ArenaLoadoutStats
+import com.example.ui.screens.ArenaScreen
+import com.example.ui.screens.ArenaSimState
 import com.example.ui.screens.ExportCompatScreen
 import com.example.ui.theme.UnknownUniversesTheme
+import androidx.compose.ui.graphics.Color
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -211,5 +216,82 @@ class RigAndExportTest {
     composeRule.onNodeWithTag("preview_code_card").performScrollTo().assertIsDisplayed()
     composeRule.onNodeWithTag("preview_tab_xanim").performScrollTo().performClick()
     composeRule.onNodeWithTag("preview_tab_gdt").performScrollTo().performClick()
+  }
+
+  @Test
+  fun arenaLoadoutAndSimState_applyArmoryPowersClawsAndLoreBosses() {
+    val fullArmory = listOf(
+      ArmoryItem(id = "perk_juggernaut", userId = "u1", name = "Aegis Juggernaut Core", category = "perk", tier = 2L, equipped = true),
+      ArmoryItem(id = "perk_overdrive", userId = "u1", name = "Stamina Speed-Cola", category = "perk", tier = 2L, equipped = true),
+      ArmoryItem(id = "power_repulse", userId = "u1", name = "Starblade Force Repulse", category = "power", tier = 2L, cooldownSec = 8L, powerValue = 250L, equipped = true),
+      ArmoryItem(id = "upgrade_packtier", userId = "u1", name = "Pack-a-Tier III Matrix", category = "upgrade", tier = 4L, equipped = true),
+      ArmoryItem(id = "upgrade_claws", userId = "u1", name = "Adamant Claw Edge", category = "upgrade", tier = 2L, equipped = true),
+      ArmoryItem(id = "consumable_maxcharge", userId = "u1", name = "Omni-Surge Cell", category = "consumable", tier = 2L, powerValue = 300L, equipped = true),
+    )
+
+    val loadout = ArenaLoadoutStats.fromArmory(fullArmory, Color.Cyan)
+    assertEquals(220, loadout.maxShield)
+    assertEquals(3, loadout.initialPackTier)
+    assertTrue(loadout.hasClawEdge)
+    assertTrue(loadout.hasRepulsePower)
+    assertTrue(loadout.multiShot >= 3)
+
+    val sim = ArenaSimState(
+      world = UniverseCatalog.worldById("blacklight_conduit"),
+      modeId = "sandbox",
+      loadout = loadout,
+      hasConsumableEquipped = true,
+    )
+    assertTrue(sim.hostiles.isNotEmpty())
+    sim.spawnBossForWorld(3L)
+    assertTrue(sim.hostiles.any { it.isBoss && it.bossName.contains("WATER HYDRA") })
+
+    val beforeBolts = sim.bolts.size
+    sim.triggerPower()
+    assertTrue(sim.bolts.size > beforeBolts)
+    assertTrue(sim.hudCallout?.contains("REPULSE") == true)
+
+    sim.stepFrame(0.016f)
+    assertFalse(sim.playerX.isNaN() || sim.playerY.isNaN())
+    assertTrue(sim.renderNonce > 0L)
+  }
+
+  @Test
+  fun arenaScreen_rendersControlsAndRespondsToActions() {
+    val profile = OperatorProfile(
+      userId = "u1",
+      callsign = "BlakePrime",
+      activeUniverseId = "sector_zero",
+      activeMode = "zombies",
+      activeRigId = "r1",
+    )
+    val rig = RigAsset(id = "r1", userId = "u1", name = "Vanguard", archetype = "operator")
+    var exited = false
+
+    composeRule.mainClock.autoAdvance = false
+    composeRule.setContent {
+      UnknownUniversesTheme(darkTheme = true) {
+        ArenaScreen(
+          profile = profile,
+          armory = emptyList(),
+          rigs = listOf(rig),
+          onSaveMatchAndExit = { _, _, _, _, _ -> exited = true },
+        )
+      }
+    }
+    composeRule.mainClock.advanceTimeByFrame()
+
+    composeRule.onNodeWithText("RND I").assertIsDisplayed()
+    composeRule.onNodeWithTag("arena_fire_btn").assertIsDisplayed().performClick()
+    composeRule.mainClock.advanceTimeByFrame()
+    composeRule.onNodeWithTag("arena_power_btn").assertIsDisplayed().performClick()
+    composeRule.mainClock.advanceTimeByFrame()
+    composeRule.onNodeWithTag("arena_interact_btn").assertIsDisplayed().performClick()
+    composeRule.mainClock.advanceTimeByFrame()
+    composeRule.onNodeWithTag("arena_dash_btn").assertIsDisplayed().performClick()
+    composeRule.mainClock.advanceTimeByFrame()
+    composeRule.onNodeWithTag("extract_exit_arena_btn").performClick()
+    composeRule.mainClock.advanceTimeByFrame()
+    assertTrue(exited)
   }
 }

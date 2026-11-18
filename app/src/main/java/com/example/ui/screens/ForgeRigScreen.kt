@@ -45,22 +45,27 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.R
+import com.example.data.local.AppSettings
+import com.example.data.local.GraphicsQuality
 import com.example.data.model.RigAsset
 import com.example.data.model.UniverseCatalog
 import com.example.export.Bo3BoneMappingMode
@@ -69,7 +74,6 @@ import com.example.export.Bo3ModToolsExporter
 import com.example.export.PortablePackageGenerator
 import com.example.ui.rig.RigEvaluator
 import com.example.ui.rig.drawRigCharacter
-import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.atan2
@@ -92,6 +96,7 @@ fun ForgeRigScreen(
     keyframeFrames: List<Long>,
     isCompleted: Boolean,
   ) -> Unit,
+  settings: AppSettings = AppSettings(),
   onStatusMessage: (String) -> Unit = {},
 ) {
   val context = LocalContext.current
@@ -114,7 +119,7 @@ fun ForgeRigScreen(
   }
 
   var selectedBoneId by remember { mutableStateOf("rUpperArm") }
-  var isPlaying by remember { mutableStateOf(true) }
+  var isPlaying by remember(settings.reduceMotion) { mutableStateOf(!settings.reduceMotion) }
   var currentFrame by remember { mutableFloatStateOf(0f) }
   var showBonesOverlay by remember { mutableStateOf(true) }
   var showNewRigDialog by remember { mutableStateOf(false) }
@@ -136,10 +141,23 @@ fun ForgeRigScreen(
       }
     }
 
-  LaunchedEffect(isPlaying, playbackSpeed) {
+  val capePathScratch = remember { Path() }
+  val torsoPathScratch = remember { Path() }
+
+  LaunchedEffect(isPlaying, playbackSpeed, settings.targetFpsCap) {
+    if (!isPlaying) return@LaunchedEffect
+    var lastNanos = withFrameNanos { it }
+    var accumNanos = 0L
+    val minStepNanos = if (settings.targetFpsCap <= 30) 30_000_000L else 14_000_000L
     while (isPlaying) {
-      delay(16L)
-      currentFrame = (currentFrame + playbackSpeed * 0.9f) % 60f
+      val now = withFrameNanos { it }
+      accumNanos += (now - lastNanos).coerceAtLeast(1_000_000L)
+      lastNanos = now
+      if (accumNanos >= minStepNanos) {
+        val dtSec = (accumNanos / 1_000_000_000f).coerceIn(0.001f, 0.06f)
+        accumNanos = 0L
+        currentFrame = (currentFrame + playbackSpeed * 54f * dtSec) % 60f
+      }
     }
   }
 
@@ -294,6 +312,10 @@ fun ForgeRigScreen(
               secondaryColor = Color(0xFFFFAB40),
               showBonesOverlay = showBonesOverlay,
               selectedBoneId = selectedBoneId,
+              capePathScratch = capePathScratch,
+              torsoPathScratch = torsoPathScratch,
+              dynamicGlow = settings.dynamicGlowEffects && settings.graphicsQuality != GraphicsQuality.LOW,
+              highContrast = settings.effectiveHighContrast,
             )
 
             // Blender-style Top-Right XYZ Orientation Gizmo
@@ -314,14 +336,15 @@ fun ForgeRigScreen(
             drawLine(Color(0xFF00E5FF), Offset(curX, barY - 8f), Offset(curX, barY + 6f), strokeWidth = 2.5f)
           }
 
-          // Viewport HUD Overlay
+          // Viewport HUD Overlay (isolated recomposition scope via integer frame derivedStateOf)
           Row(
             modifier = Modifier.align(Alignment.TopStart).padding(10.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
           ) {
+            val frameInt by remember { derivedStateOf { currentFrame.toInt() } }
             Surface(shape = RoundedCornerShape(8.dp), color = Color(0xCC111622)) {
               Text(
-                text = "POSE MODE • F${currentFrame.toInt()}/60 • ${activeClip.uppercase()}",
+                text = "POSE MODE • F$frameInt/60 • ${activeClip.uppercase()}",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),

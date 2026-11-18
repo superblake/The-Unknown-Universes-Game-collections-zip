@@ -96,6 +96,7 @@ fun OsDesktopScreen(
   onLinkAccount: (String, String, String) -> Unit = { _, _, _ -> },
   onUnlinkAccount: (String) -> Unit,
   onStatusMessage: (String) -> Unit,
+  onOpenSettings: () -> Unit = {},
   onSignOut: () -> Unit,
 ) {
   val activeWorld = UniverseCatalog.worldById(profile.activeUniverseId)
@@ -193,8 +194,18 @@ fun OsDesktopScreen(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
               IconButton(
+                onClick = onOpenSettings,
+                modifier = Modifier.size(48.dp).testTag("open_settings_button"),
+              ) {
+                Icon(
+                  imageVector = AppIcons.Settings,
+                  contentDescription = stringResource(R.string.cd_open_settings),
+                  tint = MaterialTheme.colorScheme.primary,
+                )
+              }
+              IconButton(
                 onClick = onCycleWallpaper,
-                modifier = Modifier.testTag("cycle_wallpaper_btn"),
+                modifier = Modifier.size(48.dp).testTag("cycle_wallpaper_btn"),
               ) {
                 Icon(
                   imageVector = AppIcons.Palette,
@@ -204,7 +215,7 @@ fun OsDesktopScreen(
               }
               IconButton(
                 onClick = onSignOut,
-                modifier = Modifier.testTag("sign_out_button"),
+                modifier = Modifier.size(48.dp).testTag("sign_out_button"),
               ) {
                 Icon(
                   imageVector = AppIcons.Logout,
@@ -406,6 +417,50 @@ fun OsDesktopScreen(
           value = activeConsole.id.substringBefore("_").uppercase(),
           accent = Color(0xFF00E676),
         )
+      }
+    }
+
+    // Settings, Performance, Controls & Accessibility Support Card
+    item {
+      Surface(
+        onClick = onOpenSettings,
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier
+          .fillMaxWidth()
+          .border(1.5.dp, Color(0xFF00E676).copy(alpha = 0.55f), RoundedCornerShape(18.dp))
+          .testTag("settings_accessibility_card"),
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth().padding(14.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+          Icon(
+            imageVector = AppIcons.Accessibility,
+            contentDescription = stringResource(R.string.cd_open_settings),
+            tint = Color(0xFF00E676),
+            modifier = Modifier.size(28.dp),
+          )
+          Column(modifier = Modifier.weight(1f)) {
+            Text(
+              text = stringResource(R.string.settings_title),
+              style = MaterialTheme.typography.titleMedium,
+              color = Color(0xFF00E676),
+            )
+            Text(
+              text = "Tune controls, FPS, visuals, epilepsy flash safety, colorblind palettes, large text & motor assist.",
+              style = MaterialTheme.typography.bodyMedium,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
+          Icon(
+            imageVector = AppIcons.Tune,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(22.dp),
+          )
+        }
       }
     }
 

@@ -11,6 +11,37 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
+class ArenaBackdropCache {
+  private var cachedWorldId: String = ""
+  private var cachedW: Float = -1f
+  private var cachedH: Float = -1f
+  private var cachedBrush: Brush? = null
+
+  fun brushFor(worldId: String, w: Float, h: Float): Brush {
+    val existing = cachedBrush
+    if (existing != null && cachedWorldId == worldId && cachedW == w && cachedH == h) {
+      return existing
+    }
+    val bgTop = when (worldId) {
+      "sector_zero" -> Color(0xFF0A121C)
+      "blacklight_conduit" -> Color(0xFF100822)
+      "hellbreaker_citadel" -> Color(0xFF1E0809)
+      "chrono_vault" -> Color(0xFF081229)
+      else -> Color(0xFF060C1D)
+    }
+    val created = Brush.radialGradient(
+      colors = listOf(bgTop, Color(0xFF05070E)),
+      center = Offset(w * 0.5f, h * 0.5f),
+      radius = maxOf(w, h).coerceAtLeast(1f) * 0.78f,
+    )
+    cachedWorldId = worldId
+    cachedW = w
+    cachedH = h
+    cachedBrush = created
+    return created
+  }
+}
+
 fun DrawScope.drawWorldArenaBackdrop(
   worldId: String,
   accentColor: Color,
@@ -18,52 +49,68 @@ fun DrawScope.drawWorldArenaBackdrop(
   elapsedTicks: Long,
   chevronsLocked: Int,
   overdriveActive: Boolean,
+  backdropCache: ArenaBackdropCache? = null,
+  stationReady: Boolean = false,
+  showTacticalGrid: Boolean = true,
+  reduceMotion: Boolean = false,
+  reduceFlashes: Boolean = false,
+  highContrast: Boolean = false,
+  lowGraphics: Boolean = false,
 ) {
   val w = size.width
   val h = size.height
-  val pulse = (sin(elapsedTicks * 0.06f) + 1f) * 0.5f
+  val pulse = if (reduceMotion || reduceFlashes) 0.35f else (sin(elapsedTicks * 0.06f) + 1f) * 0.5f
 
-  // Deep atmospheric floor gradient per universe
-  val bgTop = when (worldId) {
-    "sector_zero" -> Color(0xFF0A1018)
-    "blacklight_conduit" -> Color(0xFF0D081C)
-    "hellbreaker_citadel" -> Color(0xFF1A0708)
-    "chrono_vault" -> Color(0xFF081024)
-    else -> Color(0xFF060B1A)
+  // Cached radial gradient brush (0 allocations per frame after first draw)
+  if (highContrast) {
+    drawRect(color = Color(0xFF020307))
+  } else {
+    val bgBrush = backdropCache?.brushFor(worldId, w, h) ?: run {
+      val bgTop = when (worldId) {
+        "sector_zero" -> Color(0xFF0A121C)
+        "blacklight_conduit" -> Color(0xFF100822)
+        "hellbreaker_citadel" -> Color(0xFF1E0809)
+        "chrono_vault" -> Color(0xFF081229)
+        else -> Color(0xFF060C1D)
+      }
+      Brush.radialGradient(
+        colors = listOf(bgTop, Color(0xFF05070E)),
+        center = Offset(w * 0.5f, h * 0.5f),
+        radius = maxOf(w, h).coerceAtLeast(1f) * 0.78f,
+      )
+    }
+    drawRect(brush = bgBrush)
   }
-  drawRect(
-    brush = Brush.radialGradient(
-      colors = listOf(bgTop, Color(0xFF05070E)),
-      center = Offset(w * 0.5f, h * 0.5f),
-      radius = maxOf(w, h) * 0.75f,
-    )
-  )
 
   // Tactical sector grid
-  val step = 56f
-  val gridColor = accentColor.copy(alpha = if (overdriveActive) 0.16f else 0.08f)
-  var gx = 0f
-  while (gx < w) {
-    drawLine(gridColor, Offset(gx, 0f), Offset(gx, h), strokeWidth = 1f)
-    gx += step
-  }
-  var gy = 0f
-  while (gy < h) {
-    drawLine(gridColor, Offset(0f, gy), Offset(w, gy), strokeWidth = 1f)
-    gy += step
+  if (showTacticalGrid) {
+    val step = if (lowGraphics) 84f else 56f
+    val gridAlpha = if (overdriveActive && !reduceFlashes) 0.16f else 0.08f
+    val gridColor = accentColor.copy(alpha = gridAlpha)
+    var gx = 0f
+    while (gx < w) {
+      drawLine(gridColor, Offset(gx, 0f), Offset(gx, h), strokeWidth = 1f)
+      gx += step
+    }
+    var gy = 0f
+    while (gy < h) {
+      drawLine(gridColor, Offset(0f, gy), Offset(w, gy), strokeWidth = 1f)
+      gy += step
+    }
   }
 
   when (worldId) {
     "sector_zero" -> {
-      // Division SHD orange scan ring + CoD Zombies quarantine bunker + Pack-a-Tier station
-      val isacRadius = ((elapsedTicks % 180L) / 180f) * minOf(w, h) * 0.45f
-      drawCircle(
-        color = Color(0xFFFF8F00).copy(alpha = (1f - isacRadius / (minOf(w, h) * 0.45f)) * 0.35f),
-        radius = isacRadius.coerceAtLeast(10f),
-        center = Offset(w * 0.5f, h * 0.5f),
-        style = Stroke(width = 3f),
-      )
-      // Quarantine bunker blocks
+      if (!reduceMotion && !reduceFlashes) {
+        val maxScan = minOf(w, h) * 0.45f
+        val isacRadius = ((elapsedTicks % 180L) / 180f) * maxScan
+        drawCircle(
+          color = Color(0xFFFF8F00).copy(alpha = (1f - isacRadius / maxScan.coerceAtLeast(1f)) * 0.35f),
+          radius = isacRadius.coerceAtLeast(10f),
+          center = Offset(w * 0.5f, h * 0.5f),
+          style = Stroke(width = 3f),
+        )
+      }
       drawRoundRect(
         color = Color(0xFF1A2433),
         topLeft = Offset(w * 0.10f, h * 0.22f),
@@ -77,40 +124,42 @@ fun DrawScope.drawWorldArenaBackdrop(
         cornerRadius = CornerRadius(8f, 8f),
         style = Stroke(width = 2f),
       )
-      // Pack-a-Tier / Mystery Cache terminal
       val cachePos = Offset(w * 0.20f, h * 0.76f)
-      drawCircle(Color(0xFF00E5FF).copy(alpha = 0.2f + pulse * 0.2f), radius = 26f, center = cachePos)
-      drawCircle(Color(0xFF00E5FF), radius = 16f, center = cachePos, style = Stroke(width = 3f))
+      drawCircle(Color(0xFF00E5FF).copy(alpha = (if (stationReady) 0.34f else 0.16f) + pulse * 0.2f), radius = 28f, center = cachePos)
+      drawCircle(Color(0xFFFFD54F), radius = 17f, center = cachePos, style = Stroke(width = 3f))
+      drawCircle(Color(0xFF00E5FF), radius = 8f, center = cachePos)
     }
 
     "blacklight_conduit" -> {
-      // Metro city rooftop blocks + Liberty rain streaks + Arc Relay Pylon
-      val blocks = listOf(
-        Offset(w * 0.14f, h * 0.24f) to Size(w * 0.16f, h * 0.14f),
-        Offset(w * 0.70f, h * 0.24f) to Size(w * 0.16f, h * 0.14f),
-      )
-      blocks.forEach { (pos, sz) ->
-        drawRoundRect(Color(0xFF161129), topLeft = pos, size = sz, cornerRadius = CornerRadius(10f, 10f))
-        drawRoundRect(accentColor.copy(alpha = 0.45f), topLeft = pos, size = sz, cornerRadius = CornerRadius(10f, 10f), style = Stroke(width = 2f))
-      }
-      // Subtle angled rain streaks
-      for (i in 0 until 14) {
-        val rx = ((i * 97 + elapsedTicks * 4) % w.toInt().coerceAtLeast(1)).toFloat()
-        val ry = ((i * 73 + elapsedTicks * 9) % h.toInt().coerceAtLeast(1)).toFloat()
-        drawLine(Color(0x337C4DFF), Offset(rx, ry), Offset(rx - 8f, ry + 18f), strokeWidth = 1.5f)
+      val b1Pos = Offset(w * 0.14f, h * 0.24f)
+      val b1Sz = Size(w * 0.16f, h * 0.14f)
+      drawRoundRect(Color(0xFF161129), topLeft = b1Pos, size = b1Sz, cornerRadius = CornerRadius(10f, 10f))
+      drawRoundRect(Color(0xFFFF3D71).copy(alpha = 0.55f), topLeft = b1Pos, size = b1Sz, cornerRadius = CornerRadius(10f, 10f), style = Stroke(width = 2f))
+
+      val b2Pos = Offset(w * 0.70f, h * 0.24f)
+      val b2Sz = Size(w * 0.16f, h * 0.14f)
+      drawRoundRect(Color(0xFF0E1B2E), topLeft = b2Pos, size = b2Sz, cornerRadius = CornerRadius(10f, 10f))
+      drawRoundRect(Color(0xFF00E5FF).copy(alpha = 0.55f), topLeft = b2Pos, size = b2Sz, cornerRadius = CornerRadius(10f, 10f), style = Stroke(width = 2f))
+
+      if (!reduceMotion && !lowGraphics) {
+        val wInt = w.toInt().coerceAtLeast(1)
+        val hInt = h.toInt().coerceAtLeast(1)
+        for (i in 0 until 14) {
+          val rx = ((i * 97 + elapsedTicks * 4) % wInt).toFloat()
+          val ry = ((i * 73 + elapsedTicks * 9) % hInt).toFloat()
+          drawLine(Color(0x337C4DFF), Offset(rx, ry), Offset(rx - 8f, ry + 18f), strokeWidth = 1.5f)
+        }
       }
       val pylon = Offset(w * 0.80f, h * 0.76f)
-      drawCircle(Color(0xFF7C4DFF).copy(alpha = 0.28f + pulse * 0.2f), radius = 26f, center = pylon)
-      drawCircle(Color(0xFF00E5FF), radius = 14f, center = pylon, style = Stroke(width = 3f))
+      drawCircle(Color(0xFF7C4DFF).copy(alpha = (if (stationReady) 0.36f else 0.22f) + pulse * 0.2f), radius = 28f, center = pylon)
+      drawCircle(Color(0xFF00E5FF), radius = 15f, center = pylon, style = Stroke(width = 3f))
     }
 
     "hellbreaker_citadel" -> {
-      // Crucible molten lava fissures + obsidian forge rune circle
       val center = Offset(w * 0.5f, h * 0.5f)
       val r = minOf(w, h) * 0.30f
       drawCircle(Color(0xFFFF3D00).copy(alpha = 0.16f + pulse * 0.12f), radius = r, center = center, style = Stroke(width = 8f))
       drawCircle(Color(0xFFFFAB40).copy(alpha = 0.45f), radius = r * 0.74f, center = center, style = Stroke(width = 2.5f))
-      // Magma fissure lines radiating from center
       for (k in 0 until 6) {
         val a = k * (PI.toFloat() / 3f) + 0.25f
         drawLine(
@@ -120,13 +169,19 @@ fun DrawScope.drawWorldArenaBackdrop(
           strokeWidth = 3f,
         )
       }
+      val hydraVent = Offset(w * 0.20f, h * 0.76f)
+      drawCircle(Color(0xFF00E5FF).copy(alpha = 0.22f + pulse * 0.15f), radius = 22f, center = hydraVent)
+      drawCircle(Color(0xFFFF5252), radius = 12f, center = hydraVent, style = Stroke(width = 2.5f))
     }
 
     "chrono_vault" -> {
-      // Stargate 7-Chevron Ring + Temporal Event Horizon
       val gateCenter = Offset(w * 0.5f, h * 0.30f)
       val gateRadius = minOf(w, h) * 0.18f
-      drawCircle(Color(0xFF448AFF).copy(alpha = 0.16f + pulse * 0.12f), radius = gateRadius * 0.85f, center = gateCenter)
+      val kawooshAlpha = if (chevronsLocked >= 7) 0.42f + pulse * 0.25f else 0.14f + pulse * 0.10f
+      drawCircle(Color(0xFF448AFF).copy(alpha = kawooshAlpha), radius = gateRadius * 0.85f, center = gateCenter)
+      if (chevronsLocked >= 7) {
+        drawCircle(Color(0xFF00E5FF).copy(alpha = 0.55f), radius = gateRadius * (0.45f + pulse * 0.25f), center = gateCenter, style = Stroke(width = 3f))
+      }
       drawCircle(Color(0xFF90A4AE), radius = gateRadius, center = gateCenter, style = Stroke(width = 7f))
       drawCircle(Color(0xFFFFD54F).copy(alpha = 0.5f), radius = gateRadius * 0.86f, center = gateCenter, style = Stroke(width = 2f))
       for (c in 0 until 7) {
@@ -142,15 +197,31 @@ fun DrawScope.drawWorldArenaBackdrop(
     }
 
     else -> {
-      // Starforge Orbital Deck + Cosmic Starfield + Force Nexus Ring
-      for (s in 0 until 24) {
-        val sx = ((s * 131 + 40) % w.toInt().coerceAtLeast(1)).toFloat()
-        val sy = ((s * 89 + 25) % h.toInt().coerceAtLeast(1)).toFloat()
-        drawCircle(Color.White.copy(alpha = 0.25f + (s % 3) * 0.18f), radius = 1.8f, center = Offset(sx, sy))
+      if (!lowGraphics) {
+        val wInt = w.toInt().coerceAtLeast(1)
+        val hInt = h.toInt().coerceAtLeast(1)
+        for (s in 0 until 24) {
+          val sx = ((s * 131 + 40) % wInt).toFloat()
+          val sy = ((s * 89 + 25) % hInt).toFloat()
+          drawCircle(Color.White.copy(alpha = 0.25f + (s % 3) * 0.18f), radius = 1.8f, center = Offset(sx, sy))
+        }
       }
       val center = Offset(w * 0.5f, h * 0.5f)
       drawCircle(accentColor.copy(alpha = 0.22f + pulse * 0.14f), radius = minOf(w, h) * 0.28f, center = center, style = Stroke(width = 4f))
       drawCircle(secondaryColor.copy(alpha = 0.28f), radius = minOf(w, h) * 0.16f, center = center, style = Stroke(width = 2.5f))
+      drawRoundRect(
+        color = Color(0xFF141B2D),
+        topLeft = Offset(w * 0.10f, h * 0.22f),
+        size = Size(w * 0.14f, h * 0.08f),
+        cornerRadius = CornerRadius(8f, 8f),
+      )
+      drawRoundRect(
+        color = Color(0xFF00E5FF).copy(alpha = 0.5f),
+        topLeft = Offset(w * 0.10f, h * 0.22f),
+        size = Size(w * 0.14f, h * 0.08f),
+        cornerRadius = CornerRadius(8f, 8f),
+        style = Stroke(width = 2f),
+      )
     }
   }
 }
@@ -161,5 +232,10 @@ fun formatRoundRoman(round: Long): String = when (round) {
   3L -> "III"
   4L -> "IV"
   5L -> "V"
+  6L -> "VI"
+  7L -> "VII"
+  8L -> "VIII"
+  9L -> "IX"
+  10L -> "X"
   else -> round.toString()
 }
