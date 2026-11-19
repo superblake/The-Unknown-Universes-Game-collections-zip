@@ -1,0 +1,1018 @@
+package com.example.data.model
+
+import androidx.compose.runtime.Immutable
+import kotlin.math.ln
+import kotlin.math.sqrt
+
+enum class EssenceColor(
+  val id: String,
+  val displayName: String,
+  val shortTag: String,
+  val colorHex: Long,
+  val specialization: String,
+  val beyondCapNote: String,
+) {
+  BLUE(
+    id = "blue",
+    displayName = "Blue Essence",
+    shortTag = "BLUE",
+    colorHex = 0xFF00E5FF,
+    specialization = "Balanced Shield, XP & Tech Matrix scaling",
+    beyondCapNote = "Standard cap (+120% Shield / +100% DMG)",
+  ),
+  RED(
+    id = "red",
+    displayName = "Red Essence",
+    shortTag = "RED",
+    colorHex = 0xFFFF3D71,
+    specialization = "Crimson Damage, Crit & Explosive Overload",
+    beyondCapNote = "Pushes Damage up to +240% (beyond Blue/Green caps!)",
+  ),
+  YELLOW(
+    id = "yellow",
+    displayName = "Yellow Essence",
+    shortTag = "YELLOW",
+    colorHex = 0xFFFFD54F,
+    specialization = "Kinetic Fire Rate, Move Speed & Cooldown Reduction",
+    beyondCapNote = "Pushes Speed/Rate up to +180% & 65% CDR (beyond Blue/Red caps!)",
+  ),
+  GREEN(
+    id = "green",
+    displayName = "Green Essence",
+    shortTag = "GREEN",
+    colorHex = 0xFF00E676,
+    specialization = "Bio-Armor, Max Shield, Regen & Vacuum Reach",
+    beyondCapNote = "Pushes Shield up to +260% & Regen +320% (beyond Red/Yellow caps!)",
+  ),
+  COMBINED(
+    id = "combined",
+    displayName = "Combined Quad-Essence",
+    shortTag = "PRISM",
+    colorHex = 0xFFE040FB,
+    specialization = "Blue + Red + Yellow + Green fused into Omega Resonance",
+    beyondCapNote = "Transcendent cap-breaker: up to +450% ALL stats beyond single colors!",
+  ),
+}
+
+@Immutable
+data class EssenceResonanceBonuses(
+  val damageMult: Float,
+  val shieldMult: Float,
+  val moveSpeedMult: Float,
+  val fireRateMult: Float,
+  val cooldownReductionRatio: Float,
+  val regenBonusPerSec: Float,
+  val lootLuckBonus: Float,
+  val summary: String,
+) {
+  companion object {
+    fun compute(
+      blueEssence: Long,
+      redEssence: Long,
+      yellowEssence: Long,
+      greenEssence: Long,
+      combinedEssence: Long,
+      blastShards: Long,
+    ): EssenceResonanceBonuses {
+      val bScale = sqrt(blueEssence.coerceAtLeast(0L) / 250f)
+      val rScale = sqrt(redEssence.coerceAtLeast(0L) / 150f)
+      val yScale = sqrt(yellowEssence.coerceAtLeast(0L) / 150f)
+      val gScale = sqrt(greenEssence.coerceAtLeast(0L) / 150f)
+      val cScale = sqrt(combinedEssence.coerceAtLeast(0L) / 80f)
+      val shardBoost = ln(1f + blastShards.coerceAtLeast(0L) / 5f) * 0.14f
+
+      // Each color reaches different caps; Combined pushes past all single-color limits.
+      val blueDmg = (bScale * 0.08f).coerceAtMost(1.00f)
+      val redDmg = (rScale * 0.22f).coerceAtMost(2.40f)
+      val combinedDmg = (cScale * 0.35f).coerceAtMost(4.50f)
+      val damageMult = 1.0f + blueDmg + redDmg + combinedDmg + shardBoost
+
+      val blueShd = (bScale * 0.10f).coerceAtMost(1.20f)
+      val greenShd = (gScale * 0.24f).coerceAtMost(2.60f)
+      val combinedShd = (cScale * 0.36f).coerceAtMost(4.50f)
+      val shieldMult = 1.0f + blueShd + greenShd + combinedShd + shardBoost * 0.8f
+
+      val yellowMove = (yScale * 0.12f).coerceAtMost(1.40f)
+      val blueMove = (bScale * 0.04f).coerceAtMost(0.35f)
+      val combinedMove = (cScale * 0.16f).coerceAtMost(1.80f)
+      val moveSpeedMult = 1.0f + yellowMove + blueMove + combinedMove
+
+      val yellowRate = (yScale * 0.16f).coerceAtMost(1.80f)
+      val redRate = (rScale * 0.06f).coerceAtMost(0.55f)
+      val combinedRate = (cScale * 0.24f).coerceAtMost(2.60f)
+      val fireRateMult = 1.0f + yellowRate + redRate + combinedRate
+
+      val yellowCdr = (yScale * 0.045f).coerceAtMost(0.55f)
+      val combinedCdr = (cScale * 0.06f).coerceAtMost(0.75f)
+      val cooldownReductionRatio = (1f - (1f - yellowCdr) * (1f - combinedCdr)).coerceIn(0f, 0.82f)
+
+      val regenBonus = ((gScale * 1.4f).coerceAtMost(16f) + (cScale * 2.2f).coerceAtMost(24f))
+      val lootLuck = (bScale * 0.05f + cScale * 0.12f).coerceAtMost(2.0f)
+
+      val dmgPct = ((damageMult - 1f) * 100f).toInt()
+      val shdPct = ((shieldMult - 1f) * 100f).toInt()
+      val spdPct = ((fireRateMult - 1f) * 100f).toInt()
+      return EssenceResonanceBonuses(
+        damageMult = damageMult,
+        shieldMult = shieldMult,
+        moveSpeedMult = moveSpeedMult,
+        fireRateMult = fireRateMult,
+        cooldownReductionRatio = cooldownReductionRatio,
+        regenBonusPerSec = regenBonus,
+        lootLuckBonus = lootLuck,
+        summary = "+${dmgPct}% DMG • +${shdPct}% SHD • +${spdPct}% RATE",
+      )
+    }
+  }
+}
+
+enum class BlastCoreColor(
+  val id: String,
+  val displayName: String,
+  val colorHex: Long,
+  val upgradedDomain: String,
+  val effectPerLevel: String,
+) {
+  BLUE("core_blue", "Blue Blast Core", 0xFF00E5FF, "Conduit Arc & Shield Matrix", "+12 Shield & +8% Conduit/Trap Arc DMG per level"),
+  PURPLE("core_purple", "Purple Blast Core", 0xFFE040FB, "Void Wonder & Pierce Reactor", "+10% Wonder Weapon DMG & +18% Wonder Duration per level"),
+  GREEN("core_green", "Green Blast Core", 0xFF00E676, "Vacuum Bot & Bio-Plating", "+8% Vacuum Reach, +1.2 Regen/s & Faster Auto-Upgrades"),
+  YELLOW("core_yellow", "Yellow Blast Core", 0xFFFFD54F, "Kinetic Thrusters & Cadence", "+6% Fire Rate, +4% Move Speed & -4% Trap/Dash CD"),
+  RED("core_red", "Red Blast Core", 0xFFFF3D71, "Thermal Overdrive & Pack-a-Punch", "+12% Crit/Fire DMG & +1 Bonus Pack-a-Punch Multiplier"),
+}
+
+enum class PerkContainerType(val label: String) {
+  CAN("Perk Can"),
+  BOTTLE("Perk Bottle"),
+}
+
+@Immutable
+data class PerkDrinkSpec(
+  val id: String,
+  val name: String,
+  val container: PerkContainerType,
+  val colorHex: Long,
+  val summary: String,
+  val maxRank: Int = 25,
+)
+
+enum class CharacterUniverseGroup(val id: String, val label: String) {
+  ALL("all", "All Heroes"),
+  BATMAN("batman", "Batman"),
+  SPIDERMAN("spiderman", "Spider-Man"),
+  MR_CROSSOVER("mr_crossover", "Mr. Crossover"),
+  COLE_MCGRATH("cole", "Cole McGrath"),
+  STARKILLER("starkiller", "Starkiller"),
+  IRON_MAN("ironman", "Iron Man"),
+  ZOMBIES("zombies", "WaW/BO/MW Zombies"),
+  PROTOTYPE("prototype", "Prototype"),
+}
+
+@Immutable
+data class HeroOutfitSpec(
+  val id: String,
+  val characterGroup: CharacterUniverseGroup,
+  val nameWithVersion: String, // e.g., "Batman v1", "Cole McGrath v2"
+  val subtitle: String,
+  val rigArchetype: String,
+  val primaryHex: Long,
+  val secondaryHex: Long,
+  val visorHex: Long,
+  val cloakEnabled: Boolean,
+  val auraId: String,
+  val signatureSkillSummary: String,
+  val signatureGearSummary: String,
+  val signatureLethalId: String,
+  val signatureTacticalId: String,
+  val baseShieldBonus: Int,
+  val baseDamageBonus: Int,
+  val baseMoveBonus: Float,
+  val baseFireRateBonus: Float,
+)
+
+@Immutable
+data class OutfitProgressState(
+  val outfitId: String,
+  val level: Int = 1,
+  val tier: Int = 1,
+  val skillRank: Int = 1,
+  val gearRank: Int = 1,
+  val equipmentRank: Int = 1,
+  val starLevel: Int = 1,
+)
+
+enum class AreaAgeEra(
+  val label: String,
+  val colorHex: Long,
+  val speedMod: Float,
+  val essenceYieldMod: Float,
+  val damageMod: Float,
+  val tintHex: Long,
+) {
+  YOUNG(
+    label = "Young / Prime (0–32 yrs)",
+    colorHex = 0xFF00E5FF,
+    speedMod = 1.18f,
+    essenceYieldMod = 1.0f,
+    damageMod = 1.05f,
+    tintHex = 0xFF00E5FF,
+  ),
+  MATURE(
+    label = "Mature Peak (33–65 yrs)",
+    colorHex = 0xFFFFD54F,
+    speedMod = 1.05f,
+    essenceYieldMod = 1.35f,
+    damageMod = 1.25f,
+    tintHex = 0xFFFFAB40,
+  ),
+  ANCIENT(
+    label = "Ancient Overgrown (66–99 yrs)",
+    colorHex = 0xFF00E676,
+    speedMod = 0.96f,
+    essenceYieldMod = 1.85f,
+    damageMod = 1.45f,
+    tintHex = 0xFF00E676,
+  );
+
+  companion object {
+    fun fromAgeYears(age: Int): AreaAgeEra = when {
+      age < 33 -> YOUNG
+      age < 66 -> MATURE
+      else -> ANCIENT
+    }
+  }
+}
+
+@Immutable
+data class CustomAreaSpec(
+  val id: String,
+  val name: String,
+  val linkedWorldId: String,
+  val description: String,
+  val accentHex: Long,
+  val secondaryHex: Long,
+  val buildingNames: List<String>,
+  val storyEraNote: String = "Fractured Sector",
+  val uniqueTraits: String = "",
+)
+
+@Immutable
+data class CustomAreaState(
+  val areaId: String,
+  val ageYears: Int = 12,
+  val rebirthCycles: Int = 0,
+  val powerGridTier: Int = 1,
+  val defenseTurretTier: Int = 1,
+  val trapDensityTier: Int = 1,
+  val lootRichnessTier: Int = 1,
+  val starLevel: Int = 1,
+) {
+  val currentEra: AreaAgeEra get() = AreaAgeEra.fromAgeYears(ageYears)
+  val cycleBonusMult: Float get() = 1.0f + (rebirthCycles * 0.15f)
+}
+
+@Immutable
+data class VacuumBotState(
+  val level: Int = 1,
+  val tier: Int = 1,
+  val autoUpgradeEnabled: Boolean = true,
+  val autoCollectEnabled: Boolean = true,
+  val starLevel: Int = 1,
+) {
+  val vacuumRadius: Float get() = (0.18f + (level * 0.015f) + (tier * 0.025f) + ((starLevel - 1) * 0.015f)).coerceAtMost(0.92f)
+  val upgradeChargeRate: Float get() = (0.20f + (tier * 0.06f) + (level * 0.02f) + ((starLevel - 1) * 0.08f)).coerceAtMost(2.8f)
+}
+
+enum class TradeCurrencyKind(val id: String, val label: String, val colorHex: Long) {
+  BLUE_ESSENCE("blue", "Blue Essence", 0xFF00E5FF),
+  RED_ESSENCE("red", "Red Essence", 0xFFFF3D71),
+  YELLOW_ESSENCE("yellow", "Yellow Essence", 0xFFFFD54F),
+  GREEN_ESSENCE("green", "Green Essence", 0xFF00E676),
+  COMBINED_ESSENCE("combined", "Combined Quad-Essence", 0xFFE040FB),
+  BLAST_SHARDS("shards", "Blast Shards", 0xFF40C4FF),
+  BLUE_CORE("core_blue", "Blue Blast Core", 0xFF00E5FF),
+  PURPLE_CORE("core_purple", "Purple Blast Core", 0xFFE040FB),
+  GREEN_CORE("core_green", "Green Blast Core", 0xFF00E676),
+  YELLOW_CORE("core_yellow", "Yellow Blast Core", 0xFFFFD54F),
+  RED_CORE("core_red", "Red Blast Core", 0xFFFF3D71),
+}
+
+@Immutable
+data class TradeOfferSpec(
+  val id: String,
+  val title: String,
+  val subtitle: String,
+  val inputCosts: Map<TradeCurrencyKind, Long>,
+  val outputKind: TradeCurrencyKind,
+  val outputAmount: Long,
+  val bonusPerkDrinkId: String? = null,
+)
+
+object MultiverseArsenalCatalog {
+
+  val perkDrinks: List<PerkDrinkSpec> = listOf(
+    PerkDrinkSpec("perk_juggernog", "Juggernog Bottle", PerkContainerType.BOTTLE, 0xFFFF3D71, "+45 Max Shield & Fortified Plating per rank"),
+    PerkDrinkSpec("perk_speed_cola", "Speed Cola Can", PerkContainerType.CAN, 0xFF00E676, "+12% Fire Rate & Faster Equipment Reload per rank"),
+    PerkDrinkSpec("perk_double_tap", "Double Tap Root Can", PerkContainerType.CAN, 0xFFFFAB40, "+18% Weapon Damage & Twin-Shot chance per rank"),
+    PerkDrinkSpec("perk_quick_revive", "Quick Revive Bottle", PerkContainerType.BOTTLE, 0xFF00E5FF, "+2.0/s Armor Regen & Vacuum Surge heal per rank"),
+    PerkDrinkSpec("perk_stamin_up", "Stamin-Up Bottle", PerkContainerType.BOTTLE, 0xFFFFD54F, "+10% Move Speed & Longer Dash distance per rank"),
+    PerkDrinkSpec("perk_electric_cherry", "Electric Cherry Can", PerkContainerType.CAN, 0xFF448AFF, "Emits Shock Arc pulse & boosts Electric Traps per rank"),
+    PerkDrinkSpec("perk_phd_flopper", "PhD Flopper Can", PerkContainerType.CAN, 0xFFE040FB, "Explosive Dash Wave & boosts Fire Traps per rank"),
+    PerkDrinkSpec("perk_widows_wine", "Widow's Wine Bottle", PerkContainerType.BOTTLE, 0xFF7C4DFF, "Slows nearby hordes & boosts Shield Siphon per rank"),
+  )
+
+  val outfits: List<HeroOutfitSpec> = listOf(
+    // BATMAN (v1, v2, v3)
+    HeroOutfitSpec(
+      id = "batman_v1",
+      characterGroup = CharacterUniverseGroup.BATMAN,
+      nameWithVersion = "Batman v1",
+      subtitle = "Arkham Tactical Batsuit",
+      rigArchetype = "operator",
+      primaryHex = 0xFF263238,
+      secondaryHex = 0xFFFFD54F,
+      visorHex = 0xFF00E5FF,
+      cloakEnabled = true,
+      auraId = "none",
+      signatureSkillSummary = "Detective Counter-Strike & Grapnel Dash CDR",
+      signatureGearSummary = "Kevlar Tri-Weave Bat-Cowl + Gauntlet Blades",
+      signatureLethalId = "lethal_cluster",
+      signatureTacticalId = "tactical_emp",
+      baseShieldBonus = 45,
+      baseDamageBonus = 2,
+      baseMoveBonus = 0.10f,
+      baseFireRateBonus = 0.08f,
+    ),
+    HeroOutfitSpec(
+      id = "batman_v2",
+      characterGroup = CharacterUniverseGroup.BATMAN,
+      nameWithVersion = "Batman v2",
+      subtitle = "Hellbat Crimson-Forged Suit",
+      rigArchetype = "infernal",
+      primaryHex = 0xFF1A1A24,
+      secondaryHex = 0xFFFF3D71,
+      visorHex = 0xFFFF3D71,
+      cloakEnabled = true,
+      auraId = "infernal_flare",
+      signatureSkillSummary = "Devastator Wing-Blast & Boss Armor Shred",
+      signatureGearSummary = "Apokolips Hellbat Core & Thruster Boots",
+      signatureLethalId = "lethal_c4",
+      signatureTacticalId = "tactical_stim",
+      baseShieldBonus = 90,
+      baseDamageBonus = 5,
+      baseMoveBonus = 0.14f,
+      baseFireRateBonus = 0.14f,
+    ),
+    HeroOutfitSpec(
+      id = "batman_v3",
+      characterGroup = CharacterUniverseGroup.BATMAN,
+      nameWithVersion = "Batman v3",
+      subtitle = "Batman Beyond Stealth Mk.III",
+      rigArchetype = "starblade",
+      primaryHex = 0xFF10131C,
+      secondaryHex = 0xFFE53935,
+      visorHex = 0xFFFFFFFF,
+      cloakEnabled = false,
+      auraId = "pulse_ring",
+      signatureSkillSummary = "Active Camo Thrusters & Guided Batarang Pierce",
+      signatureGearSummary = "Neo-Gotham Nano-Circuit Suit",
+      signatureLethalId = "lethal_frag",
+      signatureTacticalId = "tactical_decoy",
+      baseShieldBonus = 60,
+      baseDamageBonus = 4,
+      baseMoveBonus = 0.24f,
+      baseFireRateBonus = 0.20f,
+    ),
+
+    // SPIDER-MAN (v1, v2, v3)
+    HeroOutfitSpec(
+      id = "spiderman_v1",
+      characterGroup = CharacterUniverseGroup.SPIDERMAN,
+      nameWithVersion = "Spider-Man v1",
+      subtitle = "Classic Web-Tech Suit",
+      rigArchetype = "operator",
+      primaryHex = 0xFFE53935,
+      secondaryHex = 0xFF1E88E5,
+      visorHex = 0xFFFFFFFF,
+      cloakEnabled = false,
+      auraId = "none",
+      signatureSkillSummary = "Spider-Sense Dodge & Rapid Web-Shooter Cadence",
+      signatureGearSummary = "Twin Web-Shooters & Agile Spider Boots",
+      signatureLethalId = "lethal_cluster",
+      signatureTacticalId = "tactical_decoy",
+      baseShieldBonus = 35,
+      baseDamageBonus = 2,
+      baseMoveBonus = 0.22f,
+      baseFireRateBonus = 0.18f,
+    ),
+    HeroOutfitSpec(
+      id = "spiderman_v2",
+      characterGroup = CharacterUniverseGroup.SPIDERMAN,
+      nameWithVersion = "Spider-Man v2",
+      subtitle = "Symbiote Conduit Suit",
+      rigArchetype = "biomorph",
+      primaryHex = 0xFF14121D,
+      secondaryHex = 0xFFE040FB,
+      visorHex = 0xFFFFFFFF,
+      cloakEnabled = true,
+      auraId = "pulse_ring",
+      signatureSkillSummary = "Symbiote Tendril Siphon & Frenzy Melee",
+      signatureGearSummary = "Living Klyntar Bio-Carapace",
+      signatureLethalId = "lethal_c4",
+      signatureTacticalId = "tactical_stim",
+      baseShieldBonus = 75,
+      baseDamageBonus = 5,
+      baseMoveBonus = 0.20f,
+      baseFireRateBonus = 0.22f,
+    ),
+    HeroOutfitSpec(
+      id = "spiderman_v3",
+      characterGroup = CharacterUniverseGroup.SPIDERMAN,
+      nameWithVersion = "Spider-Man v3",
+      subtitle = "Iron Spider Golden Waldoes Mk.III",
+      rigArchetype = "starblade",
+      primaryHex = 0xFFD32F2F,
+      secondaryHex = 0xFFFFD54F,
+      visorHex = 0xFF00E5FF,
+      cloakEnabled = false,
+      auraId = "chrono_spark",
+      signatureSkillSummary = "4 Nano-Waldoes Auto-Fire & Instant Kill Matrix",
+      signatureGearSummary = "Stark-Forged Nano-Plate Spider Rig",
+      signatureLethalId = "lethal_cluster",
+      signatureTacticalId = "tactical_emp",
+      baseShieldBonus = 85,
+      baseDamageBonus = 6,
+      baseMoveBonus = 0.25f,
+      baseFireRateBonus = 0.26f,
+    ),
+
+    // MR. CROSSOVER (v1, v2, v3)
+    HeroOutfitSpec(
+      id = "mrcrossover_v1",
+      characterGroup = CharacterUniverseGroup.MR_CROSSOVER,
+      nameWithVersion = "Mr. Crossover v1",
+      subtitle = "UnknownOS Prime Architect",
+      rigArchetype = "operator",
+      primaryHex = 0xFF00E5FF,
+      secondaryHex = 0xFFFFAB40,
+      visorHex = 0xFF00E5FF,
+      cloakEnabled = true,
+      auraId = "pulse_ring",
+      signatureSkillSummary = "Multiverse Synergy (+All Essence & XP Gain)",
+      signatureGearSummary = "UnknownOS Vanguard Exo-Plate",
+      signatureLethalId = "lethal_frag",
+      signatureTacticalId = "tactical_stim",
+      baseShieldBonus = 55,
+      baseDamageBonus = 3,
+      baseMoveBonus = 0.15f,
+      baseFireRateBonus = 0.15f,
+    ),
+    HeroOutfitSpec(
+      id = "mrcrossover_v2",
+      characterGroup = CharacterUniverseGroup.MR_CROSSOVER,
+      nameWithVersion = "Mr. Crossover v2",
+      subtitle = "Multiverse Rift Sovereign",
+      rigArchetype = "chrono",
+      primaryHex = 0xFF7C4DFF,
+      secondaryHex = 0xFF00E5FF,
+      visorHex = 0xFFFFD54F,
+      cloakEnabled = true,
+      auraId = "chrono_spark",
+      signatureSkillSummary = "7-Chevron Gate Surge & Wonder Drop Overdrive",
+      signatureGearSummary = "Temporal Rift Regulator Armor",
+      signatureLethalId = "lethal_cluster",
+      signatureTacticalId = "tactical_insertion",
+      baseShieldBonus = 80,
+      baseDamageBonus = 5,
+      baseMoveBonus = 0.20f,
+      baseFireRateBonus = 0.22f,
+    ),
+    HeroOutfitSpec(
+      id = "mrcrossover_v3",
+      characterGroup = CharacterUniverseGroup.MR_CROSSOVER,
+      nameWithVersion = "Mr. Crossover v3",
+      subtitle = "Omega Creator Edition Mk.III",
+      rigArchetype = "starblade",
+      primaryHex = 0xFFFFFFFF,
+      secondaryHex = 0xFFE040FB,
+      visorHex = 0xFF00E5FF,
+      cloakEnabled = true,
+      auraId = "infernal_flare",
+      signatureSkillSummary = "Prismatic Quad-Essence Resonance & Vacuum Overclock",
+      signatureGearSummary = "Celestial Omniverse Creator Mantle",
+      signatureLethalId = "lethal_c4",
+      signatureTacticalId = "tactical_insertion",
+      baseShieldBonus = 120,
+      baseDamageBonus = 7,
+      baseMoveBonus = 0.28f,
+      baseFireRateBonus = 0.30f,
+    ),
+
+    // COLE MCGRATH (v1, v2, v3)
+    HeroOutfitSpec(
+      id = "cole_v1",
+      characterGroup = CharacterUniverseGroup.COLE_MCGRATH,
+      nameWithVersion = "Cole McGrath v1",
+      subtitle = "Empire City Courier Conduit",
+      rigArchetype = "operator",
+      primaryHex = 0xFF37474F,
+      secondaryHex = 0xFF00E5FF,
+      visorHex = 0xFF00E5FF,
+      cloakEnabled = false,
+      auraId = "pulse_ring",
+      signatureSkillSummary = "Lightning Bolt Volley & Blast Shard Drain",
+      signatureGearSummary = "Empire Amp Baton & Insulated Courier Jacket",
+      signatureLethalId = "lethal_cluster",
+      signatureTacticalId = "tactical_emp",
+      baseShieldBonus = 50,
+      baseDamageBonus = 4,
+      baseMoveBonus = 0.16f,
+      baseFireRateBonus = 0.18f,
+    ),
+    HeroOutfitSpec(
+      id = "cole_v2",
+      characterGroup = CharacterUniverseGroup.COLE_MCGRATH,
+      nameWithVersion = "Cole McGrath v2",
+      subtitle = "Heroic Blue-Ice Conduit",
+      rigArchetype = "chrono",
+      primaryHex = 0xFF00B0FF,
+      secondaryHex = 0xFFFFFFFF,
+      visorHex = 0xFF00E5FF,
+      cloakEnabled = false,
+      auraId = "chrono_spark",
+      signatureSkillSummary = "Ionic Freeze & Arc Trap Overcharge",
+      signatureGearSummary = "Cryo-Amp & Ray Sphere Harmonizer",
+      signatureLethalId = "lethal_cluster",
+      signatureTacticalId = "tactical_stim",
+      baseShieldBonus = 85,
+      baseDamageBonus = 5,
+      baseMoveBonus = 0.22f,
+      baseFireRateBonus = 0.22f,
+    ),
+    HeroOutfitSpec(
+      id = "cole_v3",
+      characterGroup = CharacterUniverseGroup.COLE_MCGRATH,
+      nameWithVersion = "Cole McGrath v3",
+      subtitle = "Infamous Crimson Beast Mk.III",
+      rigArchetype = "infernal",
+      primaryHex = 0xFF2B0A0E,
+      secondaryHex = 0xFFFF3D00,
+      visorHex = 0xFFFF3D71,
+      cloakEnabled = true,
+      auraId = "infernal_flare",
+      signatureSkillSummary = "Hellfire Lightning Storm & Red-Black Overload",
+      signatureGearSummary = "Beast-Awakened Amp Conduit Armor",
+      signatureLethalId = "lethal_molotov",
+      signatureTacticalId = "tactical_emp",
+      baseShieldBonus = 95,
+      baseDamageBonus = 7,
+      baseMoveBonus = 0.20f,
+      baseFireRateBonus = 0.24f,
+    ),
+
+    // STARKILLER (v1, v2, v3)
+    HeroOutfitSpec(
+      id = "starkiller_v1",
+      characterGroup = CharacterUniverseGroup.STARKILLER,
+      nameWithVersion = "Starkiller v1",
+      subtitle = "Apprentice Cyber-Training Suit",
+      rigArchetype = "starblade",
+      primaryHex = 0xFF212121,
+      secondaryHex = 0xFFFF3D71,
+      visorHex = 0xFFFF3D71,
+      cloakEnabled = true,
+      auraId = "none",
+      signatureSkillSummary = "Force Push Repulse & Twin Saber Throw",
+      signatureGearSummary = "Apprentice Wraps & Twin Red Kyber Sabers",
+      signatureLethalId = "lethal_frag",
+      signatureTacticalId = "tactical_emp",
+      baseShieldBonus = 45,
+      baseDamageBonus = 4,
+      baseMoveBonus = 0.18f,
+      baseFireRateBonus = 0.16f,
+    ),
+    HeroOutfitSpec(
+      id = "starkiller_v2",
+      characterGroup = CharacterUniverseGroup.STARKILLER,
+      nameWithVersion = "Starkiller v2",
+      subtitle = "Lord Starkiller Sith Stalker",
+      rigArchetype = "infernal",
+      primaryHex = 0xFF1A1F26,
+      secondaryHex = 0xFFB0BEC5,
+      visorHex = 0xFFFF1744,
+      cloakEnabled = true,
+      auraId = "infernal_flare",
+      signatureSkillSummary = "Force Lightning Chain & Dark Repulse Blast",
+      signatureGearSummary = "Sith Stalker Helmet & Mechanical Spine Rig",
+      signatureLethalId = "lethal_c4",
+      signatureTacticalId = "tactical_emp",
+      baseShieldBonus = 95,
+      baseDamageBonus = 6,
+      baseMoveBonus = 0.16f,
+      baseFireRateBonus = 0.20f,
+    ),
+    HeroOutfitSpec(
+      id = "starkiller_v3",
+      characterGroup = CharacterUniverseGroup.STARKILLER,
+      nameWithVersion = "Starkiller v3",
+      subtitle = "Unleashed Clone Sovereign Mk.III",
+      rigArchetype = "starblade",
+      primaryHex = 0xFF0D47A1,
+      secondaryHex = 0xFF00E5FF,
+      visorHex = 0xFF00E5FF,
+      cloakEnabled = true,
+      auraId = "chrono_spark",
+      signatureSkillSummary = "Blue Twin-Saber Tempest & Star Destroyer Pull",
+      signatureGearSummary = "Kamino Clone Combat Harness",
+      signatureLethalId = "lethal_cluster",
+      signatureTacticalId = "tactical_insertion",
+      baseShieldBonus = 90,
+      baseDamageBonus = 7,
+      baseMoveBonus = 0.26f,
+      baseFireRateBonus = 0.25f,
+    ),
+
+    // IRON MAN (v1, v2, v3)
+    HeroOutfitSpec(
+      id = "ironman_v1",
+      characterGroup = CharacterUniverseGroup.IRON_MAN,
+      nameWithVersion = "Iron Man v1",
+      subtitle = "Mark III Titanium-Gold",
+      rigArchetype = "operator",
+      primaryHex = 0xFFD50000,
+      secondaryHex = 0xFFFFD54F,
+      visorHex = 0xFF00E5FF,
+      cloakEnabled = false,
+      auraId = "pulse_ring",
+      signatureSkillSummary = "Chest Unibeam Blast & Twin Repulsor Palm Fire",
+      signatureGearSummary = "Mark III Palladium Arc Chestplate",
+      signatureLethalId = "lethal_frag",
+      signatureTacticalId = "tactical_emp",
+      baseShieldBonus = 65,
+      baseDamageBonus = 3,
+      baseMoveBonus = 0.14f,
+      baseFireRateBonus = 0.16f,
+    ),
+    HeroOutfitSpec(
+      id = "ironman_v2",
+      characterGroup = CharacterUniverseGroup.IRON_MAN,
+      nameWithVersion = "Iron Man v2",
+      subtitle = "Mark L Bleeding Edge Nanotech",
+      rigArchetype = "starblade",
+      primaryHex = 0xFFB71C1C,
+      secondaryHex = 0xFFFFD54F,
+      visorHex = 0xFF40C4FF,
+      cloakEnabled = false,
+      auraId = "chrono_spark",
+      signatureSkillSummary = "Nano-Shield Regeneration & Micro-Missile Barrage",
+      signatureGearSummary = "Self-Healing Stark Nanotech Matrix",
+      signatureLethalId = "lethal_cluster",
+      signatureTacticalId = "tactical_stim",
+      baseShieldBonus = 100,
+      baseDamageBonus = 5,
+      baseMoveBonus = 0.22f,
+      baseFireRateBonus = 0.24f,
+    ),
+    HeroOutfitSpec(
+      id = "ironman_v3",
+      characterGroup = CharacterUniverseGroup.IRON_MAN,
+      nameWithVersion = "Iron Man v3",
+      subtitle = "Hulkbuster Veronica Omega Mk.III",
+      rigArchetype = "infernal",
+      primaryHex = 0xFFC62828,
+      secondaryHex = 0xFFFFAB00,
+      visorHex = 0xFF00E5FF,
+      cloakEnabled = false,
+      auraId = "infernal_flare",
+      signatureSkillSummary = "Heavy Titan Armor & Thermal Shockwave Slam",
+      signatureGearSummary = "Veronica Orbital Drop Heavy Chassis",
+      signatureLethalId = "lethal_c4",
+      signatureTacticalId = "tactical_insertion",
+      baseShieldBonus = 150,
+      baseDamageBonus = 6,
+      baseMoveBonus = 0.12f,
+      baseFireRateBonus = 0.18f,
+    ),
+
+    // WAW & BLACK OPS & MW ZOMBIES (v1, v2, v3)
+    HeroOutfitSpec(
+      id = "zombies_v1",
+      characterGroup = CharacterUniverseGroup.ZOMBIES,
+      nameWithVersion = "WaW Zombies v1",
+      subtitle = "Ultimis Tank / Richtofen Lab Gear",
+      rigArchetype = "operator",
+      primaryHex = 0xFF4E342E,
+      secondaryHex = 0xFF8D6E63,
+      visorHex = 0xFF00E676,
+      cloakEnabled = false,
+      auraId = "none",
+      signatureSkillSummary = "Element 115 Pack-a-Punch Boost & Perk Affinity",
+      signatureGearSummary = "Der Riese Lab Coat & Element 115 Bandolier",
+      signatureLethalId = "lethal_frag",
+      signatureTacticalId = "tactical_decoy",
+      baseShieldBonus = 40,
+      baseDamageBonus = 3,
+      baseMoveBonus = 0.12f,
+      baseFireRateBonus = 0.14f,
+    ),
+    HeroOutfitSpec(
+      id = "zombies_v2",
+      characterGroup = CharacterUniverseGroup.ZOMBIES,
+      nameWithVersion = "Black Ops Zombies v2",
+      subtitle = "Primis Origins Chrono Knight",
+      rigArchetype = "chrono",
+      primaryHex = 0xFF37474F,
+      secondaryHex = 0xFF00E5FF,
+      visorHex = 0xFF7C4DFF,
+      cloakEnabled = true,
+      auraId = "chrono_spark",
+      signatureSkillSummary = "Staff / Ray-Gun Synergy & Mystery Box Luck",
+      signatureGearSummary = "Origins Great War Trench Rig",
+      signatureLethalId = "lethal_molotov",
+      signatureTacticalId = "tactical_stim",
+      baseShieldBonus = 75,
+      baseDamageBonus = 5,
+      baseMoveBonus = 0.16f,
+      baseFireRateBonus = 0.20f,
+    ),
+    HeroOutfitSpec(
+      id = "zombies_v3",
+      characterGroup = CharacterUniverseGroup.ZOMBIES,
+      nameWithVersion = "MW Zombies v3",
+      subtitle = "Operation Deadbolt Requiem Spec-Ops",
+      rigArchetype = "operator",
+      primaryHex = 0xFF1C2638,
+      secondaryHex = 0xFFE040FB,
+      visorHex = 0xFF00E676,
+      cloakEnabled = false,
+      auraId = "pulse_ring",
+      signatureSkillSummary = "Dark Aether Essence Vacuum & Exfil Shielding",
+      signatureGearSummary = "Deadbolt Aetherium Plate Carrier",
+      signatureLethalId = "lethal_c4",
+      signatureTacticalId = "tactical_insertion",
+      baseShieldBonus = 95,
+      baseDamageBonus = 6,
+      baseMoveBonus = 0.20f,
+      baseFireRateBonus = 0.24f,
+    ),
+
+    // PROTOTYPE (v1, v2, v3)
+    HeroOutfitSpec(
+      id = "prototype_v1",
+      characterGroup = CharacterUniverseGroup.PROTOTYPE,
+      nameWithVersion = "Prototype v1",
+      subtitle = "Alex Mercer Blacklight Jacket",
+      rigArchetype = "biomorph",
+      primaryHex = 0xFF212121,
+      secondaryHex = 0xFFFF3D71,
+      visorHex = 0xFFFF3D71,
+      cloakEnabled = true,
+      auraId = "none",
+      signatureSkillSummary = "Biomass Claws Dash & Critical Tendril Devour",
+      signatureGearSummary = "Blacklight Hooded Viral Biomass",
+      signatureLethalId = "lethal_c4",
+      signatureTacticalId = "tactical_stim",
+      baseShieldBonus = 60,
+      baseDamageBonus = 4,
+      baseMoveBonus = 0.20f,
+      baseFireRateBonus = 0.16f,
+    ),
+    HeroOutfitSpec(
+      id = "prototype_v2",
+      characterGroup = CharacterUniverseGroup.PROTOTYPE,
+      nameWithVersion = "Prototype v2",
+      subtitle = "Sgt. James Heller Tendril Armor",
+      rigArchetype = "biomorph",
+      primaryHex = 0xFF1B1F23,
+      secondaryHex = 0xFFFF6D00,
+      visorHex = 0xFFFFAB40,
+      cloakEnabled = false,
+      auraId = "infernal_flare",
+      signatureSkillSummary = "Bio-Bomb Tendril Chains & Armor Blade Plating",
+      signatureGearSummary = "Heller Reinforced Biomass Carapace",
+      signatureLethalId = "lethal_molotov",
+      signatureTacticalId = "tactical_stim",
+      baseShieldBonus = 100,
+      baseDamageBonus = 5,
+      baseMoveBonus = 0.18f,
+      baseFireRateBonus = 0.20f,
+    ),
+    HeroOutfitSpec(
+      id = "prototype_v3",
+      characterGroup = CharacterUniverseGroup.PROTOTYPE,
+      nameWithVersion = "Prototype v3",
+      subtitle = "Alpha Blacklight Evolved Mk.III",
+      rigArchetype = "infernal",
+      primaryHex = 0xFF1A0710,
+      secondaryHex = 0xFFE040FB,
+      visorHex = 0xFF00E5FF,
+      cloakEnabled = true,
+      auraId = "infernal_flare",
+      signatureSkillSummary = "Apex Devastator Spikes & Infinite Bio-Siphon",
+      signatureGearSummary = "Evolved Omega Viral Exoskeleton",
+      signatureLethalId = "lethal_cluster",
+      signatureTacticalId = "tactical_insertion",
+      baseShieldBonus = 115,
+      baseDamageBonus = 7,
+      baseMoveBonus = 0.24f,
+      baseFireRateBonus = 0.24f,
+    ),
+  )
+
+  fun outfitById(id: String): HeroOutfitSpec =
+    outfits.firstOrNull { it.id == id } ?: outfits.first()
+
+  val customAreas: List<CustomAreaSpec> = listOf(
+    CustomAreaSpec(
+      id = "area_empire_city",
+      name = "Empire City (Neon & Warren District)",
+      linkedWorldId = "blacklight_conduit",
+      description = "Cole's electrified rooftops, Rail Substations, Stasis Prison Tower & Blast Shard vaults.",
+      accentHex = 0xFF00E5FF,
+      secondaryHex = 0xFFFFD54F,
+      buildingNames = listOf("Alden Spire Substation", "Neon Conduit Vault", "Warren Power Grid", "Stasis Dockhouse", "Zeke's Rooftop Workshop", "Ray Sphere Plaza"),
+    ),
+    CustomAreaSpec(
+      id = "area_batcave",
+      name = "The Batcave (Gotham Sub-Vault)",
+      linkedWorldId = "sector_zero",
+      description = "Batcomputer Nexus, Wayne Armory Foundry, Trophy Hall & Subterranean Waterfall Cavern.",
+      accentHex = 0xFFFFD54F,
+      secondaryHex = 0xFF00E5FF,
+      buildingNames = listOf("Batcomputer Console Bay", "Wayne Suit Vault", "Batmobile Hangar", "Forensic Lab Chamber", "Gotham Foundry Gate", "Batarang Forge"),
+    ),
+    CustomAreaSpec(
+      id = "area_ironman_stark",
+      name = "Stark Tower (Iron Man Hall of Armor)",
+      linkedWorldId = "aegis_starblade",
+      description = "Arc Reactor Core, Hall of Armor Suits, Jarvis Flight Deck & Repulsor Testing Grid.",
+      accentHex = 0xFFFF3D71,
+      secondaryHex = 0xFFFFD54F,
+      buildingNames = listOf("Arc Reactor Chamber", "Hall of Armor Bay", "J.A.R.V.I.S. Flight Deck", "Hulkbuster Drop Pad", "Nanotech Forge Lab", "Repulsor Generator"),
+    ),
+    CustomAreaSpec(
+      id = "area_spiderman_queens",
+      name = "Spider-Man Queens & Oscorp Skyline",
+      linkedWorldId = "blacklight_conduit",
+      description = "Queens Rooftop Bridges, Oscorp Bio-Spire, Daily Bugle Plaza & Web-Zip Conduit Pylons.",
+      accentHex = 0xFFE53935,
+      secondaryHex = 0xFF448AFF,
+      buildingNames = listOf("Oscorp Bio-Spire", "Queens Rooftop Lab", "Daily Bugle Tower", "Horizon Labs Annex", "F.E.A.S.T. Safe Shelter", "Metro Conduit Station"),
+    ),
+    CustomAreaSpec(
+      id = "area_zombies_der_riese",
+      name = "Der Riese & Dark Aether Outpost",
+      linkedWorldId = "hellbreaker_citadel",
+      description = "Teleporter Mainframe, Pack-a-Punch Catwalk, Mystery Box Alley & Element 115 Reactors.",
+      accentHex = 0xFF00E676,
+      secondaryHex = 0xFFFF3D71,
+      buildingNames = listOf("Mainframe Teleporter", "Pack-a-Punch Forge", "Animal Testing Lab", "Perk-a-Cola Courtyard", "Power Switch Hall", "Aether Reactor"),
+    ),
+    CustomAreaSpec(
+      id = "area_sector_zero",
+      name = "Sector Zero SHD Dark Zone",
+      linkedWorldId = "sector_zero",
+      description = "Quarantine Checkpoints, SHD Supply Caches, ISAC Beacon Towers & Extraction Helipads.",
+      accentHex = 0xFFFFAB40,
+      secondaryHex = 0xFF00E5FF,
+      buildingNames = listOf("SHD Extraction Plaza", "ISAC Command Bunker", "DZ-09 Contamination Vault", "Division Supply Armory", "Medical Tent Alpha", "Rooftop Sniper Nest"),
+    ),
+    CustomAreaSpec(
+      id = "area_campaign_nexus",
+      name = "Campaign Command: Genesis Frontline",
+      linkedWorldId = "campaign_origins",
+      description = "Coalition story headquarters uniting Gotham, Empire City, Stark & Sector Zero command relays during the Multiverse campaign.",
+      accentHex = 0xFF40C4FF,
+      secondaryHex = 0xFFFFD54F,
+      buildingNames = listOf("Coalition War Room", "Drop Pod Hangar", "Rift Briefing Annex", "Vanguard Field Armory", "Chrono Anchor Relay", "Story Archive Sanctum"),
+      storyEraNote = "Campaign Act I–III • Coalition Awakening",
+      uniqueTraits = "Story Chapter Beacons • +20% Hero Synergy & Drop Pod Reinforcements",
+    ),
+    CustomAreaSpec(
+      id = "area_mended_convergence",
+      name = "The Mended Convergence (Near-Finale)",
+      linkedWorldId = "campaign_origins",
+      description = "Late-story nexus forged after all worlds & areas begin healing, just before reality is fully healed. Combines Empire City, Batcave, Stark Tower, Oscorp Queens, Der Riese & Sector Zero SHD with unique Reality Loom Sanctums & Dawnbright Gardens.",
+      accentHex = 0xFFE040FB,
+      secondaryHex = 0xFF00E676,
+      buildingNames = listOf(
+        "Ray-Sphere Batcomputer Nexus",
+        "Stark-Oscorp Bio-Arc Spire",
+        "SHD Element-115 Teleporter",
+        "Genesis War-Loom Spire",
+        "Reality Anchor Monolith",
+        "Dawnbright Healing Sanctuary",
+        "Prismatic Confluence Loom",
+        "Shattered Dawn Citadel",
+      ),
+      storyEraNote = "Late Story • Reality Healing Phase (Before Full Restoration)",
+      uniqueTraits = "8 Fused + Original Landmarks • Prismatic Reality Loom Healing +25% Essence & Shield Regen",
+    ),
+  )
+
+  fun areaById(id: String): CustomAreaSpec =
+    customAreas.firstOrNull { it.id == id } ?: customAreas.first()
+
+  val tradeOffers: List<TradeOfferSpec> = listOf(
+    TradeOfferSpec(
+      id = "trade_blue_to_red",
+      title = "Convert Blue -> Red Essence",
+      subtitle = "Swap 200 Blue Essence for 150 Red Essence (Damage Surge)",
+      inputCosts = mapOf(TradeCurrencyKind.BLUE_ESSENCE to 200L),
+      outputKind = TradeCurrencyKind.RED_ESSENCE,
+      outputAmount = 150L,
+    ),
+    TradeOfferSpec(
+      id = "trade_blue_to_yellow",
+      title = "Convert Blue -> Yellow Essence",
+      subtitle = "Swap 200 Blue Essence for 150 Yellow Essence (Speed/Rate Surge)",
+      inputCosts = mapOf(TradeCurrencyKind.BLUE_ESSENCE to 200L),
+      outputKind = TradeCurrencyKind.YELLOW_ESSENCE,
+      outputAmount = 150L,
+    ),
+    TradeOfferSpec(
+      id = "trade_blue_to_green",
+      title = "Convert Blue -> Green Essence",
+      subtitle = "Swap 200 Blue Essence for 150 Green Essence (Shield/Regen Surge)",
+      inputCosts = mapOf(TradeCurrencyKind.BLUE_ESSENCE to 200L),
+      outputKind = TradeCurrencyKind.GREEN_ESSENCE,
+      outputAmount = 150L,
+    ),
+    TradeOfferSpec(
+      id = "trade_fuse_combined",
+      title = "FUSE Combined Quad-Essence (B+R+Y+G)",
+      subtitle = "Fuse 100 Blue + 100 Red + 100 Yellow + 100 Green -> 150 Combined Essence!",
+      inputCosts = mapOf(
+        TradeCurrencyKind.BLUE_ESSENCE to 100L,
+        TradeCurrencyKind.RED_ESSENCE to 100L,
+        TradeCurrencyKind.YELLOW_ESSENCE to 100L,
+        TradeCurrencyKind.GREEN_ESSENCE to 100L,
+      ),
+      outputKind = TradeCurrencyKind.COMBINED_ESSENCE,
+      outputAmount = 150L,
+    ),
+    TradeOfferSpec(
+      id = "trade_red_to_blue",
+      title = "Liquidate Red -> Blue Essence",
+      subtitle = "Trade 100 Red Essence for 160 Blue Essence",
+      inputCosts = mapOf(TradeCurrencyKind.RED_ESSENCE to 100L),
+      outputKind = TradeCurrencyKind.BLUE_ESSENCE,
+      outputAmount = 160L,
+    ),
+    TradeOfferSpec(
+      id = "trade_blue_to_shards",
+      title = "Trade Blue Essence -> Blast Shards",
+      subtitle = "Exchange 250 Blue Essence for +12 Blast Shards",
+      inputCosts = mapOf(TradeCurrencyKind.BLUE_ESSENCE to 250L),
+      outputKind = TradeCurrencyKind.BLAST_SHARDS,
+      outputAmount = 12L,
+    ),
+    TradeOfferSpec(
+      id = "trade_shards_to_combined",
+      title = "Refine Blast Shards -> Combined Essence",
+      subtitle = "Trade 15 Blast Shards for +90 Combined Quad-Essence",
+      inputCosts = mapOf(TradeCurrencyKind.BLAST_SHARDS to 15L),
+      outputKind = TradeCurrencyKind.COMBINED_ESSENCE,
+      outputAmount = 90L,
+    ),
+    TradeOfferSpec(
+      id = "trade_essence_to_blue_core",
+      title = "Forge Blue Blast Core",
+      subtitle = "Trade 300 Blue Essence + 5 Blast Shards for +2 Blue Blast Cores",
+      inputCosts = mapOf(TradeCurrencyKind.BLUE_ESSENCE to 300L, TradeCurrencyKind.BLAST_SHARDS to 5L),
+      outputKind = TradeCurrencyKind.BLUE_CORE,
+      outputAmount = 2L,
+    ),
+    TradeOfferSpec(
+      id = "trade_essence_to_purple_core",
+      title = "Forge Purple Blast Core",
+      subtitle = "Trade 180 Red + 180 Blue Essence for +2 Purple Blast Cores",
+      inputCosts = mapOf(TradeCurrencyKind.RED_ESSENCE to 180L, TradeCurrencyKind.BLUE_ESSENCE to 180L),
+      outputKind = TradeCurrencyKind.PURPLE_CORE,
+      outputAmount = 2L,
+    ),
+    TradeOfferSpec(
+      id = "trade_essence_to_green_core",
+      title = "Forge Green Blast Core",
+      subtitle = "Trade 200 Green Essence for +2 Green Blast Cores",
+      inputCosts = mapOf(TradeCurrencyKind.GREEN_ESSENCE to 200L),
+      outputKind = TradeCurrencyKind.GREEN_CORE,
+      outputAmount = 2L,
+    ),
+    TradeOfferSpec(
+      id = "trade_essence_to_yellow_core",
+      title = "Forge Yellow Blast Core",
+      subtitle = "Trade 200 Yellow Essence for +2 Yellow Blast Cores",
+      inputCosts = mapOf(TradeCurrencyKind.YELLOW_ESSENCE to 200L),
+      outputKind = TradeCurrencyKind.YELLOW_CORE,
+      outputAmount = 2L,
+    ),
+    TradeOfferSpec(
+      id = "trade_essence_to_red_core",
+      title = "Forge Red Blast Core",
+      subtitle = "Trade 200 Red Essence for +2 Red Blast Cores",
+      inputCosts = mapOf(TradeCurrencyKind.RED_ESSENCE to 200L),
+      outputKind = TradeCurrencyKind.RED_CORE,
+      outputAmount = 2L,
+    ),
+  )
+}

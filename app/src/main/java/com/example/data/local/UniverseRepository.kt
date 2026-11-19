@@ -123,12 +123,19 @@ class UniverseRepository(
         )
         dao.upsertArmoryItems(starterArmoryItems(userId, now))
         dao.upsertRigs(starterRigs(userId, now))
-      } else if (!displayName.isNullOrBlank() && displayName.trim().length >= 2 && existing.callsign != displayName.trim().take(30)) {
-        val updated = existing.copy(
-          callsign = displayName.trim().take(30),
-          updatedAtMillis = System.currentTimeMillis(),
-        )
-        dao.upsertProfile(updated)
+      } else {
+        if (!displayName.isNullOrBlank() && displayName.trim().length >= 2 && existing.callsign != displayName.trim().take(30)) {
+          val updated = existing.copy(
+            callsign = displayName.trim().take(30),
+            updatedAtMillis = System.currentTimeMillis(),
+          )
+          dao.upsertProfile(updated)
+        }
+        val existingArmory = dao.getArmoryItemsOnce(userId)
+        val outdated = existingArmory.filter { it.maxTier < 25L }
+        if (outdated.isNotEmpty()) {
+          dao.upsertArmoryItems(outdated.map { it.copy(maxTier = 25L) })
+        }
       }
       Result.success(Unit)
     } catch (e: CancellationException) {
@@ -192,7 +199,7 @@ class UniverseRepository(
         universeTag = universeTag.trim().take(40).ifEmpty { "UnknownOS" },
         description = description.trim().take(240),
         tier = 1L,
-        maxTier = 10L,
+        maxTier = 25L,
         cooldownSec = cooldownSec.coerceIn(0L, 120L),
         powerValue = powerValue.coerceIn(1L, 1500L),
         accentColorHex = accentColorHex.trim().take(10).ifEmpty { "#00E5FF" },
@@ -236,7 +243,7 @@ class UniverseRepository(
     currentEssence: Long,
   ): Result<Unit> {
     require(item.id.isNotBlank()) { "ArmoryItem id required" }
-    val effectiveMaxTier = maxOf(item.maxTier, 10L)
+    val effectiveMaxTier = maxOf(item.maxTier, 25L)
     if (item.tier >= effectiveMaxTier) {
       return Result.failure(IllegalStateException("Already at max Tier $effectiveMaxTier"))
     }
@@ -478,8 +485,9 @@ class UniverseRepository(
         )
       }
 
-      val resolvedArmory = bundle.armoryItems.map { it.copy(userId = userId, updatedAtMillis = now) }
-        .ifEmpty { starterArmoryItems(userId, now) }
+      val resolvedArmory = bundle.armoryItems.map {
+        it.copy(userId = userId, maxTier = maxOf(it.maxTier, 25L), updatedAtMillis = now)
+      }.ifEmpty { starterArmoryItems(userId, now) }
       val resolvedRigs = bundle.customRigs.map { it.copy(userId = userId, updatedAtMillis = now) }
         .ifEmpty { starterRigs(userId, now) }
       val resolvedLogs = bundle.matchLogs.map { it.copy(userId = userId) }
@@ -617,7 +625,7 @@ class UniverseRepository(
       universeTag = "Sector Zero",
       description = "Reinforces kinetic armor shielding (+40 Max Shield per tier).",
       tier = 1L,
-      maxTier = 10L,
+      maxTier = 25L,
       cooldownSec = 0L,
       powerValue = 140L,
       accentColorHex = "#FF3D71",
@@ -634,7 +642,7 @@ class UniverseRepository(
       universeTag = "Sector Zero",
       description = "Accelerates dash cadence, reload speed, and movement agility.",
       tier = 1L,
-      maxTier = 10L,
+      maxTier = 25L,
       cooldownSec = 0L,
       powerValue = 125L,
       accentColorHex = "#00E676",
@@ -651,7 +659,7 @@ class UniverseRepository(
       universeTag = "Blacklight Conduit",
       description = "Unleashes radial bio-electric tendrils that stun and clear nearby hostiles.",
       tier = 2L,
-      maxTier = 10L,
+      maxTier = 25L,
       cooldownSec = 6L,
       powerValue = 220L,
       accentColorHex = "#7C4DFF",
@@ -668,7 +676,7 @@ class UniverseRepository(
       universeTag = "Aegis & Starblade",
       description = "Telekinetic blast wave paired with twin-core saber deflection.",
       tier = 1L,
-      maxTier = 10L,
+      maxTier = 25L,
       cooldownSec = 8L,
       powerValue = 250L,
       accentColorHex = "#00E5FF",
@@ -685,7 +693,7 @@ class UniverseRepository(
       universeTag = "Chrono-Vault",
       description = "Locks hostile waves inside a golden time-dilation field for 4 seconds.",
       tier = 1L,
-      maxTier = 10L,
+      maxTier = 25L,
       cooldownSec = 12L,
       powerValue = 190L,
       accentColorHex = "#FFD54F",
@@ -702,7 +710,7 @@ class UniverseRepository(
       universeTag = "Sector Zero",
       description = "Supercharges primary energy blaster fire rate and multishot spread.",
       tier = 2L,
-      maxTier = 10L,
+      maxTier = 25L,
       cooldownSec = 0L,
       powerValue = 210L,
       accentColorHex = "#FFAB40",
@@ -719,7 +727,7 @@ class UniverseRepository(
       universeTag = "Hellbreaker",
       description = "Converts close-range dashes into armor-piercing fury strikes.",
       tier = 1L,
-      maxTier = 10L,
+      maxTier = 25L,
       cooldownSec = 0L,
       powerValue = 180L,
       accentColorHex = "#FF5252",
@@ -736,7 +744,7 @@ class UniverseRepository(
       universeTag = "UnknownOS",
       description = "Instant tactical consumable: restores shields and resets all Power cooldowns.",
       tier = 1L,
-      maxTier = 10L,
+      maxTier = 25L,
       cooldownSec = 15L,
       powerValue = 300L,
       accentColorHex = "#00E5FF",

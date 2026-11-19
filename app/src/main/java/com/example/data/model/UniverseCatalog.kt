@@ -130,6 +130,22 @@ object UniverseCatalog {
       interactActionLabel = "REPULSE",
       platformBadges = "PS5/PS4/PS3 • XBOX • SWITCH • PC",
     ),
+    UniverseWorld(
+      id = "campaign_origins",
+      title = "Campaign: Genesis Fracture",
+      subtitle = "TUU Main Story • Worlds & Areas Awakening",
+      inspirations = "UnknownOS Story Campaign • Gotham • Empire City • Stark • Der Riese",
+      description = "Play the central Multiverse Story Campaign from the first Rift Breach to uniting all heroes, worlds, and healing areas right up to The Mended Convergence before reality is fully healed.",
+      signatureMechanic = "Story Chapter Relays + Reality Anchor Surge",
+      defaultModeId = "campaign",
+      accentHex = 0xFF40C4FF,
+      secondaryHex = 0xFFFFD54F,
+      bannerRes = R.drawable.img_chrono_aegis_banner_1794591190129,
+      supportedModes = listOf("campaign", "zombies", "dmz", "br", "multiplayer", "sandbox"),
+      mapSectors = listOf("Prologue Drop Deck", "Coalition Frontline", "Shattered Nexus Bridge", "Reality Mend Spire"),
+      interactActionLabel = "ANCHOR",
+      platformBadges = "PS5/4/3 • XBOX • SWITCH • PC • MOBILE",
+    ),
   )
 
   val modes: List<GameModeSpec> = listOf(
@@ -172,6 +188,14 @@ object UniverseCatalog {
       summary = "Open testing ground for custom Blender-rigged avatars, powers, and physics.",
       winCondition = "Experiment freely with custom rigs & consumables",
       accentHex = 0xFFB388FF,
+    ),
+    GameModeSpec(
+      id = "campaign",
+      label = "Story Campaign",
+      shortTag = "CMP",
+      summary = "Chapter-based Multiverse campaign advancing missions and reality healing.",
+      winCondition = "Complete story waves, stabilize anchors & defeat Rift Sovereigns",
+      accentHex = 0xFF40C4FF,
     ),
   )
 

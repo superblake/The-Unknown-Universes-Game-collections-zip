@@ -56,6 +56,8 @@ fun LobbyQuickCard(
   accentColor: Color,
   onUpdateLobby: ((LobbyConfig) -> LobbyConfig) -> Unit,
   onOpenFullRoster: () -> Unit,
+  onOpenMatchBrowser: () -> Unit = {},
+  onOpenHostPrivate: () -> Unit = {},
 ) {
   val roster = ProgressionCatalog.generateLobbyRoster(lobbyConfig, playerCallsign, playerLevel, playerPrestige)
   val botCount = roster.count { !it.isHumanPlayer }
@@ -157,10 +159,31 @@ fun LobbyQuickCard(
         )
       }
 
+      Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(
+          onClick = onOpenMatchBrowser,
+          shape = RoundedCornerShape(12.dp),
+          modifier = Modifier.weight(1f).height(46.dp).testTag("open_match_browser_btn"),
+        ) {
+          Icon(AppIcons.Public, contentDescription = null, modifier = Modifier.size(16.dp))
+          Spacer(Modifier.width(6.dp))
+          Text("Match Browser", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+        }
+        OutlinedButton(
+          onClick = onOpenHostPrivate,
+          shape = RoundedCornerShape(12.dp),
+          modifier = Modifier.weight(1f).height(46.dp).testTag("open_host_private_btn"),
+        ) {
+          Icon(AppIcons.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
+          Spacer(Modifier.width(6.dp))
+          Text("Host Private", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+        }
+      }
+
       OutlinedButton(
         onClick = onOpenFullRoster,
         shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth().height(48.dp).testTag("open_lobby_roster_btn"),
+        modifier = Modifier.fillMaxWidth().height(44.dp).testTag("open_lobby_roster_btn"),
       ) {
         Icon(AppIcons.Tune, contentDescription = null, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))

@@ -1,0 +1,714 @@
+package com.example.ui.screens
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.example.data.model.BlastCoreColor
+import com.example.data.model.CharacterUniverseGroup
+import com.example.data.model.EssenceColor
+import com.example.data.model.HeroOutfitSpec
+import com.example.data.model.MultiverseArsenalCatalog
+import com.example.data.model.OperatorProgressionState
+import com.example.data.model.ProgressionCatalog
+import com.example.data.model.StarRankMeta
+import com.example.data.model.UniverseCatalog
+import com.example.ui.rig.RigEvaluator
+import com.example.ui.rig.drawRigCharacter
+import java.util.Locale
+
+@Composable
+fun OutfitsMenuTab(
+  progression: OperatorProgressionState,
+  totalBlueEssence: Long,
+  onEquipOutfit: (String) -> Unit,
+  onUpgradeOutfit: (String) -> Unit,
+  onUpgradeOutfitSubSystem: (String, String) -> Unit,
+  onUpgradeOutfitStar: (String) -> Unit = {},
+) {
+  var selectedGroup by remember { mutableStateOf(CharacterUniverseGroup.ALL) }
+  val outfits = remember(selectedGroup) {
+    if (selectedGroup == CharacterUniverseGroup.ALL) {
+      MultiverseArsenalCatalog.outfits
+    } else {
+      MultiverseArsenalCatalog.outfits.filter { it.characterGroup == selectedGroup }
+    }
+  }
+  val activeSpec = progression.activeOutfitSpec()
+  val activeState = progression.outfitState(activeSpec.id)
+  val capePath = remember { Path() }
+  val torsoPath = remember { Path() }
+
+  LazyColumn(
+    modifier = Modifier.fillMaxSize().testTag("outfits_menu_list"),
+    contentPadding = PaddingValues(16.dp),
+    verticalArrangement = Arrangement.spacedBy(12.dp),
+  ) {
+    item {
+      Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier
+          .fillMaxWidth()
+          .border(1.5.dp, Color(activeSpec.secondaryHex).copy(alpha = 0.75f), RoundedCornerShape(16.dp)),
+      ) {
+        Row(
+          modifier = Modifier.padding(14.dp),
+          horizontalArrangement = Arrangement.spacedBy(12.dp),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Box(
+            modifier = Modifier
+              .size(width = 96.dp, height = 118.dp)
+              .clip(RoundedCornerShape(12.dp))
+              .background(Color(0xFF0A101E))
+              .border(1.dp, Color(activeSpec.secondaryHex).copy(alpha = 0.6f), RoundedCornerShape(12.dp)),
+          ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+              val skel = RigEvaluator.evaluate(
+                origin = Offset(size.width * 0.5f, size.height * 0.56f),
+                scalePx = size.height * 0.52f,
+                poseAngles = UniverseCatalog.defaultPoseMap(),
+                clip = "idle",
+                frame = 10f,
+                ikEnabled = true,
+                animationSpeedMultiplier = progression.characterCustom.animationSpeedMultiplier,
+              )
+              drawRigCharacter(
+                skeleton = skel,
+                archetype = activeSpec.rigArchetype,
+                primaryColor = Color(activeSpec.primaryHex),
+                secondaryColor = Color(activeSpec.secondaryHex),
+                showBonesOverlay = false,
+                capePathScratch = capePath,
+                torsoPathScratch = torsoPath,
+                cloakOverride = activeSpec.cloakEnabled,
+                visorColorOverride = Color(activeSpec.visorHex),
+                auraTrailId = activeSpec.auraId,
+              )
+            }
+          }
+
+          Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+              text = "ACTIVE OUTFIT: ${activeSpec.nameWithVersion}",
+              style = MaterialTheme.typography.titleMedium,
+              color = Color(activeSpec.secondaryHex),
+              fontWeight = FontWeight.Bold,
+              modifier = Modifier.testTag("active_outfit_banner"),
+            )
+            Text(activeSpec.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+            Text(
+              text = "Lv.${activeState.level}/1000 • Tier ${activeState.tier}/25 • ${activeState.starLevel}★ (${StarRankMeta.forStars(activeState.starLevel).label})",
+              style = MaterialTheme.typography.labelMedium,
+              color = Color(0xFF00E5FF),
+              fontWeight = FontWeight.Bold,
+            )
+            Text(
+              text = "Own Skill R${activeState.skillRank} • Gear R${activeState.gearRank} • Equip R${activeState.equipmentRank}",
+              style = MaterialTheme.typography.labelSmall,
+              color = Color(0xFF00E676),
+            )
+          }
+        }
+      }
+    }
+
+    item {
+      Text("CHARACTER ROSTER (${MultiverseArsenalCatalog.outfits.size} VERSIONS)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+      Spacer(Modifier.height(6.dp))
+      LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(CharacterUniverseGroup.entries, key = { it.id }) { group ->
+          FilterChip(
+            selected = selectedGroup == group,
+            onClick = { selectedGroup = group },
+            label = { Text(group.label) },
+            modifier = Modifier.testTag("outfit_group_${group.id}"),
+          )
+        }
+      }
+    }
+
+    items(outfits, key = { it.id }) { spec ->
+      val st = progression.outfitState(spec.id)
+      val isEquipped = progression.equippedOutfitId == spec.id
+      val tierMeta = ProgressionCatalog.tierMeta(st.tier)
+      val starMeta = StarRankMeta.forStars(st.starLevel)
+      val upgCost = 250L + (st.tier * 180L)
+      val starCost = st.starLevel * 450L
+      val skillCost = 180L + (st.skillRank * 120L)
+      val gearCost = 180L + (st.gearRank * 120L)
+      val equipCost = 180L + (st.equipmentRank * 120L)
+      val accent = Color(spec.secondaryHex)
+
+      Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier
+          .fillMaxWidth()
+          .border(
+            width = if (isEquipped) 2.dp else 1.dp,
+            color = if (isEquipped) accent else MaterialTheme.colorScheme.outline,
+            shape = RoundedCornerShape(16.dp),
+          ),
+      ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Row(
+              modifier = Modifier.weight(1f),
+              horizontalArrangement = Arrangement.spacedBy(10.dp),
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Box(
+                  modifier = Modifier
+                    .size(26.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color(spec.primaryHex))
+                    .border(1.5.dp, accent, RoundedCornerShape(6.dp)),
+                )
+                Box(
+                  modifier = Modifier
+                    .size(width = 26.dp, height = 8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(Color(spec.visorHex)),
+                )
+              }
+              Column {
+                Text(
+                  text = spec.nameWithVersion,
+                  style = MaterialTheme.typography.titleMedium,
+                  fontWeight = FontWeight.Bold,
+                  color = if (isEquipped) accent else MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                  text = "${spec.subtitle} • Rig: ${spec.rigArchetype.uppercase()}",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                )
+              }
+            }
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = Color(tierMeta.colorHex).copy(alpha = 0.2f),
+            ) {
+              Text(
+                text = "T${st.tier}/25 • ${st.starLevel}★",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color(tierMeta.colorHex),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+              )
+            }
+          }
+
+          Text(
+            text = "Skill: ${spec.signatureSkillSummary}",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color(0xFF00E5FF),
+          )
+
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+              onClick = { onEquipOutfit(spec.id) },
+              colors = ButtonDefaults.buttonColors(
+                containerColor = if (isEquipped) Color(0xFF00E676) else accent,
+                contentColor = Color.Black,
+              ),
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(44.dp).testTag("equip_outfit_${spec.id}"),
+            ) {
+              Text(if (isEquipped) "EQUIPPED" else "Equip Outfit", fontWeight = FontWeight.Bold)
+            }
+            OutlinedButton(
+              onClick = { onUpgradeOutfit(spec.id) },
+              enabled = totalBlueEssence >= upgCost && st.level < 1000,
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(44.dp).testTag("upgrade_outfit_${spec.id}"),
+            ) {
+              Text(if (st.level >= 1000) "MAX LV" else "Lv+5 ($upgCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            }
+            OutlinedButton(
+              onClick = { onUpgradeOutfitStar(spec.id) },
+              enabled = st.starLevel < StarRankMeta.MAX_STARS && totalBlueEssence >= starCost,
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(44.dp).testTag("upgrade_outfit_star_${spec.id}"),
+            ) {
+              Text(if (st.starLevel >= StarRankMeta.MAX_STARS) "10★" else "★+1 ($starCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            }
+          }
+
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedButton(
+              onClick = { onUpgradeOutfitSubSystem(spec.id, "skill") },
+              enabled = st.skillRank < 20 && totalBlueEssence >= skillCost,
+              shape = RoundedCornerShape(8.dp),
+              contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+              modifier = Modifier.weight(1f).height(42.dp).testTag("outfit_skill_${spec.id}"),
+            ) {
+              Text("Skill R${st.skillRank}/20\n$skillCost B", style = MaterialTheme.typography.labelSmall, maxLines = 2)
+            }
+            OutlinedButton(
+              onClick = { onUpgradeOutfitSubSystem(spec.id, "gear") },
+              enabled = st.gearRank < 20 && totalBlueEssence >= gearCost,
+              shape = RoundedCornerShape(8.dp),
+              contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+              modifier = Modifier.weight(1f).height(42.dp).testTag("outfit_gear_${spec.id}"),
+            ) {
+              Text("Gear R${st.gearRank}/20\n$gearCost B", style = MaterialTheme.typography.labelSmall, maxLines = 2)
+            }
+            OutlinedButton(
+              onClick = { onUpgradeOutfitSubSystem(spec.id, "equipment") },
+              enabled = st.equipmentRank < 20 && totalBlueEssence >= equipCost,
+              shape = RoundedCornerShape(8.dp),
+              contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+              modifier = Modifier.weight(1f).height(42.dp).testTag("outfit_equip_${spec.id}"),
+            ) {
+              Text("Equip R${st.equipmentRank}/20\n$equipCost B", style = MaterialTheme.typography.labelSmall, maxLines = 2)
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+fun ShardsPerksAndCoresTab(
+  progression: OperatorProgressionState,
+  totalBlueEssence: Long,
+  onSpendBlastShards: () -> Unit,
+  onUpgradeVacuumBot: () -> Unit,
+  onToggleVacuumAutoUpgrade: () -> Unit,
+  onUpgradePerkDrink: (String) -> Unit,
+  onUpgradeBlastCore: (BlastCoreColor) -> Unit,
+  onUpgradeVacuumBotStar: () -> Unit = {},
+) {
+  val resonance = remember(
+    totalBlueEssence,
+    progression.redEssence,
+    progression.yellowEssence,
+    progression.greenEssence,
+    progression.combinedEssence,
+    progression.blastShards,
+  ) {
+    progression.essenceResonance(totalBlueEssence)
+  }
+  val bot = progression.vacuumBot
+  val botCost = 220L + (bot.tier * 160L)
+  val botStarCost = bot.starLevel * 400L
+
+  LazyColumn(
+    modifier = Modifier.fillMaxSize().testTag("shards_perks_cores_list"),
+    contentPadding = PaddingValues(16.dp),
+    verticalArrangement = Arrangement.spacedBy(12.dp),
+  ) {
+    item {
+      Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth().border(1.5.dp, Color(0xFFE040FB).copy(alpha = 0.7f), RoundedCornerShape(16.dp)),
+      ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          Text("ESSENCE RESONANCE (SCALES WITH HELD ESSENCE)", style = MaterialTheme.typography.titleMedium, color = Color(0xFFE040FB), fontWeight = FontWeight.Bold)
+          Text(
+            text = "Everything you own scales stronger from total Essence held. Blue, Red, Yellow, Green & Combined Quad-Essence each push different stats & caps!",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+          Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = Color(0xFF0A1220),
+            modifier = Modifier.fillMaxWidth().border(1.dp, Color(0xFF00E5FF).copy(alpha = 0.5f), RoundedCornerShape(10.dp)),
+          ) {
+            Text(
+              text = "LIVE BONUS: ${resonance.summary} • CDR ${(resonance.cooldownReductionRatio * 100).toInt()}% • Regen +${String.format(Locale.US, "%.1f", resonance.regenBonusPerSec)}/s",
+              style = MaterialTheme.typography.labelMedium,
+              color = Color(0xFF00E5FF),
+              fontWeight = FontWeight.Bold,
+              modifier = Modifier.padding(10.dp).testTag("essence_resonance_summary"),
+            )
+          }
+          EssenceColor.entries.forEach { ec ->
+            val bal = when (ec) {
+              EssenceColor.BLUE -> totalBlueEssence
+              EssenceColor.RED -> progression.redEssence
+              EssenceColor.YELLOW -> progression.yellowEssence
+              EssenceColor.GREEN -> progression.greenEssence
+              EssenceColor.COMBINED -> progression.combinedEssence
+            }
+            val col = Color(ec.colorHex)
+            Surface(
+              shape = RoundedCornerShape(10.dp),
+              color = col.copy(alpha = 0.1f),
+              modifier = Modifier.fillMaxWidth().border(1.dp, col.copy(alpha = 0.5f), RoundedCornerShape(10.dp)),
+            ) {
+              Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                  Text(ec.displayName, style = MaterialTheme.typography.labelLarge, color = col, fontWeight = FontWeight.Bold)
+                  Text("$bal HELD", style = MaterialTheme.typography.labelLarge, color = col, fontWeight = FontWeight.Bold)
+                }
+                Text(ec.specialization, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
+                Text(ec.beyondCapNote, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+              }
+            }
+          }
+        }
+      }
+    }
+
+    item {
+      Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth().border(1.5.dp, Color(0xFF40C4FF).copy(alpha = 0.75f), RoundedCornerShape(16.dp)),
+      ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text("VACUUM BOT & BLAST SHARDS", style = MaterialTheme.typography.titleMedium, color = Color(0xFF40C4FF), fontWeight = FontWeight.Bold)
+              Text(
+                text = "Vacuum Bot Lv.${bot.level}/50 • T${bot.tier}/25 • ${bot.starLevel}★ • Reach ${(bot.vacuumRadius * 100).toInt()}%",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+            }
+            Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFF40C4FF).copy(alpha = 0.2f)) {
+              Text(
+                text = "${progression.blastShards} SHARDS",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF40C4FF),
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp).testTag("blast_shards_balance"),
+              )
+            }
+          }
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text("Auto-Upgrade in Arena", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+              Text("When Vacuum Bot charges to 100%, auto-upgrades Pack-a-Punch or restores Armor", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(
+              checked = bot.autoUpgradeEnabled,
+              onCheckedChange = { onToggleVacuumAutoUpgrade() },
+              modifier = Modifier.testTag("toggle_vac_auto_btn"),
+            )
+          }
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+              onClick = onSpendBlastShards,
+              enabled = progression.blastShards >= 10L,
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(44.dp).testTag("spend_blast_shards_btn"),
+            ) {
+              Text("Channel Shards", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            }
+            OutlinedButton(
+              onClick = onUpgradeVacuumBot,
+              enabled = totalBlueEssence >= botCost && (bot.tier < 25 || bot.level < 50),
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(44.dp).testTag("upgrade_vac_bot_btn"),
+            ) {
+              Text("Bot +Lv3 ($botCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            }
+            OutlinedButton(
+              onClick = onUpgradeVacuumBotStar,
+              enabled = bot.starLevel < StarRankMeta.MAX_STARS && totalBlueEssence >= botStarCost,
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(44.dp).testTag("upgrade_vac_bot_star_btn"),
+            ) {
+              Text(if (bot.starLevel >= StarRankMeta.MAX_STARS) "10★" else "★+1 ($botStarCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            }
+          }
+        }
+      }
+    }
+
+    item {
+      Text("PERK CANS & BOTTLES (8 CLASSICS)", style = MaterialTheme.typography.titleMedium, color = Color(0xFFFFD54F))
+    }
+
+    items(MultiverseArsenalCatalog.perkDrinks, key = { it.id }) { perk ->
+      val rank = progression.perkRank(perk.id)
+      val cost = 250L + (rank * 200L)
+      val accent = Color(perk.colorHex)
+      Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth().border(1.dp, accent.copy(alpha = 0.6f), RoundedCornerShape(14.dp)),
+      ) {
+        Row(
+          modifier = Modifier.padding(12.dp),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(
+              text = "${perk.container.label.uppercase()} • RANK $rank/${perk.maxRank}",
+              style = MaterialTheme.typography.labelSmall,
+              color = accent,
+              fontWeight = FontWeight.Bold,
+            )
+            Text(perk.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text(perk.summary, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          }
+          Button(
+            onClick = { onUpgradePerkDrink(perk.id) },
+            enabled = rank < perk.maxRank && totalBlueEssence >= cost,
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier.height(44.dp).testTag("upgrade_perk_${perk.id}"),
+          ) {
+            Text(if (rank >= perk.maxRank) "MAX" else "$cost B", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+          }
+        }
+      }
+    }
+
+    item {
+      Text("COLORED BLAST CORES (BLUE, PURPLE, GREEN, YELLOW, RED)", style = MaterialTheme.typography.titleMedium, color = Color(0xFFE040FB))
+    }
+
+    items(BlastCoreColor.entries, key = { it.id }) { core ->
+      val count = progression.blastCoreCount(core)
+      val lvl = progression.blastCoreLevel(core)
+      val accent = Color(core.colorHex)
+      Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth().border(1.5.dp, accent.copy(alpha = 0.7f), RoundedCornerShape(14.dp)),
+      ) {
+        Row(
+          modifier = Modifier.padding(12.dp),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(
+              text = "${core.displayName.uppercase()} • LV $lvl/20 • OWNED: $count",
+              style = MaterialTheme.typography.labelSmall,
+              color = accent,
+              fontWeight = FontWeight.Bold,
+            )
+            Text(core.upgradedDomain, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text(core.effectPerLevel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          }
+          OutlinedButton(
+            onClick = { onUpgradeBlastCore(core) },
+            enabled = count >= 1L && lvl < 20,
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier.height(44.dp).testTag("upgrade_core_${core.id}"),
+          ) {
+            Text(if (lvl >= 20) "MAX" else "Fuse 1 Core", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+fun AreasAndAgingTab(
+  progression: OperatorProgressionState,
+  totalBlueEssence: Long,
+  onSelectArea: (String) -> Unit,
+  onUpgradeAreaFeature: (String, String) -> Unit,
+  onAdvanceAreaAge: (String, Int) -> Unit,
+  onUpgradeAreaStar: (String) -> Unit = {},
+) {
+  val activeSpec = progression.activeAreaSpec()
+  val activeArea = progression.areaState(activeSpec.id)
+
+  LazyColumn(
+    modifier = Modifier.fillMaxSize().testTag("areas_aging_list"),
+    contentPadding = PaddingValues(16.dp),
+    verticalArrangement = Arrangement.spacedBy(12.dp),
+  ) {
+    item {
+      Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth().border(1.5.dp, Color(activeArea.currentEra.colorHex).copy(alpha = 0.8f), RoundedCornerShape(16.dp)),
+      ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          Text(
+            text = "ACTIVE AREA: ${activeSpec.name}",
+            style = MaterialTheme.typography.titleMedium,
+            color = Color(activeSpec.accentHex),
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.testTag("active_area_banner"),
+          )
+          Text(
+            text = "Age: ${activeArea.ageYears}/99 yrs • ${activeArea.currentEra.label} • ${activeArea.starLevel}★ • Rebirths: ${activeArea.rebirthCycles}",
+            style = MaterialTheme.typography.labelMedium,
+            color = Color(activeArea.currentEra.colorHex),
+            fontWeight = FontWeight.Bold,
+          )
+          Text(
+            text = activeSpec.storyEraNote,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+      }
+    }
+
+    items(MultiverseArsenalCatalog.customAreas, key = { it.id }) { spec ->
+      val area = progression.areaState(spec.id)
+      val isSelected = progression.activeAreaId == spec.id
+      val accent = Color(spec.accentHex)
+      val eraColor = Color(area.currentEra.colorHex)
+      val starCost = area.starLevel * 450L
+
+      Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier
+          .fillMaxWidth()
+          .border(if (isSelected) 2.dp else 1.dp, if (isSelected) accent else MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp)),
+      ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(spec.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = accent)
+              Text(spec.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Surface(shape = RoundedCornerShape(8.dp), color = eraColor.copy(alpha = 0.2f)) {
+              Text(
+                text = "${area.ageYears}y • ${area.starLevel}★ • C${area.rebirthCycles}",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = eraColor,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp).testTag("area_age_${spec.id}"),
+              )
+            }
+          }
+
+          Text(
+            text = "Story Note: ${spec.storyEraNote} • Traits: ${spec.uniqueTraits}",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color(0xFF00E5FF),
+          )
+
+          LinearProgressIndicator(
+            progress = { (area.ageYears / 100f).coerceIn(0f, 1f) },
+            color = eraColor,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.fillMaxWidth().height(7.dp).clip(RoundedCornerShape(4.dp)),
+          )
+
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+              onClick = { onSelectArea(spec.id) },
+              colors = ButtonDefaults.buttonColors(
+                containerColor = if (isSelected) Color(0xFF00E676) else accent,
+                contentColor = Color.Black,
+              ),
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(44.dp).testTag("select_area_${spec.id}"),
+            ) {
+              Text(if (isSelected) "ACTIVE AREA" else "Mount Area", fontWeight = FontWeight.Bold)
+            }
+            OutlinedButton(
+              onClick = { onAdvanceAreaAge(spec.id, 18) },
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(44.dp).testTag("age_area_${spec.id}"),
+            ) {
+              Text("Age +18 yrs", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            }
+            OutlinedButton(
+              onClick = { onUpgradeAreaStar(spec.id) },
+              enabled = area.starLevel < StarRankMeta.MAX_STARS && totalBlueEssence >= starCost,
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(44.dp).testTag("upgrade_area_star_${spec.id}"),
+            ) {
+              Text(if (area.starLevel >= StarRankMeta.MAX_STARS) "10★" else "★+1 ($starCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            }
+          }
+
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            AreaUpgradeButton("Grid T${area.powerGridTier}/25", area.powerGridTier, totalBlueEssence, "area_up_grid_${spec.id}") {
+              onUpgradeAreaFeature(spec.id, "power_grid")
+            }
+            AreaUpgradeButton("Turret T${area.defenseTurretTier}/25", area.defenseTurretTier, totalBlueEssence, "area_up_turret_${spec.id}") {
+              onUpgradeAreaFeature(spec.id, "turrets")
+            }
+            AreaUpgradeButton("Traps T${area.trapDensityTier}/25", area.trapDensityTier, totalBlueEssence, "area_up_traps_${spec.id}") {
+              onUpgradeAreaFeature(spec.id, "traps")
+            }
+            AreaUpgradeButton("Loot T${area.lootRichnessTier}/25", area.lootRichnessTier, totalBlueEssence, "area_up_loot_${spec.id}") {
+              onUpgradeAreaFeature(spec.id, "loot")
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.AreaUpgradeButton(
+  label: String,
+  tier: Int,
+  totalBlueEssence: Long,
+  tag: String,
+  onClick: () -> Unit,
+) {
+  val cost = tier * 300L
+  OutlinedButton(
+    onClick = onClick,
+    enabled = tier < 25 && totalBlueEssence >= cost,
+    shape = RoundedCornerShape(8.dp),
+    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+    modifier = Modifier.weight(1f).height(44.dp).testTag(tag),
+  ) {
+    Text(
+      text = if (tier >= 25) "$label\nMAX" else "$label\n${cost}B",
+      style = MaterialTheme.typography.labelSmall,
+      maxLines = 2,
+    )
+  }
+}

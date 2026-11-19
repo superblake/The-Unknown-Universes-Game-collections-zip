@@ -59,6 +59,7 @@ import com.example.data.local.CloudSyncState
 import com.example.data.local.SaveBundlePreview
 import com.example.data.model.AchievementState
 import com.example.data.model.ArmoryItem
+import com.example.data.model.FriendOnlineStatus
 import com.example.data.model.LinkedAccount
 import com.example.data.model.LobbyConfig
 import com.example.data.model.MatchRecord
@@ -106,6 +107,9 @@ fun OsDesktopScreen(
   onUpdateLobby: ((LobbyConfig) -> LobbyConfig) -> Unit = {},
   onOpenStore: () -> Unit = {},
   onOpenAchievements: () -> Unit = {},
+  onOpenMissions: () -> Unit = {},
+  onOpenMatchBrowser: () -> Unit = {},
+  onOpenSocialHub: (Int) -> Unit = {},
   onSignOut: () -> Unit,
 ) {
   val activeWorld = UniverseCatalog.worldById(profile.activeUniverseId)
@@ -197,8 +201,12 @@ fun OsDesktopScreen(
                 }
               }
               val activeWeapon = ProgressionCatalog.weaponById(progression.weaponCustom.equippedWeaponId)
+              val activeOutfit = progression.activeOutfitSpec()
+              val activeAreaSpec = progression.activeAreaSpec()
+              val activeAreaState = progression.areaState(activeAreaSpec.id)
+              val resonance = progression.essenceResonance(profile.totalEssence)
               Text(
-                text = "LV ${progression.playerLevel} (${progression.playerRankTitle}) • ${activeWeapon.name} W.Lv.${progression.weaponLevel(activeWeapon.id)}",
+                text = "LV ${progression.playerLevel} (${progression.playerRankTitle}) • ${activeOutfit.nameWithVersion} • ${activeWeapon.name}",
                 style = MaterialTheme.typography.labelSmall,
                 color = Color(progression.activePassVersion.accentHex),
                 modifier = Modifier.testTag("os_level_rank_badge"),
@@ -208,6 +216,16 @@ fun OsDesktopScreen(
                 style = MaterialTheme.typography.labelSmall,
                 color = Color(0xFF00E5FF),
                 modifier = Modifier.testTag("os_blue_essence_text"),
+              )
+              Text(
+                text = "R:${progression.redEssence} Y:${progression.yellowEssence} G:${progression.greenEssence} Prism:${progression.combinedEssence} • Shards:${progression.blastShards} • ${activeAreaSpec.name.substringBefore(" (")} (${activeAreaState.ageYears}y ${activeAreaState.currentEra.name})",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFFE040FB),
+              )
+              Text(
+                text = "Resonance ${resonance.summary} • Vacuum Lv.${progression.vacuumBot.level}",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFF00E676),
               )
             }
 
@@ -269,6 +287,12 @@ fun OsDesktopScreen(
               onClick = onOpenAchievements,
             )
             OsDockChip(
+              modifier = Modifier.weight(1f).testTag("os_dock_missions"),
+              label = "MISSIONS",
+              accent = Color(0xFF00E676),
+              onClick = onOpenMissions,
+            )
+            OsDockChip(
               modifier = Modifier.weight(1f),
               label = "BLENDER",
               accent = Color(0xFFFF8F00),
@@ -287,6 +311,29 @@ fun OsDesktopScreen(
               onClick = onOpenExport,
             )
           }
+        }
+      }
+    }
+
+    item {
+      Surface(
+        onClick = onOpenMissions,
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier
+          .fillMaxWidth()
+          .border(1.5.dp, Color(0xFF00E676).copy(alpha = 0.65f), RoundedCornerShape(16.dp))
+          .testTag("os_missions_card"),
+      ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+          Text("630 MULTIVERSE & CAMPAIGN MISSIONS", style = MaterialTheme.typography.titleSmall, color = Color(0xFF00E676))
+          Text(
+            text = "45 Missions per World & Arena • Story Campaign & Mended Convergence Ready",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+          )
         }
       }
     }
@@ -461,7 +508,106 @@ fun OsDesktopScreen(
         accentColor = Color(activeWorld.accentHex),
         onUpdateLobby = onUpdateLobby,
         onOpenFullRoster = { showLobbyRosterDialog = true },
+        onOpenMatchBrowser = onOpenMatchBrowser,
+        onOpenHostPrivate = onOpenMatchBrowser,
       )
+    }
+
+    // Multiverse Communications & Social Hub Card
+    item {
+      val onlineFriends = progression.friends.count { it.status != FriendOnlineStatus.OFFLINE }
+      val latestMsg = progression.chatMessages.lastOrNull()
+      Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier
+          .fillMaxWidth()
+          .border(1.5.dp, Color(0xFF00E5FF).copy(alpha = 0.65f), RoundedCornerShape(18.dp))
+          .testTag("os_social_card"),
+      ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(AppIcons.Group, contentDescription = null, tint = Color(0xFF00E5FF), modifier = Modifier.size(18.dp))
+                Text("COMMS, FRIENDS & CLANS", style = MaterialTheme.typography.titleMedium, color = Color(0xFF00E5FF), fontWeight = FontWeight.Bold)
+              }
+              Text(
+                text = "${progression.friends.size} Friends ($onlineFriends Online) • Clan [${progression.clan.tag}] ${progression.clan.name} (Lv.${progression.clan.level})",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+            }
+            Surface(shape = RoundedCornerShape(8.dp), color = Color(0xFF00E5FF).copy(alpha = 0.2f)) {
+              Text(
+                text = "[${progression.clan.tag}] LV.${progression.clan.level}",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF00E5FF),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp).testTag("os_clan_badge"),
+              )
+            }
+          }
+
+          if (latestMsg != null) {
+            Surface(
+              shape = RoundedCornerShape(10.dp),
+              color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+              modifier = Modifier.fillMaxWidth(),
+            ) {
+              Row(
+                modifier = Modifier.padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+              ) {
+                Text("💬", style = MaterialTheme.typography.bodySmall)
+                Text(
+                  text = "${latestMsg.senderCallsign}: ${latestMsg.content}",
+                  style = MaterialTheme.typography.bodySmall,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                  color = MaterialTheme.colorScheme.onSurface,
+                  modifier = Modifier.weight(1f),
+                )
+              }
+            }
+          }
+
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+              onClick = { onOpenSocialHub(0) },
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(40.dp).testTag("os_open_friends_btn"),
+            ) {
+              Icon(AppIcons.PersonAdd, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(Modifier.width(4.dp))
+              Text("Friends (${progression.friends.size})", style = MaterialTheme.typography.labelSmall)
+            }
+            OutlinedButton(
+              onClick = { onOpenSocialHub(1) },
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(40.dp).testTag("os_open_chat_btn"),
+            ) {
+              Icon(AppIcons.Chat, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(Modifier.width(4.dp))
+              Text("Live Chat", style = MaterialTheme.typography.labelSmall)
+            }
+            OutlinedButton(
+              onClick = { onOpenSocialHub(4) },
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(40.dp).testTag("os_open_clan_btn"),
+            ) {
+              Icon(AppIcons.Shield, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(Modifier.width(4.dp))
+              Text("Clan [${progression.clan.tag}]", style = MaterialTheme.typography.labelSmall)
+            }
+          }
+        }
+      }
     }
 
     // Blue Essence Store & Achievements Menu Quick Row

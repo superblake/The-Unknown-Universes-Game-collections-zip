@@ -4,9 +4,10 @@ import android.view.KeyEvent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -75,9 +77,12 @@ import com.example.data.model.UniverseCatalog
 import com.example.ui.rig.RigEvaluator
 import com.example.ui.rig.drawArenaHostile
 import com.example.ui.rig.drawRigCharacter
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import com.example.data.model.ChatChannel
+import com.example.data.model.SocialCatalog
 import com.example.ui.theme.AppIcons
-import kotlin.math.PI
-import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
@@ -91,6 +96,7 @@ fun ArenaScreen(
   isPausedForSettings: Boolean = false,
   onOpenSettings: () -> Unit = {},
   onRecordProgression: (MatchProgressionReport) -> Unit = {},
+  onSendChatMessage: (ChatChannel, String, String?, Boolean) -> Unit = { _, _, _, _ -> },
   onSaveMatchAndExit: (score: Long, wave: Long, eliminations: Long, extracted: Boolean, durationSec: Long) -> Unit,
 ) {
   val world = remember(profile.activeUniverseId) { UniverseCatalog.worldById(profile.activeUniverseId) }
@@ -99,9 +105,17 @@ fun ArenaScreen(
   val activeRig = remember(rigs, profile.activeRigId) {
     rigs.firstOrNull { it.id == profile.activeRigId } ?: rigs.firstOrNull()
   }
+  val activeOutfit = remember(progression.equippedOutfitId) { progression.activeOutfitSpec() }
+  val activeAreaSpec = remember(progression.activeAreaId) { progression.activeAreaSpec() }
+  val activeAreaState = remember(progression.activeAreaId, progression.areaStates) { progression.areaState() }
 
-  val loadout = remember(armory, world.accentHex, progression) {
-    ArenaLoadoutStats.fromArmory(armory, Color(world.accentHex), progression)
+  val loadout = remember(armory, world.accentHex, progression, profile.totalEssence) {
+    ArenaLoadoutStats.fromArmory(
+      armory = armory,
+      fallbackAccent = Color(world.accentHex),
+      progression = progression,
+      blueEssence = profile.totalEssence,
+    )
   }
   val hasConsumable = remember(armory) { armory.any { it.equipped && it.category == "consumable" } }
 
@@ -113,6 +127,8 @@ fun ArenaScreen(
       hasConsumableEquipped = hasConsumable,
       initialSettings = settings,
       progression = progression,
+      armoryItems = armory,
+      initialBlueEssence = profile.totalEssence,
     )
   }
 
@@ -138,9 +154,24 @@ fun ArenaScreen(
   val capePathScratch = remember { Path() }
   val torsoPathScratch = remember { Path() }
   val focusRequester = remember { FocusRequester() }
+  val heldKeys = remember { mutableSetOf<Int>() }
   var thumbOffsetX by remember { mutableFloatStateOf(0f) }
   var thumbOffsetY by remember { mutableFloatStateOf(0f) }
   var hudFps by remember { mutableIntStateOf(60) }
+  var showTacticalLiveChatDialog by remember { mutableStateOf(false) }
+
+  fun syncKeyboardAxes() {
+    var dx = 0f
+    var dy = 0f
+    if (heldKeys.contains(KeyEvent.KEYCODE_A) || heldKeys.contains(KeyEvent.KEYCODE_DPAD_LEFT)) dx -= 1f
+    if (heldKeys.contains(KeyEvent.KEYCODE_D) || heldKeys.contains(KeyEvent.KEYCODE_DPAD_RIGHT)) dx += 1f
+    if (heldKeys.contains(KeyEvent.KEYCODE_W) || heldKeys.contains(KeyEvent.KEYCODE_DPAD_UP)) dy -= 1f
+    if (heldKeys.contains(KeyEvent.KEYCODE_S) || heldKeys.contains(KeyEvent.KEYCODE_DPAD_DOWN)) dy += 1f
+    sim.joyDx = dx
+    sim.joyDy = dy
+    thumbOffsetX = dx * 22f * settings.joystickScale
+    thumbOffsetY = dy * 22f * settings.joystickScale
+  }
 
   LaunchedEffect(sim, isPausedForSettings, settings.targetFpsCap, settings.showFpsCounter) {
     runCatching { focusRequester.requestFocus() }
@@ -192,26 +223,37 @@ fun ArenaScreen(
       .background(if (settings.effectiveHighContrast) Color.Black else Color(0xFF060911))
       .padding(outerMargin)
       .focusRequester(focusRequester)
+      .focusable()
       .onPreviewKeyEvent { keyEvent ->
+        val code = keyEvent.nativeKeyEvent.keyCode
         if (keyEvent.type == KeyEventType.KeyDown) {
-          when (keyEvent.nativeKeyEvent.keyCode) {
-            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_W -> { sim.joyDy = -1f; true }
-            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_S -> { sim.joyDy = 1f; true }
-            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_A -> { sim.joyDx = -1f; true }
-            KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_D -> { sim.joyDx = 1f; true }
+          when (code) {
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_W,
+            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_S,
+            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_A,
+            KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_D -> {
+              heldKeys.add(code)
+              syncKeyboardAxes()
+              true
+            }
             KeyEvent.KEYCODE_SPACE, KeyEvent.KEYCODE_BUTTON_A -> { sim.fireVolley(forceManual = true); true }
             KeyEvent.KEYCODE_E, KeyEvent.KEYCODE_BUTTON_X -> { sim.triggerPower(); true }
             KeyEvent.KEYCODE_Q, KeyEvent.KEYCODE_BUTTON_Y -> { sim.triggerConsumable(); true }
             KeyEvent.KEYCODE_F, KeyEvent.KEYCODE_BUTTON_L1 -> { sim.triggerWorldInteract(); true }
+            KeyEvent.KEYCODE_R -> { sim.cycleActiveWeapon(); true }
+            KeyEvent.KEYCODE_T -> { sim.triggerAllTraps(); true }
+            KeyEvent.KEYCODE_Z -> { sim.activateEquippedWonderSlot(); true }
+            KeyEvent.KEYCODE_C -> { sim.triggerLethal(); true }
+            KeyEvent.KEYCODE_V -> { sim.triggerTactical(); true }
+            KeyEvent.KEYCODE_P -> { sim.upgradePackAPunch(); true }
             KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_BUTTON_B -> { sim.triggerDash(); true }
             else -> false
           }
         } else if (keyEvent.type == KeyEventType.KeyUp) {
-          when (keyEvent.nativeKeyEvent.keyCode) {
-            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_W, KeyEvent.KEYCODE_S -> { sim.joyDy = 0f; true }
-            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_A, KeyEvent.KEYCODE_D -> { sim.joyDx = 0f; true }
-            else -> false
-          }
+          if (heldKeys.remove(code)) {
+            syncKeyboardAxes()
+            true
+          } else false
         } else false
       }
   ) {
@@ -220,7 +262,7 @@ fun ArenaScreen(
       color = hudSurfaceBg,
       modifier = Modifier.fillMaxWidth().border(1.dp, palette.playerAccent.copy(alpha = 0.6f)),
     ) {
-      Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+      Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Row(
           modifier = Modifier.fillMaxWidth(),
           horizontalArrangement = Arrangement.SpaceBetween,
@@ -247,20 +289,23 @@ fun ArenaScreen(
             Column {
               val elimTarget = if (mode.id == "multiplayer") "${sim.hudElims}/25" else "${sim.hudElims}"
               Text(
-                text = "${world.title.substringBefore(":")} • ${mode.shortTag} • TIER ${formatRoundRoman(sim.hudPackTier.toLong())}",
-                style = MaterialTheme.typography.titleMedium,
+                text = "${activeAreaSpec.name.substringBefore(" (")} (${activeAreaState.ageYears}y) • ${mode.shortTag} • PACK ${formatRoundRoman(sim.hudPackTier.toLong())}",
+                style = MaterialTheme.typography.titleSmall,
                 color = palette.playerAccent,
+                maxLines = 1,
               )
               Text(
-                text = "SCORE ${sim.hudScore} • ELIMS $elimTarget • SHD ${sim.hudShield}/${loadout.maxShield}",
+                text = "SCORE ${sim.hudScore} • ELIMS $elimTarget • SHD ${sim.hudShield}/${sim.loadout.maxShield} • VAC ${sim.hudVacuumChargePct}%",
                 style = MaterialTheme.typography.labelSmall,
                 color = Color.White,
+                maxLines = 1,
               )
               Text(
-                text = "LV ${loadout.playerLevel} • ${loadout.weaponSpec.name} (W.Lv.${loadout.weaponLevel} T${loadout.weaponTier}) • ${loadout.activePassVersion.title.substringBefore(":")} • ${progression.lobbyConfig.partyMode.shortLabel} ${progression.lobbyConfig.targetPlayers}P (${sim.hudBotCount} BOTS)",
+                text = "${activeOutfit.nameWithVersion} • LV ${sim.loadout.playerLevel} • ${sim.loadout.activePassVersion.title.substringBefore(":")} • ${sim.hudActiveWeaponName} (${sim.activeWeaponIndex + 1}/${sim.equippedWeaponIds.size}) • ${progression.lobbyConfig.targetPlayers}P (${sim.hudBotCount} BOTS)",
                 style = MaterialTheme.typography.labelSmall,
-                color = Color(loadout.activePassVersion.accentHex),
+                color = Color(sim.loadout.activePassVersion.accentHex),
                 modifier = Modifier.testTag("arena_level_weapon_hud"),
+                maxLines = 1,
               )
             }
           }
@@ -269,6 +314,22 @@ fun ArenaScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
           ) {
+            if (progression.joinedMatch?.isPrivate == true || progression.privateMatchRules.isPrivate) {
+              val pCode = progression.joinedMatch?.roomCode ?: progression.privateMatchRules.roomCode
+              Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = Color(0xFFFF9100).copy(alpha = 0.22f),
+                modifier = Modifier.border(1.dp, Color(0xFFFF9100), RoundedCornerShape(6.dp)).testTag("private_match_hud_badge"),
+              ) {
+                Text(
+                  text = "🔒 $pCode",
+                  style = MaterialTheme.typography.labelSmall,
+                  fontWeight = FontWeight.Bold,
+                  color = Color(0xFFFF9100),
+                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                )
+              }
+            }
             if (settings.showFpsCounter) {
               Surface(
                 shape = RoundedCornerShape(6.dp),
@@ -282,6 +343,16 @@ fun ArenaScreen(
                   modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                 )
               }
+            }
+            IconButton(
+              onClick = { showTacticalLiveChatDialog = true },
+              modifier = Modifier.size(48.dp).testTag("live_chat_arena_btn"),
+            ) {
+              Icon(
+                imageVector = AppIcons.Chat,
+                contentDescription = "Live Combat Tactical Comms",
+                tint = Color(0xFF00E5FF),
+              )
             }
             IconButton(
               onClick = onOpenSettings,
@@ -315,7 +386,7 @@ fun ArenaScreen(
           }
         }
 
-        // Segmented Shield Bar + Active Wonder Weapon / Drops Strip
+        // Segmented Shield Bar + Building / Wonder / Resonance / Multi-Essence Strip
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
           Box(
             modifier = Modifier
@@ -324,7 +395,7 @@ fun ArenaScreen(
               .clip(RoundedCornerShape(4.dp))
               .background(Color(0xFF1C2742))
           ) {
-            val pct = (sim.hudShield.toFloat() / loadout.maxShield.coerceAtLeast(1)).coerceIn(0f, 1f)
+            val pct = (sim.hudShield.toFloat() / sim.loadout.maxShield.coerceAtLeast(1)).coerceIn(0f, 1f)
             Box(
               modifier = Modifier
                 .fillMaxWidth(pct)
@@ -334,39 +405,52 @@ fun ArenaScreen(
           }
           val activeWonder = sim.hudActiveWonder
           val dropText = sim.hudActiveDropText
-          if (activeWonder != null) {
-            Surface(
-              shape = RoundedCornerShape(6.dp),
-              color = Color(activeWonder.accentHex).copy(alpha = 0.22f),
-              modifier = Modifier.border(1.dp, Color(activeWonder.accentHex), RoundedCornerShape(6.dp)).testTag("arena_wonder_badge"),
-            ) {
+          val bld = sim.hudActiveBuildingName
+          when {
+            activeWonder != null -> {
+              Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = Color(activeWonder.accentHex).copy(alpha = 0.22f),
+                modifier = Modifier.border(1.dp, Color(activeWonder.accentHex), RoundedCornerShape(6.dp)).testTag("arena_wonder_badge"),
+              ) {
+                Text(
+                  text = "WONDER: ${activeWonder.shortTag} (${sim.hudWonderSecLeft}s)",
+                  style = MaterialTheme.typography.labelSmall,
+                  fontWeight = FontWeight.Bold,
+                  color = Color(activeWonder.accentHex),
+                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+              }
+            }
+            bld != null -> {
               Text(
-                text = "WONDER: ${activeWonder.shortTag} (${sim.hudWonderSecLeft}s)",
+                text = "INSIDE: $bld",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
-                color = Color(activeWonder.accentHex),
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                color = Color(0xFF00E676),
               )
             }
-          } else if (dropText != null) {
-            Text(
-              text = dropText,
-              style = MaterialTheme.typography.labelSmall,
-              fontWeight = FontWeight.Bold,
-              color = palette.dropBuff,
-            )
-          } else if (!settings.simplifiedHud && loadout.activePerksSummary.isNotEmpty()) {
-            Text(
-              text = loadout.activePerksSummary,
-              style = MaterialTheme.typography.labelSmall,
-              color = palette.safeExfil,
-            )
+            dropText != null -> {
+              Text(
+                text = dropText,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = palette.dropBuff,
+              )
+            }
+            !settings.simplifiedHud -> {
+              Text(
+                text = "SHARDS:${progression.blastShards + sim.blastShardsEarned} • ${sim.loadout.resonance.summary}",
+                style = MaterialTheme.typography.labelSmall,
+                color = palette.safeExfil,
+              )
+            }
           }
         }
       }
     }
 
-    // Playable Multiverse Arena Canvas + Optional Touch-to-Aim
+    // Playable 2.2x2.2 Scrolling Multiverse Arena Canvas + Touch-to-Aim
     Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
       Canvas(
         modifier = Modifier
@@ -377,7 +461,9 @@ fun ArenaScreen(
               val down = awaitFirstDown(requireUnconsumed = false)
               val w = size.width.toFloat().coerceAtLeast(1f)
               val h = size.height.toFloat().coerceAtLeast(1f)
-              sim.setTouchAim(down.position.x / w, down.position.y / h, active = true)
+              val cx0 = sim.cameraOriginX()
+              val cy0 = sim.cameraOriginY()
+              sim.setTouchAim(cx0 + (down.position.x / w), cy0 + (down.position.y / h), active = true)
               sim.fireVolley(forceManual = true)
               while (true) {
                 val event = awaitPointerEvent()
@@ -387,7 +473,9 @@ fun ArenaScreen(
                   break
                 }
                 change.consume()
-                sim.setTouchAim(change.position.x / w, change.position.y / h, active = true)
+                val cx = sim.cameraOriginX()
+                val cy = sim.cameraOriginY()
+                sim.setTouchAim(cx + (change.position.x / w), cy + (change.position.y / h), active = true)
               }
             }
           }
@@ -396,8 +484,11 @@ fun ArenaScreen(
         val tick = sim.renderNonce
         val w = size.width
         val h = size.height
+        val camX = sim.cameraOriginX()
+        val camY = sim.cameraOriginY()
         val glowOn = settings.dynamicGlowEffects && settings.graphicsQuality != GraphicsQuality.LOW
         val highContrast = settings.effectiveHighContrast
+        val pulse = if (settings.reduceMotion || settings.reduceFlashes) 0.3f else (sin(sim.elapsedTicks * 0.12f) + 1f) * 0.5f
 
         drawWorldArenaBackdrop(
           worldId = world.id,
@@ -418,20 +509,31 @@ fun ArenaScreen(
           floorAccentOverride = if (settings.colorBlindMode == ColorBlindMode.NONE && !highContrast) {
             Color(progression.levelCustom.floorAccentHex)
           } else null,
+          camX = camX,
+          camY = camY,
+          areaAgeEra = activeAreaState.currentEra,
+        )
+
+        drawBuildingsAndTraps(
+          sim = sim,
+          camX = camX,
+          camY = camY,
+          glowOn = glowOn,
+          pulse = pulse,
         )
 
         if (mode.id == "br") {
           drawCircle(
             color = palette.dropHazard,
             radius = sim.brRingRadius * minOf(w, h),
-            center = Offset(w * 0.5f, h * 0.5f),
+            center = Offset((ARENA_CENTER - camX) * w, (ARENA_CENTER - camY) * h),
             style = Stroke(width = if (highContrast) 6f else 4f),
           )
         }
 
         if (mode.id == "dmz") {
           val exfilReady = sim.hudIntelCollected >= 3
-          val exfilCenter = Offset(w * 0.5f, h * 0.16f)
+          val exfilCenter = Offset((ARENA_CENTER - camX) * w, (0.30f - camY) * h)
           drawCircle(
             color = if (exfilReady) palette.safeExfil else palette.dropBuff.copy(alpha = 0.65f),
             radius = 32f,
@@ -452,18 +554,26 @@ fun ArenaScreen(
           for (i in 0 until sim.intels.size) {
             val intel = sim.intels[i]
             if (!intel.collected) {
-              val ip = Offset(intel.x * w, intel.y * h)
+              val ip = Offset((intel.x - camX) * w, (intel.y - camY) * h)
               if (glowOn) drawCircle(palette.dropBuff.copy(alpha = 0.25f), radius = 20f, center = ip)
               drawCircle(palette.dropBuff, radius = 11f, center = ip)
             }
           }
         }
 
-        // Collectible Drops (shape-coded ring + inner core for colorblind safety)
-        val pulse = if (settings.reduceMotion || settings.reduceFlashes) 0.3f else (sin(sim.elapsedTicks * 0.12f) + 1f) * 0.5f
+        drawVacuumAndCollectibles(
+          sim = sim,
+          camX = camX,
+          camY = camY,
+          glowOn = glowOn,
+          pulse = pulse,
+        )
+
+        // Power-up Field Drops
         for (i in 0 until sim.drops.size) {
           val d = sim.drops[i]
-          val pos = Offset(d.x * w, d.y * h)
+          val pos = Offset((d.x - camX) * w, (d.y - camY) * h)
+          if (pos.x < -30f || pos.x > w + 30f || pos.y < -30f || pos.y > h + 30f) continue
           val dCol = when (d.kind) {
             ArenaDropKind.NUKE -> palette.playerAccent
             ArenaDropKind.INSTA_KILL -> palette.dropHazard
@@ -475,23 +585,15 @@ fun ArenaScreen(
           drawCircle(Color.White, radius = 4f, center = pos)
         }
 
-        // Random Mystery Wonder Weapon Pickups (Glowing Diamond/Cube Beacon)
+        // Random Mystery Wonder Weapon Pickups
         for (i in 0 until sim.wonderPickups.size) {
           val wp = sim.wonderPickups[i]
-          val pos = Offset(wp.x * w, wp.y * h)
+          val pos = Offset((wp.x - camX) * w, (wp.y - camY) * h)
+          if (pos.x < -30f || pos.x > w + 30f || pos.y < -30f || pos.y > h + 30f) continue
           val wCol = Color(wp.kind.accentHex)
           if (glowOn) drawCircle(wCol.copy(alpha = 0.28f + pulse * 0.22f), radius = 22f, center = pos)
-          drawRect(
-            color = Color(0xFF0A1222),
-            topLeft = Offset(pos.x - 11f, pos.y - 11f),
-            size = Size(22f, 22f),
-          )
-          drawRect(
-            color = wCol,
-            topLeft = Offset(pos.x - 11f, pos.y - 11f),
-            size = Size(22f, 22f),
-            style = Stroke(width = 3f),
-          )
+          drawRect(color = Color(0xFF0A1222), topLeft = Offset(pos.x - 11f, pos.y - 11f), size = Size(22f, 22f))
+          drawRect(color = wCol, topLeft = Offset(pos.x - 11f, pos.y - 11f), size = Size(22f, 22f), style = Stroke(width = 3f))
           drawCircle(Color.White, radius = 4.5f, center = pos)
         }
 
@@ -499,7 +601,7 @@ fun ArenaScreen(
           drawCircle(
             color = palette.playerAccent.copy(alpha = 0.65f),
             radius = sim.pulseRingRadius * minOf(w, h),
-            center = Offset(sim.playerX * w, sim.playerY * h),
+            center = Offset((sim.playerX - camX) * w, (sim.playerY - camY) * h),
             style = Stroke(width = 7f),
           )
         }
@@ -508,34 +610,25 @@ fun ArenaScreen(
         for (i in 0 until sim.arcs.size) {
           val arc = sim.arcs[i]
           val a = (arc.life / 18f).coerceIn(0f, 1f)
+          val p1 = Offset((arc.x1 - camX) * w, (arc.y1 - camY) * h)
+          val p2 = Offset((arc.x2 - camX) * w, (arc.y2 - camY) * h)
           if (glowOn) {
-            drawLine(
-              color = palette.playerAccent.copy(alpha = a * 0.75f),
-              start = Offset(arc.x1 * w, arc.y1 * h),
-              end = Offset(arc.x2 * w, arc.y2 * h),
-              strokeWidth = 6f * a,
-              cap = StrokeCap.Round,
-            )
+            drawLine(color = arc.color.copy(alpha = a * 0.78f), start = p1, end = p2, strokeWidth = 6f * a, cap = StrokeCap.Round)
           }
-          drawLine(
-            color = Color.White.copy(alpha = a),
-            start = Offset(arc.x1 * w, arc.y1 * h),
-            end = Offset(arc.x2 * w, arc.y2 * h),
-            strokeWidth = 2.5f,
-            cap = StrokeCap.Round,
-          )
+          drawLine(color = Color.White.copy(alpha = a), start = p1, end = p2, strokeWidth = 2.5f, cap = StrokeCap.Round)
         }
 
         // Projectiles
         for (i in 0 until sim.bolts.size) {
           val b = sim.bolts[i]
-          val head = Offset(b.x * w, b.y * h)
+          val head = Offset((b.x - camX) * w, (b.y - camY) * h)
+          if (head.x < -30f || head.x > w + 30f || head.y < -30f || head.y > h + 30f) continue
           if (b.isEnemyShot) {
             if (glowOn) drawCircle(palette.enemyShot.copy(alpha = 0.45f), radius = 10f, center = head)
             drawCircle(palette.enemyShot, radius = if (highContrast) 7f else 5f, center = head)
           } else {
-            val tail = Offset((b.x - b.vx * 2.2f) * w, (b.y - b.vy * 2.2f) * h)
-            val boltCol = if (settings.colorBlindMode == com.example.data.local.ColorBlindMode.NONE) b.color else palette.playerAccent
+            val tail = Offset((b.x - b.vx * 2.2f - camX) * w, (b.y - b.vy * 2.2f - camY) * h)
+            val boltCol = if (settings.colorBlindMode == ColorBlindMode.NONE) b.color else palette.playerAccent
             if (glowOn) {
               drawLine(boltCol.copy(alpha = 0.58f), tail, head, strokeWidth = if (b.isSupercharged) 10f else 6.5f, cap = StrokeCap.Round)
             }
@@ -547,22 +640,27 @@ fun ArenaScreen(
         if (settings.particleDensity != ParticleDensity.OFF) {
           for (i in 0 until sim.sparks.size) {
             val sp = sim.sparks[i]
+            val sx = (sp.x - camX) * w
+            val sy = (sp.y - camY) * h
             val r = (sp.maxLife - sp.life).coerceAtLeast(3f) * 1.8f
             drawCircle(
-              color = palette.playerAccent.copy(alpha = (sp.life / sp.maxLife).coerceIn(0f, 1f)),
+              color = sp.color.copy(alpha = (sp.life / sp.maxLife).coerceIn(0f, 1f)),
               radius = r,
-              center = Offset(sp.x * w, sp.y * h),
+              center = Offset(sx, sy),
               style = Stroke(width = 2.5f),
             )
           }
         }
 
         // Animated Lore Hostiles & Bosses
-        val overrideEnemyCol = if (settings.colorBlindMode != com.example.data.local.ColorBlindMode.NONE || highContrast) palette.hostile else null
+        val overrideEnemyCol = if (settings.colorBlindMode != ColorBlindMode.NONE || highContrast) palette.hostile else null
         for (i in 0 until sim.hostiles.size) {
           val e = sim.hostiles[i]
+          val ex = (e.x - camX) * w
+          val ey = (e.y - camY) * h
+          if (ex < -60f || ex > w + 60f || ey < -60f || ey > h + 60f) continue
           drawArenaHostile(
-            center = Offset(e.x * w, e.y * h),
+            center = Offset(ex, ey),
             worldId = world.id,
             isElite = e.isElite,
             stasisActive = sim.stasisTicks > 0f,
@@ -578,18 +676,16 @@ fun ArenaScreen(
           )
         }
 
-        // AI Lobby Bot Combatants (Allied Squadmates & Rival Bots)
+        // AI Lobby Bot Combatants
         for (i in 0 until sim.arenaBots.size) {
           val bot = sim.arenaBots[i]
           if (bot.hp <= 0) continue
-          val botOrigin = Offset(bot.x * w, bot.y * h)
+          val bx = (bot.x - camX) * w
+          val by = (bot.y - camY) * h
+          if (bx < -50f || bx > w + 50f || by < -50f || by > h + 50f) continue
+          val botOrigin = Offset(bx, by)
           val botRingCol = if (bot.isAllied) palette.safeExfil else palette.dropBuff
-          drawCircle(
-            color = botRingCol.copy(alpha = 0.72f),
-            radius = 20f,
-            center = botOrigin,
-            style = Stroke(width = 2.4f),
-          )
+          drawCircle(color = botRingCol.copy(alpha = 0.72f), radius = 20f, center = botOrigin, style = Stroke(width = 2.4f))
           val botSkel = RigEvaluator.evaluate(
             origin = botOrigin,
             scalePx = 56f,
@@ -615,31 +711,19 @@ fun ArenaScreen(
           )
         }
 
-        // Custom Optic Aim Reticle Indicator
+        // Aim Reticle
         val retPos = if (sim.touchAimActive) {
-          Offset(sim.touchAimX * w, sim.touchAimY * h)
+          Offset((sim.touchAimX - camX) * w, (sim.touchAimY - camY) * h)
         } else {
-          Offset((sim.playerX + sim.aimX * 0.085f) * w, (sim.playerY + sim.aimY * 0.085f) * h)
+          Offset((sim.playerX + sim.aimX * 0.085f - camX) * w, (sim.playerY + sim.aimY * 0.085f - camY) * h)
         }
         val opticCol = if (settings.colorBlindMode == ColorBlindMode.NONE && !highContrast) {
-          Color(progression.weaponCustom.tracerColorHex)
+          sim.loadout.tracerColor
         } else palette.playerAccent
-        when (progression.weaponCustom.opticId) {
-          "isac_thermal" -> {
-            drawLine(opticCol, Offset(retPos.x - 11f, retPos.y), Offset(retPos.x + 11f, retPos.y), strokeWidth = 2.2f)
-            drawLine(opticCol, Offset(retPos.x, retPos.y - 11f), Offset(retPos.x, retPos.y + 11f), strokeWidth = 2.2f)
-          }
-          "starblade_reflex" -> {
-            drawCircle(opticCol.copy(alpha = 0.85f), radius = 12f, center = retPos, style = Stroke(width = 2.5f))
-            drawCircle(Color.White, radius = 4f, center = retPos, style = Stroke(width = 1.8f))
-          }
-          else -> {
-            drawCircle(opticCol.copy(alpha = 0.8f), radius = if (highContrast) 11f else 9f, center = retPos, style = Stroke(width = 2.5f))
-            drawCircle(Color.White.copy(alpha = 0.9f), radius = 2.5f, center = retPos)
-          }
-        }
+        drawCircle(opticCol.copy(alpha = 0.85f), radius = 10f, center = retPos, style = Stroke(width = 2.4f))
+        drawCircle(Color.White.copy(alpha = 0.9f), radius = 2.5f, center = retPos)
 
-        // Player Custom Rig Character with Character Customization
+        // Player Character with Active Outfit & Rig
         val isMoving = (sim.joyDx * sim.joyDx + sim.joyDy * sim.joyDy) > 0.0064f
         val playerClip = when {
           settings.reduceMotion -> "idle"
@@ -647,7 +731,7 @@ fun ArenaScreen(
           else -> activeRig?.activeClip ?: "idle"
         }
         val skel = RigEvaluator.evaluate(
-          origin = Offset(sim.playerX * w, sim.playerY * h),
+          origin = Offset((sim.playerX - camX) * w, (sim.playerY - camY) * h),
           scalePx = 70f * (activeRig?.rigScale?.toFloat() ?: 1f),
           poseAngles = activeRig?.poseAngles ?: UniverseCatalog.defaultPoseMap(),
           clip = playerClip,
@@ -657,16 +741,16 @@ fun ArenaScreen(
         )
         val visorHex = ProgressionCatalog.visorStyles
           .firstOrNull { it.first == progression.characterCustom.visorStyleId }
-          ?.second ?: progression.characterCustom.accentArmorHex
+          ?.second ?: activeOutfit.visorHex
         val customPrimary = if (settings.colorBlindMode == ColorBlindMode.NONE && !highContrast) {
-          Color(progression.characterCustom.primaryArmorHex)
+          Color(activeOutfit.primaryHex)
         } else palette.playerAccent
         val customSecondary = if (settings.colorBlindMode == ColorBlindMode.NONE && !highContrast) {
-          Color(progression.characterCustom.accentArmorHex)
+          Color(activeOutfit.secondaryHex)
         } else palette.playerSecondary
         drawRigCharacter(
           skeleton = skel,
-          archetype = activeRig?.archetype ?: "operator",
+          archetype = activeOutfit.rigArchetype.ifBlank { activeRig?.archetype ?: "operator" },
           primaryColor = customPrimary,
           secondaryColor = customSecondary,
           showBonesOverlay = false,
@@ -676,49 +760,50 @@ fun ArenaScreen(
           isDashing = sim.dashInvulnTicks > 0f,
           dynamicGlow = glowOn,
           highContrast = highContrast,
-          cloakOverride = progression.characterCustom.cloakEnabled,
+          cloakOverride = activeOutfit.cloakEnabled,
           visorColorOverride = if (settings.colorBlindMode == ColorBlindMode.NONE && !highContrast) Color(visorHex) else null,
-          auraTrailId = progression.characterCustom.auraTrailId,
+          auraTrailId = activeOutfit.auraId,
         )
 
-        // Corner Tactical Mini-Radar (hidden if disabled or Simplified HUD active)
+        // Full-Arena 2.2x2.2 Mini-Radar showing buildings, traps, hostiles, bots & player
         if (settings.showMiniRadar && !settings.simplifiedHud) {
-          val radarR = 36f
+          val radarR = 38f
           val radarCenter = Offset(w - radarR - 14f, radarR + 14f)
-          drawCircle(Color(0xBB080D1A), radius = radarR, center = radarCenter)
-          drawCircle(palette.playerAccent.copy(alpha = 0.7f), radius = radarR, center = radarCenter, style = Stroke(width = 2f))
-          drawCircle(palette.radarPlayer, radius = 3.5f, center = Offset(radarCenter.x + (sim.playerX - 0.5f) * radarR * 1.6f, radarCenter.y + (sim.playerY - 0.5f) * radarR * 1.6f))
+          drawCircle(Color(0xCC080D1A), radius = radarR, center = radarCenter)
+          drawCircle(palette.playerAccent.copy(alpha = 0.75f), radius = radarR, center = radarCenter, style = Stroke(width = 2f))
+          for (bi in 0 until sim.buildings.size) {
+            val b = sim.buildings[bi]
+            val rx = radarCenter.x + (((b.x + b.width * 0.5f) / ARENA_WORLD_SIZE) - 0.5f) * radarR * 1.7f
+            val ry = radarCenter.y + (((b.y + b.height * 0.5f) / ARENA_WORLD_SIZE) - 0.5f) * radarR * 1.7f
+            drawCircle(if (b.explored) Color(0xFF00E676) else b.accentColor, radius = 2.2f, center = Offset(rx, ry))
+          }
+          drawCircle(
+            palette.radarPlayer,
+            radius = 3.8f,
+            center = Offset(
+              radarCenter.x + ((sim.playerX / ARENA_WORLD_SIZE) - 0.5f) * radarR * 1.7f,
+              radarCenter.y + ((sim.playerY / ARENA_WORLD_SIZE) - 0.5f) * radarR * 1.7f,
+            ),
+          )
           for (i in 0 until sim.hostiles.size) {
             val e = sim.hostiles[i]
             drawCircle(
               color = if (e.isBoss) palette.boss else palette.hostile,
-              radius = if (e.isBoss) 3.8f else 2.5f,
-              center = Offset(radarCenter.x + (e.x - 0.5f) * radarR * 1.6f, radarCenter.y + (e.y - 0.5f) * radarR * 1.6f),
-            )
-          }
-          for (i in 0 until sim.arenaBots.size) {
-            val bot = sim.arenaBots[i]
-            if (bot.hp <= 0) continue
-            drawCircle(
-              color = if (bot.isAllied) palette.safeExfil else palette.dropBuff,
-              radius = 2.4f,
-              center = Offset(radarCenter.x + (bot.x - 0.5f) * radarR * 1.6f, radarCenter.y + (bot.y - 0.5f) * radarR * 1.6f),
+              radius = if (e.isBoss) 3.8f else 2.2f,
+              center = Offset(
+                radarCenter.x + ((e.x / ARENA_WORLD_SIZE) - 0.5f) * radarR * 1.7f,
+                radarCenter.y + ((e.y / ARENA_WORLD_SIZE) - 0.5f) * radarR * 1.7f,
+              ),
             )
           }
         }
 
-        // Damage Screen-Edge Flash (disabled completely when reduceFlashes is ON!)
         if (sim.damageFlashTicks > 0f && !settings.reduceFlashes) {
-          drawRect(
-            color = palette.enemyShot.copy(alpha = 0.35f),
-            topLeft = Offset.Zero,
-            size = Size(w, h),
-            style = Stroke(width = 22f),
-          )
+          drawRect(color = palette.enemyShot.copy(alpha = 0.35f), topLeft = Offset.Zero, size = Size(w, h), style = Stroke(width = 22f))
         }
       }
 
-      // Boss Health Banner / Active Callout & Visual Accessibility Captions
+      // Boss Health Banner & Action Callouts
       Column(
         modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -744,10 +829,10 @@ fun ArenaScreen(
           }
         }
 
-        if (settings.alwaysShowActionCues && (sim.hudCallout != null || mode.id == "dmz" || sim.hudShield < loadout.maxShield / 3)) {
+        if (settings.alwaysShowActionCues && (sim.hudCallout != null || mode.id == "dmz" || sim.hudShield < sim.loadout.maxShield / 3)) {
           val captionText = sim.hudCallout ?: when {
-            sim.hudShield < loadout.maxShield / 3 -> "LOW SHIELD — TAP STIM OR DASH!"
-            mode.id == "dmz" && sim.hudIntelCollected >= 3 -> "EXFIL READY — Hold Top Beacon!"
+            sim.hudShield < sim.loadout.maxShield / 3 -> "LOW SHIELD — TAP SURGE / TACTICAL / DASH!"
+            mode.id == "dmz" && sim.hudIntelCollected >= 3 -> "EXFIL READY — Reach Northern Beacon!"
             mode.id == "dmz" -> "DMZ Intel Cores: ${sim.hudIntelCollected} / 3"
             else -> ""
           }
@@ -768,7 +853,6 @@ fun ArenaScreen(
         }
       }
 
-      // Sandbox Mode Quick Test Bar
       if (mode.id == "sandbox" && !sim.hudRunEnded && !settings.simplifiedHud) {
         Row(
           modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp),
@@ -783,13 +867,13 @@ fun ArenaScreen(
               ) { Text("+Boss", style = MaterialTheme.typography.labelSmall) }
               OutlinedButton(
                 onClick = {
-                  sim.hudPackTier = 10
-                  sim.maxPackTierReached = 10
-                  sim.postCallout("SANDBOX PACK-A-TIER X (OMEGA) MAXED!")
+                  sim.hudPackTier = 25
+                  sim.maxPackTierReached = 25
+                  sim.postCallout("SANDBOX PACK-A-TIER XXV (MULTIVERSAL) MAXED!")
                 },
                 modifier = Modifier.height(36.dp),
                 shape = RoundedCornerShape(8.dp),
-              ) { Text("Tier X", style = MaterialTheme.typography.labelSmall) }
+              ) { Text("Tier XXV", style = MaterialTheme.typography.labelSmall) }
               OutlinedButton(
                 onClick = { sim.spawnRandomWonderWeapon() },
                 modifier = Modifier.height(36.dp).testTag("sandbox_spawn_wonder_btn"),
@@ -800,6 +884,8 @@ fun ArenaScreen(
                   sim.powerCd = 0f
                   sim.interactCd = 0f
                   sim.consumableCd = 0f
+                  sim.lethalCd = 0f
+                  sim.tacticalCd = 0f
                   sim.overdriveTicks = 300f
                   sim.postCallout("ALL COOLDOWNS RESET!")
                 },
@@ -828,8 +914,8 @@ fun ArenaScreen(
             )
             Spacer(Modifier.height(8.dp))
             Text(
-              text = "Score: ${sim.hudScore} • Round ${sim.hudWave} • ${sim.hudElims} Eliminations",
-              style = MaterialTheme.typography.titleLarge,
+              text = "Score: ${sim.hudScore} • Round ${sim.hudWave} • ${sim.hudElims} Elims • ${sim.buildingsExploredCount}/${sim.buildings.size} Buildings • +${sim.blastShardsEarned} Shards",
+              style = MaterialTheme.typography.titleMedium,
               color = Color.White,
             )
             Spacer(Modifier.height(18.dp))
@@ -847,21 +933,21 @@ fun ArenaScreen(
               shape = RoundedCornerShape(14.dp),
               modifier = Modifier.height(52.dp).testTag("save_match_result_btn"),
             ) {
-              Text("Claim Blue Essence & Save Run", style = MaterialTheme.typography.labelLarge)
+              Text("Claim Essence & Save Run", style = MaterialTheme.typography.labelLarge)
             }
           }
         }
       }
     }
 
-    // Bottom Gamepad / Touch Controls Deck (supports Left-Handed Mirror + Motor Sizing!)
+    // Bottom Responsive Gamepad & Multi-Touch Deck (zero-slop joystick + scrollable full action rows)
     Surface(
       color = hudSurfaceBg,
       modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outline),
     ) {
       val stickDiameter = (92f * settings.joystickScale).dp
       val puckDiameter = (34f * settings.joystickScale).dp
-      val btnHeight = (48f * settings.buttonScale).dp
+      val btnHeight = (44f * settings.buttonScale).dp
 
       val stickWidget: @Composable () -> Unit = {
         Box(
@@ -871,32 +957,35 @@ fun ArenaScreen(
             .background(Color(0xFF141E36))
             .border(1.5.dp, palette.playerAccent.copy(alpha = 0.75f), CircleShape)
             .testTag("arena_joystick")
-            .pointerInput(sim) {
-              detectDragGestures(
-                onDragEnd = {
-                  sim.joyDx = 0f
-                  sim.joyDy = 0f
-                  thumbOffsetX = 0f
-                  thumbOffsetY = 0f
-                },
-                onDragCancel = {
-                  sim.joyDx = 0f
-                  sim.joyDy = 0f
-                  thumbOffsetX = 0f
-                  thumbOffsetY = 0f
-                },
-                onDrag = { change, _ ->
-                  change.consume()
+            .pointerInput(sim, settings.joystickScale) {
+              awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                fun updateStick(posX: Float, posY: Float) {
                   val cx = size.width / 2f
                   val cy = size.height / 2f
-                  val nx = ((change.position.x - cx) / cx).coerceIn(-1f, 1f)
-                  val ny = ((change.position.y - cy) / cy).coerceIn(-1f, 1f)
+                  val nx = ((posX - cx) / cx.coerceAtLeast(1f)).coerceIn(-1f, 1f)
+                  val ny = ((posY - cy) / cy.coerceAtLeast(1f)).coerceIn(-1f, 1f)
                   sim.joyDx = nx
                   sim.joyDy = ny
                   thumbOffsetX = nx * 24f * settings.joystickScale
                   thumbOffsetY = ny * 24f * settings.joystickScale
-                },
-              )
+                }
+                down.consume()
+                updateStick(down.position.x, down.position.y)
+                while (true) {
+                  val event = awaitPointerEvent()
+                  val ch = event.changes.firstOrNull { it.id == down.id } ?: event.changes.firstOrNull()
+                  if (ch == null || !ch.pressed) {
+                    sim.joyDx = 0f
+                    sim.joyDy = 0f
+                    thumbOffsetX = 0f
+                    thumbOffsetY = 0f
+                    break
+                  }
+                  ch.consume()
+                  updateStick(ch.position.x, ch.position.y)
+                }
+              }
             },
           contentAlignment = Alignment.Center,
         ) {
@@ -912,7 +1001,9 @@ fun ArenaScreen(
 
       val buttonsAlign = if (settings.leftHandedDeck) Alignment.Start else Alignment.End
       val actionsWidget: @Composable () -> Unit = {
-        Column(horizontalAlignment = buttonsAlign) {
+        Column(
+          horizontalAlignment = buttonsAlign,
+        ) {
           Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (!settings.simplifiedHud) {
               Text(
@@ -928,123 +1019,179 @@ fun ArenaScreen(
                 sim.hudAutoFire = !sim.hudAutoFire
               },
               label = { Text("AUTO", style = MaterialTheme.typography.labelSmall) },
-              modifier = Modifier.height(34.dp).testTag("arena_autofire_chip"),
+              modifier = Modifier.height(32.dp).testTag("arena_autofire_chip"),
             )
           }
-          Spacer(Modifier.height(6.dp))
-          Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+          Spacer(Modifier.height(5.dp))
+          Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+          ) {
             Button(
-              onClick = {
-                triggerHaptic()
-                sim.fireVolley(forceManual = true)
-              },
+              onClick = { triggerHaptic(); sim.fireVolley(forceManual = true) },
               colors = ButtonDefaults.buttonColors(containerColor = palette.playerAccent, contentColor = Color.Black),
-              shape = RoundedCornerShape(12.dp),
+              shape = RoundedCornerShape(10.dp),
               modifier = Modifier.height(btnHeight).testTag("arena_fire_btn"),
-            ) {
-              Icon(AppIcons.MyLocation, contentDescription = "Fire", modifier = Modifier.size(16.dp))
-              Spacer(Modifier.width(3.dp))
-              Text("FIRE")
-            }
+            ) { Text("FIRE") }
             Button(
-              onClick = {
-                triggerHaptic()
-                sim.triggerPower()
-              },
+              onClick = { triggerHaptic(); sim.triggerPower() },
               enabled = sim.hudPowerCdSec == 0,
               colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF)),
-              shape = RoundedCornerShape(12.dp),
+              shape = RoundedCornerShape(10.dp),
               modifier = Modifier.height(btnHeight).testTag("arena_power_btn"),
-            ) {
-              Icon(AppIcons.FlashOn, contentDescription = "Power", modifier = Modifier.size(16.dp))
-              Spacer(Modifier.width(3.dp))
-              Text(if (sim.hudPowerCdSec == 0) "POWER" else "${sim.hudPowerCdSec}s")
-            }
+            ) { Text(if (sim.hudPowerCdSec == 0) "POWER" else "${sim.hudPowerCdSec}s") }
             Button(
-              onClick = {
-                triggerHaptic()
-                sim.upgradePackAPunch()
-              },
+              onClick = { triggerHaptic(); sim.upgradePackAPunch() },
               colors = ButtonDefaults.buttonColors(
-                containerColor = when {
-                  sim.hudPackTier >= 10 -> Color(0xFF00E5FF)
-                  sim.hudPackTier >= 5 -> Color(0xFFFFD54F)
-                  sim.hudPackTier >= 3 -> Color(0xFFFFAB40)
-                  else -> Color(0xFFE040FB)
-                },
+                containerColor = if (sim.hudPackTier >= 25) Color(0xFF00E5FF) else Color(0xFFE040FB),
                 contentColor = Color.Black,
               ),
-              shape = RoundedCornerShape(12.dp),
+              shape = RoundedCornerShape(10.dp),
               modifier = Modifier.height(btnHeight).testTag("arena_pack_btn"),
-            ) {
-              Text("PACK ${formatRoundRoman(sim.hudPackTier.toLong())}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-            }
-          }
-          Spacer(Modifier.height(6.dp))
-          Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            ) { Text("PACK ${formatRoundRoman(sim.hudPackTier.toLong())}") }
             OutlinedButton(
-              onClick = {
-                triggerHaptic()
-                sim.triggerWorldInteract()
-              },
+              onClick = { triggerHaptic(); sim.cycleActiveWeapon() },
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.height(btnHeight).testTag("arena_swap_wpn_btn"),
+            ) { Text("WPN ${sim.activeWeaponIndex + 1}/${sim.equippedWeaponIds.size}") }
+            OutlinedButton(
+              onClick = { triggerHaptic(); sim.activateEquippedWonderSlot() },
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.height(btnHeight).testTag("arena_wonder_swap_btn"),
+            ) { Text("WNDR") }
+          }
+          Spacer(Modifier.height(5.dp))
+          Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+          ) {
+            OutlinedButton(
+              onClick = { triggerHaptic(); sim.triggerAllTraps() },
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.height(btnHeight).testTag("arena_trap_btn"),
+            ) { Text("TRAPS", color = Color(0xFFFFAB40), style = MaterialTheme.typography.labelSmall) }
+            OutlinedButton(
+              onClick = { triggerHaptic(); sim.triggerConsumable() },
+              enabled = sim.hudConsumableCdSec == 0,
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.height(btnHeight).testTag("arena_surge_btn"),
+            ) { Text(if (sim.hudConsumableCdSec == 0) "SURGE" else "${sim.hudConsumableCdSec}s", style = MaterialTheme.typography.labelSmall) }
+            OutlinedButton(
+              onClick = { triggerHaptic(); sim.triggerWorldInteract() },
               enabled = sim.hudInteractCdSec == 0,
               shape = RoundedCornerShape(10.dp),
               modifier = Modifier.height(btnHeight).testTag("arena_interact_btn"),
-            ) {
-              Text(if (sim.hudInteractCdSec == 0) world.interactActionLabel else "${sim.hudInteractCdSec}s", style = MaterialTheme.typography.labelSmall)
-            }
+            ) { Text(if (sim.hudInteractCdSec == 0) world.interactActionLabel else "${sim.hudInteractCdSec}s", style = MaterialTheme.typography.labelSmall) }
             OutlinedButton(
-              onClick = {
-                triggerHaptic()
-                sim.triggerLethal()
-              },
+              onClick = { triggerHaptic(); sim.triggerLethal() },
               enabled = sim.hudLethalCdSec == 0,
               shape = RoundedCornerShape(10.dp),
               modifier = Modifier.height(btnHeight).testTag("arena_lethal_btn"),
-            ) {
-              Text(if (sim.hudLethalCdSec == 0) sim.hudLethalName else "${sim.hudLethalCdSec}s", style = MaterialTheme.typography.labelSmall)
-            }
+            ) { Text(if (sim.hudLethalCdSec == 0) sim.hudLethalName else "${sim.hudLethalCdSec}s", style = MaterialTheme.typography.labelSmall) }
             OutlinedButton(
-              onClick = {
-                triggerHaptic()
-                sim.triggerTactical()
-              },
+              onClick = { triggerHaptic(); sim.triggerTactical() },
               enabled = sim.hudTacticalCdSec == 0,
               shape = RoundedCornerShape(10.dp),
               modifier = Modifier.height(btnHeight).testTag("arena_tactical_btn"),
-            ) {
-              Text(if (sim.hudTacticalCdSec == 0) sim.hudTacticalName else "${sim.hudTacticalCdSec}s", style = MaterialTheme.typography.labelSmall)
-            }
+            ) { Text(if (sim.hudTacticalCdSec == 0) sim.hudTacticalName else "${sim.hudTacticalCdSec}s", style = MaterialTheme.typography.labelSmall) }
             OutlinedButton(
-              onClick = {
-                triggerHaptic()
-                sim.triggerDash()
-              },
+              onClick = { triggerHaptic(); sim.triggerDash() },
               enabled = sim.hudDashReady,
               shape = RoundedCornerShape(10.dp),
               modifier = Modifier.height(btnHeight).testTag("arena_dash_btn"),
-            ) {
-              Icon(AppIcons.Bolt, contentDescription = "Dash", modifier = Modifier.size(15.dp))
-              Spacer(Modifier.width(3.dp))
-              Text(if (loadout.hasClawEdge) "CLAW" else "DASH", style = MaterialTheme.typography.labelSmall)
-            }
+            ) { Text(if (sim.loadout.hasClawEdge) "CLAW" else "DASH", style = MaterialTheme.typography.labelSmall) }
           }
         }
       }
 
       Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp).testTag("arena_controls_deck"),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp).testTag("arena_controls_deck"),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
       ) {
         if (settings.leftHandedDeck) {
-          actionsWidget()
+          Box(modifier = Modifier.weight(1f)) { actionsWidget() }
           stickWidget()
         } else {
           stickWidget()
-          actionsWidget()
+          Box(modifier = Modifier.weight(1f)) { actionsWidget() }
         }
       }
+    }
+
+    if (showTacticalLiveChatDialog) {
+      val liveMessages = progression.chatMessages.filter { it.channel == ChatChannel.LIVE_MATCH }
+      var liveInput by remember { mutableStateOf("") }
+      AlertDialog(
+        onDismissRequest = { showTacticalLiveChatDialog = false },
+        title = {
+          Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(AppIcons.Chat, contentDescription = null, tint = Color(0xFF00E5FF), modifier = Modifier.size(20.dp))
+            Text("LIVE COMBAT TACTICAL COMMS", fontWeight = FontWeight.Bold)
+          }
+        },
+        text = {
+          Column(modifier = Modifier.fillMaxWidth().height(360.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("1-TAP QUICK CALLOUTS", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+              items(SocialCatalog.quickTacticalCallouts) { callout ->
+                Button(
+                  onClick = {
+                    onSendChatMessage(ChatChannel.LIVE_MATCH, callout, null, true)
+                  },
+                  shape = RoundedCornerShape(8.dp),
+                  contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                  modifier = Modifier.height(34.dp).testTag("arena_callout_${callout.take(8).trim()}"),
+                ) {
+                  Text(callout, style = MaterialTheme.typography.labelSmall)
+                }
+              }
+            }
+
+            LazyColumn(
+              modifier = Modifier.weight(1f).fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp)).padding(8.dp),
+              verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+              items(liveMessages.takeLast(25), key = { it.id }) { msg ->
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                  Text(
+                    text = "${msg.senderCallsign}: ${msg.content}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (msg.isTacticalQuickChat) Color(0xFFFF9100) else MaterialTheme.colorScheme.onSurface,
+                    fontWeight = if (msg.isTacticalQuickChat) FontWeight.Bold else FontWeight.Normal,
+                  )
+                }
+              }
+            }
+
+            OutlinedTextField(
+              value = liveInput,
+              onValueChange = { liveInput = it },
+              placeholder = { Text("Send combat message...") },
+              singleLine = true,
+              modifier = Modifier.fillMaxWidth().testTag("arena_live_chat_input"),
+            )
+          }
+        },
+        confirmButton = {
+          Button(
+            onClick = {
+              if (liveInput.isNotBlank()) {
+                onSendChatMessage(ChatChannel.LIVE_MATCH, liveInput, null, false)
+                liveInput = ""
+              }
+            },
+            modifier = Modifier.testTag("arena_send_live_chat_btn"),
+          ) {
+            Text("Send")
+          }
+        },
+        dismissButton = {
+          TextButton(onClick = { showTacticalLiveChatDialog = false }) {
+            Text("Close")
+          }
+        },
+      )
     }
   }
 }

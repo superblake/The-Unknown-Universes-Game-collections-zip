@@ -39,9 +39,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.model.AchievementState
+import com.example.data.model.BlastCoreColor
+import com.example.data.model.MultiverseArsenalCatalog
 import com.example.data.model.OperatorProgressionState
 import com.example.data.model.ProgressionCatalog
 import com.example.data.model.StoreCategory
+import com.example.data.model.TradeCurrencyKind
 import com.example.ui.theme.AppIcons
 
 @Composable
@@ -49,7 +52,9 @@ fun BlueEssenceStoreTab(
   progression: OperatorProgressionState,
   totalBlueEssence: Long,
   onPurchaseItem: (String) -> Unit,
+  onExecuteTradeOffer: (String) -> Unit = {},
 ) {
+  var isTradeMode by remember { mutableStateOf(false) }
   var selectedCategory by remember { mutableStateOf(StoreCategory.ALL) }
   val items = remember(selectedCategory) {
     if (selectedCategory == StoreCategory.ALL) ProgressionCatalog.storeItems
@@ -101,83 +106,163 @@ fun BlueEssenceStoreTab(
               color = Color(0xFF00E676),
             )
           }
-        }
-      }
-    }
-
-    item {
-      LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(StoreCategory.entries, key = { it.id }) { cat ->
-          FilterChip(
-            selected = selectedCategory == cat,
-            onClick = { selectedCategory = cat },
-            label = { Text(cat.label) },
-            modifier = Modifier.testTag("store_cat_${cat.id}"),
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+              selected = !isTradeMode,
+              onClick = { isTradeMode = false },
+              label = { Text("Buy Upgrades") },
+              modifier = Modifier.weight(1f).testTag("store_mode_buy"),
+            )
+            FilterChip(
+              selected = isTradeMode,
+              onClick = { isTradeMode = true },
+              label = { Text("Trading Post (${MultiverseArsenalCatalog.tradeOffers.size})") },
+              modifier = Modifier.weight(1f).testTag("store_mode_trade"),
+            )
+          }
+          Text(
+            text = "Blue $totalBlueEssence • Red ${progression.redEssence} • Yellow ${progression.yellowEssence} • Green ${progression.greenEssence} • Combined ${progression.combinedEssence} • Shards ${progression.blastShards}",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color(0xFFE040FB),
+            fontWeight = FontWeight.SemiBold,
           )
         }
       }
     }
 
-    items(items, key = { it.id }) { item ->
-      val tierMeta = ProgressionCatalog.tierMeta(item.tier)
-      val ownedNonRepeatable = !item.repeatable && progression.purchasedStoreItems.contains(item.id)
-      val canAfford = totalBlueEssence >= item.costBlueEssence && !ownedNonRepeatable
-      val accent = Color(item.accentHex)
+    if (!isTradeMode) {
+      item {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          items(StoreCategory.entries, key = { it.id }) { cat ->
+            FilterChip(
+              selected = selectedCategory == cat,
+              onClick = { selectedCategory = cat },
+              label = { Text(cat.label) },
+              modifier = Modifier.testTag("store_cat_${cat.id}"),
+            )
+          }
+        }
+      }
 
-      Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surface,
-        modifier = Modifier
-          .fillMaxWidth()
-          .border(1.5.dp, accent.copy(alpha = 0.55f), RoundedCornerShape(14.dp)),
-      ) {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-          ) {
-            Column(modifier = Modifier.weight(1f)) {
-              Text(
-                text = "${item.category.label.uppercase()} • TIER ${item.tier} ${tierMeta.label.uppercase()}",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color(tierMeta.colorHex),
-                fontWeight = FontWeight.Bold,
-              )
-              Text(item.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+      items(items, key = { it.id }) { item ->
+        val tierMeta = ProgressionCatalog.tierMeta(item.tier)
+        val ownedNonRepeatable = !item.repeatable && progression.purchasedStoreItems.contains(item.id)
+        val canAfford = totalBlueEssence >= item.costBlueEssence && !ownedNonRepeatable
+        val accent = Color(item.accentHex)
+
+        Surface(
+          shape = RoundedCornerShape(14.dp),
+          color = MaterialTheme.colorScheme.surface,
+          modifier = Modifier
+            .fillMaxWidth()
+            .border(1.5.dp, accent.copy(alpha = 0.55f), RoundedCornerShape(14.dp)),
+        ) {
+          Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Column(modifier = Modifier.weight(1f)) {
+                Text(
+                  text = "${item.category.label.uppercase()} • TIER ${item.tier} ${tierMeta.label.uppercase()}",
+                  style = MaterialTheme.typography.labelSmall,
+                  color = Color(tierMeta.colorHex),
+                  fontWeight = FontWeight.Bold,
+                )
+                Text(item.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+              }
+              Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFF00E5FF).copy(alpha = 0.14f),
+              ) {
+                Text(
+                  text = "${item.costBlueEssence} BLUE ESSENCE",
+                  style = MaterialTheme.typography.labelSmall,
+                  fontWeight = FontWeight.Bold,
+                  color = Color(0xFF00E5FF),
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+              }
             }
-            Surface(
-              shape = RoundedCornerShape(8.dp),
-              color = Color(0xFF00E5FF).copy(alpha = 0.14f),
+            Text(item.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Button(
+              onClick = { onPurchaseItem(item.id) },
+              enabled = canAfford,
+              colors = ButtonDefaults.buttonColors(
+                containerColor = if (ownedNonRepeatable) MaterialTheme.colorScheme.surfaceVariant else Color(0xFF00E5FF),
+                contentColor = Color.Black,
+              ),
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.fillMaxWidth().height(48.dp).testTag("store_buy_${item.id}"),
             ) {
               Text(
-                text = "${item.costBlueEssence} BLUE ESSENCE",
-                style = MaterialTheme.typography.labelSmall,
+                text = when {
+                  ownedNonRepeatable -> "Owned"
+                  canAfford -> "Purchase (${item.costBlueEssence} Blue Essence)"
+                  else -> "Need ${item.costBlueEssence - totalBlueEssence} More Blue Essence"
+                },
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF00E5FF),
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
               )
             }
           }
-          Text(item.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-          Button(
-            onClick = { onPurchaseItem(item.id) },
-            enabled = canAfford,
-            colors = ButtonDefaults.buttonColors(
-              containerColor = if (ownedNonRepeatable) MaterialTheme.colorScheme.surfaceVariant else Color(0xFF00E5FF),
-              contentColor = Color.Black,
-            ),
-            shape = RoundedCornerShape(10.dp),
-            modifier = Modifier.fillMaxWidth().height(48.dp).testTag("store_buy_${item.id}"),
-          ) {
-            Text(
-              text = when {
-                ownedNonRepeatable -> "Owned"
-                canAfford -> "Purchase (${item.costBlueEssence} Blue Essence)"
-                else -> "Need ${item.costBlueEssence - totalBlueEssence} More Blue Essence"
-              },
-              fontWeight = FontWeight.Bold,
-            )
+        }
+      }
+    } else {
+      item {
+        Text("MULTIVERSE TRADING POST (ESSENCE SWAPS, QUAD-FUSION & CORE FORGE)", style = MaterialTheme.typography.titleSmall, color = Color(0xFFE040FB), fontWeight = FontWeight.Bold)
+      }
+      items(MultiverseArsenalCatalog.tradeOffers, key = { it.id }) { offer ->
+        val canAffordTrade = offer.inputCosts.entries.all { (kind, req) ->
+          val have = when (kind) {
+            TradeCurrencyKind.BLUE_ESSENCE -> totalBlueEssence
+            TradeCurrencyKind.RED_ESSENCE -> progression.redEssence
+            TradeCurrencyKind.YELLOW_ESSENCE -> progression.yellowEssence
+            TradeCurrencyKind.GREEN_ESSENCE -> progression.greenEssence
+            TradeCurrencyKind.COMBINED_ESSENCE -> progression.combinedEssence
+            TradeCurrencyKind.BLAST_SHARDS -> progression.blastShards
+            TradeCurrencyKind.BLUE_CORE -> progression.blastCoreCount(BlastCoreColor.BLUE)
+            TradeCurrencyKind.PURPLE_CORE -> progression.blastCoreCount(BlastCoreColor.PURPLE)
+            TradeCurrencyKind.GREEN_CORE -> progression.blastCoreCount(BlastCoreColor.GREEN)
+            TradeCurrencyKind.YELLOW_CORE -> progression.blastCoreCount(BlastCoreColor.YELLOW)
+            TradeCurrencyKind.RED_CORE -> progression.blastCoreCount(BlastCoreColor.RED)
+          }
+          have >= req
+        }
+        val accent = Color(offer.outputKind.colorHex)
+        Surface(
+          shape = RoundedCornerShape(14.dp),
+          color = MaterialTheme.colorScheme.surface,
+          modifier = Modifier.fillMaxWidth().border(1.5.dp, accent.copy(alpha = 0.6f), RoundedCornerShape(14.dp)),
+        ) {
+          Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+              Column(modifier = Modifier.weight(1f)) {
+                Text(offer.title, style = MaterialTheme.typography.titleMedium, color = accent, fontWeight = FontWeight.Bold)
+                Text(offer.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+              }
+              Surface(shape = RoundedCornerShape(8.dp), color = accent.copy(alpha = 0.16f)) {
+                Text(
+                  text = "+${offer.outputAmount} ${offer.outputKind.label}",
+                  style = MaterialTheme.typography.labelSmall,
+                  color = accent,
+                  fontWeight = FontWeight.Bold,
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+              }
+            }
+            Button(
+              onClick = { onExecuteTradeOffer(offer.id) },
+              enabled = canAffordTrade,
+              colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = Color.Black),
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.fillMaxWidth().height(48.dp).testTag("trade_buy_${offer.id}"),
+            ) {
+              Text(
+                text = if (canAffordTrade) "Execute Trade" else "Insufficient Input Resources",
+                fontWeight = FontWeight.Bold,
+              )
+            }
           }
         }
       }
@@ -336,6 +421,7 @@ fun BlueEssenceStoreDialog(
   totalBlueEssence: Long,
   onPurchaseItem: (String) -> Unit,
   onDismiss: () -> Unit,
+  onExecuteTradeOffer: (String) -> Unit = {},
 ) {
   Dialog(
     onDismissRequest = onDismiss,
@@ -348,7 +434,7 @@ fun BlueEssenceStoreDialog(
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically,
         ) {
-          Text("BLUE ESSENCE STORE", style = MaterialTheme.typography.titleLarge, color = Color(0xFF00E5FF))
+          Text("BLUE ESSENCE STORE & TRADING POST", style = MaterialTheme.typography.titleLarge, color = Color(0xFF00E5FF))
           IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp).testTag("close_store_dialog_btn")) {
             Icon(AppIcons.Close, contentDescription = "Close Blue Essence Store")
           }
@@ -357,6 +443,7 @@ fun BlueEssenceStoreDialog(
           progression = progression,
           totalBlueEssence = totalBlueEssence,
           onPurchaseItem = onPurchaseItem,
+          onExecuteTradeOffer = onExecuteTradeOffer,
         )
       }
     }

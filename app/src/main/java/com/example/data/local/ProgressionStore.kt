@@ -5,9 +5,12 @@ import android.content.SharedPreferences
 import androidx.core.content.edit
 import com.example.data.model.AchievementState
 import com.example.data.model.BattlePassVersion
+import com.example.data.model.BlastCoreColor
 import com.example.data.model.BotDifficulty
 import com.example.data.model.ChallengeState
 import com.example.data.model.CharacterCustomization
+import com.example.data.model.CustomAreaState
+import com.example.data.model.EquipmentSlotType
 import com.example.data.model.EquipmentState
 import com.example.data.model.GearSlot
 import com.example.data.model.GearState
@@ -15,10 +18,32 @@ import com.example.data.model.LevelCustomization
 import com.example.data.model.LobbyConfig
 import com.example.data.model.LobbyPartyMode
 import com.example.data.model.MatchProgressionReport
+import com.example.data.model.MissionScope
+import com.example.data.model.MissionSpec
+import com.example.data.model.MissionStatKind
+import com.example.data.model.MissionState
+import com.example.data.model.MissionsCatalog
+import com.example.data.model.MultiverseArsenalCatalog
 import com.example.data.model.OperatorProgressionState
+import com.example.data.model.OutfitProgressState
+import com.example.data.model.PowerTier
 import com.example.data.model.ProgressionCatalog
+import com.example.data.model.StarRankMeta
+import com.example.data.model.TradeCurrencyKind
+import com.example.data.model.VacuumBotState
 import com.example.data.model.WeaponCustomization
-import com.example.data.model.WonderWeaponKind
+import com.example.data.model.ChatChannel
+import com.example.data.model.ChatMessage
+import com.example.data.model.ClanData
+import com.example.data.model.ClanMember
+import com.example.data.model.ClanRank
+import com.example.data.model.FriendEntry
+import com.example.data.model.FriendOnlineStatus
+import com.example.data.model.MatchPrivacy
+import com.example.data.model.MultiverseMatchListing
+import com.example.data.model.PrivateMatchRules
+import com.example.data.model.SocialCatalog
+import com.example.data.model.UniverseCatalog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -49,11 +74,85 @@ class ProgressionStore(
     get() = _state.value
 
   fun updateWeaponCustomization(transform: (WeaponCustomization) -> WeaponCustomization) {
+    val updated = transform(current.weaponCustom)
+    val ensuredList = if (updated.equippedWeaponIds.contains(updated.equippedWeaponId)) {
+      updated.equippedWeaponIds
+    } else {
+      (listOf(updated.equippedWeaponId) + updated.equippedWeaponIds).distinct().take(3)
+    }
     val next = current.copy(
-      weaponCustom = transform(current.weaponCustom),
+      weaponCustom = updated.copy(equippedWeaponIds = ensuredList),
       challengeProgress = incrementChallenge(current.challengeProgress, "ch_armory_custom", 1L),
     )
     save(next)
+  }
+
+  fun toggleMultiWeaponEquip(weaponId: String): List<String> {
+    val cur = current
+    val curList = cur.effectiveWeaponList().toMutableList()
+    if (curList.contains(weaponId)) {
+      if (curList.size > 1) {
+        curList.remove(weaponId)
+      }
+    } else {
+      if (curList.size >= 3) {
+        curList.removeAt(0)
+      }
+      curList.add(weaponId)
+    }
+    val nextPrimary = if (curList.contains(cur.weaponCustom.equippedWeaponId)) {
+      cur.weaponCustom.equippedWeaponId
+    } else {
+      curList.first()
+    }
+    val spec = ProgressionCatalog.weaponById(nextPrimary)
+    save(
+      cur.copy(
+        weaponCustom = cur.weaponCustom.copy(
+          equippedWeaponId = nextPrimary,
+          equippedWeaponIds = curList,
+          tracerColorHex = spec.defaultTracerHex,
+        ),
+        challengeProgress = incrementChallenge(cur.challengeProgress, "ch_armory_custom", 1L),
+      )
+    )
+    return curList
+  }
+
+  fun toggleMultiWonderEquip(wonderId: String): List<String> {
+    val cur = current
+    val curList = cur.effectiveWonderList().toMutableList()
+    if (curList.contains(wonderId)) {
+      if (curList.size > 1) curList.remove(wonderId)
+    } else {
+      if (curList.size >= 3) curList.removeAt(0)
+      curList.add(wonderId)
+    }
+    save(cur.copy(equippedWonderIds = curList))
+    return curList
+  }
+
+  fun toggleMultiEquipmentEquip(slotType: EquipmentSlotType, itemId: String): List<String> {
+    val cur = current
+    val slotId = slotType.id
+    val curList = (if (slotType == EquipmentSlotType.LETHAL) cur.equippedLethalIds else cur.equippedTacticalIds)
+      .toMutableList()
+    if (curList.contains(itemId)) {
+      if (curList.size > 1) curList.remove(itemId)
+    } else {
+      if (curList.size >= 2) curList.removeAt(0)
+      curList.add(itemId)
+    }
+    val eq = cur.equipmentState(slotId)
+    val primaryItem = if (curList.contains(eq.equippedItemId)) eq.equippedItemId else curList.first()
+    val nextEqMap = cur.equipmentMap + (slotId to eq.copy(equippedItemId = primaryItem))
+    val nextState = if (slotType == EquipmentSlotType.LETHAL) {
+      cur.copy(equippedLethalIds = curList, equipmentMap = nextEqMap)
+    } else {
+      cur.copy(equippedTacticalIds = curList, equipmentMap = nextEqMap)
+    }
+    save(nextState)
+    return curList
   }
 
   fun updateCharacterCustomization(transform: (CharacterCustomization) -> CharacterCustomization) {
@@ -78,6 +177,242 @@ class ProgressionStore(
     save(current.copy(lobbyConfig = clamped))
   }
 
+  fun updatePrivateMatchRules(transform: (PrivateMatchRules) -> PrivateMatchRules) {
+    val nextRules = transform(current.privateMatchRules)
+    save(current.copy(privateMatchRules = nextRules))
+  }
+
+  fun hostPrivateMatch(rules: PrivateMatchRules, hostCallsign: String): MultiverseMatchListing {
+    val activeWorld = UniverseCatalog.worldById(rules.worldId)
+    val activeMode = UniverseCatalog.modeById(rules.modeId)
+    val activeArea = MultiverseArsenalCatalog.areaById(rules.areaId)
+    val listing = MultiverseMatchListing(
+      id = "match_${rules.roomCode.lowercase()}_${System.currentTimeMillis() % 10000}",
+      roomName = rules.roomName,
+      hostCallsign = hostCallsign,
+      hostLevel = current.playerLevel,
+      hostStars = current.characterStarLevel,
+      worldId = rules.worldId,
+      worldTitle = activeWorld.title,
+      modeId = rules.modeId,
+      modeLabel = activeMode.label,
+      areaId = rules.areaId,
+      areaName = activeArea.name,
+      currentPlayers = 1,
+      maxPlayers = rules.maxPlayers,
+      privacy = rules.privacy,
+      roomCode = rules.roomCode,
+      passcode = if (rules.privacy == MatchPrivacy.PRIVATE_PASSWORD) rules.passcode.ifEmpty { "0000" } else null,
+      pingMs = 15,
+      currentWave = rules.startingWave,
+      activeMutators = rules.activeMutatorLabels(),
+      clanTag = current.clan.tag,
+    )
+    val updatedLobby = current.lobbyConfig.copy(
+      targetPlayers = rules.maxPlayers,
+      autoFillBots = rules.botFillEnabled,
+      botDifficulty = rules.botDifficulty,
+      humanPlayersOnline = 1,
+    )
+    save(
+      current.copy(
+        privateMatchRules = rules,
+        joinedMatch = listing,
+        lobbyConfig = updatedLobby,
+      )
+    )
+    return listing
+  }
+
+  fun joinMatch(match: MultiverseMatchListing, enteredPasscode: String? = null): Result<MultiverseMatchListing> {
+    if (match.isFull) {
+      return Result.failure(IllegalStateException("Match ${match.roomName} is already full (${match.currentPlayers}/${match.maxPlayers})"))
+    }
+    if (match.privacy == MatchPrivacy.PRIVATE_PASSWORD) {
+      val expected = match.passcode.orEmpty()
+      if (expected.isNotEmpty() && enteredPasscode != expected) {
+        return Result.failure(IllegalStateException("Incorrect passcode for private match ${match.roomName}"))
+      }
+    }
+    val updatedLobby = current.lobbyConfig.copy(
+      targetPlayers = match.maxPlayers,
+      humanPlayersOnline = (match.currentPlayers + 1).coerceAtMost(match.maxPlayers),
+    )
+    save(
+      current.copy(
+        joinedMatch = match.copy(currentPlayers = match.currentPlayers + 1),
+        lobbyConfig = updatedLobby,
+      )
+    )
+    return Result.success(match)
+  }
+
+  fun leaveJoinedMatch() {
+    save(current.copy(joinedMatch = null))
+  }
+
+  fun addFriend(callsign: String): Result<FriendEntry> {
+    val clean = callsign.trim()
+    if (clean.length < 2) {
+      return Result.failure(IllegalArgumentException("Callsign too short"))
+    }
+    if (current.friends.any { it.callsign.equals(clean, ignoreCase = true) }) {
+      return Result.failure(IllegalStateException("$clean is already on your friends list"))
+    }
+    val newFriend = FriendEntry(
+      id = "friend_${clean.lowercase()}_${System.currentTimeMillis() % 10000}",
+      callsign = clean,
+      level = (15..55).random(),
+      stars = (3..9).random(),
+      tier = (3..8).random(),
+      status = FriendOnlineStatus.ONLINE_LOBBY,
+      statusDetail = "In Lobby",
+      clanTag = if ((0..1).random() == 1) current.clan.tag else null,
+    )
+    save(current.copy(friends = current.friends + newFriend))
+    return Result.success(newFriend)
+  }
+
+  fun removeFriend(friendId: String) {
+    save(current.copy(friends = current.friends.filterNot { it.id == friendId }))
+  }
+
+  fun toggleFriendFavorite(friendId: String) {
+    val nextFriends = current.friends.map {
+      if (it.id == friendId) it.copy(isFavorite = !it.isFavorite) else it
+    }
+    save(current.copy(friends = nextFriends))
+  }
+
+  fun sendChatMessage(
+    channel: ChatChannel,
+    content: String,
+    senderCallsign: String,
+    targetFriendId: String? = null,
+    isTactical: Boolean = false,
+  ) {
+    val clean = content.trim()
+    if (clean.isEmpty()) return
+    val msg = ChatMessage(
+      id = "msg_${System.currentTimeMillis()}_${(100..999).random()}",
+      channel = channel,
+      senderCallsign = senderCallsign,
+      senderClanTag = current.clan.tag,
+      senderStars = current.characterStarLevel,
+      targetFriendId = targetFriendId,
+      content = clean,
+      timestampMillis = System.currentTimeMillis(),
+      isTacticalQuickChat = isTactical,
+    )
+    val nextMessages = (current.chatMessages + msg).takeLast(250)
+    save(current.copy(chatMessages = nextMessages))
+  }
+
+  fun createClan(
+    name: String,
+    tag: String,
+    motto: String,
+    colorHex: Long,
+    creatorCallsign: String,
+  ): Result<ClanData> {
+    val cName = name.trim()
+    val cTag = tag.trim().uppercase()
+    if (cName.length < 3) return Result.failure(IllegalArgumentException("Clan name too short"))
+    if (cTag.length !in 2..5) return Result.failure(IllegalArgumentException("Clan tag must be 2-5 characters"))
+    val newClan = ClanData(
+      id = "clan_${cTag.lowercase()}_${System.currentTimeMillis() % 10000}",
+      name = cName,
+      tag = cTag,
+      motto = motto.trim().ifEmpty { "United we conquer the multiverse." },
+      level = 1,
+      tier = 1,
+      starLevel = 1,
+      totalEssenceDonated = 0L,
+      leaderCallsign = creatorCallsign,
+      colorHex = colorHex,
+      members = listOf(
+        ClanMember("cm_1", creatorCallsign, ClanRank.LEADER, current.playerLevel, current.characterStarLevel, 0L, true)
+      ),
+    )
+    val announce = ChatMessage(
+      id = "msg_clan_create_${System.currentTimeMillis()}",
+      channel = ChatChannel.CLAN,
+      senderCallsign = creatorCallsign,
+      senderClanTag = cTag,
+      content = "Clan [$cTag] $cName founded! Welcome all operatives.",
+      isSystemMessage = true,
+    )
+    save(current.copy(clan = newClan, chatMessages = (current.chatMessages + announce).takeLast(250)))
+    return Result.success(newClan)
+  }
+
+  fun joinClan(targetClan: ClanData, memberCallsign: String) {
+    val existingMembers = targetClan.members.filterNot { it.callsign.equals(memberCallsign, ignoreCase = true) }
+    val newMember = ClanMember(
+      id = "cm_${System.currentTimeMillis() % 10000}",
+      callsign = memberCallsign,
+      rank = ClanRank.RECRUIT,
+      level = current.playerLevel,
+      stars = current.characterStarLevel,
+      donatedEssence = 0L,
+      online = true,
+    )
+    val updatedClan = targetClan.copy(members = existingMembers + newMember)
+    val announce = ChatMessage(
+      id = "msg_clan_join_${System.currentTimeMillis()}",
+      channel = ChatChannel.CLAN,
+      senderCallsign = memberCallsign,
+      senderClanTag = updatedClan.tag,
+      content = "$memberCallsign has joined the clan!",
+      isSystemMessage = true,
+    )
+    save(current.copy(clan = updatedClan, chatMessages = (current.chatMessages + announce).takeLast(250)))
+  }
+
+  fun donateToClan(essenceAmount: Long, memberCallsign: String, totalBlueEssence: Long): Result<Long> {
+    if (essenceAmount <= 0L) return Result.failure(IllegalArgumentException("Amount must be positive"))
+    if (totalBlueEssence < essenceAmount) return Result.failure(IllegalStateException("Need $essenceAmount Blue Essence"))
+    val curClan = current.clan
+    val nextDonated = curClan.totalEssenceDonated + essenceAmount
+    val newLevel = (1 + (nextDonated / 5000L).toInt()).coerceIn(1, 25)
+    val newTier = (1 + (newLevel / 2)).coerceIn(1, 25)
+    val newStar = (1 + (newLevel / 3)).coerceIn(1, 10)
+    val leveledUp = newLevel > curClan.level
+    val updatedMembers = curClan.members.map { m ->
+      if (m.callsign.equals(memberCallsign, ignoreCase = true)) {
+        m.copy(donatedEssence = m.donatedEssence + essenceAmount)
+      } else m
+    }
+    val updatedClan = curClan.copy(
+      totalEssenceDonated = nextDonated,
+      level = newLevel,
+      tier = newTier,
+      starLevel = newStar,
+      members = updatedMembers,
+    )
+    val sysMsg = ChatMessage(
+      id = "msg_clan_don_${System.currentTimeMillis()}",
+      channel = ChatChannel.CLAN,
+      senderCallsign = memberCallsign,
+      senderClanTag = updatedClan.tag,
+      content = "$memberCallsign donated $essenceAmount Blue Essence! Clan Bank: ${nextDonated} B" +
+        if (leveledUp) " • CLAN LEVELED UP TO LV.$newLevel (Tier $newTier, ${newStar}★)!" else "",
+      isSystemMessage = true,
+    )
+    save(
+      current.copy(
+        clan = updatedClan,
+        totalBlueEssenceSpent = current.totalBlueEssenceSpent + essenceAmount,
+        chatMessages = (current.chatMessages + sysMsg).takeLast(250),
+      )
+    )
+    return Result.success(essenceAmount)
+  }
+
+  fun leaveClan(memberCallsign: String) {
+    save(current.copy(clan = SocialCatalog.defaultClan))
+  }
+
   fun upgradeGear(slot: GearSlot) {
     val cur = current
     val gear = cur.gearMap[slot.id] ?: GearState(slot)
@@ -94,14 +429,34 @@ class ProgressionStore(
   fun upgradeGearTier(slot: GearSlot, currentBlueEssence: Long): Result<Long> {
     val cur = current
     val gear = cur.gearMap[slot.id] ?: GearState(slot)
-    if (gear.tier >= 10) {
-      return Result.failure(IllegalStateException("${slot.displayName} already at max Tier 10 Omega"))
+    if (gear.tier >= PowerTier.MAX_TIER) {
+      return Result.failure(IllegalStateException("${slot.displayName} already at max Tier ${PowerTier.MAX_TIER} Multiversal"))
     }
     val cost = gear.tier * 400L
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence"))
     }
     val nextGear = gear.copy(tier = gear.tier + 1)
+    save(
+      cur.copy(
+        gearMap = cur.gearMap + (slot.id to nextGear),
+        totalBlueEssenceSpent = cur.totalBlueEssenceSpent + cost,
+      )
+    )
+    return Result.success(cost)
+  }
+
+  fun upgradeGearStar(slot: GearSlot, currentBlueEssence: Long): Result<Long> {
+    val cur = current
+    val gear = cur.gearMap[slot.id] ?: GearState(slot)
+    if (gear.starLevel >= StarRankMeta.MAX_STARS) {
+      return Result.failure(IllegalStateException("${slot.displayName} already at max ${StarRankMeta.MAX_STARS}★"))
+    }
+    val cost = gear.starLevel * 450L
+    if (currentBlueEssence < cost) {
+      return Result.failure(IllegalStateException("Need $cost Blue Essence"))
+    }
+    val nextGear = gear.copy(starLevel = gear.starLevel + 1)
     save(
       cur.copy(
         gearMap = cur.gearMap + (slot.id to nextGear),
@@ -136,14 +491,34 @@ class ProgressionStore(
   fun upgradeEquipmentTier(slotId: String, currentBlueEssence: Long): Result<Long> {
     val cur = current
     val eq = cur.equipmentState(slotId)
-    if (eq.tier >= 10) {
-      return Result.failure(IllegalStateException("Equipment already at max Tier 10 Omega"))
+    if (eq.tier >= PowerTier.MAX_TIER) {
+      return Result.failure(IllegalStateException("Equipment already at max Tier ${PowerTier.MAX_TIER} Multiversal"))
     }
     val cost = eq.tier * 350L
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence"))
     }
     val nextEq = eq.copy(tier = eq.tier + 1)
+    save(
+      cur.copy(
+        equipmentMap = cur.equipmentMap + (slotId to nextEq),
+        totalBlueEssenceSpent = cur.totalBlueEssenceSpent + cost,
+      )
+    )
+    return Result.success(cost)
+  }
+
+  fun upgradeEquipmentStar(slotId: String, currentBlueEssence: Long): Result<Long> {
+    val cur = current
+    val eq = cur.equipmentState(slotId)
+    if (eq.starLevel >= StarRankMeta.MAX_STARS) {
+      return Result.failure(IllegalStateException("Equipment already at max ${StarRankMeta.MAX_STARS}★"))
+    }
+    val cost = eq.starLevel * 400L
+    if (currentBlueEssence < cost) {
+      return Result.failure(IllegalStateException("Need $cost Blue Essence"))
+    }
+    val nextEq = eq.copy(starLevel = eq.starLevel + 1)
     save(
       cur.copy(
         equipmentMap = cur.equipmentMap + (slotId to nextEq),
@@ -168,7 +543,429 @@ class ProgressionStore(
     val cur = current
     val eq = cur.equipmentState(slotId)
     val nextEq = eq.copy(equippedItemId = itemId)
-    save(cur.copy(equipmentMap = cur.equipmentMap + (slotId to nextEq)))
+    val nextLethals = if (slotId == "lethal") {
+      (listOf(itemId) + cur.equippedLethalIds).distinct().take(2)
+    } else cur.equippedLethalIds
+    val nextTacticals = if (slotId == "tactical") {
+      (listOf(itemId) + cur.equippedTacticalIds).distinct().take(2)
+    } else cur.equippedTacticalIds
+    save(
+      cur.copy(
+        equipmentMap = cur.equipmentMap + (slotId to nextEq),
+        equippedLethalIds = nextLethals,
+        equippedTacticalIds = nextTacticals,
+      )
+    )
+  }
+
+  // OUTFITS SYSTEM (Character + Version + own Skill/Gear/Equipment)
+  fun equipOutfit(outfitId: String): HeroOutfitResult {
+    val cur = current
+    val spec = MultiverseArsenalCatalog.outfitById(outfitId)
+    val nextCharCustom = cur.characterCustom.copy(
+      primaryArmorHex = spec.primaryHex,
+      accentArmorHex = spec.secondaryHex,
+      cloakEnabled = spec.cloakEnabled,
+      auraTrailId = spec.auraId,
+      titleBadge = spec.nameWithVersion,
+    )
+    save(
+      cur.copy(
+        equippedOutfitId = spec.id,
+        characterCustom = nextCharCustom,
+      )
+    )
+    return HeroOutfitResult(spec.nameWithVersion, cur.outfitState(spec.id))
+  }
+
+  fun upgradeOutfit(outfitId: String, currentBlueEssence: Long): Result<Long> {
+    val cur = current
+    val st = cur.outfitState(outfitId)
+    val cost = 250L + (st.tier * 180L)
+    if (currentBlueEssence < cost) {
+      return Result.failure(IllegalStateException("Need $cost Blue Essence to upgrade outfit"))
+    }
+    val nextTier = if (st.level % 10 == 0 && st.tier < 25) st.tier + 1 else st.tier
+    val nextSt = st.copy(
+      level = (st.level + 5).coerceAtMost(1000),
+      tier = nextTier.coerceIn(1, 25),
+    )
+    save(
+      cur.copy(
+        outfitStates = cur.outfitStates + (outfitId to nextSt),
+        totalBlueEssenceSpent = cur.totalBlueEssenceSpent + cost,
+      )
+    )
+    return Result.success(cost)
+  }
+
+  fun upgradeCharacterTier(currentBlueEssence: Long): Result<Long> {
+    val cur = current
+    if (cur.characterTier >= PowerTier.MAX_TIER) {
+      return Result.failure(IllegalStateException("Character already at max Tier ${PowerTier.MAX_TIER} Multiversal"))
+    }
+    val cost = cur.characterTier * 500L
+    if (currentBlueEssence < cost) {
+      return Result.failure(IllegalStateException("Need $cost Blue Essence"))
+    }
+    save(
+      cur.copy(
+        characterTier = cur.characterTier + 1,
+        totalBlueEssenceSpent = cur.totalBlueEssenceSpent + cost,
+      )
+    )
+    return Result.success(cost)
+  }
+
+  fun upgradeCharacterStar(currentBlueEssence: Long): Result<Long> {
+    val cur = current
+    if (cur.characterStarLevel >= StarRankMeta.MAX_STARS) {
+      return Result.failure(IllegalStateException("Character already at max ${StarRankMeta.MAX_STARS}★"))
+    }
+    val cost = cur.characterStarLevel * 600L
+    if (currentBlueEssence < cost) {
+      return Result.failure(IllegalStateException("Need $cost Blue Essence"))
+    }
+    save(
+      cur.copy(
+        characterStarLevel = cur.characterStarLevel + 1,
+        totalBlueEssenceSpent = cur.totalBlueEssenceSpent + cost,
+      )
+    )
+    return Result.success(cost)
+  }
+
+  fun upgradeOutfitStar(outfitId: String, currentBlueEssence: Long): Result<Long> {
+    val cur = current
+    val st = cur.outfitState(outfitId)
+    if (st.starLevel >= StarRankMeta.MAX_STARS) {
+      return Result.failure(IllegalStateException("Outfit already at max ${StarRankMeta.MAX_STARS}★"))
+    }
+    val cost = st.starLevel * 500L
+    if (currentBlueEssence < cost) {
+      return Result.failure(IllegalStateException("Need $cost Blue Essence"))
+    }
+    val nextSt = st.copy(starLevel = st.starLevel + 1)
+    save(
+      cur.copy(
+        outfitStates = cur.outfitStates + (outfitId to nextSt),
+        totalBlueEssenceSpent = cur.totalBlueEssenceSpent + cost,
+      )
+    )
+    return Result.success(cost)
+  }
+
+  fun upgradeArmoryItemStar(itemId: String, currentBlueEssence: Long): Result<Long> {
+    val cur = current
+    val curStar = cur.armoryItemStar(itemId)
+    if (curStar >= StarRankMeta.MAX_STARS) {
+      return Result.failure(IllegalStateException("Mod already at max ${StarRankMeta.MAX_STARS}★"))
+    }
+    val cost = curStar * 450L
+    if (currentBlueEssence < cost) {
+      return Result.failure(IllegalStateException("Need $cost Blue Essence"))
+    }
+    save(
+      cur.copy(
+        armoryItemStarMap = cur.armoryItemStarMap + (itemId to (curStar + 1)),
+        totalBlueEssenceSpent = cur.totalBlueEssenceSpent + cost,
+      )
+    )
+    return Result.success(cost)
+  }
+
+  fun upgradeOutfitSubSystem(outfitId: String, part: String, currentBlueEssence: Long): Result<Long> {
+    val cur = current
+    val st = cur.outfitState(outfitId)
+    val curRank = when (part) {
+      "skill" -> st.skillRank
+      "gear" -> st.gearRank
+      else -> st.equipmentRank
+    }
+    if (curRank >= 20) {
+      return Result.failure(IllegalStateException("Outfit $part already at max Rank 20"))
+    }
+    val cost = 180L + (curRank * 120L)
+    if (currentBlueEssence < cost) {
+      return Result.failure(IllegalStateException("Need $cost Blue Essence"))
+    }
+    val nextSt = when (part) {
+      "skill" -> st.copy(skillRank = curRank + 1, tier = (st.tier + if ((curRank + 1) % 2 == 0) 1 else 0).coerceAtMost(25))
+      "gear" -> st.copy(gearRank = curRank + 1)
+      else -> st.copy(equipmentRank = curRank + 1)
+    }
+    save(
+      cur.copy(
+        outfitStates = cur.outfitStates + (outfitId to nextSt),
+        totalBlueEssenceSpent = cur.totalBlueEssenceSpent + cost,
+      )
+    )
+    return Result.success(cost)
+  }
+
+  // AREAS & TEMPORAL AGING SYSTEM
+  fun selectArea(areaId: String) {
+    val cur = current
+    val spec = MultiverseArsenalCatalog.areaById(areaId)
+    save(
+      cur.copy(
+        activeAreaId = spec.id,
+        levelCustom = cur.levelCustom.copy(floorAccentHex = spec.accentHex),
+      )
+    )
+  }
+
+  fun upgradeAreaFeature(areaId: String, feature: String, currentBlueEssence: Long): Result<Long> {
+    val cur = current
+    val area = cur.areaState(areaId)
+    val curTier = when (feature) {
+      "power_grid" -> area.powerGridTier
+      "turrets" -> area.defenseTurretTier
+      "traps" -> area.trapDensityTier
+      else -> area.lootRichnessTier
+    }
+    if (curTier >= 25) {
+      return Result.failure(IllegalStateException("$feature already at max Tier 25"))
+    }
+    val cost = curTier * 300L
+    if (currentBlueEssence < cost) {
+      return Result.failure(IllegalStateException("Need $cost Blue Essence"))
+    }
+    val nextArea = when (feature) {
+      "power_grid" -> area.copy(powerGridTier = curTier + 1)
+      "turrets" -> area.copy(defenseTurretTier = curTier + 1)
+      "traps" -> area.copy(trapDensityTier = curTier + 1)
+      else -> area.copy(lootRichnessTier = curTier + 1)
+    }
+    save(
+      cur.copy(
+        areaStates = cur.areaStates + (areaId to nextArea),
+        totalBlueEssenceSpent = cur.totalBlueEssenceSpent + cost,
+      )
+    )
+    return Result.success(cost)
+  }
+
+  fun upgradeAreaStar(areaId: String, currentBlueEssence: Long): Result<Long> {
+    val cur = current
+    val area = cur.areaState(areaId)
+    if (area.starLevel >= StarRankMeta.MAX_STARS) {
+      return Result.failure(IllegalStateException("Area already at max ${StarRankMeta.MAX_STARS}★"))
+    }
+    val cost = area.starLevel * 450L
+    if (currentBlueEssence < cost) {
+      return Result.failure(IllegalStateException("Need $cost Blue Essence"))
+    }
+    val nextArea = area.copy(starLevel = area.starLevel + 1)
+    save(
+      cur.copy(
+        areaStates = cur.areaStates + (areaId to nextArea),
+        totalBlueEssenceSpent = cur.totalBlueEssenceSpent + cost,
+      )
+    )
+    return Result.success(cost)
+  }
+
+  fun advanceAreaAge(areaId: String, yearsDelta: Int = 18): CustomAreaState {
+    val cur = current
+    val area = cur.areaState(areaId)
+    val rawAge = area.ageYears + yearsDelta
+    val cyclesGained = rawAge / 100
+    val wrappedAge = rawAge % 100
+    val nextArea = area.copy(
+      ageYears = wrappedAge,
+      rebirthCycles = area.rebirthCycles + cyclesGained,
+    )
+    save(cur.copy(areaStates = cur.areaStates + (areaId to nextArea)))
+    return nextArea
+  }
+
+  // BLAST SHARDS, PERK CANS/BOTTLES, COLORED BLAST CORES & VACUUM BOT
+  fun spendBlastShardsUpgrade(shardCost: Long = 10L): Result<Unit> {
+    val cur = current
+    if (cur.blastShards < shardCost) {
+      return Result.failure(IllegalStateException("Need $shardCost Blast Shards"))
+    }
+    val nextBot = cur.vacuumBot.copy(
+      level = (cur.vacuumBot.level + 1).coerceAtMost(50),
+    )
+    save(
+      cur.copy(
+        blastShards = cur.blastShards - shardCost,
+        redEssence = cur.redEssence + 60L,
+        yellowEssence = cur.yellowEssence + 60L,
+        greenEssence = cur.greenEssence + 60L,
+        vacuumBot = nextBot,
+      )
+    )
+    return Result.success(Unit)
+  }
+
+  fun upgradePerkDrink(perkId: String, currentBlueEssence: Long): Result<Long> {
+    val cur = current
+    val spec = MultiverseArsenalCatalog.perkDrinks.firstOrNull { it.id == perkId }
+      ?: return Result.failure(IllegalStateException("Perk drink not found"))
+    val curRank = cur.perkRank(perkId)
+    if (curRank >= spec.maxRank) {
+      return Result.failure(IllegalStateException("${spec.name} is already Max Rank ${spec.maxRank}"))
+    }
+    val cost = 250L + (curRank * 200L)
+    if (currentBlueEssence < cost) {
+      return Result.failure(IllegalStateException("Need $cost Blue Essence"))
+    }
+    save(
+      cur.copy(
+        perkRanks = cur.perkRanks + (perkId to (curRank + 1)),
+        totalBlueEssenceSpent = cur.totalBlueEssenceSpent + cost,
+      )
+    )
+    return Result.success(cost)
+  }
+
+  fun upgradeBlastCore(color: BlastCoreColor): Result<Int> {
+    val cur = current
+    val count = cur.blastCoreCount(color)
+    val curLvl = cur.blastCoreLevel(color)
+    if (curLvl >= 20) {
+      return Result.failure(IllegalStateException("${color.displayName} is already Max Level 20"))
+    }
+    if (count < 1L) {
+      return Result.failure(IllegalStateException("Need 1 ${color.displayName} (collect in Arena or forge in Trading Post)"))
+    }
+    val nextInv = cur.blastCoreInventory + (color.id to (count - 1L))
+    val nextLvls = cur.blastCoreLevels + (color.id to (curLvl + 1))
+    save(cur.copy(blastCoreInventory = nextInv, blastCoreLevels = nextLvls))
+    return Result.success(curLvl + 1)
+  }
+
+  fun upgradeVacuumBot(currentBlueEssence: Long): Result<Long> {
+    val cur = current
+    val bot = cur.vacuumBot
+    if (bot.tier >= 25 && bot.level >= 50) {
+      return Result.failure(IllegalStateException("Vacuum Bot is already Tier 25 Multiversal Max"))
+    }
+    val cost = 220L + (bot.tier * 160L)
+    if (currentBlueEssence < cost) {
+      return Result.failure(IllegalStateException("Need $cost Blue Essence"))
+    }
+    val nextLvl = (bot.level + 3).coerceAtMost(50)
+    val nextTier = (bot.tier + 1).coerceAtMost(25)
+    save(
+      cur.copy(
+        vacuumBot = bot.copy(level = nextLvl, tier = nextTier),
+        totalBlueEssenceSpent = cur.totalBlueEssenceSpent + cost,
+      )
+    )
+    return Result.success(cost)
+  }
+
+  fun upgradeVacuumBotStar(currentBlueEssence: Long): Result<Long> {
+    val cur = current
+    val bot = cur.vacuumBot
+    if (bot.starLevel >= StarRankMeta.MAX_STARS) {
+      return Result.failure(IllegalStateException("Vacuum Bot already at max ${StarRankMeta.MAX_STARS}★"))
+    }
+    val cost = bot.starLevel * 400L
+    if (currentBlueEssence < cost) {
+      return Result.failure(IllegalStateException("Need $cost Blue Essence"))
+    }
+    save(
+      cur.copy(
+        vacuumBot = bot.copy(starLevel = bot.starLevel + 1),
+        totalBlueEssenceSpent = cur.totalBlueEssenceSpent + cost,
+      )
+    )
+    return Result.success(cost)
+  }
+
+  fun toggleVacuumAutoUpgrade() {
+    val cur = current
+    save(cur.copy(vacuumBot = cur.vacuumBot.copy(autoUpgradeEnabled = !cur.vacuumBot.autoUpgradeEnabled)))
+  }
+
+  /**
+   * Executes a Trade Post transaction. Returns net Blue Essence change (negative = spent, positive = gained).
+   */
+  fun executeTradeOffer(offerId: String, currentBlueEssence: Long): Result<Long> {
+    val cur = current
+    val offer = MultiverseArsenalCatalog.tradeOffers.firstOrNull { it.id == offerId }
+      ?: return Result.failure(IllegalStateException("Trade offer not found"))
+
+    // Validate balances
+    for ((kind, req) in offer.inputCosts) {
+      val have = when (kind) {
+        TradeCurrencyKind.BLUE_ESSENCE -> currentBlueEssence
+        TradeCurrencyKind.RED_ESSENCE -> cur.redEssence
+        TradeCurrencyKind.YELLOW_ESSENCE -> cur.yellowEssence
+        TradeCurrencyKind.GREEN_ESSENCE -> cur.greenEssence
+        TradeCurrencyKind.COMBINED_ESSENCE -> cur.combinedEssence
+        TradeCurrencyKind.BLAST_SHARDS -> cur.blastShards
+        TradeCurrencyKind.BLUE_CORE -> cur.blastCoreCount(BlastCoreColor.BLUE)
+        TradeCurrencyKind.PURPLE_CORE -> cur.blastCoreCount(BlastCoreColor.PURPLE)
+        TradeCurrencyKind.GREEN_CORE -> cur.blastCoreCount(BlastCoreColor.GREEN)
+        TradeCurrencyKind.YELLOW_CORE -> cur.blastCoreCount(BlastCoreColor.YELLOW)
+        TradeCurrencyKind.RED_CORE -> cur.blastCoreCount(BlastCoreColor.RED)
+      }
+      if (have < req) {
+        return Result.failure(IllegalStateException("Need $req ${kind.label} (have $have)"))
+      }
+    }
+
+    var nextRed = cur.redEssence
+    var nextYellow = cur.yellowEssence
+    var nextGreen = cur.greenEssence
+    var nextCombined = cur.combinedEssence
+    var nextShards = cur.blastShards
+    val nextCores = cur.blastCoreInventory.toMutableMap()
+    var blueDelta = 0L
+    var blueSpent = 0L
+
+    for ((kind, cost) in offer.inputCosts) {
+      when (kind) {
+        TradeCurrencyKind.BLUE_ESSENCE -> {
+          blueDelta -= cost
+          blueSpent += cost
+        }
+        TradeCurrencyKind.RED_ESSENCE -> nextRed -= cost
+        TradeCurrencyKind.YELLOW_ESSENCE -> nextYellow -= cost
+        TradeCurrencyKind.GREEN_ESSENCE -> nextGreen -= cost
+        TradeCurrencyKind.COMBINED_ESSENCE -> nextCombined -= cost
+        TradeCurrencyKind.BLAST_SHARDS -> nextShards -= cost
+        TradeCurrencyKind.BLUE_CORE -> nextCores[BlastCoreColor.BLUE.id] = (nextCores[BlastCoreColor.BLUE.id] ?: 0L) - cost
+        TradeCurrencyKind.PURPLE_CORE -> nextCores[BlastCoreColor.PURPLE.id] = (nextCores[BlastCoreColor.PURPLE.id] ?: 0L) - cost
+        TradeCurrencyKind.GREEN_CORE -> nextCores[BlastCoreColor.GREEN.id] = (nextCores[BlastCoreColor.GREEN.id] ?: 0L) - cost
+        TradeCurrencyKind.YELLOW_CORE -> nextCores[BlastCoreColor.YELLOW.id] = (nextCores[BlastCoreColor.YELLOW.id] ?: 0L) - cost
+        TradeCurrencyKind.RED_CORE -> nextCores[BlastCoreColor.RED.id] = (nextCores[BlastCoreColor.RED.id] ?: 0L) - cost
+      }
+    }
+
+    when (offer.outputKind) {
+      TradeCurrencyKind.BLUE_ESSENCE -> blueDelta += offer.outputAmount
+      TradeCurrencyKind.RED_ESSENCE -> nextRed += offer.outputAmount
+      TradeCurrencyKind.YELLOW_ESSENCE -> nextYellow += offer.outputAmount
+      TradeCurrencyKind.GREEN_ESSENCE -> nextGreen += offer.outputAmount
+      TradeCurrencyKind.COMBINED_ESSENCE -> nextCombined += offer.outputAmount
+      TradeCurrencyKind.BLAST_SHARDS -> nextShards += offer.outputAmount
+      TradeCurrencyKind.BLUE_CORE -> nextCores[BlastCoreColor.BLUE.id] = (nextCores[BlastCoreColor.BLUE.id] ?: 0L) + offer.outputAmount
+      TradeCurrencyKind.PURPLE_CORE -> nextCores[BlastCoreColor.PURPLE.id] = (nextCores[BlastCoreColor.PURPLE.id] ?: 0L) + offer.outputAmount
+      TradeCurrencyKind.GREEN_CORE -> nextCores[BlastCoreColor.GREEN.id] = (nextCores[BlastCoreColor.GREEN.id] ?: 0L) + offer.outputAmount
+      TradeCurrencyKind.YELLOW_CORE -> nextCores[BlastCoreColor.YELLOW.id] = (nextCores[BlastCoreColor.YELLOW.id] ?: 0L) + offer.outputAmount
+      TradeCurrencyKind.RED_CORE -> nextCores[BlastCoreColor.RED.id] = (nextCores[BlastCoreColor.RED.id] ?: 0L) + offer.outputAmount
+    }
+
+    save(
+      cur.copy(
+        redEssence = nextRed.coerceAtLeast(0L),
+        yellowEssence = nextYellow.coerceAtLeast(0L),
+        greenEssence = nextGreen.coerceAtLeast(0L),
+        combinedEssence = nextCombined.coerceAtLeast(0L),
+        blastShards = nextShards.coerceAtLeast(0L),
+        blastCoreInventory = nextCores,
+        totalBlueEssenceSpent = cur.totalBlueEssenceSpent + blueSpent,
+        storePurchasesCount = cur.storePurchasesCount + 1,
+      )
+    )
+    return Result.success(blueDelta)
   }
 
   fun unlockSkillNode(nodeId: String, currentBlueEssence: Long): Result<Long> {
@@ -204,11 +1001,34 @@ class ProgressionStore(
     return Result.success(upgradeCost)
   }
 
+  fun upgradeSkillStar(nodeId: String, currentBlueEssence: Long): Result<Long> {
+    val cur = current
+    val node = cur.skillNodes[nodeId] ?: return Result.failure(IllegalStateException("Skill node not found"))
+    if (!node.unlocked) {
+      return Result.failure(IllegalStateException("Unlock ${node.title} before raising its Star Level"))
+    }
+    if (node.starLevel >= StarRankMeta.MAX_STARS) {
+      return Result.failure(IllegalStateException("${node.title} already at max ${StarRankMeta.MAX_STARS}★"))
+    }
+    val cost = node.starLevel * 400L
+    if (currentBlueEssence < cost) {
+      return Result.failure(IllegalStateException("Need $cost Blue Essence"))
+    }
+    val nextNode = node.copy(starLevel = node.starLevel + 1)
+    save(
+      cur.copy(
+        skillNodes = cur.skillNodes + (nodeId to nextNode),
+        totalBlueEssenceSpent = cur.totalBlueEssenceSpent + cost,
+      )
+    )
+    return Result.success(cost)
+  }
+
   fun upgradeWeaponTier(weaponId: String, currentBlueEssence: Long): Result<Long> {
     val cur = current
     val curTier = cur.weaponTier(weaponId)
-    if (curTier >= 10) {
-      return Result.failure(IllegalStateException("Weapon already at max Tier 10 Omega"))
+    if (curTier >= 25) {
+      return Result.failure(IllegalStateException("Weapon already at max Tier 25 Multiversal"))
     }
     val cost = curTier * 450L
     if (currentBlueEssence < cost) {
@@ -224,11 +1044,30 @@ class ProgressionStore(
     return Result.success(cost)
   }
 
+  fun upgradeWeaponStar(weaponId: String, currentBlueEssence: Long): Result<Long> {
+    val cur = current
+    val curStar = cur.weaponStar(weaponId)
+    if (curStar >= StarRankMeta.MAX_STARS) {
+      return Result.failure(IllegalStateException("Weapon already at max ${StarRankMeta.MAX_STARS}★"))
+    }
+    val cost = curStar * 500L
+    if (currentBlueEssence < cost) {
+      return Result.failure(IllegalStateException("Need $cost Blue Essence"))
+    }
+    save(
+      cur.copy(
+        weaponStarMap = cur.weaponStarMap + (weaponId to (curStar + 1)),
+        totalBlueEssenceSpent = cur.totalBlueEssenceSpent + cost,
+      )
+    )
+    return Result.success(cost)
+  }
+
   fun upgradeWonderTier(wonderId: String, currentBlueEssence: Long): Result<Long> {
     val cur = current
     val curTier = cur.wonderTier(wonderId)
-    if (curTier >= 10) {
-      return Result.failure(IllegalStateException("Wonder Weapon already at max Tier 10 Omega"))
+    if (curTier >= 25) {
+      return Result.failure(IllegalStateException("Wonder Weapon already at max Tier 25 Multiversal"))
     }
     val cost = curTier * 500L
     if (currentBlueEssence < cost) {
@@ -238,6 +1077,25 @@ class ProgressionStore(
     save(
       cur.copy(
         wonderTierMap = nextMap,
+        totalBlueEssenceSpent = cur.totalBlueEssenceSpent + cost,
+      )
+    )
+    return Result.success(cost)
+  }
+
+  fun upgradeWonderStar(wonderId: String, currentBlueEssence: Long): Result<Long> {
+    val cur = current
+    val curStar = cur.wonderStar(wonderId)
+    if (curStar >= StarRankMeta.MAX_STARS) {
+      return Result.failure(IllegalStateException("Wonder Weapon already at max ${StarRankMeta.MAX_STARS}★"))
+    }
+    val cost = curStar * 550L
+    if (currentBlueEssence < cost) {
+      return Result.failure(IllegalStateException("Need $cost Blue Essence"))
+    }
+    save(
+      cur.copy(
+        wonderStarMap = cur.wonderStarMap + (wonderId to (curStar + 1)),
         totalBlueEssenceSpent = cur.totalBlueEssenceSpent + cost,
       )
     )
@@ -380,7 +1238,7 @@ class ProgressionStore(
         "ach_lvl_25", "ach_lvl_100", "ach_lvl_500" -> state.playerLevel.toLong()
         "ach_wpn_30", "ach_wpn_60" -> maxWeaponLvl
         "ach_over8_lobby", "ach_war_32" -> state.largestLobbyPlayed.toLong()
-        "ach_pack_5", "ach_pack_10" -> state.highestPackTierReached.toLong()
+        "ach_pack_5", "ach_pack_10", "ach_pack_15", "ach_pack_20", "ach_pack_25" -> state.highestPackTierReached.toLong()
         "ach_wonder_10" -> state.wonderWeaponsPickedTotal
         "ach_store_1", "ach_store_5" -> state.storePurchasesCount.toLong()
         "ach_spend_3k" -> state.totalBlueEssenceSpent
@@ -450,14 +1308,14 @@ class ProgressionStore(
       "store_weapon_tier_up" -> {
         val wpnId = cur.weaponCustom.equippedWeaponId
         val curTier = cur.weaponTier(wpnId)
-        if (curTier >= 10) return Result.failure(IllegalStateException("Equipped weapon is already Tier 10 Omega"))
+        if (curTier >= 25) return Result.failure(IllegalStateException("Equipped weapon is already Tier 25 Multiversal"))
         val newTier = curTier + 1
         next = next.copy(weaponTierMap = cur.weaponTierMap + (wpnId to newTier))
         "Elevated weapon to Tier $newTier (${ProgressionCatalog.tierMeta(newTier).label})"
       }
       "store_wonder_tier_up" -> {
         val nextWonderTiers = WonderWeaponKind.entries.associate {
-          it.id to (cur.wonderTier(it.id) + 1).coerceAtMost(10)
+          it.id to (cur.wonderTier(it.id) + 1).coerceAtMost(25)
         }
         next = next.copy(wonderTierMap = nextWonderTiers)
         "All 6 Wonder Weapons upgraded +1 Tier!"
@@ -466,13 +1324,13 @@ class ProgressionStore(
         val nextGear = cur.gearMap.mapValues { (_, g) ->
           val nextLvl = (g.level + 5).coerceAtMost(50)
           val minXp = ProgressionCatalog.totalXpForGearLevel(nextLvl)
-          val nextTier = if (g.level >= 50) (g.tier + 1).coerceAtMost(10) else g.tier
+          val nextTier = if (g.level >= 50) (g.tier + 1).coerceAtMost(25) else g.tier
           g.copy(level = nextLvl, xp = maxOf(g.xp, minXp), tier = nextTier)
         }
         val nextEq = cur.equipmentMap.mapValues { (_, e) ->
           val nextLvl = (e.level + 5).coerceAtMost(60)
           val minXp = ProgressionCatalog.totalXpForEquipmentLevel(nextLvl)
-          val nextTier = if (e.level >= 60) (e.tier + 1).coerceAtMost(10) else e.tier
+          val nextTier = if (e.level >= 60) (e.tier + 1).coerceAtMost(25) else e.tier
           e.copy(level = nextLvl, xp = maxOf(e.xp, minXp), tier = nextTier)
         }
         next = next.copy(gearMap = nextGear, equipmentMap = nextEq)
@@ -558,6 +1416,32 @@ class ProgressionStore(
       )
     }
 
+    val nextCores = cur.blastCoreInventory.toMutableMap()
+    report.blastCoresEarned.forEach { (coreId, count) ->
+      if (count > 0L) nextCores[coreId] = (nextCores[coreId] ?: 0L) + count
+    }
+
+    // Age active area after each match, cycling back to Young at 100 years
+    val curArea = cur.areaState(cur.activeAreaId)
+    val rawAge = curArea.ageYears + 8
+    val nextArea = curArea.copy(
+      ageYears = rawAge % 100,
+      rebirthCycles = curArea.rebirthCycles + (rawAge / 100),
+    )
+
+    // Level active outfit slightly on every match
+    val curOutfit = cur.outfitState(cur.equippedOutfitId)
+    val nextOutfit = curOutfit.copy(
+      level = (curOutfit.level + 1).coerceAtMost(1000),
+    )
+
+    val redGain = report.redEssenceEarned.coerceAtLeast(report.eliminations * 4L + 20L)
+    val yellowGain = report.yellowEssenceEarned.coerceAtLeast(report.waveReached * 18L + 20L)
+    val greenGain = report.greenEssenceEarned.coerceAtLeast(report.eliminations * 3L + 20L)
+    val combinedGain = report.combinedEssenceEarned + if (report.bossEliminations > 0) report.bossEliminations * 8L else 0L
+    val shardGain = report.blastShardsEarned + (report.buildingsExplored * 2L)
+    val nextMissions = applyMatchToMissions(cur.missionProgress, report, shardGain)
+
     val nextState = cur.copy(
       playerXp = cur.playerXp + xpGained,
       weaponXpMap = nextWpnMap,
@@ -566,12 +1450,22 @@ class ProgressionStore(
       battlePassXp = cur.battlePassXp + bpXpGained,
       challengeProgress = nextChallenges,
       wonderWeaponsPickedTotal = cur.wonderWeaponsPickedTotal + report.wonderPickupsCollected,
+      claimedMissions = cur.claimedMissions,
+      missionProgress = nextMissions,
       totalElimsLifetime = cur.totalElimsLifetime + report.eliminations,
       totalBossesLifetime = cur.totalBossesLifetime + report.bossEliminations,
       totalMatchesPlayed = cur.totalMatchesPlayed + 1L,
       highestPackTierReached = maxOf(cur.highestPackTierReached, report.highestPackTierReached),
       largestLobbyPlayed = maxOf(cur.largestLobbyPlayed, report.lobbySizePlayed),
       xpBoosterMatchesRemaining = (cur.xpBoosterMatchesRemaining - 1).coerceAtLeast(0),
+      redEssence = cur.redEssence + redGain,
+      yellowEssence = cur.yellowEssence + yellowGain,
+      greenEssence = cur.greenEssence + greenGain,
+      combinedEssence = cur.combinedEssence + combinedGain,
+      blastShards = cur.blastShards + shardGain,
+      blastCoreInventory = nextCores,
+      areaStates = cur.areaStates + (cur.activeAreaId to nextArea),
+      outfitStates = cur.outfitStates + (cur.equippedOutfitId to nextOutfit),
     )
     save(nextState)
 
@@ -582,6 +1476,76 @@ class ProgressionStore(
       (newPlayerLvl - prevPlayerLvl).toLong(),
       (newWpnLvl - prevWpnLvl).toLong(),
     )
+  }
+
+  fun missionStates(
+    scope: MissionScope? = null,
+    targetId: String? = null,
+    state: OperatorProgressionState = current,
+  ): List<MissionState> {
+    val specs: List<MissionSpec> = when {
+      scope == MissionScope.WORLD && targetId != null -> MissionsCatalog.missionsForWorld(targetId)
+      scope == MissionScope.ARENA && targetId != null -> MissionsCatalog.missionsForArena(targetId)
+      scope == MissionScope.WORLD -> MissionsCatalog.worldMissions
+      scope == MissionScope.ARENA -> MissionsCatalog.arenaMissions
+      else -> MissionsCatalog.allMissions
+    }
+    return specs.map { spec ->
+      val prog = (state.missionProgress[spec.id] ?: 0L).coerceAtMost(spec.targetCount)
+      MissionState(
+        spec = spec,
+        progress = prog,
+        claimed = state.claimedMissions.contains(spec.id),
+      )
+    }
+  }
+
+  fun claimMission(missionId: String): Result<Triple<Long, Long, Long>> {
+    val cur = current
+    val spec = MissionsCatalog.missionById(missionId)
+      ?: return Result.failure(IllegalStateException("Mission not found"))
+    val prog = cur.missionProgress[missionId] ?: 0L
+    if (prog < spec.targetCount) {
+      return Result.failure(IllegalStateException("Mission incomplete ($prog/${spec.targetCount})"))
+    }
+    if (cur.claimedMissions.contains(missionId)) {
+      return Result.failure(IllegalStateException("Mission already claimed"))
+    }
+    val next = cur.copy(
+      claimedMissions = cur.claimedMissions + missionId,
+      playerXp = cur.playerXp + spec.rewardPlayerXp,
+      blastShards = cur.blastShards + spec.rewardShards,
+    )
+    save(next)
+    return Result.success(Triple(spec.rewardBlueEssence, spec.rewardPlayerXp, spec.rewardShards))
+  }
+
+  private fun applyMatchToMissions(
+    existing: Map<String, Long>,
+    report: MatchProgressionReport,
+    shardGain: Long,
+  ): Map<String, Long> {
+    val relevant = MissionsCatalog.missionsForWorld(report.worldId) + MissionsCatalog.missionsForArena(report.areaId)
+    if (relevant.isEmpty()) return existing
+    val essenceGain = report.redEssenceEarned + report.yellowEssenceEarned + report.greenEssenceEarned + report.combinedEssenceEarned
+    val mutable = existing.toMutableMap()
+    relevant.forEach { spec ->
+      val curVal = mutable[spec.id] ?: 0L
+      val updated = when (spec.statKind) {
+        MissionStatKind.ELIMINATIONS -> curVal + report.eliminations
+        MissionStatKind.BOSS_ELIMS -> curVal + report.bossEliminations
+        MissionStatKind.WAVES -> curVal + report.waveReached
+        MissionStatKind.WONDER_PICKUPS -> curVal + report.wonderPickupsCollected.toLong()
+        MissionStatKind.EXTRACTIONS -> curVal + if (report.extracted) 1L else 0L
+        MissionStatKind.TRAP_KILLS -> curVal + report.trapKills.toLong()
+        MissionStatKind.BUILDINGS_EXPLORED -> curVal + report.buildingsExplored.toLong()
+        MissionStatKind.PACK_TIER -> maxOf(curVal, report.highestPackTierReached.toLong())
+        MissionStatKind.ESSENCE_EARNED -> curVal + essenceGain.coerceAtLeast(report.eliminations * 6L + 30L)
+        MissionStatKind.BLAST_SHARDS -> curVal + shardGain
+      }.coerceAtMost(spec.targetCount)
+      if (updated > 0L) mutable[spec.id] = updated
+    }
+    return mutable
   }
 
   fun challengeStates(state: OperatorProgressionState = current): List<ChallengeState> =
@@ -611,6 +1575,8 @@ class ProgressionStore(
     val root = JSONObject().apply {
       put("playerXp", next.playerXp)
       put("playerPrestige", next.playerPrestige)
+      put("characterTier", next.characterTier)
+      put("characterStarLevel", next.characterStarLevel)
       put("battlePassXp", next.battlePassXp)
       put("battlePassPrestige", next.battlePassPrestige)
       put("bpCycleCount", next.bpCycleCount)
@@ -627,11 +1593,67 @@ class ProgressionStore(
       put("storePurchasesCount", next.storePurchasesCount)
       put("xpBoosterMatchesRemaining", next.xpBoosterMatchesRemaining)
       put("botDamageBoostPct", next.botDamageBoostPct)
+      put("redEssence", next.redEssence)
+      put("yellowEssence", next.yellowEssence)
+      put("greenEssence", next.greenEssence)
+      put("combinedEssence", next.combinedEssence)
+      put("blastShards", next.blastShards)
+      put("equippedOutfitId", next.equippedOutfitId)
+      put("activeAreaId", next.activeAreaId)
+      put("equippedWonderIds", JSONArray(next.equippedWonderIds))
+      put("equippedLethalIds", JSONArray(next.equippedLethalIds))
+      put("equippedTacticalIds", JSONArray(next.equippedTacticalIds))
       put("unlockedPasses", JSONArray(next.unlockedPassVersions.map { it.id }))
       put("claimedTiers", JSONArray(next.claimedPassTiers.toList()))
       put("claimedChallenges", JSONArray(next.claimedChallenges.toList()))
       put("claimedAchievements", JSONArray(next.claimedAchievements.toList()))
+      put("claimedMissions", JSONArray(next.claimedMissions.toList()))
+      put("missionProgress", JSONObject().apply {
+        next.missionProgress.forEach { (k, v) -> put(k, v) }
+      })
       put("purchasedStoreItems", JSONArray(next.purchasedStoreItems.toList()))
+
+      put("perkRanks", JSONObject().apply {
+        next.perkRanks.forEach { (k, v) -> put(k, v) }
+      })
+      put("blastCoreInventory", JSONObject().apply {
+        next.blastCoreInventory.forEach { (k, v) -> put(k, v) }
+      })
+      put("blastCoreLevels", JSONObject().apply {
+        next.blastCoreLevels.forEach { (k, v) -> put(k, v) }
+      })
+      put("outfitStates", JSONObject().apply {
+        next.outfitStates.forEach { (k, o) ->
+          put(k, JSONObject().apply {
+            put("level", o.level)
+            put("tier", o.tier)
+            put("starLevel", o.starLevel)
+            put("skillRank", o.skillRank)
+            put("gearRank", o.gearRank)
+            put("equipmentRank", o.equipmentRank)
+          })
+        }
+      })
+      put("areaStates", JSONObject().apply {
+        next.areaStates.forEach { (k, a) ->
+          put(k, JSONObject().apply {
+            put("ageYears", a.ageYears)
+            put("rebirthCycles", a.rebirthCycles)
+            put("powerGridTier", a.powerGridTier)
+            put("defenseTurretTier", a.defenseTurretTier)
+            put("trapDensityTier", a.trapDensityTier)
+            put("lootRichnessTier", a.lootRichnessTier)
+            put("starLevel", a.starLevel)
+          })
+        }
+      })
+      put("vacuumBot", JSONObject().apply {
+        put("level", next.vacuumBot.level)
+        put("tier", next.vacuumBot.tier)
+        put("starLevel", next.vacuumBot.starLevel)
+        put("autoUpgradeEnabled", next.vacuumBot.autoUpgradeEnabled)
+        put("autoCollectEnabled", next.vacuumBot.autoCollectEnabled)
+      })
 
       put("weaponXpMap", JSONObject().apply {
         next.weaponXpMap.forEach { (k, v) -> put(k, v) }
@@ -642,8 +1664,17 @@ class ProgressionStore(
       put("weaponTierMap", JSONObject().apply {
         next.weaponTierMap.forEach { (k, v) -> put(k, v) }
       })
+      put("weaponStarMap", JSONObject().apply {
+        next.weaponStarMap.forEach { (k, v) -> put(k, v) }
+      })
       put("wonderTierMap", JSONObject().apply {
         next.wonderTierMap.forEach { (k, v) -> put(k, v) }
+      })
+      put("wonderStarMap", JSONObject().apply {
+        next.wonderStarMap.forEach { (k, v) -> put(k, v) }
+      })
+      put("armoryItemStarMap", JSONObject().apply {
+        next.armoryItemStarMap.forEach { (k, v) -> put(k, v) }
       })
       put("challengeProgress", JSONObject().apply {
         next.challengeProgress.forEach { (k, v) -> put(k, v) }
@@ -656,6 +1687,7 @@ class ProgressionStore(
             put("xp", g.xp)
             put("tier", g.tier)
             put("colorHex", g.colorHex)
+            put("starLevel", g.starLevel)
           })
         }
       })
@@ -668,6 +1700,7 @@ class ProgressionStore(
             put("xp", eq.xp)
             put("variantId", eq.variantId)
             put("tier", eq.tier)
+            put("starLevel", eq.starLevel)
           })
         }
       })
@@ -676,6 +1709,7 @@ class ProgressionStore(
           put(k, JSONObject().apply {
             put("unlocked", node.unlocked)
             put("tier", node.tier)
+            put("starLevel", node.starLevel)
           })
         }
       })
@@ -688,6 +1722,7 @@ class ProgressionStore(
       })
       put("weaponCustom", JSONObject().apply {
         put("equippedWeaponId", next.weaponCustom.equippedWeaponId)
+        put("equippedWeaponIds", JSONArray(next.weaponCustom.equippedWeaponIds))
         put("camoId", next.weaponCustom.camoId)
         put("opticId", next.weaponCustom.opticId)
         put("barrelId", next.weaponCustom.barrelId)
@@ -720,6 +1755,57 @@ class ProgressionStore(
         put("lowGravityDash", next.levelCustom.lowGravityDash)
         put("bossRushMutator", next.levelCustom.bossRushMutator)
         put("floorAccentHex", next.levelCustom.floorAccentHex)
+      })
+      put("privateMatchRules", JSONObject().apply {
+        put("isPrivate", next.privateMatchRules.isPrivate)
+        put("privacy", next.privateMatchRules.privacy.id)
+        put("roomName", next.privateMatchRules.roomName)
+        put("roomCode", next.privateMatchRules.roomCode)
+        put("passcode", next.privateMatchRules.passcode)
+        put("startingWave", next.privateMatchRules.startingWave)
+        put("maxPlayers", next.privateMatchRules.maxPlayers)
+        put("botFillEnabled", next.privateMatchRules.botFillEnabled)
+        put("botDifficulty", next.privateMatchRules.botDifficulty.id)
+        put("worldId", next.privateMatchRules.worldId)
+        put("areaId", next.privateMatchRules.areaId)
+        put("modeId", next.privateMatchRules.modeId)
+        put("infiniteAmmo", next.privateMatchRules.infiniteAmmo)
+        put("headshotsOnly", next.privateMatchRules.headshotsOnly)
+        put("bossRush", next.privateMatchRules.bossRush)
+        put("wonderSpawnBoost", next.privateMatchRules.wonderSpawnBoost)
+        put("lowGravity", next.privateMatchRules.lowGravity)
+        put("doubleSpeed", next.privateMatchRules.doubleSpeed)
+        put("vampiricSiphon", next.privateMatchRules.vampiricSiphon)
+        put("doubleBlueEssence", next.privateMatchRules.doubleBlueEssence)
+        put("friendlyFire", next.privateMatchRules.friendlyFire)
+        put("customWaveGoal", next.privateMatchRules.customWaveGoal)
+      })
+      put("clan", JSONObject().apply {
+        put("id", next.clan.id)
+        put("name", next.clan.name)
+        put("tag", next.clan.tag)
+        put("motto", next.clan.motto)
+        put("level", next.clan.level)
+        put("tier", next.clan.tier)
+        put("starLevel", next.clan.starLevel)
+        put("totalEssenceDonated", next.clan.totalEssenceDonated)
+        put("leaderCallsign", next.clan.leaderCallsign)
+        put("colorHex", next.clan.colorHex)
+      })
+      put("friends", JSONArray().apply {
+        next.friends.forEach { f ->
+          put(JSONObject().apply {
+            put("id", f.id)
+            put("callsign", f.callsign)
+            put("level", f.level)
+            put("stars", f.stars)
+            put("tier", f.tier)
+            put("status", f.status.id)
+            put("statusDetail", f.statusDetail)
+            put("clanTag", f.clanTag ?: "")
+            put("isFavorite", f.isFavorite)
+          })
+        }
       })
     }
     val jsonString = root.toString()
@@ -782,6 +1868,14 @@ class ProgressionStore(
       root.optJSONArray("claimedAchievements")?.let { arr ->
         for (i in 0 until arr.length()) claimedAchievements.add(arr.optString(i))
       }
+      val claimedMissions = mutableSetOf<String>()
+      root.optJSONArray("claimedMissions")?.let { arr ->
+        for (i in 0 until arr.length()) claimedMissions.add(arr.optString(i))
+      }
+      val missionProgress = mutableMapOf<String, Long>()
+      root.optJSONObject("missionProgress")?.let { obj ->
+        obj.keys().forEach { k -> missionProgress[k] = obj.optLong(k, 0L).coerceAtLeast(0L) }
+      }
       val purchasedStoreItems = mutableSetOf<String>()
       root.optJSONArray("purchasedStoreItems")?.let { arr ->
         for (i in 0 until arr.length()) purchasedStoreItems.add(arr.optString(i))
@@ -797,11 +1891,23 @@ class ProgressionStore(
       }
       val wpnTierMap = ProgressionCatalog.weapons.associate { it.id to 1 }.toMutableMap()
       root.optJSONObject("weaponTierMap")?.let { obj ->
-        obj.keys().forEach { k -> wpnTierMap[k] = obj.optInt(k, 1).coerceIn(1, 10) }
+        obj.keys().forEach { k -> wpnTierMap[k] = obj.optInt(k, 1).coerceIn(1, 25) }
+      }
+      val wpnStarMap = ProgressionCatalog.weapons.associate { it.id to 1 }.toMutableMap()
+      root.optJSONObject("weaponStarMap")?.let { obj ->
+        obj.keys().forEach { k -> wpnStarMap[k] = obj.optInt(k, 1).coerceIn(1, StarRankMeta.MAX_STARS) }
       }
       val wonderTierMap = WonderWeaponKind.entries.associate { it.id to 1 }.toMutableMap()
       root.optJSONObject("wonderTierMap")?.let { obj ->
-        obj.keys().forEach { k -> wonderTierMap[k] = obj.optInt(k, 1).coerceIn(1, 10) }
+        obj.keys().forEach { k -> wonderTierMap[k] = obj.optInt(k, 1).coerceIn(1, 25) }
+      }
+      val wonderStarMap = WonderWeaponKind.entries.associate { it.id to 1 }.toMutableMap()
+      root.optJSONObject("wonderStarMap")?.let { obj ->
+        obj.keys().forEach { k -> wonderStarMap[k] = obj.optInt(k, 1).coerceIn(1, StarRankMeta.MAX_STARS) }
+      }
+      val armoryStarMap = mutableMapOf<String, Int>()
+      root.optJSONObject("armoryItemStarMap")?.let { obj ->
+        obj.keys().forEach { k -> armoryStarMap[k] = obj.optInt(k, 1).coerceIn(1, StarRankMeta.MAX_STARS) }
       }
       val chProg = mutableMapOf<String, Long>()
       root.optJSONObject("challengeProgress")?.let { obj ->
@@ -821,16 +1927,17 @@ class ProgressionStore(
               level = maxOf(lvl, ProgressionCatalog.gearLevelForXp(xp)),
               prestige = gObj.optInt("prestige", 0),
               xp = xp,
-              tier = gObj.optInt("tier", 1).coerceIn(1, 10),
+              tier = gObj.optInt("tier", 1).coerceIn(1, 25),
               colorHex = gObj.optLong("colorHex", 0xFF00E5FF),
+              starLevel = gObj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
             )
           }
         }
       }
 
       val equipmentMap = mapOf(
-        "lethal" to EquipmentState("lethal", "lethal_frag", 1, 0, 0L, "standard", 1),
-        "tactical" to EquipmentState("tactical", "tactical_stim", 1, 0, 0L, "standard", 1),
+        "lethal" to EquipmentState("lethal", "lethal_frag", 1, 0, 0L, "standard", 1, 1),
+        "tactical" to EquipmentState("tactical", "tactical_stim", 1, 0, 0L, "standard", 1, 1),
       ).toMutableMap()
       root.optJSONObject("equipmentMap")?.let { obj ->
         obj.keys().forEach { k ->
@@ -845,7 +1952,8 @@ class ProgressionStore(
               prestige = eObj.optInt("prestige", 0),
               xp = xp,
               variantId = eObj.optString("variantId", "standard"),
-              tier = eObj.optInt("tier", 1).coerceIn(1, 10),
+              tier = eObj.optInt("tier", 1).coerceIn(1, 25),
+              starLevel = eObj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
             )
           }
         }
@@ -860,6 +1968,7 @@ class ProgressionStore(
             skillNodes[k] = existing.copy(
               unlocked = sObj.optBoolean("unlocked", false),
               tier = sObj.optInt("tier", 1).coerceIn(1, existing.maxTier),
+              starLevel = sObj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
             )
           }
         }
@@ -882,8 +1991,18 @@ class ProgressionStore(
 
       val wcObj = root.optJSONObject("weaponCustom")
       val wc = if (wcObj != null) {
+        val mainId = wcObj.optString("equippedWeaponId", "wpn_pulse_carbine")
+        val eqList = mutableListOf<String>()
+        wcObj.optJSONArray("equippedWeaponIds")?.let { arr ->
+          for (i in 0 until arr.length()) {
+            val s = arr.optString(i)
+            if (s.isNotBlank()) eqList.add(s)
+          }
+        }
+        if (eqList.isEmpty()) eqList.add(mainId)
         WeaponCustomization(
-          equippedWeaponId = wcObj.optString("equippedWeaponId", "wpn_pulse_carbine"),
+          equippedWeaponId = mainId,
+          equippedWeaponIds = eqList.distinct(),
           camoId = wcObj.optString("camoId", "cyber_matte"),
           opticId = wcObj.optString("opticId", "holo_cyan"),
           barrelId = wcObj.optString("barrelId", "standard_barrel"),
@@ -927,16 +2046,204 @@ class ProgressionStore(
         )
       } else LevelCustomization()
 
+      val wonderList = mutableListOf<String>()
+      root.optJSONArray("equippedWonderIds")?.let { arr ->
+        for (i in 0 until arr.length()) {
+          val s = arr.optString(i)
+          if (s.isNotBlank()) wonderList.add(s)
+        }
+      }
+      if (wonderList.isEmpty()) wonderList.add(WonderWeaponKind.RAY_NOVA_MK3.id)
+
+      val lethalList = mutableListOf<String>()
+      root.optJSONArray("equippedLethalIds")?.let { arr ->
+        for (i in 0 until arr.length()) {
+          val s = arr.optString(i)
+          if (s.isNotBlank()) lethalList.add(s)
+        }
+      }
+      if (lethalList.isEmpty()) lethalList.add(equipmentMap["lethal"]?.equippedItemId ?: "lethal_frag")
+
+      val tacticalList = mutableListOf<String>()
+      root.optJSONArray("equippedTacticalIds")?.let { arr ->
+        for (i in 0 until arr.length()) {
+          val s = arr.optString(i)
+          if (s.isNotBlank()) tacticalList.add(s)
+        }
+      }
+      if (tacticalList.isEmpty()) tacticalList.add(equipmentMap["tactical"]?.equippedItemId ?: "tactical_stim")
+
+      val perkRanks = mutableMapOf<String, Int>()
+      root.optJSONObject("perkRanks")?.let { obj ->
+        obj.keys().forEach { k -> perkRanks[k] = obj.optInt(k, 0).coerceIn(0, 25) }
+      }
+
+      val coreInv = BlastCoreColor.entries.associate { it.id to 2L }.toMutableMap()
+      root.optJSONObject("blastCoreInventory")?.let { obj ->
+        obj.keys().forEach { k -> coreInv[k] = obj.optLong(k, 2L).coerceAtLeast(0L) }
+      }
+
+      val coreLvls = BlastCoreColor.entries.associate { it.id to 1 }.toMutableMap()
+      root.optJSONObject("blastCoreLevels")?.let { obj ->
+        obj.keys().forEach { k -> coreLvls[k] = obj.optInt(k, 1).coerceIn(1, 20) }
+      }
+
+      val outfitStates = MultiverseArsenalCatalog.outfits.associate {
+        it.id to OutfitProgressState(it.id)
+      }.toMutableMap()
+      root.optJSONObject("outfitStates")?.let { obj ->
+        obj.keys().forEach { k ->
+          val oObj = obj.optJSONObject(k)
+          if (oObj != null) {
+            outfitStates[k] = OutfitProgressState(
+              outfitId = k,
+              level = oObj.optInt("level", 1).coerceIn(1, 1000),
+              tier = oObj.optInt("tier", 1).coerceIn(1, 25),
+              skillRank = oObj.optInt("skillRank", 1).coerceIn(1, 20),
+              gearRank = oObj.optInt("gearRank", 1).coerceIn(1, 20),
+              equipmentRank = oObj.optInt("equipmentRank", 1).coerceIn(1, 20),
+              starLevel = oObj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
+            )
+          }
+        }
+      }
+
+      val areaStates = MultiverseArsenalCatalog.customAreas.associate {
+        it.id to CustomAreaState(it.id)
+      }.toMutableMap()
+      root.optJSONObject("areaStates")?.let { obj ->
+        obj.keys().forEach { k ->
+          val aObj = obj.optJSONObject(k)
+          if (aObj != null) {
+            areaStates[k] = CustomAreaState(
+              areaId = k,
+              ageYears = aObj.optInt("ageYears", 12).coerceIn(0, 99),
+              rebirthCycles = aObj.optInt("rebirthCycles", 0).coerceAtLeast(0),
+              powerGridTier = aObj.optInt("powerGridTier", 1).coerceIn(1, 25),
+              defenseTurretTier = aObj.optInt("defenseTurretTier", 1).coerceIn(1, 25),
+              trapDensityTier = aObj.optInt("trapDensityTier", 1).coerceIn(1, 25),
+              lootRichnessTier = aObj.optInt("lootRichnessTier", 1).coerceIn(1, 25),
+              starLevel = aObj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
+            )
+          }
+        }
+      }
+
+      val vacObj = root.optJSONObject("vacuumBot")
+      val vacBot = if (vacObj != null) {
+        VacuumBotState(
+          level = vacObj.optInt("level", 1).coerceIn(1, 50),
+          tier = vacObj.optInt("tier", 1).coerceIn(1, 25),
+          autoUpgradeEnabled = vacObj.optBoolean("autoUpgradeEnabled", true),
+          autoCollectEnabled = vacObj.optBoolean("autoCollectEnabled", true),
+          starLevel = vacObj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
+        )
+      } else VacuumBotState()
+
+      val pmObj = root.optJSONObject("privateMatchRules")
+      val pmRules = if (pmObj != null) {
+        val privId = pmObj.optString("privacy", MatchPrivacy.PRIVATE_PASSWORD.id)
+        val priv = MatchPrivacy.entries.firstOrNull { it.id == privId } ?: MatchPrivacy.PRIVATE_PASSWORD
+        val diffId = pmObj.optString("botDifficulty", BotDifficulty.OPERATIVE.id)
+        val diff = BotDifficulty.entries.firstOrNull { it.id == diffId } ?: BotDifficulty.OPERATIVE
+        PrivateMatchRules(
+          isPrivate = pmObj.optBoolean("isPrivate", true),
+          privacy = priv,
+          roomName = pmObj.optString("roomName", "Omega Convergence Strike"),
+          roomCode = pmObj.optString("roomCode", "GENESIS-774"),
+          passcode = pmObj.optString("passcode", "7744"),
+          startingWave = pmObj.optInt("startingWave", 1),
+          maxPlayers = pmObj.optInt("maxPlayers", 8),
+          botFillEnabled = pmObj.optBoolean("botFillEnabled", true),
+          botDifficulty = diff,
+          worldId = pmObj.optString("worldId", "campaign_origins"),
+          areaId = pmObj.optString("areaId", "area_mended_convergence"),
+          modeId = pmObj.optString("modeId", "campaign"),
+          infiniteAmmo = pmObj.optBoolean("infiniteAmmo", false),
+          headshotsOnly = pmObj.optBoolean("headshotsOnly", false),
+          bossRush = pmObj.optBoolean("bossRush", false),
+          wonderSpawnBoost = pmObj.optBoolean("wonderSpawnBoost", false),
+          lowGravity = pmObj.optBoolean("lowGravity", false),
+          doubleSpeed = pmObj.optBoolean("doubleSpeed", false),
+          vampiricSiphon = pmObj.optBoolean("vampiricSiphon", false),
+          doubleBlueEssence = pmObj.optBoolean("doubleBlueEssence", false),
+          friendlyFire = pmObj.optBoolean("friendlyFire", false),
+          customWaveGoal = pmObj.optInt("customWaveGoal", 0),
+        )
+      } else PrivateMatchRules()
+
+      val clanObj = root.optJSONObject("clan")
+      val clanData = if (clanObj != null) {
+        SocialCatalog.defaultClan.copy(
+          id = clanObj.optString("id", SocialCatalog.defaultClan.id),
+          name = clanObj.optString("name", SocialCatalog.defaultClan.name),
+          tag = clanObj.optString("tag", SocialCatalog.defaultClan.tag),
+          motto = clanObj.optString("motto", SocialCatalog.defaultClan.motto),
+          level = clanObj.optInt("level", 4).coerceIn(1, 25),
+          tier = clanObj.optInt("tier", 4).coerceIn(1, 25),
+          starLevel = clanObj.optInt("starLevel", 3).coerceIn(1, 10),
+          totalEssenceDonated = clanObj.optLong("totalEssenceDonated", 18500L),
+          leaderCallsign = clanObj.optString("leaderCallsign", SocialCatalog.defaultClan.leaderCallsign),
+          colorHex = clanObj.optLong("colorHex", SocialCatalog.defaultClan.colorHex),
+        )
+      } else SocialCatalog.defaultClan
+
+      val friendsArray = root.optJSONArray("friends")
+      val friendsList = if (friendsArray != null && friendsArray.length() > 0) {
+        val list = ArrayList<FriendEntry>(friendsArray.length())
+        for (i in 0 until friendsArray.length()) {
+          val fObj = friendsArray.optJSONObject(i) ?: continue
+          val statusId = fObj.optString("status", FriendOnlineStatus.ONLINE_LOBBY.id)
+          val status = FriendOnlineStatus.entries.firstOrNull { it.id == statusId } ?: FriendOnlineStatus.ONLINE_LOBBY
+          val tag = fObj.optString("clanTag", "").ifEmpty { null }
+          list.add(
+            FriendEntry(
+              id = fObj.optString("id", "f_$i"),
+              callsign = fObj.optString("callsign", "Operator_$i"),
+              level = fObj.optInt("level", 25),
+              stars = fObj.optInt("stars", 5),
+              tier = fObj.optInt("tier", 4),
+              status = status,
+              statusDetail = fObj.optString("statusDetail", "In Lobby"),
+              clanTag = tag,
+              isFavorite = fObj.optBoolean("isFavorite", false),
+            )
+          )
+        }
+        list
+      } else SocialCatalog.defaultFriends
+
       OperatorProgressionState(
         playerXp = root.optLong("playerXp", 0L),
         playerPrestige = root.optInt("playerPrestige", 0),
+        characterTier = root.optInt("characterTier", 1).coerceIn(1, PowerTier.MAX_TIER),
+        characterStarLevel = root.optInt("characterStarLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
         weaponXpMap = wpnXp.ifEmpty { mapOf("wpn_pulse_carbine" to 0L) },
         weaponPrestigeMap = wpnPrestige,
         weaponTierMap = wpnTierMap,
+        weaponStarMap = wpnStarMap,
         wonderTierMap = wonderTierMap,
+        wonderStarMap = wonderStarMap,
+        armoryItemStarMap = armoryStarMap,
         gearMap = gearMap,
         gearPrestige = root.optInt("gearPrestige", 0),
         equipmentMap = equipmentMap,
+        equippedWonderIds = wonderList.distinct(),
+        equippedLethalIds = lethalList.distinct(),
+        equippedTacticalIds = tacticalList.distinct(),
+        redEssence = root.optLong("redEssence", 300L),
+        yellowEssence = root.optLong("yellowEssence", 300L),
+        greenEssence = root.optLong("greenEssence", 300L),
+        combinedEssence = root.optLong("combinedEssence", 50L),
+        blastShards = root.optLong("blastShards", 20L),
+        perkRanks = perkRanks,
+        blastCoreInventory = coreInv,
+        blastCoreLevels = coreLvls,
+        equippedOutfitId = root.optString("equippedOutfitId", "mrcrossover_v1"),
+        outfitStates = outfitStates,
+        activeAreaId = root.optString("activeAreaId", "area_empire_city"),
+        areaStates = areaStates,
+        vacuumBot = vacBot,
         weaponCustom = wc,
         characterCustom = cc,
         levelCustom = lc,
@@ -953,6 +2260,8 @@ class ProgressionStore(
         skillNodes = skillNodes,
         wonderWeaponsPickedTotal = root.optLong("wonderPicked", 0L),
         claimedAchievements = claimedAchievements,
+        missionProgress = missionProgress,
+        claimedMissions = claimedMissions,
         totalElimsLifetime = root.optLong("totalElimsLifetime", 0L),
         totalBossesLifetime = root.optLong("totalBossesLifetime", 0L),
         totalMatchesPlayed = root.optLong("totalMatchesPlayed", 0L),
@@ -963,9 +2272,17 @@ class ProgressionStore(
         purchasedStoreItems = purchasedStoreItems,
         xpBoosterMatchesRemaining = root.optInt("xpBoosterMatchesRemaining", 0),
         botDamageBoostPct = root.optInt("botDamageBoostPct", 0),
+        privateMatchRules = pmRules,
+        friends = friendsList,
+        clan = clanData,
       )
     }.getOrDefault(OperatorProgressionState())
   }
+
+  data class HeroOutfitResult(
+    val nameWithVersion: String,
+    val progress: OutfitProgressState,
+  )
 
   companion object {
     const val PREFS_PREFIX = "unknown_os_progression"

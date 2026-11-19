@@ -231,7 +231,7 @@ class RigAndExportTest {
 
     val loadout = ArenaLoadoutStats.fromArmory(fullArmory, Color.Cyan)
     assertEquals(220, loadout.maxShield)
-    assertEquals(3, loadout.initialPackTier)
+    assertEquals(4, loadout.initialPackTier)
     assertTrue(loadout.hasClawEdge)
     assertTrue(loadout.hasRepulsePower)
     assertTrue(loadout.multiShot >= 3)

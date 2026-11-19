@@ -58,7 +58,7 @@ class LobbyStoreAndTiersTest {
   }
 
   @Test
-  fun progressionAndTiers_syncXpAndUpgradeAllCategoriesUpToTier10() {
+  fun progressionAndTiers_syncXpAndUpgradeAllCategoriesUpToTier25() {
     val store = ProgressionStore(context, "test_mega")
 
     // Verify manual upgrades sync XP cleanly
@@ -81,7 +81,7 @@ class LobbyStoreAndTiersTest {
         wonderPickupsCollected = 4,
         weaponIdUsed = "wpn_pulse_carbine",
         extracted = true,
-        highestPackTierReached = 10,
+        highestPackTierReached = 25,
         lobbySizePlayed = 32,
       )
     )
@@ -90,20 +90,22 @@ class LobbyStoreAndTiersTest {
     assertTrue(store.current.weaponLevel("wpn_pulse_carbine") > 1)
     assertTrue(store.current.equipmentState("tactical").xp > 0L)
     assertTrue(store.current.gearMap[GearSlot.CHEST.id]!!.xp > 0L)
-    assertEquals(10, store.current.highestPackTierReached)
+    assertEquals(25, store.current.highestPackTierReached)
     assertEquals(32, store.current.largestLobbyPlayed)
 
-    // Verify PowerTier 1..10 & upgrades on Weapons, Wonder Weapons, Gear, Equipment, Skills
+    // Verify PowerTier 1..25 & upgrades on Weapons, Wonder Weapons, Gear, Equipment, Skills
     assertEquals(PowerTier.OMEGA, ProgressionCatalog.tierMeta(10))
+    assertEquals(PowerTier.MULTIVERSAL, ProgressionCatalog.tierMeta(25))
+    assertTrue(ProgressionCatalog.tierMultiplier(25) > ProgressionCatalog.tierMultiplier(10))
     assertTrue(ProgressionCatalog.tierMultiplier(10) > ProgressionCatalog.tierMultiplier(5))
 
-    var blueEssence = 50_000L
-    for (t in 2..10) {
+    var blueEssence = 500_000L
+    for (t in 2..25) {
       val wRes = store.upgradeWeaponTier("wpn_pulse_carbine", blueEssence)
       assertTrue("Weapon tier $t should succeed", wRes.isSuccess)
       blueEssence -= wRes.getOrThrow()
     }
-    assertEquals(10, store.current.weaponTier("wpn_pulse_carbine"))
+    assertEquals(25, store.current.weaponTier("wpn_pulse_carbine"))
     assertTrue(store.upgradeWeaponTier("wpn_pulse_carbine", blueEssence).isFailure)
 
     assertTrue(store.upgradeWonderTier(WonderWeaponKind.RAY_NOVA_MK3.id, blueEssence).isSuccess)
@@ -115,17 +117,21 @@ class LobbyStoreAndTiersTest {
     assertTrue(store.upgradeEquipmentTier("lethal", blueEssence).isSuccess)
     assertEquals(2, store.current.equipmentState("lethal").tier)
 
-    // Unlock + upgrade skill node up to Tier 10
+    // Unlock + upgrade skill node up to Tier 25
     val skUnlock = store.unlockSkillNode("sk_damage_1", blueEssence)
     assertTrue(skUnlock.isSuccess)
     assertEquals(1, store.current.skillNodes["sk_damage_1"]!!.tier)
-    val skUpgrade = store.unlockSkillNode("sk_damage_1", blueEssence)
-    assertTrue(skUpgrade.isSuccess)
-    assertEquals(2, store.current.skillNodes["sk_damage_1"]!!.tier)
+    for (st in 2..25) {
+      val skUpgrade = store.unlockSkillNode("sk_damage_1", blueEssence)
+      assertTrue("Skill tier $st should succeed", skUpgrade.isSuccess)
+      blueEssence -= skUpgrade.getOrThrow()
+    }
+    assertEquals(25, store.current.skillNodes["sk_damage_1"]!!.tier)
+    assertTrue(store.unlockSkillNode("sk_damage_1", blueEssence).isFailure)
 
-    // Verify ArmoryItem default maxTier supports Tier 10 Omega
+    // Verify ArmoryItem default maxTier supports Tier 25 Multiversal
     assertEquals(
-      10L,
+      25L,
       com.example.data.model.ArmoryItem(
         id = "test",
         userId = "test_mega",
@@ -188,12 +194,12 @@ class LobbyStoreAndTiersTest {
       sim.stepFrame(0.016f)
     }
 
-    // Pack-a-Punch advances all the way to Tier 10 (I -> X)
-    while (sim.hudPackTier < 10) {
+    // Pack-a-Punch advances all the way to Tier 25 (I -> XXV)
+    while (sim.hudPackTier < 25) {
       sim.upgradePackAPunch()
     }
-    assertEquals(10, sim.hudPackTier)
-    assertEquals(10, sim.maxPackTierReached)
+    assertEquals(25, sim.hudPackTier)
+    assertEquals(25, sim.maxPackTierReached)
   }
 
   @Test

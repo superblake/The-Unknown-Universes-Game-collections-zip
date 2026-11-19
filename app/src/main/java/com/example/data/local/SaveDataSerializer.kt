@@ -206,7 +206,7 @@ object SaveDataSerializer {
           val name = obj.optString("name").trim().take(50)
           if (name.isEmpty()) continue
           val rawId = obj.optString("id").ifBlank { "imp_arm_${i}_${name.hashCode().toUInt()}" }
-          val maxTier = obj.optLong("maxTier", 5L).coerceIn(1L, 5L)
+          val maxTier = maxOf(obj.optLong("maxTier", 25L), 25L).coerceIn(1L, 25L)
           val tier = obj.optLong("tier", 1L).coerceIn(1L, maxTier)
           add(
             ArmoryItem(
@@ -219,7 +219,7 @@ object SaveDataSerializer {
               tier = tier,
               maxTier = maxTier,
               cooldownSec = obj.optLong("cooldownSec", 0L).coerceIn(0L, 120L),
-              powerValue = obj.optLong("powerValue", 120L).coerceIn(1L, 500L),
+              powerValue = obj.optLong("powerValue", 120L).coerceIn(1L, 1500L),
               accentColorHex = obj.optString("accentColorHex", "#00E5FF").trim().take(10).ifEmpty { "#00E5FF" },
               equipped = obj.optBoolean("equipped", false),
               isCustom = obj.optBoolean("isCustom", rawId.startsWith("custom_") || rawId.startsWith("imp_")),

@@ -53,11 +53,11 @@ service cloud.firestore {
              data.category in ['perk', 'power', 'upgrade', 'consumable'] &&
              data.universeTag is string && data.universeTag.size() >= 1 && data.universeTag.size() <= 40 &&
              data.description is string && data.description.size() <= 240 &&
-             data.tier is int && data.tier >= 1 && data.tier <= 5 &&
-             data.maxTier is int && data.maxTier >= 1 && data.maxTier <= 5 &&
+             data.tier is int && data.tier >= 1 && data.tier <= 25 &&
+             data.maxTier is int && data.maxTier >= 1 && data.maxTier <= 25 &&
              data.tier <= data.maxTier &&
              data.cooldownSec is int && data.cooldownSec >= 0 && data.cooldownSec <= 120 &&
-             data.powerValue is int && data.powerValue >= 1 && data.powerValue <= 500 &&
+             data.powerValue is int && data.powerValue >= 1 && data.powerValue <= 1500 &&
              data.accentColorHex is string && data.accentColorHex.size() >= 4 && data.accentColorHex.size() <= 10 &&
              data.equipped is bool &&
              data.isCustom is bool;

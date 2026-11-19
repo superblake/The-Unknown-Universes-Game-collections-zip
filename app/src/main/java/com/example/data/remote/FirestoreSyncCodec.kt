@@ -114,7 +114,7 @@ object FirestoreSyncCodec {
   // --- ArmoryItem (/users/{userId}/armoryItems/{itemId}) ---
 
   fun ArmoryItem.toFirestoreCreateMap(uid: String): Map<String, Any> {
-    val safeMaxTier = maxTier.coerceIn(1L, 5L)
+    val safeMaxTier = maxTier.coerceIn(1L, 25L)
     val safeTier = tier.coerceIn(1L, safeMaxTier)
     return mapOf(
       "userId" to uid,
@@ -125,7 +125,7 @@ object FirestoreSyncCodec {
       "tier" to safeTier,
       "maxTier" to safeMaxTier,
       "cooldownSec" to cooldownSec.coerceIn(0L, 120L),
-      "powerValue" to powerValue.coerceIn(1L, 500L),
+      "powerValue" to powerValue.coerceIn(1L, 1500L),
       "accentColorHex" to accentColorHex.trim().take(10).ifEmpty { "#00E5FF" },
       "equipped" to equipped,
       "isCustom" to isCustom,
@@ -135,7 +135,7 @@ object FirestoreSyncCodec {
   }
 
   fun ArmoryItem.toFirestoreUpdateMap(): Map<String, Any> {
-    val safeMaxTier = maxTier.coerceIn(1L, 5L)
+    val safeMaxTier = maxTier.coerceIn(1L, 25L)
     val safeTier = tier.coerceIn(1L, safeMaxTier)
     return mapOf(
       "name" to name.trim().take(50).ifEmpty { "Module" },
@@ -145,7 +145,7 @@ object FirestoreSyncCodec {
       "tier" to safeTier,
       "maxTier" to safeMaxTier,
       "cooldownSec" to cooldownSec.coerceIn(0L, 120L),
-      "powerValue" to powerValue.coerceIn(1L, 500L),
+      "powerValue" to powerValue.coerceIn(1L, 1500L),
       "accentColorHex" to accentColorHex.trim().take(10).ifEmpty { "#00E5FF" },
       "equipped" to equipped,
       "updatedAt" to FieldValue.serverTimestamp(),
@@ -155,7 +155,7 @@ object FirestoreSyncCodec {
   fun DocumentSnapshot.toArmoryItemOrNull(fallbackUserId: String): ArmoryItem? {
     val data = data ?: return null
     val now = System.currentTimeMillis()
-    val maxTier = ((data["maxTier"] as? Number)?.toLong() ?: 5L).coerceIn(1L, 5L)
+    val maxTier = ((data["maxTier"] as? Number)?.toLong() ?: 25L).coerceIn(1L, 25L)
     val tier = ((data["tier"] as? Number)?.toLong() ?: 1L).coerceIn(1L, maxTier)
     return ArmoryItem(
       id = id,
@@ -167,7 +167,7 @@ object FirestoreSyncCodec {
       tier = tier,
       maxTier = maxTier,
       cooldownSec = ((data["cooldownSec"] as? Number)?.toLong() ?: 0L).coerceIn(0L, 120L),
-      powerValue = ((data["powerValue"] as? Number)?.toLong() ?: 100L).coerceIn(1L, 500L),
+      powerValue = ((data["powerValue"] as? Number)?.toLong() ?: 100L).coerceIn(1L, 1500L),
       accentColorHex = (data["accentColorHex"] as? String)?.take(10).orEmpty().ifBlank { "#00E5FF" },
       equipped = (data["equipped"] as? Boolean) ?: false,
       isCustom = (data["isCustom"] as? Boolean) ?: false,

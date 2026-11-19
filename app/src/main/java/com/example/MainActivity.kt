@@ -73,9 +73,13 @@ import com.example.ui.screens.ArmoryScreen
 import com.example.ui.screens.BlueEssenceStoreDialog
 import com.example.ui.screens.ExportCompatScreen
 import com.example.ui.screens.ForgeRigScreen
+import com.example.ui.screens.MatchBrowserDialog
 import com.example.ui.screens.MediaVaultScreen
+import com.example.ui.screens.MissionsDialog
 import com.example.ui.screens.OsDesktopScreen
 import com.example.ui.screens.SettingsDialog
+import com.example.ui.screens.SocialAndCommsDialog
+import com.example.data.model.SocialCatalog
 import com.example.ui.theme.AppIcons
 import com.example.ui.theme.UnknownUniversesTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -271,6 +275,7 @@ fun UnknownOsShell(
   val progression by viewModel.progressionState.collectAsStateWithLifecycle()
   val challenges by viewModel.challengeStates.collectAsStateWithLifecycle()
   val achievements by viewModel.achievementStates.collectAsStateWithLifecycle()
+  val missions by viewModel.missionStates.collectAsStateWithLifecycle()
   val activeTab by viewModel.activeTab.collectAsStateWithLifecycle()
   val statusBanner by viewModel.statusBanner.collectAsStateWithLifecycle()
   val oauthRedirectUri by pendingOAuthRedirect.collectAsStateWithLifecycle()
@@ -278,6 +283,10 @@ fun UnknownOsShell(
   val isCloudSignedIn = runCatching { Firebase.auth.currentUser?.uid == currentUserId }.getOrDefault(false)
   var showStoreDialog by remember { mutableStateOf(false) }
   var showAchievementsDialog by remember { mutableStateOf(false) }
+  var showMissionsDialog by remember { mutableStateOf(false) }
+  var showMatchBrowserDialog by remember { mutableStateOf(false) }
+  var showSocialDialog by remember { mutableStateOf(false) }
+  var socialDialogInitialTab by remember { mutableIntStateOf(0) }
 
   val handleDesktopGoogleSuccess: (String?) -> Unit = { name ->
     isGoogleSigningIn = false
@@ -468,6 +477,11 @@ fun UnknownOsShell(
                   onUpdateLobby = viewModel::updateLobbyConfig,
                   onOpenStore = { showStoreDialog = true },
                   onOpenAchievements = { showAchievementsDialog = true },
+                  onOpenMatchBrowser = { showMatchBrowserDialog = true },
+                  onOpenSocialHub = { tabIdx ->
+                    socialDialogInitialTab = tabIdx
+                    showSocialDialog = true
+                  },
                   onSignOut = onLockSession,
                 )
 
@@ -480,6 +494,9 @@ fun UnknownOsShell(
                   isPausedForSettings = isSettingsOpen,
                   onOpenSettings = onOpenSettings,
                   onRecordProgression = viewModel::recordArenaProgression,
+                  onSendChatMessage = { ch, content, targetId, isTac ->
+                    viewModel.sendChatMessage(ch, content, state.profile.callsign, targetId, isTac)
+                  },
                   onSaveMatchAndExit = { score, wave, elims, extracted, durationSec ->
                     viewModel.submitMatchResult(
                       profile = state.profile,
@@ -541,6 +558,21 @@ fun UnknownOsShell(
                   onPrestigeWeapon = viewModel::prestigeWeapon,
                   onPurchaseStoreItem = { itemId -> viewModel.purchaseStoreItem(itemId, state.profile.totalEssence) },
                   onClaimAchievement = viewModel::claimAchievement,
+                  onToggleMultiWeaponEquip = viewModel::toggleMultiWeaponEquip,
+                  onToggleMultiWonderEquip = viewModel::toggleMultiWonderEquip,
+                  onToggleMultiEquipmentEquip = viewModel::toggleMultiEquipmentEquip,
+                  onEquipOutfit = viewModel::equipOutfit,
+                  onUpgradeOutfit = { id -> viewModel.upgradeOutfit(id, state.profile.totalEssence) },
+                  onUpgradeOutfitSubSystem = { id, part -> viewModel.upgradeOutfitSubSystem(id, part, state.profile.totalEssence) },
+                  onSelectArea = viewModel::selectCustomArea,
+                  onUpgradeAreaFeature = { id, feat -> viewModel.upgradeAreaFeature(id, feat, state.profile.totalEssence) },
+                  onAdvanceAreaAge = viewModel::advanceAreaAge,
+                  onSpendBlastShards = viewModel::spendBlastShardsUpgrade,
+                  onUpgradeVacuumBot = { viewModel.upgradeVacuumBot(state.profile.totalEssence) },
+                  onToggleVacuumAutoUpgrade = viewModel::toggleVacuumAutoUpgrade,
+                  onUpgradePerkDrink = { perkId -> viewModel.upgradePerkDrink(perkId, state.profile.totalEssence) },
+                  onUpgradeBlastCore = viewModel::upgradeBlastCore,
+                  onExecuteTradeOffer = { offerId -> viewModel.executeTradeOffer(offerId, state.profile.totalEssence) },
                 )
 
                 OsWorkspaceTab.MEDIA_VAULT -> MediaVaultScreen(
@@ -577,6 +609,7 @@ fun UnknownOsShell(
         totalBlueEssence = readyProfile.totalEssence,
         onPurchaseItem = { itemId -> viewModel.purchaseStoreItem(itemId, readyProfile.totalEssence) },
         onDismiss = { showStoreDialog = false },
+        onExecuteTradeOffer = { offerId -> viewModel.executeTradeOffer(offerId, readyProfile.totalEssence) },
       )
     }
 

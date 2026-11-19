@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -53,22 +55,32 @@ import com.example.R
 import com.example.data.model.AchievementState
 import com.example.data.model.ArmoryItem
 import com.example.data.model.BattlePassVersion
+import com.example.data.model.BlastCoreColor
 import com.example.data.model.ChallengeState
 import com.example.data.model.CharacterCustomization
+import com.example.data.model.EquipmentSlotType
+import com.example.data.model.GearSlot
 import com.example.data.model.LevelCustomization
+import com.example.data.model.MissionScope
+import com.example.data.model.MissionState
 import com.example.data.model.OperatorProgressionState
 import com.example.data.model.ProgressionCatalog
 import com.example.data.model.RigAsset
+import com.example.data.model.StarRankMeta
 import com.example.data.model.WeaponCustomization
 
 enum class ArmorySection(val label: String, val tag: String) {
   MODS("Mods", "mods"),
+  OUTFITS("Outfits", "outfits"),
   WEAPONS("Weapons", "weapons"),
   GEAR("Gear", "gear"),
   EQUIPMENT("Equipment", "equipment"),
+  SHARDS_CORES("Shards & Cores", "shards_cores"),
+  AREAS("Areas & Aging", "areas"),
   SKILLS("Skill Tree", "skills"),
   CHARACTER("Character", "character"),
   LEVELS("Levels", "levels"),
+  MISSIONS("Missions", "missions"),
   PASS_CHALLENGES("Pass & Challenges", "pass"),
   STORE("Store", "store"),
   ACHIEVEMENTS("Achievements", "achievements"),
@@ -93,6 +105,9 @@ fun ArmoryScreen(
   progression: OperatorProgressionState = OperatorProgressionState(),
   challenges: List<ChallengeState> = ProgressionCatalog.challenges.map { ChallengeState(it, 0L, false) },
   achievements: List<AchievementState> = emptyList(),
+  missions: List<MissionState> = emptyList(),
+  activeWorldId: String = "sector_zero",
+  activeAreaId: String = "area_empire_city",
   activeRig: RigAsset? = null,
   onUpdateWeaponCustom: ((WeaponCustomization) -> WeaponCustomization) -> Unit = {},
   onUpdateCharacterCustom: ((CharacterCustomization) -> CharacterCustomization) -> Unit = {},
@@ -105,8 +120,8 @@ fun ArmoryScreen(
   onUpgradeEquipmentTier: (String) -> Unit = {},
   onPrestigeEquipment: (String) -> Unit = {},
   onEquipEquipment: (String, String) -> Unit = { _, _ -> },
-  onUpgradeGear: (com.example.data.model.GearSlot) -> Unit = {},
-  onUpgradeGearTier: (com.example.data.model.GearSlot) -> Unit = {},
+  onUpgradeGear: (GearSlot) -> Unit = {},
+  onUpgradeGearTier: (GearSlot) -> Unit = {},
   onPrestigeGear: () -> Unit = {},
   onUnlockSkill: (String) -> Unit = {},
   onUpgradeWeaponTier: (String) -> Unit = {},
@@ -115,6 +130,34 @@ fun ArmoryScreen(
   onPrestigeWeapon: (String) -> Unit = {},
   onPurchaseStoreItem: (String) -> Unit = {},
   onClaimAchievement: (String) -> Unit = {},
+  onToggleMultiWeaponEquip: (String) -> Unit = {},
+  onToggleMultiWonderEquip: (String) -> Unit = {},
+  onToggleMultiEquipmentEquip: (EquipmentSlotType, String) -> Unit = { _, _ -> },
+  onEquipOutfit: (String) -> Unit = {},
+  onUpgradeOutfit: (String) -> Unit = {},
+  onUpgradeOutfitSubSystem: (String, String) -> Unit = { _, _ -> },
+  onSelectArea: (String) -> Unit = {},
+  onUpgradeAreaFeature: (String, String) -> Unit = { _, _ -> },
+  onAdvanceAreaAge: (String, Int) -> Unit = { _, _ -> },
+  onSpendBlastShards: () -> Unit = {},
+  onUpgradeVacuumBot: () -> Unit = {},
+  onToggleVacuumAutoUpgrade: () -> Unit = {},
+  onUpgradePerkDrink: (String) -> Unit = {},
+  onUpgradeBlastCore: (BlastCoreColor) -> Unit = {},
+  onExecuteTradeOffer: (String) -> Unit = {},
+  onClaimMission: (String) -> Unit = {},
+  onDeployMissionTarget: (MissionScope, String) -> Unit = { _, _ -> },
+  onUpgradeArmoryItemStar: (String) -> Unit = {},
+  onUpgradeCharacterTier: () -> Unit = {},
+  onUpgradeCharacterStar: () -> Unit = {},
+  onUpgradeOutfitStar: (String) -> Unit = {},
+  onUpgradeWeaponStar: (String) -> Unit = {},
+  onUpgradeWonderStar: (String) -> Unit = {},
+  onUpgradeGearStar: (GearSlot) -> Unit = {},
+  onUpgradeEquipmentStar: (String) -> Unit = {},
+  onUpgradeSkillStar: (String) -> Unit = {},
+  onUpgradeVacuumBotStar: () -> Unit = {},
+  onUpgradeAreaStar: (String) -> Unit = {},
 ) {
   val categories = listOf("all", "perk", "power", "upgrade", "consumable")
   var selectedSection by remember { mutableStateOf(ArmorySection.MODS) }
@@ -123,9 +166,18 @@ fun ArmoryScreen(
 
   val filtered =
     if (selectedCategory == "all") armory else armory.filter { it.category == selectedCategory }
+  val sections = ArmorySection.entries
+  val curIdx = sections.indexOf(selectedSection).coerceAtLeast(0)
+  val resonance = remember(
+    totalEssence,
+    progression.redEssence,
+    progression.yellowEssence,
+    progression.greenEssence,
+    progression.combinedEssence,
+    progression.blastShards,
+  ) { progression.essenceResonance(totalEssence) }
 
   Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-    // Persistent Top Armory Header + Section Switcher
     Surface(
       color = MaterialTheme.colorScheme.surface,
       modifier = Modifier
@@ -142,7 +194,7 @@ fun ArmoryScreen(
           Column(modifier = Modifier.weight(1f)) {
             Text("MULTIVERSE ARMORY", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
             Text(
-              text = "Lv.${progression.playerLevel} ${progression.playerRankTitle} • ${progression.activePassVersion.title.substringBefore(":")}",
+              text = "Lv.${progression.playerLevel} ${progression.playerRankTitle} • ${progression.activeOutfitSpec().nameWithVersion}",
               style = MaterialTheme.typography.labelSmall,
               color = MaterialTheme.colorScheme.primary,
             )
@@ -161,14 +213,87 @@ fun ArmoryScreen(
           }
         }
 
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          items(ArmorySection.entries, key = { it.tag }) { sec ->
-            FilterChip(
-              selected = selectedSection == sec,
-              onClick = { selectedSection = sec },
-              label = { Text(sec.label) },
-              modifier = Modifier.testTag("armory_tab_${sec.tag}"),
-            )
+        Text(
+          text = "Red ${progression.redEssence} • Yellow ${progression.yellowEssence} • Green ${progression.greenEssence} • Combined ${progression.combinedEssence} • ${resonance.summary}",
+          style = MaterialTheme.typography.labelSmall,
+          color = Color(0xFFE040FB),
+          fontWeight = FontWeight.SemiBold,
+        )
+
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          OutlinedButton(
+            onClick = { selectedSection = sections[(curIdx - 1 + sections.size) % sections.size] },
+            shape = RoundedCornerShape(10.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+            modifier = Modifier.height(40.dp).testTag("armory_prev_section_btn"),
+          ) {
+            Text("< Prev", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+          }
+          Text(
+            text = "${curIdx + 1}/${sections.size}: ${selectedSection.label.uppercase()}",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF00E5FF),
+          )
+          OutlinedButton(
+            onClick = { selectedSection = sections[(curIdx + 1) % sections.size] },
+            shape = RoundedCornerShape(10.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+            modifier = Modifier.height(40.dp).testTag("armory_next_section_btn"),
+          ) {
+            Text("Next >", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+          }
+        }
+
+        val topRowSections = remember(sections) {
+          listOf(
+            ArmorySection.MODS,
+            ArmorySection.OUTFITS,
+            ArmorySection.WEAPONS,
+            ArmorySection.CHARACTER,
+            ArmorySection.LEVELS,
+            ArmorySection.MISSIONS,
+            ArmorySection.PASS_CHALLENGES,
+          )
+        }
+        val bottomRowSections = remember(sections) {
+          listOf(
+            ArmorySection.GEAR,
+            ArmorySection.EQUIPMENT,
+            ArmorySection.SKILLS,
+            ArmorySection.SHARDS_CORES,
+            ArmorySection.AREAS,
+            ArmorySection.STORE,
+            ArmorySection.ACHIEVEMENTS,
+          )
+        }
+        Column(
+          modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+          verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            topRowSections.forEach { sec ->
+              FilterChip(
+                selected = selectedSection == sec,
+                onClick = { selectedSection = sec },
+                label = { Text(sec.label, fontWeight = if (selectedSection == sec) FontWeight.Bold else FontWeight.Medium) },
+                modifier = Modifier.height(40.dp).testTag("armory_tab_${sec.tag}"),
+              )
+            }
+          }
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            bottomRowSections.forEach { sec ->
+              FilterChip(
+                selected = selectedSection == sec,
+                onClick = { selectedSection = sec },
+                label = { Text(sec.label, fontWeight = if (selectedSection == sec) FontWeight.Bold else FontWeight.Medium) },
+                modifier = Modifier.height(40.dp).testTag("armory_tab_${sec.tag}"),
+              )
+            }
           }
         }
       }
@@ -209,8 +334,10 @@ fun ArmoryScreen(
               ArmoryModuleCard(
                 item = item,
                 totalEssence = totalEssence,
+                starLevel = progression.armoryItemStar(item.id),
                 onToggleEquip = { onToggleEquip(item) },
                 onUpgrade = { onUpgradeItem(item) },
+                onUpgradeStar = { onUpgradeArmoryItemStar(item.id) },
                 onDelete = if (item.isCustom) ({ onDeleteItem(item.id) }) else null,
               )
             }
@@ -236,6 +363,15 @@ fun ArmoryScreen(
           }
         }
 
+        ArmorySection.OUTFITS -> OutfitsMenuTab(
+          progression = progression,
+          totalBlueEssence = totalEssence,
+          onEquipOutfit = onEquipOutfit,
+          onUpgradeOutfit = onUpgradeOutfit,
+          onUpgradeOutfitSubSystem = onUpgradeOutfitSubSystem,
+          onUpgradeOutfitStar = onUpgradeOutfitStar,
+        )
+
         ArmorySection.WEAPONS -> WeaponCustomizationTab(
           progression = progression,
           onUpdateWeaponCustom = onUpdateWeaponCustom,
@@ -243,6 +379,28 @@ fun ArmoryScreen(
           onUpgradeWeaponTier = onUpgradeWeaponTier,
           onUpgradeWonderTier = onUpgradeWonderTier,
           onPrestigeWeapon = onPrestigeWeapon,
+          onToggleMultiWeaponEquip = onToggleMultiWeaponEquip,
+          onToggleMultiWonderEquip = onToggleMultiWonderEquip,
+        )
+
+        ArmorySection.SHARDS_CORES -> ShardsPerksAndCoresTab(
+          progression = progression,
+          totalBlueEssence = totalEssence,
+          onSpendBlastShards = onSpendBlastShards,
+          onUpgradeVacuumBot = onUpgradeVacuumBot,
+          onToggleVacuumAutoUpgrade = onToggleVacuumAutoUpgrade,
+          onUpgradePerkDrink = onUpgradePerkDrink,
+          onUpgradeBlastCore = onUpgradeBlastCore,
+          onUpgradeVacuumBotStar = onUpgradeVacuumBotStar,
+        )
+
+        ArmorySection.AREAS -> AreasAndAgingTab(
+          progression = progression,
+          totalBlueEssence = totalEssence,
+          onSelectArea = onSelectArea,
+          onUpgradeAreaFeature = onUpgradeAreaFeature,
+          onAdvanceAreaAge = onAdvanceAreaAge,
+          onUpgradeAreaStar = onUpgradeAreaStar,
         )
 
         ArmorySection.CHARACTER -> CharacterCustomizationTab(
@@ -250,11 +408,22 @@ fun ArmoryScreen(
           activeRig = activeRig,
           onUpdateCharacterCustom = onUpdateCharacterCustom,
           onPrestigePlayer = onPrestigePlayer,
+          totalBlueEssence = totalEssence,
+          onUpgradeCharacterTier = onUpgradeCharacterTier,
+          onUpgradeCharacterStar = onUpgradeCharacterStar,
         )
 
         ArmorySection.LEVELS -> LevelCustomizationTab(
           progression = progression,
           onUpdateLevelCustom = onUpdateLevelCustom,
+        )
+
+        ArmorySection.MISSIONS -> MissionsTab(
+          missions = missions,
+          activeWorldId = activeWorldId,
+          activeAreaId = activeAreaId,
+          onClaimMission = onClaimMission,
+          onDeployTarget = onDeployMissionTarget,
         )
 
         ArmorySection.PASS_CHALLENGES -> PassAndChallengesTab(
@@ -273,6 +442,7 @@ fun ArmoryScreen(
           onPrestigeGear = onPrestigeGear,
           totalBlueEssence = totalEssence,
           onUpgradeGearTier = onUpgradeGearTier,
+          onUpgradeGearStar = onUpgradeGearStar,
         )
 
         ArmorySection.EQUIPMENT -> EquipmentCustomizationTab(
@@ -282,18 +452,22 @@ fun ArmoryScreen(
           onEquipEquipment = onEquipEquipment,
           totalBlueEssence = totalEssence,
           onUpgradeEquipmentTier = onUpgradeEquipmentTier,
+          onToggleMultiEquipmentEquip = onToggleMultiEquipmentEquip,
+          onUpgradeEquipmentStar = onUpgradeEquipmentStar,
         )
 
         ArmorySection.SKILLS -> SkillTreeTab(
           progression = progression,
           totalEssence = totalEssence,
           onUnlockSkill = onUnlockSkill,
+          onUpgradeSkillStar = onUpgradeSkillStar,
         )
 
         ArmorySection.STORE -> BlueEssenceStoreTab(
           progression = progression,
           totalBlueEssence = totalEssence,
           onPurchaseItem = onPurchaseStoreItem,
+          onExecuteTradeOffer = onExecuteTradeOffer,
         )
 
         ArmorySection.ACHIEVEMENTS -> AchievementsMenuTab(
@@ -319,15 +493,20 @@ fun ArmoryScreen(
 private fun ArmoryModuleCard(
   item: ArmoryItem,
   totalEssence: Long,
+  starLevel: Int,
   onToggleEquip: () -> Unit,
   onUpgrade: () -> Unit,
+  onUpgradeStar: () -> Unit,
   onDelete: (() -> Unit)?,
 ) {
   val accent = parseHexSafe(item.accentColorHex, MaterialTheme.colorScheme.primary)
-  val effectiveMaxTier = maxOf(item.maxTier, 10L)
+  val effectiveMaxTier = maxOf(item.maxTier, 25L)
   val upgradeCost = item.tier * 300L
+  val starCost = starLevel * 400L
   val canUpgrade = item.tier < effectiveMaxTier && totalEssence >= upgradeCost
+  val canUpgradeStar = starLevel < StarRankMeta.MAX_STARS && totalEssence >= starCost
   val tierMeta = ProgressionCatalog.tierMeta(item.tier.toInt())
+  val starMeta = ProgressionCatalog.starMeta(starLevel)
 
   Surface(
     shape = RoundedCornerShape(16.dp),
@@ -355,9 +534,10 @@ private fun ArmoryModuleCard(
               )
             }
             Text(
-              text = item.universeTag,
+              text = "${item.universeTag} • $starLevel★ (${starMeta.label})",
               style = MaterialTheme.typography.labelSmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              color = Color(starMeta.colorHex),
+              fontWeight = FontWeight.Bold,
             )
           }
           Spacer(Modifier.height(2.dp))
@@ -410,15 +590,23 @@ private fun ArmoryModuleCard(
           )
         }
 
-        OutlinedButton(
-          onClick = onUpgrade,
-          enabled = canUpgrade,
-          shape = RoundedCornerShape(10.dp),
-          modifier = Modifier.testTag("upgrade_btn_${item.id}"),
-        ) {
-          Icon(AppIcons.ArrowUpward, contentDescription = null, modifier = Modifier.size(16.dp))
-          Spacer(Modifier.width(4.dp))
-          Text(if (item.tier >= effectiveMaxTier) "MAX" else "$upgradeCost B.ESS")
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+          OutlinedButton(
+            onClick = onUpgrade,
+            enabled = canUpgrade,
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier.testTag("upgrade_btn_${item.id}"),
+          ) {
+            Text(if (item.tier >= effectiveMaxTier) "MAX" else "$upgradeCost B")
+          }
+          OutlinedButton(
+            onClick = onUpgradeStar,
+            enabled = canUpgradeStar,
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier.testTag("upgrade_star_btn_${item.id}"),
+          ) {
+            Text(if (starLevel >= StarRankMeta.MAX_STARS) "10★" else "★+1 ($starCost B)")
+          }
         }
       }
     }

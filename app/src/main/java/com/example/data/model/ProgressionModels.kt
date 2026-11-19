@@ -82,11 +82,53 @@ enum class PowerTier(
   ASCENDANT(7, "Ascendant", 0xFF00E676, 3.6f),
   COSMIC(8, "Cosmic", 0xFFE040FB, 4.4f),
   CELESTIAL(9, "Celestial", 0xFFFFD54F, 5.4f),
-  OMEGA(10, "Omega", 0xFFFFFFFF, 6.8f);
+  OMEGA(10, "Omega", 0xFFFFFFFF, 6.8f),
+  TRANSCENDENT(11, "Transcendent", 0xFF00BFA5, 8.4f),
+  ASTRAL(12, "Astral", 0xFF40C4FF, 10.3f),
+  HYPERION(13, "Hyperion", 0xFF536DFE, 12.6f),
+  RADIANT(14, "Radiant", 0xFFFFEA00, 15.4f),
+  APEX(15, "Apex", 0xFFFF9100, 18.8f),
+  SOVEREIGN(16, "Sovereign", 0xFFFF1744, 23.0f),
+  QUANTUM(17, "Quantum", 0xFF1DE9B6, 28.0f),
+  VOIDBORN(18, "Voidborn", 0xFFAA00FF, 34.0f),
+  CHRONOS(19, "Chronos", 0xFFFFD180, 41.5f),
+  INFINITY(20, "Infinity", 0xFF00E5FF, 50.5f),
+  ABYSSAL(21, "Abyssal", 0xFFD500F9, 61.5f),
+  SERAPHIC(22, "Seraphic", 0xFFFFC400, 75.0f),
+  PRIMORDIAL(23, "Primordial", 0xFF00E676, 92.0f),
+  SINGULARITY(24, "Singularity", 0xFFFF3D71, 112.0f),
+  MULTIVERSAL(25, "Multiversal", 0xFFFFFFFF, 140.0f);
 
   companion object {
+    const val MAX_TIER = 25
+
     fun fromLevel(tier: Int): PowerTier =
-      entries.firstOrNull { it.level == tier.coerceIn(1, 10) } ?: OMEGA
+      entries.firstOrNull { it.level == tier.coerceIn(1, MAX_TIER) } ?: MULTIVERSAL
+  }
+}
+
+enum class StarRankMeta(
+  val stars: Int,
+  val label: String,
+  val multiplier: Float,
+  val colorHex: Long,
+) {
+  STAR_1(1, "1★ Spark", 1.00f, 0xFF90A4AE),
+  STAR_2(2, "2★ Flare", 1.25f, 0xFF40C4FF),
+  STAR_3(3, "3★ Nimbus", 1.50f, 0xFF00E676),
+  STAR_4(4, "4★ Supernova", 1.75f, 0xFF7C4DFF),
+  STAR_5(5, "5★ Pulsar", 2.00f, 0xFFFFD54F),
+  STAR_6(6, "6★ Celestial", 2.25f, 0xFFFFAB40),
+  STAR_7(7, "7★ Astral Crown", 2.50f, 0xFFFF5252),
+  STAR_8(8, "8★ Cosmic Apex", 2.75f, 0xFFE040FB),
+  STAR_9(9, "9★ Reality Loom", 3.00f, 0xFF00E5FF),
+  STAR_10(10, "10★ Omniverse Nova", 3.25f, 0xFFFFFFFF);
+
+  companion object {
+    const val MAX_STARS: Int = 10
+
+    fun forStars(stars: Int): StarRankMeta =
+      entries.firstOrNull { it.stars == stars.coerceIn(1, MAX_STARS) } ?: STAR_10
   }
 }
 
@@ -178,6 +220,7 @@ data class GearState(
   val xp: Long = 0L,
   val tier: Int = 1,
   val colorHex: Long = 0xFF00E5FF,
+  val starLevel: Int = 1,
 )
 
 enum class EquipmentSlotType(val id: String, val displayName: String) {
@@ -205,6 +248,7 @@ data class EquipmentState(
   val xp: Long = 0L,
   val variantId: String = "standard",
   val tier: Int = 1,
+  val starLevel: Int = 1,
 )
 
 @Immutable
@@ -224,6 +268,7 @@ data class WeaponSpec(
 @Immutable
 data class WeaponCustomization(
   val equippedWeaponId: String = "wpn_pulse_carbine",
+  val equippedWeaponIds: List<String> = listOf("wpn_pulse_carbine"),
   val camoId: String = "cyber_matte",
   val opticId: String = "holo_cyan",
   val barrelId: String = "standard_barrel",
@@ -271,7 +316,8 @@ data class SkillNode(
   val costEssence: Long,
   val unlocked: Boolean = false,
   val tier: Int = 1,
-  val maxTier: Int = 10,
+  val maxTier: Int = 25,
+  val starLevel: Int = 1,
 ) {
   fun nextUpgradeCost(): Long = costEssence + (tier * 250L)
 }
@@ -438,16 +484,32 @@ data class MatchProgressionReport(
   val weaponLevelUps: Int = 0,
   val highestPackTierReached: Int = 1,
   val lobbySizePlayed: Int = 1,
+  val redEssenceEarned: Long = 0L,
+  val yellowEssenceEarned: Long = 0L,
+  val greenEssenceEarned: Long = 0L,
+  val combinedEssenceEarned: Long = 0L,
+  val blastShardsEarned: Long = 0L,
+  val perkDrinksCollected: Int = 0,
+  val blastCoresEarned: Map<String, Long> = emptyMap(),
+  val buildingsExplored: Int = 0,
+  val trapKills: Int = 0,
+  val worldId: String = "sector_zero",
+  val areaId: String = "area_empire_city",
 )
 
 @Immutable
 data class OperatorProgressionState(
   val playerXp: Long = 0L,
   val playerPrestige: Int = 0,
+  val characterTier: Int = 1,
+  val characterStarLevel: Int = 1,
   val weaponXpMap: Map<String, Long> = mapOf("wpn_pulse_carbine" to 0L),
   val weaponPrestigeMap: Map<String, Int> = emptyMap(),
   val weaponTierMap: Map<String, Int> = ProgressionCatalog.weapons.associate { it.id to 1 },
+  val weaponStarMap: Map<String, Int> = ProgressionCatalog.weapons.associate { it.id to 1 },
   val wonderTierMap: Map<String, Int> = WonderWeaponKind.entries.associate { it.id to 1 },
+  val wonderStarMap: Map<String, Int> = WonderWeaponKind.entries.associate { it.id to 1 },
+  val armoryItemStarMap: Map<String, Int> = emptyMap(),
   val gearMap: Map<String, GearState> = GearSlot.entries.associate { it.id to GearState(it) },
   val gearPrestige: Int = 0,
   val weaponCustom: WeaponCustomization = WeaponCustomization(),
@@ -465,11 +527,33 @@ data class OperatorProgressionState(
   val challengePrestige: Int = 0,
   val skillNodes: Map<String, SkillNode> = ProgressionCatalog.defaultSkillNodes(),
   val equipmentMap: Map<String, EquipmentState> = mapOf(
-    "lethal" to EquipmentState("lethal", "lethal_frag", 1, 0, 0L, "standard", 1),
-    "tactical" to EquipmentState("tactical", "tactical_stim", 1, 0, 0L, "standard", 1),
+    "lethal" to EquipmentState("lethal", "lethal_frag", 1, 0, 0L, "standard", 1, 1),
+    "tactical" to EquipmentState("tactical", "tactical_stim", 1, 0, 0L, "standard", 1, 1),
   ),
+  val equippedWonderIds: List<String> = listOf(WonderWeaponKind.RAY_NOVA_MK3.id),
+  val equippedLethalIds: List<String> = listOf("lethal_frag"),
+  val equippedTacticalIds: List<String> = listOf("tactical_stim"),
+  val redEssence: Long = 300L,
+  val yellowEssence: Long = 300L,
+  val greenEssence: Long = 300L,
+  val combinedEssence: Long = 50L,
+  val blastShards: Long = 20L,
+  val perkRanks: Map<String, Int> = emptyMap(),
+  val blastCoreInventory: Map<String, Long> = BlastCoreColor.entries.associate { it.id to 2L },
+  val blastCoreLevels: Map<String, Int> = BlastCoreColor.entries.associate { it.id to 1 },
+  val equippedOutfitId: String = "mrcrossover_v1",
+  val outfitStates: Map<String, OutfitProgressState> = MultiverseArsenalCatalog.outfits.associate {
+    it.id to OutfitProgressState(it.id)
+  },
+  val activeAreaId: String = "area_empire_city",
+  val areaStates: Map<String, CustomAreaState> = MultiverseArsenalCatalog.customAreas.associate {
+    it.id to CustomAreaState(it.id)
+  },
+  val vacuumBot: VacuumBotState = VacuumBotState(),
   val wonderWeaponsPickedTotal: Long = 0L,
   val claimedAchievements: Set<String> = emptySet(),
+  val missionProgress: Map<String, Long> = emptyMap(),
+  val claimedMissions: Set<String> = emptySet(),
   val totalElimsLifetime: Long = 0L,
   val totalBossesLifetime: Long = 0L,
   val totalMatchesPlayed: Long = 0L,
@@ -480,6 +564,11 @@ data class OperatorProgressionState(
   val purchasedStoreItems: Set<String> = emptySet(),
   val xpBoosterMatchesRemaining: Int = 0,
   val botDamageBoostPct: Int = 0,
+  val privateMatchRules: PrivateMatchRules = PrivateMatchRules(),
+  val friends: List<FriendEntry> = SocialCatalog.defaultFriends,
+  val chatMessages: List<ChatMessage> = SocialCatalog.defaultChatMessages,
+  val clan: ClanData = SocialCatalog.defaultClan,
+  val joinedMatch: MultiverseMatchListing? = null,
 ) {
   val playerLevel: Int
     get() = ProgressionCatalog.levelForXp(playerXp)
@@ -493,12 +582,52 @@ data class OperatorProgressionState(
 
   fun weaponPrestige(weaponId: String): Int = weaponPrestigeMap[weaponId] ?: 0
 
-  fun weaponTier(weaponId: String): Int = (weaponTierMap[weaponId] ?: 1).coerceIn(1, 10)
+  fun weaponTier(weaponId: String): Int = (weaponTierMap[weaponId] ?: 1).coerceIn(1, 25)
 
-  fun wonderTier(wonderId: String): Int = (wonderTierMap[wonderId] ?: 1).coerceIn(1, 10)
+  fun weaponStar(weaponId: String): Int = (weaponStarMap[weaponId] ?: 1).coerceIn(1, StarRankMeta.MAX_STARS)
+
+  fun wonderTier(wonderId: String): Int = (wonderTierMap[wonderId] ?: 1).coerceIn(1, 25)
+
+  fun wonderStar(wonderId: String): Int = (wonderStarMap[wonderId] ?: 1).coerceIn(1, StarRankMeta.MAX_STARS)
+
+  fun armoryItemStar(itemId: String): Int = (armoryItemStarMap[itemId] ?: 1).coerceIn(1, StarRankMeta.MAX_STARS)
 
   fun equipmentState(slotId: String): EquipmentState =
-    equipmentMap[slotId] ?: EquipmentState(slotId, if (slotId == "lethal") "lethal_frag" else "tactical_stim", 1, 0, 0L, "standard", 1)
+    equipmentMap[slotId] ?: EquipmentState(slotId, if (slotId == "lethal") "lethal_frag" else "tactical_stim", 1, 0, 0L, "standard", 1, 1)
+
+  fun outfitState(id: String = equippedOutfitId): OutfitProgressState =
+    outfitStates[id] ?: OutfitProgressState(id)
+
+  fun activeOutfitSpec(): HeroOutfitSpec =
+    MultiverseArsenalCatalog.outfitById(equippedOutfitId)
+
+  fun areaState(id: String = activeAreaId): CustomAreaState =
+    areaStates[id] ?: CustomAreaState(id)
+
+  fun activeAreaSpec(): CustomAreaSpec =
+    MultiverseArsenalCatalog.areaById(activeAreaId)
+
+  fun perkRank(perkId: String): Int = (perkRanks[perkId] ?: 0).coerceIn(0, 25)
+
+  fun blastCoreCount(color: BlastCoreColor): Long = (blastCoreInventory[color.id] ?: 0L).coerceAtLeast(0L)
+
+  fun blastCoreLevel(color: BlastCoreColor): Int = (blastCoreLevels[color.id] ?: 1).coerceIn(1, 20)
+
+  fun essenceResonance(blueEssence: Long): EssenceResonanceBonuses =
+    EssenceResonanceBonuses.compute(
+      blueEssence = blueEssence,
+      redEssence = redEssence,
+      yellowEssence = yellowEssence,
+      greenEssence = greenEssence,
+      combinedEssence = combinedEssence,
+      blastShards = blastShards,
+    )
+
+  fun effectiveWeaponList(): List<String> =
+    weaponCustom.equippedWeaponIds.ifEmpty { listOf(weaponCustom.equippedWeaponId) }.distinct()
+
+  fun effectiveWonderList(): List<String> =
+    equippedWonderIds.ifEmpty { listOf(WonderWeaponKind.RAY_NOVA_MK3.id) }.distinct()
 }
 
 object ProgressionCatalog {
@@ -677,12 +806,12 @@ object ProgressionCatalog {
   )
 
   fun defaultSkillNodes(): Map<String, SkillNode> = listOf(
-    SkillNode("sk_shield_1", "Reinforced Chassis I", "+25 Max Shield per Tier (up to T10: +250 Shield).", "SURVIVAL", 300L, false, 1, 10),
-    SkillNode("sk_shield_2", "Reinforced Chassis II", "+35 Max Shield & +1 Regen/sec per Tier (up to T10).", "SURVIVAL", 600L, false, 1, 10),
-    SkillNode("sk_damage_1", "Ballistic Lethality I", "+2 Bolt Damage per Tier (up to T10: +20 DMG).", "COMBAT", 350L, false, 1, 10),
-    SkillNode("sk_damage_2", "Ballistic Lethality II", "+3 Bolt Damage & +1 Pierce every 2 Tiers (T1-T10).", "COMBAT", 750L, false, 1, 10),
-    SkillNode("sk_cooldown_1", "Overdrive Capacitor", "-6% Cooldowns & +3% Move Speed per Tier (up to T10).", "ENGINEERING", 450L, false, 1, 10),
-    SkillNode("sk_wonder_1", "Mystery Crate Attractor", "+30% Wonder Drop Rate & +15% Wonder Duration per Tier.", "WONDER", 550L, false, 1, 10),
+    SkillNode("sk_shield_1", "Reinforced Chassis I", "+25 Max Shield per Tier (up to T25: +625 Shield).", "SURVIVAL", 300L, false, 1, 25),
+    SkillNode("sk_shield_2", "Reinforced Chassis II", "+35 Max Shield & +1 Regen/sec per Tier (up to T25).", "SURVIVAL", 600L, false, 1, 25),
+    SkillNode("sk_damage_1", "Ballistic Lethality I", "+2 Bolt Damage per Tier (up to T25: +50 DMG).", "COMBAT", 350L, false, 1, 25),
+    SkillNode("sk_damage_2", "Ballistic Lethality II", "+3 Bolt Damage & +1 Pierce every 2 Tiers (T1-T25).", "COMBAT", 750L, false, 1, 25),
+    SkillNode("sk_cooldown_1", "Overdrive Capacitor", "-6% Cooldowns & +3% Move Speed per Tier (up to T25).", "ENGINEERING", 450L, false, 1, 25),
+    SkillNode("sk_wonder_1", "Mystery Crate Attractor", "+30% Wonder Drop Rate & +15% Wonder Duration per Tier (T1-T25).", "WONDER", 550L, false, 1, 25),
   ).associateBy { it.id }
 
   val challenges: List<ChallengeSpec> = listOf(
@@ -752,7 +881,10 @@ object ProgressionCatalog {
     AchievementSpec("ach_over8_lobby", "Over-Capacity Ops", "Deploy into a 12+ player Mega Lobby with AI Bots.", "LOBBY", 12L, 700L, 1100L, 5),
     AchievementSpec("ach_war_32", "Total Multiverse War", "Deploy into a maximum 32-Player Lobby.", "LOBBY", 32L, 1500L, 2200L, 8),
     AchievementSpec("ach_pack_5", "Mythic Pacifier", "Upgrade Pack-a-Punch to Tier V+ inside an Arena.", "ARMORY", 5L, 850L, 1200L, 5),
-    AchievementSpec("ach_pack_10", "Omega Transcendence", "Reach maximum Pack-a-Punch Tier X in combat.", "ARMORY", 10L, 2500L, 3500L, 10),
+    AchievementSpec("ach_pack_10", "Omega Transcendence", "Upgrade Pack-a-Punch to Tier X+ in combat.", "ARMORY", 10L, 2500L, 3500L, 10),
+    AchievementSpec("ach_pack_15", "Apex Conduit", "Upgrade Pack-a-Punch to Tier XV+ in combat.", "ARMORY", 15L, 4500L, 6500L, 15),
+    AchievementSpec("ach_pack_20", "Infinity Overclock", "Upgrade Pack-a-Punch to Tier XX+ in combat.", "ARMORY", 20L, 7500L, 10000L, 20),
+    AchievementSpec("ach_pack_25", "Multiversal Ascendancy", "Reach maximum Pack-a-Punch Tier XXV in combat.", "ARMORY", 25L, 12000L, 16000L, 25),
     AchievementSpec("ach_wonder_10", "Artifact Collector", "Pick up 10 Wonder Weapon crates in Arena.", "ARMORY", 10L, 900L, 1300L, 5),
     AchievementSpec("ach_store_1", "Quartermaster Regular", "Make your first purchase in the Blue Essence Store.", "STORE", 1L, 350L, 500L, 2),
     AchievementSpec("ach_store_5", "Syndicate Patron", "Purchase 5 upgrades from the Blue Essence Store.", "STORE", 5L, 1100L, 1600L, 6),
@@ -802,11 +934,11 @@ object ProgressionCatalog {
     ),
     StoreItemSpec(
       id = "store_weapon_tier_up",
-      name = "Omega Weapon Tier Catalyst (+1 Tier)",
+      name = "Multiversal Weapon Tier Catalyst (+1 Tier)",
       category = StoreCategory.TIERS,
-      description = "Elevates your equipped Weapon Rarity Tier by +1 (up to Tier 10 Omega: massive DMG & Pierce).",
+      description = "Elevates your equipped Weapon Rarity Tier by +1 (up to Tier 25 Multiversal: massive DMG & Pierce).",
       costBlueEssence = 750L,
-      tier = 8,
+      tier = 15,
       accentHex = 0xFFFF3D71,
       repeatable = true,
     ),
@@ -814,9 +946,9 @@ object ProgressionCatalog {
       id = "store_wonder_tier_up",
       name = "Wonder Arsenal Overclock (+1 All Wonder)",
       category = StoreCategory.TIERS,
-      description = "Upgrades ALL 6 Mystery Wonder Weapons by +1 Tier (up to Tier 10 Omega) for massive Arena power.",
+      description = "Upgrades ALL 6 Mystery Wonder Weapons by +1 Tier (up to Tier 25 Multiversal) for massive Arena power.",
       costBlueEssence = 900L,
-      tier = 9,
+      tier = 25,
       accentHex = 0xFFE040FB,
       repeatable = true,
     ),
@@ -1117,5 +1249,9 @@ object ProgressionCatalog {
     val maxNeed = xpRequiredForGearLevel(49)
     return maxNeed to maxNeed
   }
+
+  fun starMeta(stars: Int): StarRankMeta = StarRankMeta.forStars(stars)
+
+  fun starMultiplier(stars: Int): Float = StarRankMeta.forStars(stars).multiplier
 }
 
