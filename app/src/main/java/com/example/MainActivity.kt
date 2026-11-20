@@ -37,6 +37,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -618,6 +619,48 @@ fun UnknownOsShell(
         achievements = achievements,
         onClaimAchievement = viewModel::claimAchievement,
         onDismiss = { showAchievementsDialog = false },
+      )
+    }
+
+    if (showMatchBrowserDialog && readyProfile != null) {
+      MatchBrowserDialog(
+        progression = progression,
+        playerCallsign = readyProfile.callsign,
+        onHostPrivateMatch = { rules ->
+          viewModel.hostPrivateMatch(rules, readyProfile.callsign)
+          showMatchBrowserDialog = false
+        },
+        onJoinMatch = { match, passcode ->
+          viewModel.joinMatch(match, passcode)
+          showMatchBrowserDialog = false
+        },
+        onDismiss = { showMatchBrowserDialog = false },
+      )
+    }
+
+    if (showSocialDialog && readyProfile != null) {
+      SocialAndCommsDialog(
+        progression = progression,
+        playerCallsign = readyProfile.callsign,
+        totalBlueEssence = readyProfile.totalEssence,
+        initialTabIdx = socialDialogInitialTab,
+        onAddFriend = { callsign -> viewModel.addFriend(callsign) },
+        onRemoveFriend = viewModel::removeFriend,
+        onToggleFavoriteFriend = viewModel::toggleFriendFavorite,
+        onSendChatMessage = { ch, content, targetId, isTac ->
+          viewModel.sendChatMessage(ch, content, readyProfile.callsign, targetId, isTac)
+        },
+        onCreateClan = { name, tag, motto, color ->
+          viewModel.createClan(name, tag, motto, color, readyProfile.callsign)
+        },
+        onJoinClan = { clan -> viewModel.joinClan(clan, readyProfile.callsign) },
+        onDonateClan = { amount -> viewModel.donateToClan(amount, readyProfile.callsign, readyProfile.totalEssence) },
+        onLeaveClan = { viewModel.leaveClan(readyProfile.callsign) },
+        onJoinFriendMatch = { matchId ->
+          showSocialDialog = false
+          viewModel.showBanner("Connecting to friend match session [$matchId]...")
+        },
+        onDismiss = { showSocialDialog = false },
       )
     }
   }
