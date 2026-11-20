@@ -29,9 +29,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -83,7 +83,7 @@ fun SocialAndCommsDialog(
   onJoinFriendMatch: (String) -> Unit,
   onDismiss: () -> Unit,
 ) {
-  var selectedTabIdx by remember { mutableIntStateOf(initialTabIdx) }
+  var selectedTabIdx by remember(initialTabIdx) { mutableIntStateOf(initialTabIdx.coerceIn(0, socialTabs.lastIndex)) }
   var selectedFriendForWhisper by remember {
     mutableStateOf(progression.friends.firstOrNull())
   }
@@ -151,9 +151,10 @@ fun SocialAndCommsDialog(
           }
         }
 
-        // Multi-Tab Row
-        TabRow(
+        // Multi-Tab Row (Scrollable so all 5 tabs fit cleanly on compact phones)
+        ScrollableTabRow(
           selectedTabIndex = selectedTabIdx,
+          edgePadding = 8.dp,
           containerColor = MaterialTheme.colorScheme.surfaceVariant,
           contentColor = MaterialTheme.colorScheme.primary,
           modifier = Modifier.fillMaxWidth().testTag("social_tab_row"),
@@ -863,10 +864,17 @@ private fun ClanAndCommsTab(
         shape = RoundedCornerShape(8.dp),
       ) {
         Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text("MULTIVERSE CLANS DIRECTORY", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-            TextButton(onClick = onOpenCreateClan, modifier = Modifier.height(28.dp).testTag("open_create_clan_btn")) {
-              Text("+ Create Clan", style = MaterialTheme.typography.labelSmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+              if (clan.id != SocialCatalog.defaultClan.id) {
+                TextButton(onClick = onLeaveClan, modifier = Modifier.height(28.dp).testTag("leave_clan_btn")) {
+                  Text("Leave Clan", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                }
+              }
+              TextButton(onClick = onOpenCreateClan, modifier = Modifier.height(28.dp).testTag("open_create_clan_btn")) {
+                Text("+ Create Clan", style = MaterialTheme.typography.labelSmall)
+              }
             }
           }
           SocialCatalog.recommendedClans.forEach { recClan ->

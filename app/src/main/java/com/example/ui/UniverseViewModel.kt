@@ -35,6 +35,7 @@ import com.example.data.model.OperatorProgressionState
 import com.example.data.model.PrivateMatchRules
 import com.example.data.model.ProgressionCatalog
 import com.example.data.model.RigAsset
+import com.example.data.model.SocialCatalog
 import com.example.data.model.StarRankMeta
 import com.example.data.model.UniverseCatalog
 import com.example.data.model.WeaponCustomization
@@ -445,6 +446,13 @@ class UniverseViewModel(
   fun hostPrivateMatch(rules: PrivateMatchRules, hostCallsign: String): MultiverseMatchListing? {
     val store = progressionStore ?: return null
     val match = store.hostPrivateMatch(rules, hostCallsign)
+    viewModelScope.launch {
+      repository.updateProfileSelection(
+        userId = currentUserId,
+        activeUniverseId = match.worldId,
+        activeMode = match.modeId,
+      )
+    }
     _statusBanner.value = "Hosted Private Match: ${match.roomName} (Code: ${match.roomCode})"
     return match
   }
@@ -453,12 +461,29 @@ class UniverseViewModel(
     val store = progressionStore ?: return false
     val res = store.joinMatch(match, enteredPasscode)
     return if (res.isSuccess) {
+      viewModelScope.launch {
+        repository.updateProfileSelection(
+          userId = currentUserId,
+          activeUniverseId = match.worldId,
+          activeMode = match.modeId,
+        )
+      }
       _statusBanner.value = "Joined Match: ${match.roomName} [${match.modeLabel}]"
       true
     } else {
       _statusBanner.value = res.exceptionOrNull()?.message ?: "Failed to join match"
       false
     }
+  }
+
+  fun joinMatchById(matchId: String): Boolean {
+    val target = progressionState.value.joinedMatch?.takeIf { it.id == matchId }
+      ?: SocialCatalog.sampleMatches.firstOrNull { it.id == matchId }
+    if (target == null) {
+      _statusBanner.value = "Match session [$matchId] is no longer active"
+      return false
+    }
+    return joinMatch(target, target.passcode)
   }
 
   fun leaveJoinedMatch() {
@@ -1151,9 +1176,13 @@ class UniverseViewModel(
     extracted: Boolean,
     durationSec: Long,
   ) {
-    val passMult = progressionState.value.activePassVersion.essenceMultiplier
+    val prog = progressionState.value
+    val passMult = prog.activePassVersion.essenceMultiplier
+    val clanMult = prog.clan.essencePerkMultiplier
+    val rules = prog.effectiveMatchRules()
+    val mutatorEssenceMult = (if (rules.doubleBlueEssence) 2.0f else 1.0f) * (if (rules.friendlyFire) 1.25f else 1.0f)
     val baseEssence = (score / 10L).coerceAtLeast(150L) + if (extracted) 350L else 0L
-    val essenceEarned = (baseEssence * passMult).toLong()
+    val essenceEarned = (baseEssence * passMult * clanMult * mutatorEssenceMult).toLong()
     viewModelScope.launch {
       val res =
         repository.recordMatchResult(

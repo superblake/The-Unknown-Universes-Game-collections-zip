@@ -377,7 +377,9 @@ fun ArmoryScreen(
           onUpdateWeaponCustom = onUpdateWeaponCustom,
           totalBlueEssence = totalEssence,
           onUpgradeWeaponTier = onUpgradeWeaponTier,
+          onUpgradeWeaponStar = onUpgradeWeaponStar,
           onUpgradeWonderTier = onUpgradeWonderTier,
+          onUpgradeWonderStar = onUpgradeWonderStar,
           onPrestigeWeapon = onPrestigeWeapon,
           onToggleMultiWeaponEquip = onToggleMultiWeaponEquip,
           onToggleMultiWonderEquip = onToggleMultiWonderEquip,
@@ -502,7 +504,7 @@ private fun ArmoryModuleCard(
   val accent = parseHexSafe(item.accentColorHex, MaterialTheme.colorScheme.primary)
   val effectiveMaxTier = maxOf(item.maxTier, 25L)
   val upgradeCost = item.tier * 300L
-  val starCost = starLevel * 400L
+  val starCost = starLevel * 450L
   val canUpgrade = item.tier < effectiveMaxTier && totalEssence >= upgradeCost
   val canUpgradeStar = starLevel < StarRankMeta.MAX_STARS && totalEssence >= starCost
   val tierMeta = ProgressionCatalog.tierMeta(item.tier.toInt())

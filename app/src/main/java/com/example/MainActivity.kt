@@ -286,6 +286,7 @@ fun UnknownOsShell(
   var showAchievementsDialog by remember { mutableStateOf(false) }
   var showMissionsDialog by remember { mutableStateOf(false) }
   var showMatchBrowserDialog by remember { mutableStateOf(false) }
+  var matchBrowserInitialTab by remember { mutableIntStateOf(0) }
   var showSocialDialog by remember { mutableStateOf(false) }
   var socialDialogInitialTab by remember { mutableIntStateOf(0) }
 
@@ -478,7 +479,11 @@ fun UnknownOsShell(
                   onUpdateLobby = viewModel::updateLobbyConfig,
                   onOpenStore = { showStoreDialog = true },
                   onOpenAchievements = { showAchievementsDialog = true },
-                  onOpenMatchBrowser = { showMatchBrowserDialog = true },
+                  onOpenMissions = { showMissionsDialog = true },
+                  onOpenMatchBrowser = { tabIdx ->
+                    matchBrowserInitialTab = tabIdx
+                    showMatchBrowserDialog = true
+                  },
                   onOpenSocialHub = { tabIdx ->
                     socialDialogInitialTab = tabIdx
                     showSocialDialog = true
@@ -535,6 +540,9 @@ fun UnknownOsShell(
                   progression = progression,
                   challenges = challenges,
                   achievements = achievements,
+                  missions = missions,
+                  activeWorldId = state.profile.activeUniverseId,
+                  activeAreaId = progression.activeAreaId,
                   activeRig = state.rigs.firstOrNull { it.id == state.profile.activeRigId } ?: state.rigs.firstOrNull(),
                   onUpdateWeaponCustom = viewModel::updateWeaponCustomization,
                   onUpdateCharacterCustom = viewModel::updateCharacterCustomization,
@@ -574,6 +582,19 @@ fun UnknownOsShell(
                   onUpgradePerkDrink = { perkId -> viewModel.upgradePerkDrink(perkId, state.profile.totalEssence) },
                   onUpgradeBlastCore = viewModel::upgradeBlastCore,
                   onExecuteTradeOffer = { offerId -> viewModel.executeTradeOffer(offerId, state.profile.totalEssence) },
+                  onClaimMission = viewModel::claimMission,
+                  onDeployMissionTarget = viewModel::deployMissionTarget,
+                  onUpgradeArmoryItemStar = { itemId -> viewModel.upgradeArmoryItemStar(itemId, state.profile.totalEssence) },
+                  onUpgradeCharacterTier = { viewModel.upgradeCharacterTier(state.profile.totalEssence) },
+                  onUpgradeCharacterStar = { viewModel.upgradeCharacterStar(state.profile.totalEssence) },
+                  onUpgradeOutfitStar = { id -> viewModel.upgradeOutfitStar(id, state.profile.totalEssence) },
+                  onUpgradeWeaponStar = { wId -> viewModel.upgradeWeaponStar(wId, state.profile.totalEssence) },
+                  onUpgradeWonderStar = { wId -> viewModel.upgradeWonderStar(wId, state.profile.totalEssence) },
+                  onUpgradeGearStar = { slot -> viewModel.upgradeGearStar(slot, state.profile.totalEssence) },
+                  onUpgradeEquipmentStar = { slot -> viewModel.upgradeEquipmentStar(slot, state.profile.totalEssence) },
+                  onUpgradeSkillStar = { nodeId -> viewModel.upgradeSkillStar(nodeId, state.profile.totalEssence) },
+                  onUpgradeVacuumBotStar = { viewModel.upgradeVacuumBotStar(state.profile.totalEssence) },
+                  onUpgradeAreaStar = { areaId -> viewModel.upgradeAreaStar(areaId, state.profile.totalEssence) },
                 )
 
                 OsWorkspaceTab.MEDIA_VAULT -> MediaVaultScreen(
@@ -622,18 +643,35 @@ fun UnknownOsShell(
       )
     }
 
+    if (showMissionsDialog && readyProfile != null) {
+      MissionsDialog(
+        missions = missions,
+        activeWorldId = readyProfile.activeUniverseId,
+        activeAreaId = progression.activeAreaId,
+        onClaimMission = viewModel::claimMission,
+        onDeployTarget = { scopeType, targetId ->
+          viewModel.deployMissionTarget(scopeType, targetId)
+          showMissionsDialog = false
+        },
+        onDismiss = { showMissionsDialog = false },
+      )
+    }
+
     if (showMatchBrowserDialog && readyProfile != null) {
       MatchBrowserDialog(
         progression = progression,
         playerCallsign = readyProfile.callsign,
+        initialTabIdx = matchBrowserInitialTab,
         onHostPrivateMatch = { rules ->
           viewModel.hostPrivateMatch(rules, readyProfile.callsign)
           showMatchBrowserDialog = false
         },
         onJoinMatch = { match, passcode ->
-          viewModel.joinMatch(match, passcode)
-          showMatchBrowserDialog = false
+          val ok = viewModel.joinMatch(match, passcode)
+          if (ok) showMatchBrowserDialog = false
+          ok
         },
+        onLeaveMatch = viewModel::leaveJoinedMatch,
         onDismiss = { showMatchBrowserDialog = false },
       )
     }
@@ -657,8 +695,8 @@ fun UnknownOsShell(
         onDonateClan = { amount -> viewModel.donateToClan(amount, readyProfile.callsign, readyProfile.totalEssence) },
         onLeaveClan = { viewModel.leaveClan(readyProfile.callsign) },
         onJoinFriendMatch = { matchId ->
-          showSocialDialog = false
-          viewModel.showBanner("Connecting to friend match session [$matchId]...")
+          val ok = viewModel.joinMatchById(matchId)
+          if (ok) showSocialDialog = false
         },
         onDismiss = { showSocialDialog = false },
       )

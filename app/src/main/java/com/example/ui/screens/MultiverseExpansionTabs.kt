@@ -173,7 +173,7 @@ fun OutfitsMenuTab(
       val tierMeta = ProgressionCatalog.tierMeta(st.tier)
       val starMeta = StarRankMeta.forStars(st.starLevel)
       val upgCost = 250L + (st.tier * 180L)
-      val starCost = st.starLevel * 450L
+      val starCost = st.starLevel * 500L
       val skillCost = 180L + (st.skillRank * 120L)
       val gearCost = 180L + (st.gearRank * 120L)
       val equipCost = 180L + (st.equipmentRank * 120L)

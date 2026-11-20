@@ -50,6 +50,7 @@ import com.example.data.model.LevelCustomization
 import com.example.data.model.OperatorProgressionState
 import com.example.data.model.ProgressionCatalog
 import com.example.data.model.RigAsset
+import com.example.data.model.StarRankMeta
 import com.example.data.model.UniverseCatalog
 import com.example.data.model.WeaponCustomization
 import com.example.data.model.WonderWeaponKind
@@ -82,7 +83,9 @@ fun WeaponCustomizationTab(
   onUpdateWeaponCustom: ((WeaponCustomization) -> WeaponCustomization) -> Unit,
   totalBlueEssence: Long = 0L,
   onUpgradeWeaponTier: (String) -> Unit = {},
+  onUpgradeWeaponStar: (String) -> Unit = {},
   onUpgradeWonderTier: (String) -> Unit = {},
+  onUpgradeWonderStar: (String) -> Unit = {},
   onPrestigeWeapon: (String) -> Unit = {},
   onToggleMultiWeaponEquip: (String) -> Unit = {},
   onToggleMultiWonderEquip: (String) -> Unit = {},
@@ -96,11 +99,14 @@ fun WeaponCustomizationTab(
   val wpnPrestige = progression.weaponPrestige(equippedWeapon.id)
   val wpnTier = progression.weaponTier(equippedWeapon.id)
   val wpnTierMeta = ProgressionCatalog.tierMeta(wpnTier)
+  val wpnStar = progression.weaponStar(equippedWeapon.id)
+  val wpnStarMeta = ProgressionCatalog.starMeta(wpnStar)
   val tierCost = wpnTier * 450L
+  val wpnStarCost = wpnStar * 500L
   val (wpnCur, wpnNeed) = ProgressionCatalog.xpProgressInCurrentWeaponLevel(wpnXp)
 
   LazyColumn(
-    modifier = Modifier.fillMaxSize(),
+    modifier = Modifier.fillMaxSize().testTag("weapon_customization_list"),
     contentPadding = PaddingValues(16.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp),
   ) {
@@ -140,7 +146,7 @@ fun WeaponCustomizationTab(
                 color = Color(wpnTierMeta.colorHex).copy(alpha = 0.18f),
               ) {
                 Text(
-                  text = "TIER $wpnTier/25 (${wpnTierMeta.label})",
+                  text = "T$wpnTier/25 • ${wpnStar}★/10★ (${wpnStarMeta.label})",
                   style = MaterialTheme.typography.labelSmall,
                   fontWeight = FontWeight.Bold,
                   color = Color(wpnTierMeta.colorHex),
@@ -156,7 +162,7 @@ fun WeaponCustomizationTab(
             modifier = Modifier.fillMaxWidth().height(7.dp).clip(RoundedCornerShape(4.dp)),
           )
           Text(
-            text = "Weapon XP: $wpnCur / $wpnNeed to W.Lv.${(wpnLevel + 1).coerceAtMost(60)} • +${(wpnLevel - 1) / 3} Level DMG • Tier x${String.format(Locale.US, "%.2f", wpnTierMeta.multiplier)}",
+            text = "Weapon XP: $wpnCur / $wpnNeed to W.Lv.${(wpnLevel + 1).coerceAtMost(60)} • Tier x${String.format(Locale.US, "%.2f", wpnTierMeta.multiplier)} • Star x${String.format(Locale.US, "%.2f", wpnStarMeta.multiplier)}",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
@@ -168,8 +174,20 @@ fun WeaponCustomizationTab(
               modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_weapon_tier_btn"),
             ) {
               Text(
-                text = if (wpnTier >= 25) "MAX TIER 25 (MULTIVERSAL)" else "Upgrade Tier ($tierCost Blue Essence)",
-                style = MaterialTheme.typography.labelMedium,
+                text = if (wpnTier >= 25) "MAX TIER 25" else "Tier +1 ($tierCost B)",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+              )
+            }
+            OutlinedButton(
+              onClick = { onUpgradeWeaponStar(equippedWeapon.id) },
+              enabled = wpnStar < StarRankMeta.MAX_STARS && totalBlueEssence >= wpnStarCost,
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_weapon_star_btn"),
+            ) {
+              Text(
+                text = if (wpnStar >= StarRankMeta.MAX_STARS) "10★ MAX" else "Star +1 ($wpnStarCost B)",
+                style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
               )
             }
@@ -179,7 +197,7 @@ fun WeaponCustomizationTab(
                 shape = RoundedCornerShape(10.dp),
                 modifier = Modifier.height(48.dp).testTag("prestige_weapon_btn"),
               ) {
-                Text("Prestige (+1000 Blue Essence)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                Text("Prestige (+1000 B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
               }
             }
           }
@@ -338,14 +356,16 @@ fun WeaponCustomizationTab(
       LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         items(WonderWeaponKind.entries, key = { it.id }) { kind ->
           val wt = progression.wonderTier(kind.id)
+          val wStar = progression.wonderStar(kind.id)
           val wMeta = ProgressionCatalog.tierMeta(wt)
           val wCost = wt * 500L
+          val wStarCost = wStar * 550L
           val inWonderLoadout = multiWonders.contains(kind.id)
           Surface(
             shape = RoundedCornerShape(14.dp),
             color = if (inWonderLoadout) Color(kind.accentHex).copy(alpha = 0.10f) else MaterialTheme.colorScheme.surface,
             modifier = Modifier
-              .width(230.dp)
+              .width(240.dp)
               .border(
                 width = if (inWonderLoadout) 2.dp else 1.dp,
                 color = Color(kind.accentHex).copy(alpha = if (inWonderLoadout) 0.95f else 0.55f),
@@ -355,7 +375,7 @@ fun WeaponCustomizationTab(
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
               Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(kind.shortTag, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(kind.accentHex))
-                Text("T$wt/25 • ${wMeta.label}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(wMeta.colorHex))
+                Text("T$wt/25 • ${wStar}★ • ${wMeta.label}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(wMeta.colorHex))
               }
               Text(kind.displayName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
               Text(kind.description, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
@@ -370,17 +390,33 @@ fun WeaponCustomizationTab(
                   color = if (inWonderLoadout) Color(0xFF00E676) else MaterialTheme.colorScheme.primary,
                 )
               }
-              OutlinedButton(
-                onClick = { onUpgradeWonderTier(kind.id) },
-                enabled = wt < 25 && totalBlueEssence >= wCost,
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.fillMaxWidth().height(40.dp).testTag("upgrade_wonder_${kind.id}"),
-              ) {
-                Text(
-                  text = if (wt >= 25) "MAX T25" else "Tier +1 ($wCost Blue Essence)",
-                  style = MaterialTheme.typography.labelSmall,
-                  fontWeight = FontWeight.Bold,
-                )
+              Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedButton(
+                  onClick = { onUpgradeWonderTier(kind.id) },
+                  enabled = wt < 25 && totalBlueEssence >= wCost,
+                  shape = RoundedCornerShape(8.dp),
+                  contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                  modifier = Modifier.weight(1f).height(40.dp).testTag("upgrade_wonder_${kind.id}"),
+                ) {
+                  Text(
+                    text = if (wt >= 25) "MAX T25" else "T+1 (${wCost}B)",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                  )
+                }
+                OutlinedButton(
+                  onClick = { onUpgradeWonderStar(kind.id) },
+                  enabled = wStar < StarRankMeta.MAX_STARS && totalBlueEssence >= wStarCost,
+                  shape = RoundedCornerShape(8.dp),
+                  contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                  modifier = Modifier.weight(1f).height(40.dp).testTag("upgrade_wonder_star_${kind.id}"),
+                ) {
+                  Text(
+                    text = if (wStar >= StarRankMeta.MAX_STARS) "10★" else "★+1 (${wStarCost}B)",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                  )
+                }
               }
             }
           }
@@ -816,7 +852,7 @@ fun EquipmentCustomizationTab(
       val (eqXpCur, eqXpNeed) = ProgressionCatalog.xpProgressInCurrentEquipmentLevel(eqState.xp)
       val eqTierMeta = ProgressionCatalog.tierMeta(eqState.tier)
       val eqTierCost = eqState.tier * 350L
-      val eqStarCost = eqState.starLevel * 550L
+      val eqStarCost = eqState.starLevel * 400L
 
       Surface(
         shape = RoundedCornerShape(16.dp),
@@ -1019,7 +1055,7 @@ fun GearCustomizationTab(
       val gear = progression.gearMap[slot.id] ?: GearState(slot)
       val gearTierMeta = ProgressionCatalog.tierMeta(gear.tier)
       val gearTierCost = gear.tier * 400L
-      val gearStarCost = gear.starLevel * 600L
+      val gearStarCost = gear.starLevel * 450L
       val (gXpCur, gXpNeed) = ProgressionCatalog.xpProgressInCurrentGearLevel(gear.xp)
       val slotDesc = when (slot) {
         GearSlot.HELMET -> "+Target HUD tracking & +${gear.level * 2}% Precision critical damage"
@@ -1187,7 +1223,7 @@ fun SkillTreeTab(
       }
       val tierMeta = ProgressionCatalog.tierMeta(node.tier)
       val nextCost = if (!node.unlocked) node.costEssence else node.nextUpgradeCost()
-      val skillStarCost = node.starLevel * 700L
+      val skillStarCost = node.starLevel * 400L
       val isMaxTier = node.unlocked && node.tier >= node.maxTier
 
       Surface(

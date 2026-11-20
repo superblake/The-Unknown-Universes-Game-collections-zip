@@ -372,12 +372,14 @@ data class ArenaLoadoutStats(
           p.tier.toInt()
         } else 0
       }
+      val matchRules = progression.effectiveMatchRules()
       val bootsMoveBonus = (((boots?.level ?: 1) - 1) * 0.0035f) + ((boots?.tier ?: 1) - 1) * 0.02f + (bootsStarAbove * 0.025f)
       val stockMoveBonus = if (wc.stockId == "lightweight_skeleton") 0.08f else 0f
+      val speedMutatorMult = if (matchRules.doubleSpeed) 1.45f else 1.0f
       val moveBoost = ((1f + speedPerkCount * 0.14f + (perks.size * 0.05f) + pass.moveSpeedBonus +
         skCd * 0.03f + bootsMoveBonus + stockMoveBonus + outfitMoveBonus + storyAreaMove +
-        (staminUpRank * 0.10f) + (yellowCoreAbove * 0.04f)) * resonance.moveSpeedMult * era.speedMod)
-        .coerceIn(0.85f, 3.6f)
+        (staminUpRank * 0.10f) + (yellowCoreAbove * 0.04f)) * resonance.moveSpeedMult * era.speedMod * speedMutatorMult)
+        .coerceIn(0.85f, 4.2f)
 
       val magExtraSpread = if (wc.magazineId == "extended_mag_2") 1 else 0
       val multiShot = (1 + upgrades.sumOf { (it.tier / 2).toInt().coerceAtLeast(1) } +
@@ -416,11 +418,13 @@ data class ArenaLoadoutStats(
 
       val glovesRateBonus = ((gloves?.level ?: 1) - 1) * 0.04f + ((gloves?.tier ?: 1) - 1) * 0.25f + (glovesStarAbove * 0.25f)
       val levelCadenceReduction = (((wpnLevel - 1) * 0.08f) + glovesRateBonus).coerceAtMost(4.5f)
-      val totalRateMult = (pass.fireRateMultiplier + outfitRateBonus + (speedColaRank * 0.12f) + (yellowCoreAbove * 0.06f)) * resonance.fireRateMult
+      val mutatorRateMult = (if (matchRules.doubleSpeed) 1.75f else 1.0f) * (if (matchRules.infiniteAmmo) 1.25f else 1.0f)
+      val totalRateMult = (pass.fireRateMultiplier + outfitRateBonus + (speedColaRank * 0.12f) + (yellowCoreAbove * 0.06f)) * resonance.fireRateMult * mutatorRateMult
       val rawCadence = (weapon.baseCadenceTicks - speedPerkCount * 0.9f - levelCadenceReduction) / totalRateMult.coerceAtLeast(1f)
-      val fireCadence = rawCadence.coerceIn(2.4f, 15.0f)
+      val fireCadence = rawCadence.coerceIn(1.8f, 15.0f)
 
-      val wonderDropSkillMult = 1f + skWonder * 0.30f + ((areaSt.lootRichnessTier - 1) * 0.15f) + resonance.lootLuckBonus
+      val wonderDropSkillMult = (1f + skWonder * 0.30f + ((areaSt.lootRichnessTier - 1) * 0.15f) + resonance.lootLuckBonus) *
+        progression.clan.wonderPerkMultiplier * (if (matchRules.wonderSpawnBoost) 2.2f else 1.0f)
       val wonderDurSkillMult = 1f + skWonder * 0.15f + (((backRig?.level ?: 1) - 1) * 0.01f) + ((backRig?.tier ?: 1) - 1) * 0.08f + (backRigStarAbove * 0.10f) + (purpleCoreAbove * 0.18f)
       val critDmgGearBonus = 1f + (((helmet?.level ?: 1) - 1) * 0.02f) + ((helmet?.tier ?: 1) - 1) * 0.12f + (helmetStarAbove * 0.14f) + (redCoreAbove * 0.12f)
       val vacRadius = (progression.vacuumBot.vacuumRadius + greenCoreAbove * 0.018f).coerceAtMost(0.95f)
@@ -462,7 +466,7 @@ data class ArenaLoadoutStats(
         weaponTierMultiplier = wpnTierMult,
         weaponBonusDamage = rawTotalWpnDmg.roundToInt().coerceAtLeast(1),
         weaponExtraSpread = barrelExtraSpread,
-        weaponExtraPierce = weapon.basePierce + ((wpnLevel - 1) / 6) + (skDmg2 / 2) + ((wpnTier - 1) / 3),
+        weaponExtraPierce = weapon.basePierce + ((wpnLevel - 1) / 6) + (skDmg2 / 2) + ((wpnTier - 1) / 3) + (if (matchRules.infiniteAmmo) 1 else 0),
         projectileSpeed = weapon.baseProjectileSpeed * barrelSpeedMult * (1f + ((wpnLevel - 1) * 0.008f).coerceAtMost(0.35f)),
         tracerColor = weaponBulletColor,
         ammoModId = wc.ammoModId,
@@ -615,16 +619,14 @@ class ArenaSimState(
   var hudExtractedSuccess by mutableStateOf(false)
 
   private val accentColor = Color(world.accentHex)
+  val matchRules = progression.effectiveMatchRules()
 
   init {
     setupBuildingsAndTraps()
     spawnLobbyBots()
     spawnAreaCollectibles()
-    val initialWave = if (progression.joinedMatch != null) {
-      progression.joinedMatch.currentWave.toLong().coerceAtLeast(1L)
-    } else if (progression.privateMatchRules.isPrivate) {
-      progression.privateMatchRules.startingWave.toLong().coerceAtLeast(1L)
-    } else 1L
+    val initialWave = matchRules.startingWave.toLong().coerceAtLeast(1L)
+    hudWave = initialWave
     spawnWave(initialWave)
   }
 
@@ -856,7 +858,7 @@ class ArenaSimState(
       )
     }
 
-    if (lc.bossRushMutator || w % 3L == 0L || (modeId == "br" && w == 4L)) {
+    if (lc.bossRushMutator || matchRules.bossRush || w % 3L == 0L || (modeId == "br" && w == 4L)) {
       spawnBossForWorld(w)
     }
 
@@ -1035,7 +1037,7 @@ class ArenaSimState(
     val packLevel = hudPackTier.coerceIn(1, 25)
     val wonder = activeWonderWeapon
     val critBoost = if (progression.levelCustom.critSurgeMutator && playerShotCounter % 3 == 0) 2f else 1f
-    val instagibBoost = if (progression.levelCustom.instagibMutator) 2 else 1
+    val instagibBoost = if (progression.levelCustom.instagibMutator || matchRules.headshotsOnly) 3 else 1
 
     if (wonder != null) {
       val wonderCol = Color(wonder.accentHex)
@@ -1421,9 +1423,10 @@ class ArenaSimState(
   fun triggerDash() {
     if (hudRunEnded || dashCd > 0f) return
     val baseDashCd = if (loadout.hasClawEdge) 40f else 50f
-    dashCd = (if (progression.levelCustom.lowGravityDash) baseDashCd * 0.6f else baseDashCd) * loadout.skillDashCdMult
-    dashInvulnTicks = if (progression.levelCustom.lowGravityDash) 32f else 24f
-    val dashDist = if (progression.levelCustom.lowGravityDash) 0.22f else 0.16f
+    val lowGrav = progression.levelCustom.lowGravityDash || matchRules.lowGravity
+    dashCd = (if (lowGrav) baseDashCd * 0.6f else baseDashCd) * loadout.skillDashCdMult
+    dashInvulnTicks = if (lowGrav) 32f else 24f
+    val dashDist = if (lowGrav) 0.22f else 0.16f
     val oldX = playerX
     val oldY = playerY
     playerX = (playerX + aimX * dashDist).coerceIn(ARENA_MIN_X, ARENA_MAX_X)
@@ -1456,12 +1459,21 @@ class ArenaSimState(
     if (loadout.ammoModId == "vampiric_bio") {
       hudShield = (hudShield + 2).coerceAtMost(loadout.maxShield)
     }
+    if (matchRules.vampiricSiphon) {
+      hudShield = (hudShield + 20).coerceAtMost(loadout.maxShield)
+    }
+    if (h.isBoss || h.isElite) {
+      val clanSiphon = (progression.clan.armorSiphonPerk / 4).coerceAtLeast(1)
+      hudShield = (hudShield + clanSiphon).coerceAtMost(loadout.maxShield)
+    }
     val base = when {
       h.isBoss -> 500L
       h.isElite -> 160L
       else -> 70L
     }
-    hudScore += base * scoreMult
+    val effectiveMult = scoreMult * (if (matchRules.doubleBlueEssence) 2L else 1L)
+    val hardcoreBonus = if (matchRules.friendlyFire) base / 4L else 0L
+    hudScore += (base + hardcoreBonus) * effectiveMult
 
     if (modeId == "multiplayer") {
       if (hudElims > 0L && hudElims % 7L == 0L) {
@@ -1751,7 +1763,8 @@ class ArenaSimState(
     // AI Squad & Lobby Bots Movement and Tactical Fire
     if (arenaBots.isNotEmpty()) {
       val botDiff = progression.lobbyConfig.botDifficulty
-      val botDmgMult = botDiff.damageScale * (1f + progression.botDamageBoostPct / 100f)
+      val hardcoreBotScale = if (matchRules.friendlyFire) 1.35f else 1.0f
+      val botDmgMult = botDiff.damageScale * (1f + (progression.botDamageBoostPct + progression.clan.botDamageBoost) / 100f) * hardcoreBotScale
       for (bi in 0 until arenaBots.size) {
         val bot = arenaBots[bi]
         bot.roamAngle = (bot.roamAngle + 0.015f * dt) % (2f * PI.toFloat())
@@ -1912,7 +1925,8 @@ class ArenaSimState(
         val dy = b.y - playerY
         if (dx * dx + dy * dy <= 0.036f * 0.036f) {
           b.life = 0f
-          val shotDmg = if (liveSettings.assistShieldBoost) 5 else 8
+          val rawShot = if (liveSettings.assistShieldBoost) 5 else 8
+          val shotDmg = if (matchRules.friendlyFire) (rawShot * 1.35f).roundToInt() else rawShot
           hudShield = (hudShield - shotDmg).coerceAtLeast(0)
           damageFlashTicks = if (liveSettings.reduceFlashes) 0f else 12f
           if (hudShield <= 0) hudRunEnded = true
@@ -2114,12 +2128,16 @@ class ArenaSimState(
 
     // Wave transition
     if (hostiles.isEmpty() && !hudRunEnded) {
-      if (modeId == "br" && hudWave >= 4L) {
+      if ((modeId == "br" && hudWave >= 4L) || (matchRules.customWaveGoal > 0 && hudWave >= matchRules.customWaveGoal.toLong())) {
         hudExtractedSuccess = true
         hudRunEnded = true
+        if (matchRules.customWaveGoal > 0) {
+          postCallout("MATCH GOAL WAVE ${matchRules.customWaveGoal} CLEARED! VICTORY EXFIL!")
+        }
       } else {
         hudWave++
-        hudScore += hudWave * 100L * scoreMult
+        val waveEffMult = scoreMult * (if (matchRules.doubleBlueEssence) 2L else 1L)
+        hudScore += hudWave * 100L * waveEffMult
         if (world.id == "chrono_vault") {
           hudChevronsLocked = ((hudWave.toInt() - 1) % 7) + 1
         }

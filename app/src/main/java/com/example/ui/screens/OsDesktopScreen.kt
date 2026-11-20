@@ -109,7 +109,7 @@ fun OsDesktopScreen(
   onOpenStore: () -> Unit = {},
   onOpenAchievements: () -> Unit = {},
   onOpenMissions: () -> Unit = {},
-  onOpenMatchBrowser: () -> Unit = {},
+  onOpenMatchBrowser: (Int) -> Unit = {},
   onOpenSocialHub: (Int) -> Unit = {},
   onSignOut: () -> Unit,
 ) {
@@ -509,8 +509,8 @@ fun OsDesktopScreen(
         accentColor = Color(activeWorld.accentHex),
         onUpdateLobby = onUpdateLobby,
         onOpenFullRoster = { showLobbyRosterDialog = true },
-        onOpenMatchBrowser = onOpenMatchBrowser,
-        onOpenHostPrivate = onOpenMatchBrowser,
+        onOpenMatchBrowser = { onOpenMatchBrowser(0) },
+        onOpenHostPrivate = { onOpenMatchBrowser(4) },
       )
     }
 

@@ -217,6 +217,7 @@ class ProgressionStore(
     )
     save(
       current.copy(
+        activeAreaId = activeArea.id,
         privateMatchRules = rules,
         joinedMatch = listing,
         lobbyConfig = updatedLobby,
@@ -239,13 +240,15 @@ class ProgressionStore(
       targetPlayers = match.maxPlayers,
       humanPlayersOnline = (match.currentPlayers + 1).coerceAtMost(match.maxPlayers),
     )
+    val joinedListing = match.copy(currentPlayers = match.currentPlayers + 1)
     save(
       current.copy(
-        joinedMatch = match.copy(currentPlayers = match.currentPlayers + 1),
+        activeAreaId = match.areaId,
+        joinedMatch = joinedListing,
         lobbyConfig = updatedLobby,
       )
     )
-    return Result.success(match)
+    return Result.success(joinedListing)
   }
 
   fun leaveJoinedMatch() {
@@ -411,7 +414,16 @@ class ProgressionStore(
   }
 
   fun leaveClan(memberCallsign: String) {
-    save(current.copy(clan = SocialCatalog.defaultClan))
+    val defaultClan = SocialCatalog.defaultClan
+    val announce = ChatMessage(
+      id = "msg_clan_leave_${System.currentTimeMillis()}",
+      channel = ChatChannel.CLAN,
+      senderCallsign = memberCallsign,
+      senderClanTag = defaultClan.tag,
+      content = "$memberCallsign returned to Clan [${defaultClan.tag}] ${defaultClan.name}.",
+      isSystemMessage = true,
+    )
+    save(current.copy(clan = defaultClan, chatMessages = (current.chatMessages + announce).takeLast(250)))
   }
 
   fun upgradeGear(slot: GearSlot) {
@@ -1792,6 +1804,19 @@ class ProgressionStore(
         put("totalEssenceDonated", next.clan.totalEssenceDonated)
         put("leaderCallsign", next.clan.leaderCallsign)
         put("colorHex", next.clan.colorHex)
+        put("members", JSONArray().apply {
+          next.clan.members.forEach { m ->
+            put(JSONObject().apply {
+              put("id", m.id)
+              put("callsign", m.callsign)
+              put("rank", m.rank.id)
+              put("level", m.level)
+              put("stars", m.stars)
+              put("donatedEssence", m.donatedEssence)
+              put("online", m.online)
+            })
+          }
+        })
       })
       put("friends", JSONArray().apply {
         next.friends.forEach { f ->
@@ -1801,13 +1826,55 @@ class ProgressionStore(
             put("level", f.level)
             put("stars", f.stars)
             put("tier", f.tier)
+            put("avatarThemeId", f.avatarThemeId)
             put("status", f.status.id)
             put("statusDetail", f.statusDetail)
+            put("currentMatchId", f.currentMatchId ?: "")
             put("clanTag", f.clanTag ?: "")
             put("isFavorite", f.isFavorite)
           })
         }
       })
+      put("chatMessages", JSONArray().apply {
+        next.chatMessages.takeLast(150).forEach { msg ->
+          put(JSONObject().apply {
+            put("id", msg.id)
+            put("channel", msg.channel.id)
+            put("senderCallsign", msg.senderCallsign)
+            put("senderClanTag", msg.senderClanTag ?: "")
+            put("senderStars", msg.senderStars)
+            put("targetFriendId", msg.targetFriendId ?: "")
+            put("content", msg.content)
+            put("timestampMillis", msg.timestampMillis)
+            put("isTacticalQuickChat", msg.isTacticalQuickChat)
+            put("isSystemMessage", msg.isSystemMessage)
+          })
+        }
+      })
+      next.joinedMatch?.let { jm ->
+        put("joinedMatch", JSONObject().apply {
+          put("id", jm.id)
+          put("roomName", jm.roomName)
+          put("hostCallsign", jm.hostCallsign)
+          put("hostLevel", jm.hostLevel)
+          put("hostStars", jm.hostStars)
+          put("worldId", jm.worldId)
+          put("worldTitle", jm.worldTitle)
+          put("modeId", jm.modeId)
+          put("modeLabel", jm.modeLabel)
+          put("areaId", jm.areaId)
+          put("areaName", jm.areaName)
+          put("currentPlayers", jm.currentPlayers)
+          put("maxPlayers", jm.maxPlayers)
+          put("privacy", jm.privacy.id)
+          put("roomCode", jm.roomCode)
+          put("passcode", jm.passcode ?: "")
+          put("pingMs", jm.pingMs)
+          put("currentWave", jm.currentWave)
+          put("activeMutators", JSONArray(jm.activeMutators))
+          put("clanTag", jm.clanTag ?: "")
+        })
+      }
     }
     val jsonString = root.toString()
     prefs.edit {
@@ -2175,6 +2242,27 @@ class ProgressionStore(
 
       val clanObj = root.optJSONObject("clan")
       val clanData = if (clanObj != null) {
+        val membersArr = clanObj.optJSONArray("members")
+        val loadedMembers = if (membersArr != null) {
+          val mList = ArrayList<ClanMember>(membersArr.length())
+          for (i in 0 until membersArr.length()) {
+            val mObj = membersArr.optJSONObject(i) ?: continue
+            val rId = mObj.optString("rank", ClanRank.RECRUIT.id)
+            val rank = ClanRank.entries.firstOrNull { it.id == rId } ?: ClanRank.RECRUIT
+            mList.add(
+              ClanMember(
+                id = mObj.optString("id", "cm_$i"),
+                callsign = mObj.optString("callsign", "Operative"),
+                rank = rank,
+                level = mObj.optInt("level", 1),
+                stars = mObj.optInt("stars", 1),
+                donatedEssence = mObj.optLong("donatedEssence", 0L),
+                online = mObj.optBoolean("online", true),
+              )
+            )
+          }
+          mList.ifEmpty { SocialCatalog.defaultClan.members }
+        } else SocialCatalog.defaultClan.members
         SocialCatalog.defaultClan.copy(
           id = clanObj.optString("id", SocialCatalog.defaultClan.id),
           name = clanObj.optString("name", SocialCatalog.defaultClan.name),
@@ -2186,17 +2274,19 @@ class ProgressionStore(
           totalEssenceDonated = clanObj.optLong("totalEssenceDonated", 18500L),
           leaderCallsign = clanObj.optString("leaderCallsign", SocialCatalog.defaultClan.leaderCallsign),
           colorHex = clanObj.optLong("colorHex", SocialCatalog.defaultClan.colorHex),
+          members = loadedMembers,
         )
       } else SocialCatalog.defaultClan
 
       val friendsArray = root.optJSONArray("friends")
-      val friendsList = if (friendsArray != null && friendsArray.length() > 0) {
+      val friendsList = if (friendsArray != null) {
         val list = ArrayList<FriendEntry>(friendsArray.length())
         for (i in 0 until friendsArray.length()) {
           val fObj = friendsArray.optJSONObject(i) ?: continue
           val statusId = fObj.optString("status", FriendOnlineStatus.ONLINE_LOBBY.id)
           val status = FriendOnlineStatus.entries.firstOrNull { it.id == statusId } ?: FriendOnlineStatus.ONLINE_LOBBY
           val tag = fObj.optString("clanTag", "").ifEmpty { null }
+          val matchId = fObj.optString("currentMatchId", "").ifEmpty { null }
           list.add(
             FriendEntry(
               id = fObj.optString("id", "f_$i"),
@@ -2204,8 +2294,10 @@ class ProgressionStore(
               level = fObj.optInt("level", 25),
               stars = fObj.optInt("stars", 5),
               tier = fObj.optInt("tier", 4),
+              avatarThemeId = fObj.optString("avatarThemeId", "vanguard_cyber"),
               status = status,
               statusDetail = fObj.optString("statusDetail", "In Lobby"),
+              currentMatchId = matchId,
               clanTag = tag,
               isFavorite = fObj.optBoolean("isFavorite", false),
             )
@@ -2213,6 +2305,63 @@ class ProgressionStore(
         }
         list
       } else SocialCatalog.defaultFriends
+
+      val chatArray = root.optJSONArray("chatMessages")
+      val loadedChats = if (chatArray != null) {
+        val list = ArrayList<ChatMessage>(chatArray.length())
+        for (i in 0 until chatArray.length()) {
+          val mObj = chatArray.optJSONObject(i) ?: continue
+          val chId = mObj.optString("channel", ChatChannel.GENERAL.id)
+          val ch = ChatChannel.entries.firstOrNull { it.id == chId } ?: ChatChannel.GENERAL
+          list.add(
+            ChatMessage(
+              id = mObj.optString("id", "msg_$i"),
+              channel = ch,
+              senderCallsign = mObj.optString("senderCallsign", "Operator"),
+              senderClanTag = mObj.optString("senderClanTag", "").ifEmpty { null },
+              senderStars = mObj.optInt("senderStars", 1),
+              targetFriendId = mObj.optString("targetFriendId", "").ifEmpty { null },
+              content = mObj.optString("content", ""),
+              timestampMillis = mObj.optLong("timestampMillis", System.currentTimeMillis()),
+              isTacticalQuickChat = mObj.optBoolean("isTacticalQuickChat", false),
+              isSystemMessage = mObj.optBoolean("isSystemMessage", false),
+            )
+          )
+        }
+        list
+      } else SocialCatalog.defaultChatMessages
+
+      val jmObj = root.optJSONObject("joinedMatch")
+      val loadedJoinedMatch = if (jmObj != null) {
+        val privId = jmObj.optString("privacy", MatchPrivacy.PUBLIC.id)
+        val priv = MatchPrivacy.entries.firstOrNull { it.id == privId } ?: MatchPrivacy.PUBLIC
+        val muts = mutableListOf<String>()
+        jmObj.optJSONArray("activeMutators")?.let { arr ->
+          for (i in 0 until arr.length()) muts.add(arr.optString(i))
+        }
+        MultiverseMatchListing(
+          id = jmObj.optString("id", ""),
+          roomName = jmObj.optString("roomName", "Match"),
+          hostCallsign = jmObj.optString("hostCallsign", "Host"),
+          hostLevel = jmObj.optInt("hostLevel", 1),
+          hostStars = jmObj.optInt("hostStars", 1),
+          worldId = jmObj.optString("worldId", "campaign_origins"),
+          worldTitle = jmObj.optString("worldTitle", "Genesis Fracture"),
+          modeId = jmObj.optString("modeId", "campaign"),
+          modeLabel = jmObj.optString("modeLabel", "Story Campaign"),
+          areaId = jmObj.optString("areaId", "area_mended_convergence"),
+          areaName = jmObj.optString("areaName", "The Mended Convergence"),
+          currentPlayers = jmObj.optInt("currentPlayers", 1),
+          maxPlayers = jmObj.optInt("maxPlayers", 8),
+          privacy = priv,
+          roomCode = jmObj.optString("roomCode", "CONV-101"),
+          passcode = jmObj.optString("passcode", "").ifEmpty { null },
+          pingMs = jmObj.optInt("pingMs", 20),
+          currentWave = jmObj.optInt("currentWave", 1),
+          activeMutators = muts,
+          clanTag = jmObj.optString("clanTag", "").ifEmpty { null },
+        )
+      } else null
 
       OperatorProgressionState(
         playerXp = root.optLong("playerXp", 0L),
@@ -2275,7 +2424,9 @@ class ProgressionStore(
         botDamageBoostPct = root.optInt("botDamageBoostPct", 0),
         privateMatchRules = pmRules,
         friends = friendsList,
+        chatMessages = loadedChats,
         clan = clanData,
+        joinedMatch = loadedJoinedMatch,
       )
     }.getOrDefault(OperatorProgressionState())
   }

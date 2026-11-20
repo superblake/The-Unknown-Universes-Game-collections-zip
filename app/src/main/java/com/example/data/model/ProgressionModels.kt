@@ -628,6 +628,38 @@ data class OperatorProgressionState(
 
   fun effectiveWonderList(): List<String> =
     equippedWonderIds.ifEmpty { listOf(WonderWeaponKind.RAY_NOVA_MK3.id) }.distinct()
+
+  fun effectiveMatchRules(): PrivateMatchRules {
+    val jm = joinedMatch
+    if (jm != null) {
+      val muts = jm.activeMutators
+      return PrivateMatchRules(
+        isPrivate = jm.isPrivate,
+        privacy = jm.privacy,
+        roomName = jm.roomName,
+        roomCode = jm.roomCode,
+        passcode = jm.passcode ?: "",
+        startingWave = jm.currentWave.coerceAtLeast(1),
+        maxPlayers = jm.maxPlayers,
+        botFillEnabled = lobbyConfig.autoFillBots,
+        botDifficulty = lobbyConfig.botDifficulty,
+        worldId = jm.worldId,
+        areaId = jm.areaId,
+        modeId = jm.modeId,
+        infiniteAmmo = muts.any { it.contains("Infinite", ignoreCase = true) } || (jm.roomCode == privateMatchRules.roomCode && privateMatchRules.infiniteAmmo),
+        headshotsOnly = muts.any { it.contains("Instagib", ignoreCase = true) || it.contains("Headshot", ignoreCase = true) } || (jm.roomCode == privateMatchRules.roomCode && privateMatchRules.headshotsOnly),
+        bossRush = muts.any { it.contains("Boss Rush", ignoreCase = true) } || (jm.roomCode == privateMatchRules.roomCode && privateMatchRules.bossRush),
+        wonderSpawnBoost = muts.any { it.contains("Wonder Boost", ignoreCase = true) } || (jm.roomCode == privateMatchRules.roomCode && privateMatchRules.wonderSpawnBoost),
+        lowGravity = muts.any { it.contains("Low Gravity", ignoreCase = true) } || (jm.roomCode == privateMatchRules.roomCode && privateMatchRules.lowGravity),
+        doubleSpeed = muts.any { it.contains("2x Speed", ignoreCase = true) } || (jm.roomCode == privateMatchRules.roomCode && privateMatchRules.doubleSpeed),
+        vampiricSiphon = muts.any { it.contains("Vampiric", ignoreCase = true) } || (jm.roomCode == privateMatchRules.roomCode && privateMatchRules.vampiricSiphon),
+        doubleBlueEssence = muts.any { it.contains("2x Blue Essence", ignoreCase = true) } || (jm.roomCode == privateMatchRules.roomCode && privateMatchRules.doubleBlueEssence),
+        friendlyFire = muts.any { it.contains("Hardcore", ignoreCase = true) } || (jm.roomCode == privateMatchRules.roomCode && privateMatchRules.friendlyFire),
+        customWaveGoal = if (jm.roomCode == privateMatchRules.roomCode) privateMatchRules.customWaveGoal else 0,
+      )
+    }
+    return if (privateMatchRules.isPrivate) privateMatchRules else PrivateMatchRules(isPrivate = false)
+  }
 }
 
 object ProgressionCatalog {

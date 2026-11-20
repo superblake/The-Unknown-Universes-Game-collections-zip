@@ -17,10 +17,24 @@ import com.example.ui.screens.ArenaLoadoutStats
 import com.example.ui.screens.ArenaSimState
 import com.example.data.local.AppSettings
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
+import com.example.ui.screens.ArmoryScreen
+import com.example.ui.screens.MissionsDialog
+import com.example.ui.theme.UnknownUniversesTheme
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -30,12 +44,17 @@ import org.robolectric.annotation.Config
 @Config(sdk = [36], qualifiers = "w800dp-h1280dp")
 class StarLevelsMissionsAndCampaignTest {
 
+  @get:Rule
+  val composeRule = createComposeRule()
+
   private lateinit var context: Context
 
   @Before
   fun setUp() {
     context = ApplicationProvider.getApplicationContext()
     context.getSharedPreferences("${ProgressionStore.PREFS_PREFIX}_star_test", Context.MODE_PRIVATE)
+      .edit().clear().commit()
+    context.getSharedPreferences("${ProgressionStore.PREFS_PREFIX}_ui_star_test", Context.MODE_PRIVATE)
       .edit().clear().commit()
   }
 
@@ -88,8 +107,9 @@ class StarLevelsMissionsAndCampaignTest {
   }
 
   @Test
-  fun starLevelsAndTiers_upgradePersistAndBoostArenaStats() = runBlocking {
-    val db = Room.inMemoryDatabaseBuilder(context, UniverseDatabase::class.java)
+  fun starLevelsAndTiers_upgradePersistAndBoostArenaStats() {
+    runBlocking {
+      val db = Room.inMemoryDatabaseBuilder(context, UniverseDatabase::class.java)
       .allowMainThreadQueries()
       .build()
     try {
@@ -127,7 +147,7 @@ class StarLevelsMissionsAndCampaignTest {
       essence -= wonderStarRes.getOrThrow()
       assertEquals(2, store.current.wonderStar("wonder_raygun"))
 
-      // Upgrade Outfit Star, Vacuum Bot Star, Area Star
+      // Upgrade Outfit Star, Vacuum Bot Star, Area Star, Gear Star, Equipment Star, Skill Star, Mod Star
       assertTrue(store.upgradeOutfitStar("batman_v1", essence).isSuccess)
       assertEquals(2, store.current.outfitState("batman_v1").starLevel)
 
@@ -137,11 +157,26 @@ class StarLevelsMissionsAndCampaignTest {
       assertTrue(store.upgradeAreaStar("area_mended_convergence", essence).isSuccess)
       assertEquals(2, store.current.areaState("area_mended_convergence").starLevel)
 
+      assertTrue(store.upgradeGearStar(com.example.data.model.GearSlot.HELMET, essence).isSuccess)
+      assertEquals(2, store.current.gearMap[com.example.data.model.GearSlot.HELMET.id]?.starLevel)
+
+      assertTrue(store.upgradeEquipmentStar("lethal", essence).isSuccess)
+      assertEquals(2, store.current.equipmentState("lethal").starLevel)
+
+      val firstSkillId = store.current.skillNodes.keys.first()
+      assertTrue(store.unlockSkillNode(firstSkillId, essence).isSuccess)
+      assertTrue(store.upgradeSkillStar(firstSkillId, essence).isSuccess)
+      assertEquals(2, store.current.skillNodes[firstSkillId]?.starLevel)
+
+      assertTrue(store.upgradeArmoryItemStar("perk_juggernog", essence).isSuccess)
+      assertEquals(2, store.current.armoryItemStar("perk_juggernog"))
+
       // Verify ArenaLoadoutStats incorporates all star levels and tier multipliers
       val loadout = ArenaLoadoutStats.fromArmory(emptyList(), Color.Cyan, store.current, 5000L)
       assertTrue(loadout.weaponTierMultiplier >= 1.0f)
     } finally {
       db.close()
+    }
     }
   }
 
@@ -174,5 +209,97 @@ class StarLevelsMissionsAndCampaignTest {
     assertTrue(blueGain > 0L)
     assertTrue(xpGain > 0L)
     assertTrue(shardGain > 0L)
+  }
+
+  @Test
+  fun armoryScreen_weaponWonderAndCharacterStarButtonsAndMissionsTabWorkEndToEnd() {
+    val store = ProgressionStore(context, "ui_star_test")
+    val firstMission = MissionsCatalog.worldMissions.first()
+    var deployedTarget: String? = null
+
+    composeRule.setContent {
+      UnknownUniversesTheme(darkTheme = true) {
+        val prog by store.state.collectAsState()
+        ArmoryScreen(
+          armory = emptyList(),
+          totalEssence = 10_000L,
+          onToggleEquip = {},
+          onUpgradeItem = {},
+          onCreateCustomItem = { _, _, _, _, _, _, _ -> },
+          onDeleteItem = {},
+          progression = prog,
+          missions = store.missionStates(),
+          activeWorldId = firstMission.targetId,
+          activeAreaId = "area_empire_city",
+          onUpgradeCharacterTier = { store.upgradeCharacterTier(10_000L) },
+          onUpgradeCharacterStar = { store.upgradeCharacterStar(10_000L) },
+          onUpgradeWeaponStar = { wId -> store.upgradeWeaponStar(wId, 10_000L) },
+          onUpgradeWonderStar = { wId -> store.upgradeWonderStar(wId, 10_000L) },
+          onDeployMissionTarget = { _, targetId -> deployedTarget = targetId },
+        )
+      }
+    }
+
+    // Switch to WEAPONS tab and upgrade primary weapon star & Wonder Weapon star
+    composeRule.onNodeWithTag("armory_tab_weapons").performScrollTo().performClick()
+    composeRule.waitForIdle()
+    composeRule.onNodeWithTag("upgrade_weapon_star_btn").assertIsEnabled().performClick()
+    composeRule.waitForIdle()
+    assertEquals(2, store.current.weaponStar(store.current.weaponCustom.equippedWeaponId))
+
+    // Scroll LazyColumn to Wonder Weapon Ray Nova MK3 star button and upgrade
+    composeRule.onNodeWithTag("weapon_customization_list")
+      .performScrollToNode(hasTestTag("upgrade_wonder_star_ww_ray_mk3"))
+    composeRule.waitForIdle()
+    composeRule.onNodeWithTag("upgrade_wonder_star_ww_ray_mk3").performScrollTo().assertIsEnabled().performClick()
+    composeRule.waitForIdle()
+    assertEquals(2, store.current.wonderStar("ww_ray_mk3"))
+
+    // Switch to CHARACTER tab and upgrade Character Tier and Character Star
+    composeRule.onNodeWithTag("armory_tab_character").performScrollTo().performClick()
+    composeRule.waitForIdle()
+    composeRule.onNodeWithTag("upgrade_char_tier_btn").assertIsEnabled().performClick()
+    composeRule.onNodeWithTag("upgrade_char_star_btn").assertIsEnabled().performClick()
+    composeRule.waitForIdle()
+    assertEquals(2, store.current.characterTier)
+    assertEquals(2, store.current.characterStarLevel)
+
+    // Switch to MISSIONS tab and verify deploy target works
+    composeRule.onNodeWithTag("armory_tab_missions").performScrollTo().performClick()
+    composeRule.waitForIdle()
+    composeRule.onNodeWithTag("missions_deploy_target_btn").assertIsDisplayed().performClick()
+    composeRule.waitForIdle()
+    assertEquals(firstMission.targetId, deployedTarget)
+  }
+
+  @Test
+  fun missionsDialog_rendersFiltersAndDeploysToSelectedTarget() {
+    val store = ProgressionStore(context, "ui_star_test")
+    var dismissed = false
+    var deployed = ""
+
+    composeRule.setContent {
+      UnknownUniversesTheme(darkTheme = true) {
+        MissionsDialog(
+          missions = store.missionStates(),
+          activeWorldId = "campaign_origins",
+          activeAreaId = "area_mended_convergence",
+          onClaimMission = {},
+          onDeployTarget = { _, id -> deployed = id },
+          onDismiss = { dismissed = true },
+        )
+      }
+    }
+
+    composeRule.onNodeWithTag("missions_tab_list").assertIsDisplayed()
+    composeRule.onNodeWithTag("missions_scope_arena").performClick()
+    composeRule.waitForIdle()
+    composeRule.onNodeWithTag("missions_deploy_target_btn").performClick()
+    composeRule.waitForIdle()
+    assertEquals("area_mended_convergence", deployed)
+
+    composeRule.onNodeWithTag("close_missions_dialog_btn").performClick()
+    composeRule.waitForIdle()
+    assertTrue(dismissed)
   }
 }

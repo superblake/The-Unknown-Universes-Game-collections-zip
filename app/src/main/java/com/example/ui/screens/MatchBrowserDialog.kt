@@ -28,10 +28,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -63,16 +63,19 @@ import com.example.ui.theme.AppIcons
 private val matchBrowserTabs = listOf("ALL", "PUBLIC", "PRIVATE", "FRIENDS", "HOST PRIVATE", "DIRECT CODE")
 private val lobbySizes = listOf(1, 2, 4, 8, 12, 16, 24, 32)
 private val startingWaveOptions = listOf(1, 5, 10, 15, 20, 25, 30)
+private val customWaveGoalOptions = listOf(0, 5, 10, 15, 20, 30)
 
 @Composable
 fun MatchBrowserDialog(
   progression: OperatorProgressionState,
   playerCallsign: String,
+  initialTabIdx: Int = 0,
   onHostPrivateMatch: (PrivateMatchRules) -> Unit,
-  onJoinMatch: (MultiverseMatchListing, String?) -> Unit,
+  onJoinMatch: (MultiverseMatchListing, String?) -> Boolean,
+  onLeaveMatch: () -> Unit = {},
   onDismiss: () -> Unit,
 ) {
-  var selectedTabIdx by remember { mutableIntStateOf(0) }
+  var selectedTabIdx by remember(initialTabIdx) { mutableIntStateOf(initialTabIdx.coerceIn(0, matchBrowserTabs.lastIndex)) }
   var searchQuery by remember { mutableStateOf("") }
   var filterOnlyAvailable by remember { mutableStateOf(false) }
   var filterLowPing by remember { mutableStateOf(false) }
@@ -167,9 +170,49 @@ fun MatchBrowserDialog(
           }
         }
 
-        // Multi-Tab Selector Bar
-        TabRow(
+        // Active Session Banner (when connected to a public/private room)
+        val activeJoined = progression.joinedMatch
+        if (activeJoined != null) {
+          Surface(
+            color = Color(0xFF00E676).copy(alpha = 0.14f),
+            modifier = Modifier.fillMaxWidth().border(1.dp, Color(0xFF00E676).copy(alpha = 0.45f)),
+          ) {
+            Row(
+              modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Column(modifier = Modifier.weight(1f)) {
+                Text(
+                  text = "CONNECTED: ${activeJoined.roomName} [${activeJoined.roomCode}]",
+                  style = MaterialTheme.typography.labelMedium,
+                  fontWeight = FontWeight.Bold,
+                  color = Color(0xFF00E676),
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                  text = "${activeJoined.worldTitle} • ${activeJoined.modeLabel} • ${activeJoined.currentPlayers}/${activeJoined.maxPlayers}P",
+                  style = MaterialTheme.typography.labelSmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+              }
+              OutlinedButton(
+                onClick = onLeaveMatch,
+                shape = RoundedCornerShape(8.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                modifier = Modifier.height(34.dp).testTag("leave_joined_match_btn"),
+              ) {
+                Text("Leave", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+              }
+            }
+          }
+        }
+
+        // Multi-Tab Selector Bar (Scrollable so all 6 tabs are never clipped on narrow screens)
+        ScrollableTabRow(
           selectedTabIndex = selectedTabIdx,
+          edgePadding = 8.dp,
           containerColor = MaterialTheme.colorScheme.surfaceVariant,
           contentColor = MaterialTheme.colorScheme.primary,
           modifier = Modifier.fillMaxWidth().testTag("match_browser_tab_row"),
@@ -299,33 +342,35 @@ fun MatchBrowserDialog(
               onCodeChanged = { directCodeInput = it },
               onDirectJoin = { code, pass ->
                 val match = allMatches.firstOrNull { it.roomCode.equals(code.trim(), ignoreCase = true) }
-                if (match != null) {
+                val ok = if (match != null) {
                   onJoinMatch(match, pass)
                 } else {
-                  // Fallback: construct match from code
+                  val selectedWorld = UniverseCatalog.worldById(customRules.worldId)
+                  val selectedMode = UniverseCatalog.modeById(customRules.modeId)
+                  val selectedArea = MultiverseArsenalCatalog.areaById(customRules.areaId)
                   val generated = MultiverseMatchListing(
                     id = "match_${code.lowercase().trim()}",
                     roomName = "Direct Session [$code]",
                     hostCallsign = "CommandOperator",
                     hostLevel = 35,
                     hostStars = 7,
-                    worldId = "campaign_origins",
-                    worldTitle = "Genesis Fracture",
-                    modeId = "campaign",
-                    modeLabel = "Story Campaign",
-                    areaId = "area_mended_convergence",
-                    areaName = "The Mended Convergence",
+                    worldId = selectedWorld.id,
+                    worldTitle = selectedWorld.title,
+                    modeId = selectedMode.id,
+                    modeLabel = selectedMode.label,
+                    areaId = selectedArea.id,
+                    areaName = selectedArea.name,
                     currentPlayers = 1,
-                    maxPlayers = 8,
+                    maxPlayers = customRules.maxPlayers,
                     privacy = MatchPrivacy.INVITE_ONLY,
                     roomCode = code.trim().uppercase(),
                     pingMs = 20,
-                    currentWave = 1,
+                    currentWave = customRules.startingWave,
                     activeMutators = listOf("Custom Direct Join"),
                   )
                   onJoinMatch(generated, pass)
                 }
-                onDismiss()
+                if (ok) onDismiss()
               },
             )
           }
@@ -599,7 +644,7 @@ private fun HostPrivateMatchTab(
       }
     }
 
-    // World & Arena
+    // World, Mode & Area
     item {
       Text("WORLD SELECTION", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
       LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -609,6 +654,18 @@ private fun HostPrivateMatchTab(
             onClick = { onRulesChanged(customRules.copy(worldId = world.id)) },
             label = { Text(world.title) },
             modifier = Modifier.testTag("world_chip_${world.id}"),
+          )
+        }
+      }
+      Spacer(Modifier.height(8.dp))
+      Text("GAME MODE", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+      LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(UniverseCatalog.modes, key = { it.id }) { mode ->
+          FilterChip(
+            selected = customRules.modeId == mode.id,
+            onClick = { onRulesChanged(customRules.copy(modeId = mode.id)) },
+            label = { Text("${mode.shortTag} • ${mode.label}") },
+            modifier = Modifier.testTag("mode_chip_${mode.id}"),
           )
         }
       }
@@ -626,7 +683,7 @@ private fun HostPrivateMatchTab(
       }
     }
 
-    // Starting Wave & Max Players
+    // Starting Wave, Custom Wave Goal & Max Players
     item {
       Text("STARTING WAVE", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
       LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -636,6 +693,18 @@ private fun HostPrivateMatchTab(
             onClick = { onRulesChanged(customRules.copy(startingWave = wave)) },
             label = { Text("Wave $wave") },
             modifier = Modifier.testTag("start_wave_chip_$wave"),
+          )
+        }
+      }
+      Spacer(Modifier.height(8.dp))
+      Text("VICTORY WAVE GOAL", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+      LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(customWaveGoalOptions) { goal ->
+          FilterChip(
+            selected = customRules.customWaveGoal == goal,
+            onClick = { onRulesChanged(customRules.copy(customWaveGoal = goal)) },
+            label = { Text(if (goal == 0) "Endless" else "Goal W$goal") },
+            modifier = Modifier.testTag("wave_goal_chip_$goal"),
           )
         }
       }
@@ -713,6 +782,9 @@ private fun HostPrivateMatchTab(
         }
         MutatorToggle("2x Blue Essence Multiplier", "Doubles Blue Essence earned from waves and kills", customRules.doubleBlueEssence) {
           onRulesChanged(customRules.copy(doubleBlueEssence = it))
+        }
+        MutatorToggle("Hardcore Fire (+25% Essence)", "Hostiles hit +35% harder while bots & essence reward surge", customRules.friendlyFire) {
+          onRulesChanged(customRules.copy(friendlyFire = it))
         }
       }
     }

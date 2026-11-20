@@ -126,7 +126,16 @@ fun ArenaScreen(
   }
   val hasConsumable = remember(armory) { armory.any { it.equipped && it.category == "consumable" } }
 
-  val sim = remember(world.id, mode.id, loadout, hasConsumable) {
+  val sim = remember(
+    world.id,
+    mode.id,
+    loadout,
+    hasConsumable,
+    progression.activeAreaId,
+    progression.privateMatchRules,
+    progression.joinedMatch?.id,
+    progression.lobbyConfig,
+  ) {
     ArenaSimState(
       world = world,
       modeId = mode.id,
@@ -1127,30 +1136,52 @@ fun ArenaScreen(
     }
 
     if (showTacticalLiveChatDialog) {
-      val liveMessages = progression.chatMessages.filter { it.channel == ChatChannel.LIVE_MATCH }
+      var activeArenaChannel by remember { mutableStateOf(ChatChannel.LIVE_MATCH) }
+      val channelMessages = progression.chatMessages.filter { it.channel == activeArenaChannel }
       var liveInput by remember { mutableStateOf("") }
       AlertDialog(
         onDismissRequest = { showTacticalLiveChatDialog = false },
         title = {
           Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Icon(AppIcons.Chat, contentDescription = null, tint = Color(0xFF00E5FF), modifier = Modifier.size(20.dp))
-            Text("LIVE COMBAT TACTICAL COMMS", fontWeight = FontWeight.Bold)
+            Text("LIVE COMBAT & CLAN COMMS", fontWeight = FontWeight.Bold)
           }
         },
         text = {
-          Column(modifier = Modifier.fillMaxWidth().height(360.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("1-TAP QUICK CALLOUTS", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+          Column(modifier = Modifier.fillMaxWidth().height(380.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-              items(SocialCatalog.quickTacticalCallouts) { callout ->
-                Button(
-                  onClick = {
-                    onSendChatMessage(ChatChannel.LIVE_MATCH, callout, null, true)
+              items(listOf(ChatChannel.LIVE_MATCH, ChatChannel.CLAN, ChatChannel.GENERAL), key = { it.id }) { ch ->
+                FilterChip(
+                  selected = activeArenaChannel == ch,
+                  onClick = { activeArenaChannel = ch },
+                  label = {
+                    Text(
+                      when (ch) {
+                        ChatChannel.LIVE_MATCH -> "LIVE TACTICAL"
+                        ChatChannel.CLAN -> "CLAN [${progression.clan.tag}]"
+                        else -> "GENERAL"
+                      },
+                      style = MaterialTheme.typography.labelSmall,
+                    )
                   },
-                  shape = RoundedCornerShape(8.dp),
-                  contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                  modifier = Modifier.height(34.dp).testTag("arena_callout_${callout.take(8).trim()}"),
-                ) {
-                  Text(callout, style = MaterialTheme.typography.labelSmall)
+                  modifier = Modifier.testTag("arena_chat_channel_${ch.id}"),
+                )
+              }
+            }
+            if (activeArenaChannel == ChatChannel.LIVE_MATCH) {
+              Text("1-TAP QUICK CALLOUTS", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+              LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(SocialCatalog.quickTacticalCallouts) { callout ->
+                  Button(
+                    onClick = {
+                      onSendChatMessage(ChatChannel.LIVE_MATCH, callout, null, true)
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier.height(34.dp).testTag("arena_callout_${callout.take(8).trim()}"),
+                  ) {
+                    Text(callout, style = MaterialTheme.typography.labelSmall)
+                  }
                 }
               }
             }
@@ -1159,13 +1190,13 @@ fun ArenaScreen(
               modifier = Modifier.weight(1f).fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp)).padding(8.dp),
               verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-              items(liveMessages.takeLast(25), key = { it.id }) { msg ->
+              items(channelMessages.takeLast(25), key = { it.id }) { msg ->
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                   Text(
-                    text = "${msg.senderCallsign}: ${msg.content}",
+                    text = "${msg.senderClanTag?.let { "[$it] " } ?: ""}${msg.senderCallsign}: ${msg.content}",
                     style = MaterialTheme.typography.bodySmall,
                     color = if (msg.isTacticalQuickChat) Color(0xFFFF9100) else MaterialTheme.colorScheme.onSurface,
-                    fontWeight = if (msg.isTacticalQuickChat) FontWeight.Bold else FontWeight.Normal,
+                    fontWeight = if (msg.isTacticalQuickChat || msg.isSystemMessage) FontWeight.Bold else FontWeight.Normal,
                   )
                 }
               }
@@ -1174,7 +1205,7 @@ fun ArenaScreen(
             OutlinedTextField(
               value = liveInput,
               onValueChange = { liveInput = it },
-              placeholder = { Text("Send combat message...") },
+              placeholder = { Text("Message ${activeArenaChannel.title}...") },
               singleLine = true,
               modifier = Modifier.fillMaxWidth().testTag("arena_live_chat_input"),
             )
@@ -1184,7 +1215,7 @@ fun ArenaScreen(
           Button(
             onClick = {
               if (liveInput.isNotBlank()) {
-                onSendChatMessage(ChatChannel.LIVE_MATCH, liveInput, null, false)
+                onSendChatMessage(activeArenaChannel, liveInput, null, false)
                 liveInput = ""
               }
             },
