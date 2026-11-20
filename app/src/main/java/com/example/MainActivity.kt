@@ -87,6 +87,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 class MainActivity : ComponentActivity() {
+  import androidx.compose.runtime.mutableIntStateOf
+  import com.example.data.model.WonderWeaponKind
+  
   private val pendingOAuthRedirect = MutableStateFlow<Uri?>(null)
 
   override fun onCreate(savedInstanceState: Bundle?) {

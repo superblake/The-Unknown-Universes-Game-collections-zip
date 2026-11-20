@@ -51,6 +51,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 data class StorePurchaseResult(
+  import androidx.compose.runtime.mutableIntStateOf
+  import com.example.data.model.WonderWeaponKind
+  
   val itemName: String,
   val costBlueEssence: Long,
   val summary: String,
