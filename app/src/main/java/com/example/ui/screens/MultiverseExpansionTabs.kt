@@ -51,6 +51,7 @@ import com.example.data.model.OperatorProgressionState
 import com.example.data.model.ProgressionCatalog
 import com.example.data.model.StarRankMeta
 import com.example.data.model.UniverseCatalog
+import com.example.data.model.UpgradeCosts
 import com.example.ui.rig.RigEvaluator
 import com.example.ui.rig.drawRigCharacter
 import java.util.Locale
@@ -129,13 +130,32 @@ fun OutfitsMenuTab(
 
           Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-              text = "ACTIVE OUTFIT: ${activeSpec.nameWithVersion}",
+              text = "ACTIVE CHARACTER: ${activeSpec.nameWithVersion}",
               style = MaterialTheme.typography.titleMedium,
               color = Color(activeSpec.secondaryHex),
               fontWeight = FontWeight.Bold,
               modifier = Modifier.testTag("active_outfit_banner"),
             )
+            if (activeSpec.isOriginalCharacter) {
+              Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = Color(0xFF00E676).copy(alpha = 0.18f),
+              ) {
+                Text(
+                  text = "${activeSpec.originTag.uppercase()} • ORIGINAL HERO +25% POWER BUFF",
+                  style = MaterialTheme.typography.labelSmall,
+                  fontWeight = FontWeight.Bold,
+                  color = Color(0xFF00E676),
+                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+              }
+            }
             Text(activeSpec.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+            Text(
+              text = "Base: +${activeSpec.baseShieldBonus} SHD • +${activeSpec.baseDamageBonus} DMG • +${(activeSpec.baseMoveBonus * 100).toInt()}% SPD",
+              style = MaterialTheme.typography.labelSmall,
+              color = Color(0xFFFFD54F),
+            )
             Text(
               text = "Lv.${activeState.level}/1000 • Tier ${activeState.tier}/25 • ${activeState.starLevel}★ (${StarRankMeta.forStars(activeState.starLevel).label})",
               style = MaterialTheme.typography.labelMedium,
@@ -153,7 +173,7 @@ fun OutfitsMenuTab(
     }
 
     item {
-      Text("CHARACTER ROSTER (${MultiverseArsenalCatalog.outfits.size} VERSIONS)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+      Text("PLAYABLE CHARACTERS (${MultiverseArsenalCatalog.outfits.size} VERSIONS • ORIGINALS +25%)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
       Spacer(Modifier.height(6.dp))
       LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(CharacterUniverseGroup.entries, key = { it.id }) { group ->
@@ -172,11 +192,11 @@ fun OutfitsMenuTab(
       val isEquipped = progression.equippedOutfitId == spec.id
       val tierMeta = ProgressionCatalog.tierMeta(st.tier)
       val starMeta = StarRankMeta.forStars(st.starLevel)
-      val upgCost = 250L + (st.tier * 180L)
-      val starCost = st.starLevel * 500L
-      val skillCost = 180L + (st.skillRank * 120L)
-      val gearCost = 180L + (st.gearRank * 120L)
-      val equipCost = 180L + (st.equipmentRank * 120L)
+      val upgCost = UpgradeCosts.outfitLevelUp(st.tier)
+      val starCost = UpgradeCosts.outfitStar(st.starLevel)
+      val skillCost = UpgradeCosts.outfitSubSystem(st.skillRank)
+      val gearCost = UpgradeCosts.outfitSubSystem(st.gearRank)
+      val equipCost = UpgradeCosts.outfitSubSystem(st.equipmentRank)
       val accent = Color(spec.secondaryHex)
 
       Surface(
@@ -217,14 +237,33 @@ fun OutfitsMenuTab(
                 )
               }
               Column {
+                Row(
+                  horizontalArrangement = Arrangement.spacedBy(6.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                ) {
+                  Text(
+                    text = spec.nameWithVersion,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isEquipped) accent else MaterialTheme.colorScheme.onSurface,
+                  )
+                  if (spec.isOriginalCharacter) {
+                    Surface(
+                      shape = RoundedCornerShape(5.dp),
+                      color = Color(0xFF00E676).copy(alpha = 0.2f),
+                    ) {
+                      Text(
+                        text = "ORIGINAL +25%",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF00E676),
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                      )
+                    }
+                  }
+                }
                 Text(
-                  text = spec.nameWithVersion,
-                  style = MaterialTheme.typography.titleMedium,
-                  fontWeight = FontWeight.Bold,
-                  color = if (isEquipped) accent else MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                  text = "${spec.subtitle} • Rig: ${spec.rigArchetype.uppercase()}",
+                  text = "${spec.originTag} • ${spec.subtitle} • Rig: ${spec.rigArchetype.uppercase()}",
                   style = MaterialTheme.typography.bodySmall,
                   color = MaterialTheme.colorScheme.onSurfaceVariant,
                   maxLines = 1,
@@ -247,9 +286,14 @@ fun OutfitsMenuTab(
           }
 
           Text(
-            text = "Skill: ${spec.signatureSkillSummary}",
+            text = "Stats: +${spec.baseShieldBonus} SHD • +${spec.baseDamageBonus} DMG • +${(spec.baseMoveBonus * 100).toInt()}% SPD • Skill: ${spec.signatureSkillSummary}",
             style = MaterialTheme.typography.labelSmall,
             color = Color(0xFF00E5FF),
+          )
+          Text(
+            text = "Signature Loadout: ${spec.signatureGearSummary}",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color(0xFFFFD54F),
           )
 
           Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -262,7 +306,7 @@ fun OutfitsMenuTab(
               shape = RoundedCornerShape(10.dp),
               modifier = Modifier.weight(1f).height(44.dp).testTag("equip_outfit_${spec.id}"),
             ) {
-              Text(if (isEquipped) "EQUIPPED" else "Equip Outfit", fontWeight = FontWeight.Bold)
+              Text(if (isEquipped) "EQUIPPED" else "Select Character", fontWeight = FontWeight.Bold)
             }
             OutlinedButton(
               onClick = { onUpgradeOutfit(spec.id) },
@@ -339,8 +383,8 @@ fun ShardsPerksAndCoresTab(
     progression.essenceResonance(totalBlueEssence)
   }
   val bot = progression.vacuumBot
-  val botCost = 220L + (bot.tier * 160L)
-  val botStarCost = bot.starLevel * 400L
+  val botCost = UpgradeCosts.vacuumBot(bot.tier)
+  val botStarCost = UpgradeCosts.vacuumBotStar(bot.starLevel)
 
   LazyColumn(
     modifier = Modifier.fillMaxSize().testTag("shards_perks_cores_list"),
@@ -474,7 +518,7 @@ fun ShardsPerksAndCoresTab(
 
     items(MultiverseArsenalCatalog.perkDrinks, key = { it.id }) { perk ->
       val rank = progression.perkRank(perk.id)
-      val cost = 250L + (rank * 200L)
+      val cost = UpgradeCosts.perkDrink(rank)
       val accent = Color(perk.colorHex)
       Surface(
         shape = RoundedCornerShape(14.dp),
@@ -601,7 +645,7 @@ fun AreasAndAgingTab(
       val isSelected = progression.activeAreaId == spec.id
       val accent = Color(spec.accentHex)
       val eraColor = Color(area.currentEra.colorHex)
-      val starCost = area.starLevel * 450L
+      val starCost = UpgradeCosts.areaStar(area.starLevel)
 
       Surface(
         shape = RoundedCornerShape(16.dp),
@@ -697,7 +741,7 @@ private fun androidx.compose.foundation.layout.RowScope.AreaUpgradeButton(
   tag: String,
   onClick: () -> Unit,
 ) {
-  val cost = tier * 300L
+  val cost = UpgradeCosts.areaFeatureTier(tier)
   OutlinedButton(
     onClick = onClick,
     enabled = tier < 25 && totalBlueEssence >= cost,

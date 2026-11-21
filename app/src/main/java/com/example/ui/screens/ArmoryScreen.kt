@@ -67,11 +67,12 @@ import com.example.data.model.OperatorProgressionState
 import com.example.data.model.ProgressionCatalog
 import com.example.data.model.RigAsset
 import com.example.data.model.StarRankMeta
+import com.example.data.model.UpgradeCosts
 import com.example.data.model.WeaponCustomization
 
 enum class ArmorySection(val label: String, val tag: String) {
   MODS("Mods", "mods"),
-  OUTFITS("Outfits", "outfits"),
+  OUTFITS("Characters", "outfits"),
   WEAPONS("Weapons", "weapons"),
   GEAR("Gear", "gear"),
   EQUIPMENT("Equipment", "equipment"),
@@ -413,6 +414,7 @@ fun ArmoryScreen(
           totalBlueEssence = totalEssence,
           onUpgradeCharacterTier = onUpgradeCharacterTier,
           onUpgradeCharacterStar = onUpgradeCharacterStar,
+          onEquipOutfit = onEquipOutfit,
         )
 
         ArmorySection.LEVELS -> LevelCustomizationTab(
@@ -503,8 +505,8 @@ private fun ArmoryModuleCard(
 ) {
   val accent = parseHexSafe(item.accentColorHex, MaterialTheme.colorScheme.primary)
   val effectiveMaxTier = maxOf(item.maxTier, 25L)
-  val upgradeCost = item.tier * 300L
-  val starCost = starLevel * 450L
+  val upgradeCost = UpgradeCosts.armoryModTier(item.tier.toInt())
+  val starCost = UpgradeCosts.armoryModStar(starLevel)
   val canUpgrade = item.tier < effectiveMaxTier && totalEssence >= upgradeCost
   val canUpgradeStar = starLevel < StarRankMeta.MAX_STARS && totalEssence >= starCost
   val tierMeta = ProgressionCatalog.tierMeta(item.tier.toInt())

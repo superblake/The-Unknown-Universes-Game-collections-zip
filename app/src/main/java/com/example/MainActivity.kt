@@ -1,9 +1,11 @@
 package com.example
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -58,9 +60,11 @@ import com.example.data.local.AppSettings
 import com.example.data.local.AppSettingsStore
 import com.example.data.local.ProgressionStore
 import com.example.data.local.UniverseRepository
+import com.example.security.AppSecurityManager
 import com.example.ui.OsWorkspaceTab
 import com.example.ui.UniverseUiState
 import com.example.ui.UniverseViewModel
+import com.example.ui.auth.AppPinUnlockScreen
 import com.example.ui.auth.AuthScreen
 import com.example.ui.auth.GoogleSignInHelper
 import com.example.ui.auth.OAuthCallbackResult
@@ -175,6 +179,22 @@ fun AppNavigation(
     mutableStateOf(prefs.getString(KEY_VAULT_WALLPAPER, null))
   }
 
+  var isPinUnlocked by remember(context) {
+    mutableStateOf(!AppSecurityManager.isPinEnabled(context))
+  }
+  var progressionIntegrityValid by remember { mutableStateOf(true) }
+  var verifyIntegrityFn by remember { mutableStateOf<() -> Boolean>({ true }) }
+
+  DisposableEffect(appSettings.screenCaptureShield, context) {
+    val window = (context as? Activity)?.window
+    if (appSettings.screenCaptureShield) {
+      window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+    } else {
+      window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+    }
+    onDispose {}
+  }
+
   val currentUserId = signedInGoogleUid ?: LOCAL_OPERATOR_ID
 
   UnknownUniversesTheme(
@@ -190,7 +210,23 @@ fun AppNavigation(
             putBoolean(KEY_SESSION_ACTIVE, true)
             putString(KEY_LAST_CALLSIGN, callsign)
           }
+          isPinUnlocked = !AppSecurityManager.isPinEnabled(context)
           isSessionActive = true
+        },
+      )
+    } else if (!isPinUnlocked && AppSecurityManager.isPinEnabled(context)) {
+      AppPinUnlockScreen(
+        callsign = activeCallsign,
+        onVerifyPin = { pin -> AppSecurityManager.verifyAppPin(context, pin) },
+        onUnlocked = { isPinUnlocked = true },
+        onResetSession = {
+          prefs.edit { putBoolean(KEY_SESSION_ACTIVE, false) }
+          GoogleSignInHelper.signOut(
+            context = context,
+            credentialManager = credentialManager,
+            scope = scope,
+            onSignOutComplete = { isSessionActive = false },
+          )
         },
       )
     } else {
@@ -212,8 +248,13 @@ fun AppNavigation(
           },
           pendingOAuthRedirect = pendingOAuthRedirect,
           onConsumeRedirect = onConsumeRedirect,
+          onRegisterIntegrityCheck = { valid, fn ->
+            progressionIntegrityValid = valid
+            verifyIntegrityFn = fn
+          },
           onLockSession = {
             prefs.edit { putBoolean(KEY_SESSION_ACTIVE, false) }
+            isPinUnlocked = !AppSecurityManager.isPinEnabled(context)
             GoogleSignInHelper.signOut(
               context = context,
               credentialManager = credentialManager,
@@ -232,6 +273,12 @@ fun AppNavigation(
         onReplaceSettings = { next -> settingsStore.replace(next) },
         onResetDefaults = { settingsStore.resetDefaults() },
         onDismiss = { showSettingsDialog = false },
+        progressionIntegrityValid = progressionIntegrityValid,
+        onVerifyIntegrity = {
+          val valid = verifyIntegrityFn()
+          progressionIntegrityValid = valid
+          valid
+        },
       )
     }
   }
@@ -249,6 +296,7 @@ fun UnknownOsShell(
   onSetWallpaperPath: (String?) -> Unit,
   pendingOAuthRedirect: StateFlow<Uri?>,
   onConsumeRedirect: () -> Unit,
+  onRegisterIntegrityCheck: (Boolean, () -> Boolean) -> Unit = { _, _ -> },
   onLockSession: () -> Unit,
 ) {
   val context = LocalContext.current
@@ -289,6 +337,13 @@ fun UnknownOsShell(
   var matchBrowserInitialTab by remember { mutableIntStateOf(0) }
   var showSocialDialog by remember { mutableStateOf(false) }
   var socialDialogInitialTab by remember { mutableIntStateOf(0) }
+
+  LaunchedEffect(viewModel) {
+    onRegisterIntegrityCheck(
+      viewModel.verifyProgressionIntegrity(),
+      viewModel::verifyProgressionIntegrity,
+    )
+  }
 
   val handleDesktopGoogleSuccess: (String?) -> Unit = { name ->
     isGoogleSigningIn = false
@@ -488,6 +543,7 @@ fun UnknownOsShell(
                     socialDialogInitialTab = tabIdx
                     showSocialDialog = true
                   },
+                  onEquipOutfit = viewModel::equipOutfit,
                   onSignOut = onLockSession,
                 )
 
@@ -501,7 +557,14 @@ fun UnknownOsShell(
                   onOpenSettings = onOpenSettings,
                   onRecordProgression = viewModel::recordArenaProgression,
                   onSendChatMessage = { ch, content, targetId, isTac ->
-                    viewModel.sendChatMessage(ch, content, state.profile.callsign, targetId, isTac)
+                    viewModel.sendChatMessage(
+                      channel = ch,
+                      content = content,
+                      senderCallsign = state.profile.callsign,
+                      targetFriendId = targetId,
+                      isTactical = isTac,
+                      safetyFilterEnabled = appSettings.chatSafetyFilter,
+                    )
                   },
                   onSaveMatchAndExit = { score, wave, elims, extracted, durationSec ->
                     viewModel.submitMatchResult(
@@ -686,7 +749,14 @@ fun UnknownOsShell(
         onRemoveFriend = viewModel::removeFriend,
         onToggleFavoriteFriend = viewModel::toggleFriendFavorite,
         onSendChatMessage = { ch, content, targetId, isTac ->
-          viewModel.sendChatMessage(ch, content, readyProfile.callsign, targetId, isTac)
+          viewModel.sendChatMessage(
+            channel = ch,
+            content = content,
+            senderCallsign = readyProfile.callsign,
+            targetFriendId = targetId,
+            isTactical = isTac,
+            safetyFilterEnabled = appSettings.chatSafetyFilter,
+          )
         },
         onCreateClan = { name, tag, motto, color ->
           viewModel.createClan(name, tag, motto, color, readyProfile.callsign)

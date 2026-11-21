@@ -47,11 +47,13 @@ import com.example.data.model.CharacterCustomization
 import com.example.data.model.GearSlot
 import com.example.data.model.GearState
 import com.example.data.model.LevelCustomization
+import com.example.data.model.MultiverseArsenalCatalog
 import com.example.data.model.OperatorProgressionState
 import com.example.data.model.ProgressionCatalog
 import com.example.data.model.RigAsset
 import com.example.data.model.StarRankMeta
 import com.example.data.model.UniverseCatalog
+import com.example.data.model.UpgradeCosts
 import com.example.data.model.WeaponCustomization
 import com.example.data.model.WonderWeaponKind
 import androidx.compose.runtime.getValue
@@ -101,8 +103,8 @@ fun WeaponCustomizationTab(
   val wpnTierMeta = ProgressionCatalog.tierMeta(wpnTier)
   val wpnStar = progression.weaponStar(equippedWeapon.id)
   val wpnStarMeta = ProgressionCatalog.starMeta(wpnStar)
-  val tierCost = wpnTier * 450L
-  val wpnStarCost = wpnStar * 500L
+  val tierCost = UpgradeCosts.weaponTier(wpnTier)
+  val wpnStarCost = UpgradeCosts.weaponStar(wpnStar)
   val (wpnCur, wpnNeed) = ProgressionCatalog.xpProgressInCurrentWeaponLevel(wpnXp)
 
   LazyColumn(
@@ -358,8 +360,8 @@ fun WeaponCustomizationTab(
           val wt = progression.wonderTier(kind.id)
           val wStar = progression.wonderStar(kind.id)
           val wMeta = ProgressionCatalog.tierMeta(wt)
-          val wCost = wt * 500L
-          val wStarCost = wStar * 550L
+          val wCost = UpgradeCosts.wonderTier(wt)
+          val wStarCost = UpgradeCosts.wonderStar(wStar)
           val inWonderLoadout = multiWonders.contains(kind.id)
           Surface(
             shape = RoundedCornerShape(14.dp),
@@ -465,19 +467,29 @@ fun CharacterCustomizationTab(
   totalBlueEssence: Long = 0L,
   onUpgradeCharacterTier: () -> Unit = {},
   onUpgradeCharacterStar: () -> Unit = {},
+  onEquipOutfit: (String) -> Unit = {},
 ) {
   val cc = progression.characterCustom
+  val activeSpec = progression.activeOutfitSpec()
   val (xpCur, xpNeed) = ProgressionCatalog.xpProgressInCurrentPlayerLevel(progression.playerXp)
   val visorHex = ProgressionCatalog.visorStyles.firstOrNull { it.first == cc.visorStyleId }?.second ?: cc.accentArmorHex
   val charTierMeta = ProgressionCatalog.tierMeta(progression.characterTier)
   val charStarMeta = ProgressionCatalog.starMeta(progression.characterStarLevel)
-  val charTierCost = progression.characterTier * 500L
-  val charStarCost = progression.characterStarLevel * 600L
+  val charTierCost = UpgradeCosts.characterTier(progression.characterTier)
+  val charStarCost = UpgradeCosts.characterStar(progression.characterStarLevel)
+  var originalsOnlyFilter by remember { mutableStateOf(false) }
+  val characterRoster = remember(originalsOnlyFilter) {
+    if (originalsOnlyFilter) {
+      MultiverseArsenalCatalog.outfits.filter { it.isOriginalCharacter }
+    } else {
+      MultiverseArsenalCatalog.outfits
+    }
+  }
   val capePath = remember { Path() }
   val torsoPath = remember { Path() }
 
   LazyColumn(
-    modifier = Modifier.fillMaxSize(),
+    modifier = Modifier.fillMaxSize().testTag("character_customization_list"),
     contentPadding = PaddingValues(16.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp),
   ) {
@@ -512,7 +524,7 @@ fun CharacterCustomizationTab(
                 )
                 drawRigCharacter(
                   skeleton = skel,
-                  archetype = activeRig?.archetype ?: "operator",
+                  archetype = activeSpec.rigArchetype.ifBlank { activeRig?.archetype ?: "operator" },
                   primaryColor = Color(cc.primaryArmorHex),
                   secondaryColor = Color(cc.accentArmorHex),
                   showBonesOverlay = false,
@@ -526,6 +538,27 @@ fun CharacterCustomizationTab(
             }
 
             Column(modifier = Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+              Text(
+                text = "${activeSpec.nameWithVersion} (${activeSpec.originTag})",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color(activeSpec.secondaryHex),
+                modifier = Modifier.testTag("character_active_hero_name"),
+              )
+              if (activeSpec.isOriginalCharacter) {
+                Surface(
+                  shape = RoundedCornerShape(6.dp),
+                  color = Color(0xFF00E676).copy(alpha = 0.18f),
+                ) {
+                  Text(
+                    text = "ORIGINAL HERO • +25% POWER & SHIELD RESONANCE",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF00E676),
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp).testTag("character_original_badge"),
+                  )
+                }
+              }
               Text(
                 text = "LV ${progression.playerLevel}/1000 • P${progression.playerPrestige}/30 • ${progression.playerRankTitle}",
                 style = MaterialTheme.typography.titleSmall,
@@ -547,7 +580,7 @@ fun CharacterCustomizationTab(
               )
               val shieldBonus = ((progression.playerLevel - 1) * 2).coerceAtMost(600) + progression.playerPrestige * 25
               Text(
-                text = "XP: $xpCur / $xpNeed • Passive Shield: +$shieldBonus",
+                text = "Hero Bonus: +${activeSpec.baseShieldBonus} SHD / +${activeSpec.baseDamageBonus} DMG • Passive: +$shieldBonus SHD",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
               )
@@ -580,6 +613,93 @@ fun CharacterCustomizationTab(
               modifier = Modifier.fillMaxWidth().height(42.dp).testTag("prestige_player_btn"),
             ) {
               Text("Prestige Operator (+${(progression.playerPrestige + 1) * 2500L} Blue Essence)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            }
+          }
+        }
+      }
+    }
+
+    item {
+      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Text(
+            text = "PLAYABLE CHARACTER ROSTER (${characterRoster.size})",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary,
+          )
+          Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            FilterChip(
+              selected = !originalsOnlyFilter,
+              onClick = { originalsOnlyFilter = false },
+              label = { Text("All (${MultiverseArsenalCatalog.outfits.size})") },
+              modifier = Modifier.testTag("char_filter_all"),
+            )
+            FilterChip(
+              selected = originalsOnlyFilter,
+              onClick = { originalsOnlyFilter = true },
+              label = { Text("Originals +25%") },
+              modifier = Modifier.testTag("char_filter_originals"),
+            )
+          }
+        }
+        LazyRow(
+          horizontalArrangement = Arrangement.spacedBy(10.dp),
+          modifier = Modifier.testTag("char_roster_row"),
+        ) {
+          items(characterRoster, key = { it.id }) { spec ->
+            val selected = progression.equippedOutfitId == spec.id
+            val accent = Color(spec.secondaryHex)
+            Surface(
+              onClick = { onEquipOutfit(spec.id) },
+              shape = RoundedCornerShape(14.dp),
+              color = if (selected) accent.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surface,
+              modifier = Modifier
+                .width(210.dp)
+                .border(
+                  width = if (selected) 2.dp else 1.dp,
+                  color = if (selected) accent else MaterialTheme.colorScheme.outline,
+                  shape = RoundedCornerShape(14.dp),
+                )
+                .testTag("char_select_${spec.id}"),
+            ) {
+              Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                  modifier = Modifier.fillMaxWidth(),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically,
+                ) {
+                  Text(
+                    text = spec.originTag.uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = accent,
+                    fontWeight = FontWeight.Bold,
+                  )
+                  if (spec.isOriginalCharacter) {
+                    Text(
+                      text = "ORIG +25%",
+                      style = MaterialTheme.typography.labelSmall,
+                      color = Color(0xFF00E676),
+                      fontWeight = FontWeight.Bold,
+                    )
+                  }
+                }
+                Text(spec.nameWithVersion, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(
+                  text = "+${spec.baseShieldBonus} SHD • +${spec.baseDamageBonus} DMG • +${(spec.baseMoveBonus * 100).toInt()}% SPD",
+                  style = MaterialTheme.typography.labelSmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                  text = if (selected) "ACTIVE CHARACTER" else "Tap to Play",
+                  style = MaterialTheme.typography.labelSmall,
+                  fontWeight = FontWeight.Bold,
+                  color = if (selected) Color(0xFF00E676) else MaterialTheme.colorScheme.primary,
+                )
+              }
             }
           }
         }
@@ -851,8 +971,8 @@ fun EquipmentCustomizationTab(
       }
       val (eqXpCur, eqXpNeed) = ProgressionCatalog.xpProgressInCurrentEquipmentLevel(eqState.xp)
       val eqTierMeta = ProgressionCatalog.tierMeta(eqState.tier)
-      val eqTierCost = eqState.tier * 350L
-      val eqStarCost = eqState.starLevel * 400L
+      val eqTierCost = UpgradeCosts.equipmentTier(eqState.tier)
+      val eqStarCost = UpgradeCosts.equipmentStar(eqState.starLevel)
 
       Surface(
         shape = RoundedCornerShape(16.dp),
@@ -1054,8 +1174,8 @@ fun GearCustomizationTab(
     items(GearSlot.entries, key = { it.id }) { slot ->
       val gear = progression.gearMap[slot.id] ?: GearState(slot)
       val gearTierMeta = ProgressionCatalog.tierMeta(gear.tier)
-      val gearTierCost = gear.tier * 400L
-      val gearStarCost = gear.starLevel * 450L
+      val gearTierCost = UpgradeCosts.gearTier(gear.tier)
+      val gearStarCost = UpgradeCosts.gearStar(gear.starLevel)
       val (gXpCur, gXpNeed) = ProgressionCatalog.xpProgressInCurrentGearLevel(gear.xp)
       val slotDesc = when (slot) {
         GearSlot.HELMET -> "+Target HUD tracking & +${gear.level * 2}% Precision critical damage"
@@ -1223,7 +1343,7 @@ fun SkillTreeTab(
       }
       val tierMeta = ProgressionCatalog.tierMeta(node.tier)
       val nextCost = if (!node.unlocked) node.costEssence else node.nextUpgradeCost()
-      val skillStarCost = node.starLevel * 400L
+      val skillStarCost = UpgradeCosts.skillStar(node.starLevel)
       val isMaxTier = node.unlocked && node.tier >= node.maxTier
 
       Surface(

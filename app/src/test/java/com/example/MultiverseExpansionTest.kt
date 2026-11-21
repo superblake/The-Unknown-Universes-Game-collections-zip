@@ -136,9 +136,9 @@ class MultiverseExpansionTest {
   }
 
   @Test
-  fun heroOutfits_coverAll24VersionsWithIndependentSkillsGearEquipment() {
+  fun heroOutfits_coverAll36VersionsWithIndependentSkillsGearEquipment() {
     val outfits = MultiverseArsenalCatalog.outfits
-    assertEquals(24, outfits.size)
+    assertEquals(36, outfits.size)
     // Ensure every requested character group has v1/v2/v3
     for (group in CharacterUniverseGroup.entries.filter { it != CharacterUniverseGroup.ALL }) {
       val groupOutfits = outfits.filter { it.characterGroup == group }

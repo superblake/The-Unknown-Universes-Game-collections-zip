@@ -1287,3 +1287,31 @@ object ProgressionCatalog {
   fun starMultiplier(stars: Int): Float = StarRankMeta.forStars(stars).multiplier
 }
 
+/**
+ * Single source of truth for all Blue Essence upgrade costs across UI tabs and ProgressionStore.
+ */
+object UpgradeCosts {
+  fun characterTier(tier: Int): Long = tier * 500L
+  fun characterStar(stars: Int): Long = stars * 600L
+  fun outfitLevelUp(tier: Int): Long = 250L + (tier * 180L)
+  fun outfitStar(stars: Int): Long = stars * 500L
+  fun outfitSubSystem(rank: Int): Long = 180L + (rank * 120L)
+  fun armoryModTier(tier: Int): Long = tier * 300L
+  fun armoryModStar(stars: Int): Long = stars * 450L
+  fun gearTier(tier: Int): Long = tier * 400L
+  fun gearStar(stars: Int): Long = stars * 450L
+  fun equipmentTier(tier: Int): Long = tier * 350L
+  fun equipmentStar(stars: Int): Long = stars * 400L
+  fun weaponTier(tier: Int): Long = tier * 450L
+  fun weaponStar(stars: Int): Long = stars * 500L
+  fun wonderTier(tier: Int): Long = tier * 500L
+  fun wonderStar(stars: Int): Long = stars * 550L
+  fun skillStar(stars: Int): Long = stars * 400L
+  fun areaFeatureTier(tier: Int): Long = tier * 300L
+  fun areaStar(stars: Int): Long = stars * 450L
+  fun perkDrink(rank: Int): Long = 250L + (rank * 200L)
+  fun vacuumBot(tier: Int): Long = 220L + (tier * 160L)
+  fun vacuumBotStar(stars: Int): Long = stars * 400L
+}
+
+

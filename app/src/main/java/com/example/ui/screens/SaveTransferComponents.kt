@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.data.local.CloudSyncState
 import com.example.data.local.SaveBundlePreview
+import com.example.security.SaveIntegrityStatus
 import com.example.ui.theme.AppIcons
 
 @Composable
@@ -317,6 +318,17 @@ fun CloudSyncAndSaveCard(
           Text(
             text = "Source v${preview.sourceAppVersion} • Blue Essence: ${preview.totalEssence} • High Score: ${preview.highScore} • Best Wave: ${preview.highestWave}",
             style = MaterialTheme.typography.bodyMedium,
+          )
+          val (sealColor, sealText) = when (preview.integrityStatus) {
+            SaveIntegrityStatus.VERIFIED -> Color(0xFF00E676) to "SHA-256 INTEGRITY VERIFIED"
+            SaveIntegrityStatus.UNSEALED_LEGACY -> Color(0xFFFFAB40) to "LEGACY PORTABLE SAVE (UNSEALED)"
+            SaveIntegrityStatus.TAMPERED -> Color(0xFFFF5252) to "WARNING: MODIFIED SAVE SEAL"
+          }
+          Text(
+            text = sealText,
+            style = MaterialTheme.typography.labelMedium,
+            color = sealColor,
+            modifier = Modifier.testTag("save_integrity_badge"),
           )
           Text(
             text = "Includes ${preview.armoryCount} Armory modules, ${preview.rigsCount} Blender Rigs, and ${preview.matchLogsCount} Match Logs.",

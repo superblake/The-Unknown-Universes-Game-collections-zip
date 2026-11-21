@@ -64,6 +64,7 @@ import com.example.data.model.FriendOnlineStatus
 import com.example.data.model.LinkedAccount
 import com.example.data.model.LobbyConfig
 import com.example.data.model.MatchRecord
+import com.example.data.model.MultiverseArsenalCatalog
 import com.example.data.model.OperatorProfile
 import com.example.data.model.OperatorProgressionState
 import com.example.data.model.OriginalVaultCatalog
@@ -111,6 +112,7 @@ fun OsDesktopScreen(
   onOpenMissions: () -> Unit = {},
   onOpenMatchBrowser: (Int) -> Unit = {},
   onOpenSocialHub: (Int) -> Unit = {},
+  onEquipOutfit: (String) -> Unit = {},
   onSignOut: () -> Unit,
 ) {
   val activeWorld = UniverseCatalog.worldById(profile.activeUniverseId)
@@ -496,6 +498,112 @@ fun OsDesktopScreen(
           value = activeConsole.id.substringBefore("_").uppercase(),
           accent = Color(0xFF00E676),
         )
+      }
+    }
+
+    // Playable Original & Crossover Characters Quick-Swap Strip
+    item {
+      var showAllDesktopHeroes by remember { mutableStateOf(false) }
+      val heroList = remember(showAllDesktopHeroes) {
+        if (showAllDesktopHeroes) {
+          MultiverseArsenalCatalog.outfits
+        } else {
+          MultiverseArsenalCatalog.outfits.filter { it.isOriginalCharacter }
+        }
+      }
+      val activeSpec = progression.activeOutfitSpec()
+      Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier
+          .fillMaxWidth()
+          .border(1.5.dp, Color(activeSpec.secondaryHex).copy(alpha = 0.65f), RoundedCornerShape(18.dp))
+          .testTag("os_character_quick_swap_card"),
+      ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(
+                text = "PLAYABLE CHARACTERS • ${activeSpec.nameWithVersion}",
+                style = MaterialTheme.typography.titleSmall,
+                color = Color(activeSpec.secondaryHex),
+                fontWeight = FontWeight.Bold,
+              )
+              Text(
+                text = if (activeSpec.isOriginalCharacter) {
+                  "Original Hero Resonance ACTIVE (+25% Power & Shield) • ${activeSpec.originTag}"
+                } else {
+                  "${activeSpec.originTag} • +${activeSpec.baseShieldBonus} SHD / +${activeSpec.baseDamageBonus} DMG"
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = if (activeSpec.isOriginalCharacter) Color(0xFF00E676) else MaterialTheme.colorScheme.onSurfaceVariant,
+              )
+            }
+            OutlinedButton(
+              onClick = { showAllDesktopHeroes = !showAllDesktopHeroes },
+              shape = RoundedCornerShape(8.dp),
+              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+              modifier = Modifier.height(34.dp).testTag("os_toggle_all_characters_btn"),
+            ) {
+              Text(if (showAllDesktopHeroes) "Originals Only" else "All ${MultiverseArsenalCatalog.outfits.size}", style = MaterialTheme.typography.labelSmall)
+            }
+          }
+          LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(heroList, key = { it.id }) { spec ->
+              val isSelected = progression.equippedOutfitId == spec.id
+              val accent = Color(spec.secondaryHex)
+              Surface(
+                onClick = { onEquipOutfit(spec.id) },
+                shape = RoundedCornerShape(12.dp),
+                color = if (isSelected) accent.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier
+                  .width(172.dp)
+                  .border(
+                    width = if (isSelected) 2.dp else 1.dp,
+                    color = if (isSelected) accent else MaterialTheme.colorScheme.outline,
+                    shape = RoundedCornerShape(12.dp),
+                  )
+                  .testTag("os_quick_char_${spec.id}"),
+              ) {
+                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                  Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                  ) {
+                    Text(
+                      text = spec.originTag.uppercase(),
+                      style = MaterialTheme.typography.labelSmall,
+                      color = accent,
+                      maxLines = 1,
+                      overflow = TextOverflow.Ellipsis,
+                      modifier = Modifier.weight(1f),
+                    )
+                    if (spec.isOriginalCharacter) {
+                      Text("+25%", style = MaterialTheme.typography.labelSmall, color = Color(0xFF00E676), fontWeight = FontWeight.Bold)
+                    }
+                  }
+                  Text(
+                    text = spec.nameWithVersion,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                  )
+                  Text(
+                    text = if (isSelected) "EQUIPPED" else "+${spec.baseShieldBonus} SHD • +${spec.baseDamageBonus} DMG",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isSelected) Color(0xFF00E676) else MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
+                }
+              }
+            }
+          }
+        }
       }
     }
 

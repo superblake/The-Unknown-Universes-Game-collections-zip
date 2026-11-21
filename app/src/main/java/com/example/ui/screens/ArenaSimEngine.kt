@@ -250,21 +250,13 @@ data class ArenaLoadoutStats(
       val outfitSpec = progression.activeOutfitSpec()
       val outfitSt = progression.outfitState(outfitSpec.id)
       val outfitStarAbove = (outfitSt.starLevel - 1).coerceAtLeast(0)
-      val isCustomOrUpgradedOutfit = outfitSpec.id != "mrcrossover_v1" ||
-        outfitSt.level > 1 || outfitSt.tier > 1 || outfitSt.starLevel > 1 ||
-        outfitSt.skillRank > 1 || outfitSt.gearRank > 1 || outfitSt.equipmentRank > 1
-      val outfitShieldBonus = if (isCustomOrUpgradedOutfit) {
-        outfitSpec.baseShieldBonus + ((outfitSt.tier - 1) * 12) + ((outfitSt.gearRank - 1) * 8) + (outfitStarAbove * 14)
-      } else 0
-      val outfitDmgBonus = if (isCustomOrUpgradedOutfit) {
-        outfitSpec.baseDamageBonus + (outfitSt.skillRank - 1) + (outfitSt.tier - 1) + (outfitStarAbove * 2)
-      } else 0
-      val outfitMoveBonus = if (isCustomOrUpgradedOutfit) {
-        outfitSpec.baseMoveBonus + ((outfitSt.equipmentRank - 1) * 0.01f) + (outfitStarAbove * 0.015f)
-      } else 0f
-      val outfitRateBonus = if (isCustomOrUpgradedOutfit) {
-        outfitSpec.baseFireRateBonus + ((outfitSt.skillRank - 1) * 0.015f) + (outfitStarAbove * 0.02f)
-      } else 0f
+      val originPowerMult = if (outfitSpec.isOriginalCharacter) 1.25f else 1.0f
+      val originMobilityBonus = if (outfitSpec.isOriginalCharacter) 0.08f else 0f
+      val outfitShieldBonus = outfitSpec.baseShieldBonus +
+        ((outfitSt.tier - 1) * 12) + ((outfitSt.gearRank - 1) * 8) + (outfitStarAbove * 14)
+      val outfitDmgBonus = ((outfitSpec.baseDamageBonus + (outfitSt.skillRank - 1) + (outfitSt.tier - 1) + (outfitStarAbove * 2)) * originPowerMult).roundToInt()
+      val outfitMoveBonus = outfitSpec.baseMoveBonus + originMobilityBonus + ((outfitSt.equipmentRank - 1) * 0.01f) + (outfitStarAbove * 0.015f)
+      val outfitRateBonus = outfitSpec.baseFireRateBonus + originMobilityBonus + ((outfitSt.skillRank - 1) * 0.015f) + (outfitStarAbove * 0.02f)
 
       // Operator Character Tier (1..25) & Star Level (1..10★)
       val charTierAbove = (progression.characterTier - 1).coerceAtLeast(0)
@@ -365,7 +357,7 @@ data class ArenaLoadoutStats(
       val levelShieldBonus = ((playerLvl - 1) * 2).coerceAtMost(600) + playerPrestige * 25
       val rawShield = 100 + juggBonus + levelShieldBonus + pass.bonusShield + chestShield + skillShield +
         outfitShieldBonus + charTierShield + charStarShield + storyAreaShield
-      val maxShield = (rawShield * resonance.shieldMult * areaStarMult).roundToInt().coerceAtLeast(100)
+      val maxShield = (rawShield * originPowerMult * resonance.shieldMult * areaStarMult).roundToInt().coerceAtLeast(100)
 
       val speedPerkCount = perks.sumOf { p ->
         if (p.id == "perk_overdrive" || p.name.contains("Speed", ignoreCase = true) || p.name.contains("Stamina", ignoreCase = true)) {
@@ -414,7 +406,7 @@ data class ArenaLoadoutStats(
       val levelDmgBonus = ((wpnLevel - 1) / 3) + (wpnPrestige * 2)
       val skillDmgBonus = skDmg1 * 2 + skDmg2 * 3 + outfitDmgBonus + charTierDmg + (doubleTapRank * 2) + (redCoreAbove * 2)
       val rawTotalWpnDmg = ((weapon.baseDamage - 1).coerceAtLeast(0) + barrelBonusDmg + muzzleBonusDmg +
-        levelDmgBonus + skillDmgBonus) * wpnTierMult * wpnStarMult * charStarMult * resonance.damageMult * era.damageMod * areaCycleMult * areaStarMult * storyAreaDmgMult
+        levelDmgBonus + skillDmgBonus) * originPowerMult * wpnTierMult * wpnStarMult * charStarMult * resonance.damageMult * era.damageMod * areaCycleMult * areaStarMult * storyAreaDmgMult
 
       val glovesRateBonus = ((gloves?.level ?: 1) - 1) * 0.04f + ((gloves?.tier ?: 1) - 1) * 0.25f + (glovesStarAbove * 0.25f)
       val levelCadenceReduction = (((wpnLevel - 1) * 0.08f) + glovesRateBonus).coerceAtMost(4.5f)
@@ -840,9 +832,9 @@ class ArenaSimState(
       val rawHp = 1 + (w.toInt() / 2) + if (archetype == "mech") 2 else if (isElite) 2 else 0
       val baseHp = if (lc.instagibMutator) 1 else rawHp
       val spd = when (archetype) {
-        "rusher" -> (0.0023f + w * 0.00024f).coerceAtMost(0.0052f)
-        "mech" -> (0.0010f + w * 0.00014f).coerceAtMost(0.0026f)
-        else -> (0.0014f + w * 0.00020f).coerceAtMost(0.0040f)
+        "rusher" -> (0.0018f + w * 0.00018f).coerceAtMost(0.0040f)
+        "mech" -> (0.0008f + w * 0.00011f).coerceAtMost(0.0021f)
+        else -> (0.0011f + w * 0.00015f).coerceAtMost(0.0032f)
       }
       hostiles.add(
         ArenaHostile(
@@ -914,7 +906,7 @@ class ArenaSimState(
         y = (playerY - 0.42f).coerceIn(ARENA_MIN_Y, ARENA_MAX_Y),
         hp = hp,
         maxHp = hp,
-        speed = 0.00125f,
+        speed = 0.0010f,
         isElite = true,
         isBoss = true,
         archetype = arch,
@@ -1676,7 +1668,7 @@ class ArenaSimState(
         aimX = joyDx / len
         aimY = joyDy / len
       }
-      val spd = 0.0072f * loadout.moveBoost * liveSettings.moveSensitivity.coerceIn(0.6f, 1.6f) * dt
+      val spd = 0.0058f * loadout.moveBoost * liveSettings.moveSensitivity.coerceIn(0.6f, 1.6f) * dt
       playerX = (playerX + (joyDx / len) * spd * len.coerceAtMost(1f)).coerceIn(ARENA_MIN_X, ARENA_MAX_X)
       playerY = (playerY + (joyDy / len) * spd * len.coerceAtMost(1f)).coerceIn(ARENA_MIN_Y, ARENA_MAX_Y)
     }
@@ -1991,14 +1983,14 @@ class ArenaSimState(
         if ((h.archetype == "trooper" || h.archetype == "mech" || h.isBoss) && d > 0.15f && d < 0.95f) {
           h.rangedCooldownTicks -= paceDt
           if (h.rangedCooldownTicks <= 0f) {
-            h.rangedCooldownTicks = if (h.isBoss) 95f else 155f
+            h.rangedCooldownTicks = if (h.isBoss) 118f else 185f
             bolts.add(
               ArenaBolt(
                 x = h.x,
                 y = h.y,
-                vx = (dx / d) * 0.009f,
-                vy = (dy / d) * 0.009f,
-                life = 95f,
+                vx = (dx / d) * 0.0072f,
+                vy = (dy / d) * 0.0072f,
+                life = 115f,
                 isEnemyShot = true,
                 color = Color(0xFFFF5252),
               )
@@ -2006,7 +1998,7 @@ class ArenaSimState(
           }
         }
 
-        val contactThreshold = if (liveSettings.assistShieldBoost) 34f else 22f
+        val contactThreshold = if (liveSettings.assistShieldBoost) 42f else 28f
         if (dSq < 0.045f * 0.045f && dashInvulnTicks <= 0f && modeId != "sandbox") {
           meleeDamageAccum += paceDt
           if (meleeDamageAccum >= contactThreshold) {

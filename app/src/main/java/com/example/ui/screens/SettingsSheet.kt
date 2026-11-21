@@ -18,16 +18,20 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,10 +41,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -51,6 +59,8 @@ import com.example.data.local.ColorBlindMode
 import com.example.data.local.GraphicsQuality
 import com.example.data.local.ParticleDensity
 import com.example.data.local.ThemeVisualMode
+import com.example.security.AppSecurityManager
+import com.example.security.SecurityAuditReport
 import com.example.ui.theme.AppIcons
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -61,6 +71,7 @@ private enum class SettingsCategory(val id: String, val label: String) {
   PERFORMANCE("performance", "Performance"),
   VISUAL("visual", "Visuals"),
   ACCESSIBILITY("accessibility", "Health & Access"),
+  PROTECTION("protection", "Security"),
 }
 
 @Composable
@@ -70,8 +81,25 @@ fun SettingsDialog(
   onReplaceSettings: (AppSettings) -> Unit,
   onResetDefaults: () -> Unit,
   onDismiss: () -> Unit,
+  progressionIntegrityValid: Boolean = true,
+  onVerifyIntegrity: () -> Boolean = { true },
 ) {
+  val context = LocalContext.current
   var selectedCategory by remember { mutableStateOf(SettingsCategory.ALL) }
+  var pinEnabled by remember(context) { mutableStateOf(AppSecurityManager.isPinEnabled(context)) }
+  var showPinDialog by remember { mutableStateOf(false) }
+  var pinDraft by remember { mutableStateOf("") }
+  var pinError by remember { mutableStateOf<String?>(null) }
+  var lastAuditValid by remember(progressionIntegrityValid) { mutableStateOf(progressionIntegrityValid) }
+  val auditReport = remember(pinEnabled, settings.screenCaptureShield, settings.chatSafetyFilter, lastAuditValid) {
+    SecurityAuditReport(
+      pinLockEnabled = pinEnabled,
+      screenShieldEnabled = settings.screenCaptureShield,
+      chatFilterEnabled = settings.chatSafetyFilter,
+      progressionSealValid = lastAuditValid,
+      backupDisabled = true,
+    )
+  }
 
   Dialog(
     onDismissRequest = onDismiss,
@@ -481,6 +509,81 @@ fun SettingsDialog(
             }
           }
 
+          if (selectedCategory == SettingsCategory.ALL || selectedCategory == SettingsCategory.PROTECTION) {
+            item {
+              SettingsSectionCard(
+                title = "FREE APP PROTECTION & PRIVACY SHIELD",
+                subtitle = "On-device SHA-256 save integrity seals, optional salted PIN lock, screen-capture protection, and automated chat safety filtering.",
+                icon = AppIcons.Shield,
+                accent = Color(0xFF40C4FF),
+              ) {
+                Surface(
+                  shape = RoundedCornerShape(12.dp),
+                  color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                  modifier = Modifier.fillMaxWidth(),
+                ) {
+                  Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                  ) {
+                    Text(
+                      text = auditReport.summaryLine,
+                      style = MaterialTheme.typography.labelLarge,
+                      fontWeight = FontWeight.Bold,
+                      color = if (auditReport.progressionSealValid) Color(0xFF00E676) else MaterialTheme.colorScheme.error,
+                      modifier = Modifier.testTag("integrity_audit_result"),
+                    )
+                    Text(
+                      text = "Backup Disabled (allowBackup=false) • Local Salted PIN: ${if (pinEnabled) "ACTIVE" else "OFF"}",
+                      style = MaterialTheme.typography.bodySmall,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                  }
+                }
+
+                SettingSwitchRow(
+                  title = "Screen Capture & Overlay Shield (FLAG_SECURE)",
+                  description = "Blocks screenshots and screen recording while UnknownOS is open to protect private rooms and account info.",
+                  checked = settings.screenCaptureShield,
+                  tag = "switch_screen_shield",
+                  onCheckedChange = { v -> onUpdateSettings { it.copy(screenCaptureShield = v) } },
+                )
+                SettingSwitchRow(
+                  title = "Chat & Room Input Safety Filter",
+                  description = "Automatically strips HTML/control payloads and filters abusive terms in General, Clan, Friend & Live chats.",
+                  checked = settings.chatSafetyFilter,
+                  tag = "switch_chat_filter",
+                  onCheckedChange = { v -> onUpdateSettings { it.copy(chatSafetyFilter = v) } },
+                )
+
+                Row(
+                  modifier = Modifier.fillMaxWidth(),
+                  horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                  OutlinedButton(
+                    onClick = {
+                      pinDraft = ""
+                      pinError = null
+                      showPinDialog = true
+                    },
+                    modifier = Modifier.weight(1f).height(48.dp).testTag("btn_manage_app_pin"),
+                  ) {
+                    Text(if (pinEnabled) "Change / Remove PIN" else "Set 4–6 Digit App Lock PIN")
+                  }
+                  OutlinedButton(
+                    onClick = {
+                      pinEnabled = AppSecurityManager.isPinEnabled(context)
+                      lastAuditValid = onVerifyIntegrity()
+                    },
+                    modifier = Modifier.weight(1f).height(48.dp).testTag("btn_run_integrity_check"),
+                  ) {
+                    Text("Verify SHA-256 Seal")
+                  }
+                }
+              }
+            }
+          }
+
           item {
             Button(
               onClick = onDismiss,
@@ -493,6 +596,78 @@ fun SettingsDialog(
           }
         }
       }
+    }
+
+    if (showPinDialog) {
+      AlertDialog(
+        onDismissRequest = { showPinDialog = false },
+        title = { Text(if (pinEnabled) "Update App Lock PIN" else "Set Free App Lock PIN") },
+        text = {
+          Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+              text = "Enter a 4 to 6 digit numeric PIN. Stored locally using salted 1000-round SHA-256.",
+              style = MaterialTheme.typography.bodyMedium,
+            )
+            OutlinedTextField(
+              value = pinDraft,
+              onValueChange = { raw ->
+                pinDraft = raw.filter { it.isDigit() }.take(6)
+                pinError = null
+              },
+              label = { Text("4–6 Digit PIN") },
+              singleLine = true,
+              visualTransformation = PasswordVisualTransformation(),
+              keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+              modifier = Modifier.fillMaxWidth().testTag("pin_setup_input"),
+            )
+            if (pinError != null) {
+              Text(
+                text = pinError!!,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+              )
+            }
+          }
+        },
+        confirmButton = {
+          Button(
+            onClick = {
+              val result = AppSecurityManager.setAppPin(context, pinDraft)
+              if (result.isSuccess) {
+                pinEnabled = true
+                showPinDialog = false
+              } else {
+                pinError = result.exceptionOrNull()?.message ?: "Enter 4 to 6 digits."
+              }
+            },
+            modifier = Modifier.height(48.dp).testTag("confirm_app_pin_btn"),
+          ) {
+            Text("Save PIN")
+          }
+        },
+        dismissButton = {
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (pinEnabled) {
+              TextButton(
+                onClick = {
+                  AppSecurityManager.clearAppPin(context)
+                  pinEnabled = false
+                  showPinDialog = false
+                },
+                modifier = Modifier.height(48.dp).testTag("remove_app_pin_btn"),
+              ) {
+                Text("Remove PIN", color = MaterialTheme.colorScheme.error)
+              }
+            }
+            TextButton(
+              onClick = { showPinDialog = false },
+              modifier = Modifier.height(48.dp).testTag("cancel_app_pin_btn"),
+            ) {
+              Text("Cancel")
+            }
+          }
+        },
+      )
     }
   }
 }

@@ -70,6 +70,10 @@ data class AppSettings(
   val simplifiedHud: Boolean = false,
   val alwaysShowActionCues: Boolean = true,
   val assistShieldBoost: Boolean = false,
+
+  // 5. Free App Protection & Privacy
+  val screenCaptureShield: Boolean = false,
+  val chatSafetyFilter: Boolean = true,
 ) {
   val effectiveDarkTheme: Boolean
     get() = themeMode != ThemeVisualMode.HIGH_CONTRAST_LIGHT
@@ -272,6 +276,8 @@ class AppSettingsStore(context: Context) {
         simplifiedHud = prefs.getBoolean("simplified_hud", d.simplifiedHud),
         alwaysShowActionCues = prefs.getBoolean("action_cues", d.alwaysShowActionCues),
         assistShieldBoost = prefs.getBoolean("assist_shield", d.assistShieldBoost),
+        screenCaptureShield = prefs.getBoolean("screen_capture_shield", d.screenCaptureShield),
+        chatSafetyFilter = prefs.getBoolean("chat_safety_filter", d.chatSafetyFilter),
       )
     )
   }
@@ -305,6 +311,8 @@ class AppSettingsStore(context: Context) {
       putBoolean("simplified_hud", s.simplifiedHud)
       putBoolean("action_cues", s.alwaysShowActionCues)
       putBoolean("assist_shield", s.assistShieldBoost)
+      putBoolean("screen_capture_shield", s.screenCaptureShield)
+      putBoolean("chat_safety_filter", s.chatSafetyFilter)
     }
   }
 

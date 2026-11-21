@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -28,6 +29,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -384,3 +388,109 @@ private fun FeatureHighlightRow(
     }
   }
 }
+
+@Composable
+fun AppPinUnlockScreen(
+  callsign: String,
+  onVerifyPin: (String) -> Boolean,
+  onUnlocked: () -> Unit,
+  onResetSession: () -> Unit,
+) {
+  var pinInput by remember { mutableStateOf("") }
+  var errorMsg by remember { mutableStateOf<String?>(null) }
+
+  Box(
+    modifier = Modifier
+      .fillMaxSize()
+      .background(
+        Brush.verticalGradient(
+          listOf(
+            MaterialTheme.colorScheme.background,
+            Color(0xFF0C152B),
+            MaterialTheme.colorScheme.background,
+          )
+        )
+      )
+      .safeDrawingPadding()
+      .padding(24.dp)
+      .testTag("app_pin_unlock_screen"),
+    contentAlignment = Alignment.Center,
+  ) {
+    Surface(
+      shape = RoundedCornerShape(20.dp),
+      color = MaterialTheme.colorScheme.surface,
+      tonalElevation = 6.dp,
+      modifier = Modifier
+        .widthIn(max = 460.dp)
+        .fillMaxWidth()
+        .border(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), RoundedCornerShape(20.dp)),
+    ) {
+      Column(
+        modifier = Modifier.padding(22.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+      ) {
+        Icon(
+          imageVector = AppIcons.Lock,
+          contentDescription = "UnknownOS App Lock",
+          tint = MaterialTheme.colorScheme.primary,
+          modifier = Modifier.size(40.dp),
+        )
+        Text(
+          text = "UNKNOWNOS SHIELD LOCK",
+          style = MaterialTheme.typography.titleLarge,
+          color = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+          text = "Operator $callsign • Enter your 4–6 digit PIN to unlock your session and protected save vault.",
+          style = MaterialTheme.typography.bodyMedium,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedTextField(
+          value = pinInput,
+          onValueChange = { raw ->
+            pinInput = raw.filter { it.isDigit() }.take(6)
+            errorMsg = null
+          },
+          label = { Text("App Lock PIN") },
+          singleLine = true,
+          visualTransformation = PasswordVisualTransformation(),
+          keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+          modifier = Modifier.fillMaxWidth().testTag("app_pin_unlock_input"),
+        )
+        if (errorMsg != null) {
+          Text(
+            text = errorMsg!!,
+            color = MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.testTag("app_pin_error_text"),
+          )
+        }
+        Button(
+          onClick = {
+            if (pinInput.length < 4) {
+              errorMsg = "Enter at least 4 digits."
+            } else if (onVerifyPin(pinInput)) {
+              errorMsg = null
+              onUnlocked()
+            } else {
+              errorMsg = "Incorrect PIN. Please try again."
+              pinInput = ""
+            }
+          },
+          shape = RoundedCornerShape(14.dp),
+          modifier = Modifier.fillMaxWidth().height(50.dp).testTag("app_pin_unlock_btn"),
+        ) {
+          Text("Unlock UnknownOS")
+        }
+        TextButton(
+          onClick = onResetSession,
+          modifier = Modifier.height(48.dp).testTag("app_pin_reset_session_btn"),
+        ) {
+          Text("Switch Account / Sign Out")
+        }
+      }
+    }
+  }
+}
+

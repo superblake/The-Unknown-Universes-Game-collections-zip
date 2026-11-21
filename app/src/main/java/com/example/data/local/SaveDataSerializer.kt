@@ -7,6 +7,8 @@ import com.example.data.model.OperatorProfile
 import com.example.data.model.RigAsset
 import com.example.data.model.UniverseCatalog
 import com.example.data.remote.FirestoreSyncCodec
+import com.example.security.AppSecurityManager
+import com.example.security.SaveIntegrityStatus
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -31,6 +33,7 @@ data class SaveBundlePreview(
   val matchLogsCount: Int,
   val exportedAtMillis: Long,
   val bundle: SaveDataBundle,
+  val integrityStatus: SaveIntegrityStatus = SaveIntegrityStatus.UNSEALED_LEGACY,
 )
 
 object SaveDataSerializer {
@@ -129,6 +132,19 @@ object SaveDataSerializer {
       )
     }
     root.put("matchLogs", logsArr)
+    root.put(
+      "integritySha256",
+      AppSecurityManager.computeSaveBundleSeal(
+        callsign = profile.callsign,
+        totalEssence = profile.totalEssence,
+        highScore = profile.highScore,
+        highestWave = profile.highestWave,
+        armoryCount = armory.size,
+        rigsCount = rigs.size,
+        matchLogsCount = matchLogs.take(50).size,
+        exportedAtMillis = nowMillis,
+      ),
+    )
 
     return root.toString(2)
   }
@@ -319,6 +335,17 @@ object SaveDataSerializer {
         customRigs = rigs,
         matchLogs = matchLogs,
       )
+      val integrityStatus = AppSecurityManager.verifySaveBundleSeal(
+        seal = root.optString("integritySha256").takeIf { it.isNotBlank() },
+        callsign = callsign,
+        totalEssence = totalEssence,
+        highScore = highScore,
+        highestWave = highestWave,
+        armoryCount = armoryItems.size,
+        rigsCount = rigs.size,
+        matchLogsCount = matchLogs.size,
+        exportedAtMillis = exportedAt,
+      )
       Result.success(
         SaveBundlePreview(
           callsign = callsign,
@@ -331,6 +358,7 @@ object SaveDataSerializer {
           matchLogsCount = matchLogs.size,
           exportedAtMillis = exportedAt,
           bundle = bundle,
+          integrityStatus = integrityStatus,
         ),
       )
     } catch (e: Exception) {

@@ -44,7 +44,9 @@ import com.example.data.model.MultiverseMatchListing
 import com.example.data.model.PrivateMatchRules
 import com.example.data.model.SocialCatalog
 import com.example.data.model.UniverseCatalog
+import com.example.data.model.UpgradeCosts
 import com.example.data.model.WonderWeaponKind
+import com.example.security.AppSecurityManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -68,11 +70,22 @@ class ProgressionStore(
     Context.MODE_PRIVATE,
   )
 
+  var lastLoadedIntegrityValid: Boolean = true
+    private set
+
   private val _state = MutableStateFlow(load())
   val state: StateFlow<OperatorProgressionState> = _state.asStateFlow()
 
   val current: OperatorProgressionState
     get() = _state.value
+
+  fun verifyStoredIntegrity(): Boolean {
+    val raw = prefs.getString(KEY_STATE_JSON, null) ?: return true
+    val storedSeal = prefs.getString(KEY_STATE_HASH, null)
+    val valid = if (storedSeal == null) true else AppSecurityManager.verifyPayload(raw, storedSeal)
+    lastLoadedIntegrityValid = valid
+    return valid
+  }
 
   fun updateWeaponCustomization(transform: (WeaponCustomization) -> WeaponCustomization) {
     val updated = transform(current.weaponCustom)
@@ -256,7 +269,7 @@ class ProgressionStore(
   }
 
   fun addFriend(callsign: String): Result<FriendEntry> {
-    val clean = callsign.trim()
+    val clean = AppSecurityManager.sanitizeIdentifierLabel(callsign, maxLength = 24)
     if (clean.length < 2) {
       return Result.failure(IllegalArgumentException("Callsign too short"))
     }
@@ -294,13 +307,14 @@ class ProgressionStore(
     senderCallsign: String,
     targetFriendId: String? = null,
     isTactical: Boolean = false,
+    safetyFilterEnabled: Boolean = true,
   ) {
-    val clean = content.trim()
+    val clean = AppSecurityManager.sanitizeChatText(content, safetyFilterEnabled = safetyFilterEnabled)
     if (clean.isEmpty()) return
     val msg = ChatMessage(
       id = "msg_${System.currentTimeMillis()}_${(100..999).random()}",
       channel = channel,
-      senderCallsign = senderCallsign,
+      senderCallsign = AppSecurityManager.sanitizeIdentifierLabel(senderCallsign, 30),
       senderClanTag = current.clan.tag,
       senderStars = current.characterStarLevel,
       targetFriendId = targetFriendId,
@@ -319,15 +333,16 @@ class ProgressionStore(
     colorHex: Long,
     creatorCallsign: String,
   ): Result<ClanData> {
-    val cName = name.trim()
-    val cTag = tag.trim().uppercase()
+    val cName = AppSecurityManager.sanitizeIdentifierLabel(name, 32)
+    val cTag = AppSecurityManager.sanitizeIdentifierLabel(tag, 5).uppercase()
+    val cMotto = AppSecurityManager.sanitizeChatText(motto, safetyFilterEnabled = true, maxLength = 80)
     if (cName.length < 3) return Result.failure(IllegalArgumentException("Clan name too short"))
     if (cTag.length !in 2..5) return Result.failure(IllegalArgumentException("Clan tag must be 2-5 characters"))
     val newClan = ClanData(
       id = "clan_${cTag.lowercase()}_${System.currentTimeMillis() % 10000}",
       name = cName,
       tag = cTag,
-      motto = motto.trim().ifEmpty { "United we conquer the multiverse." },
+      motto = cMotto.ifEmpty { "United we conquer the multiverse." },
       level = 1,
       tier = 1,
       starLevel = 1,
@@ -445,7 +460,7 @@ class ProgressionStore(
     if (gear.tier >= PowerTier.MAX_TIER) {
       return Result.failure(IllegalStateException("${slot.displayName} already at max Tier ${PowerTier.MAX_TIER} Multiversal"))
     }
-    val cost = gear.tier * 400L
+    val cost = UpgradeCosts.gearTier(gear.tier)
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence"))
     }
@@ -465,7 +480,7 @@ class ProgressionStore(
     if (gear.starLevel >= StarRankMeta.MAX_STARS) {
       return Result.failure(IllegalStateException("${slot.displayName} already at max ${StarRankMeta.MAX_STARS}★"))
     }
-    val cost = gear.starLevel * 450L
+    val cost = UpgradeCosts.gearStar(gear.starLevel)
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence"))
     }
@@ -507,7 +522,7 @@ class ProgressionStore(
     if (eq.tier >= PowerTier.MAX_TIER) {
       return Result.failure(IllegalStateException("Equipment already at max Tier ${PowerTier.MAX_TIER} Multiversal"))
     }
-    val cost = eq.tier * 350L
+    val cost = UpgradeCosts.equipmentTier(eq.tier)
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence"))
     }
@@ -527,7 +542,7 @@ class ProgressionStore(
     if (eq.starLevel >= StarRankMeta.MAX_STARS) {
       return Result.failure(IllegalStateException("Equipment already at max ${StarRankMeta.MAX_STARS}★"))
     }
-    val cost = eq.starLevel * 400L
+    val cost = UpgradeCosts.equipmentStar(eq.starLevel)
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence"))
     }
@@ -571,8 +586,11 @@ class ProgressionStore(
     )
   }
 
-  // OUTFITS SYSTEM (Character + Version + own Skill/Gear/Equipment)
-  fun equipOutfit(outfitId: String): HeroOutfitResult {
+  // CHARACTER & OUTFITS SYSTEM (Character + Version + own Skill/Gear/Equipment)
+  fun equipOutfit(
+    outfitId: String,
+    syncSignatureEquipment: Boolean = true,
+  ): HeroOutfitResult {
     val cur = current
     val spec = MultiverseArsenalCatalog.outfitById(outfitId)
     val nextCharCustom = cur.characterCustom.copy(
@@ -582,10 +600,23 @@ class ProgressionStore(
       auraTrailId = spec.auraId,
       titleBadge = spec.nameWithVersion,
     )
+    var nextEqMap = cur.equipmentMap
+    var nextLethals = cur.equippedLethalIds
+    var nextTacticals = cur.equippedTacticalIds
+    if (syncSignatureEquipment) {
+      val lethalEq = cur.equipmentState("lethal").copy(equippedItemId = spec.signatureLethalId)
+      val tacticalEq = cur.equipmentState("tactical").copy(equippedItemId = spec.signatureTacticalId)
+      nextEqMap = cur.equipmentMap + ("lethal" to lethalEq) + ("tactical" to tacticalEq)
+      nextLethals = (listOf(spec.signatureLethalId) + cur.equippedLethalIds).distinct().take(2)
+      nextTacticals = (listOf(spec.signatureTacticalId) + cur.equippedTacticalIds).distinct().take(2)
+    }
     save(
       cur.copy(
         equippedOutfitId = spec.id,
         characterCustom = nextCharCustom,
+        equipmentMap = nextEqMap,
+        equippedLethalIds = nextLethals,
+        equippedTacticalIds = nextTacticals,
       )
     )
     return HeroOutfitResult(spec.nameWithVersion, cur.outfitState(spec.id))
@@ -594,7 +625,7 @@ class ProgressionStore(
   fun upgradeOutfit(outfitId: String, currentBlueEssence: Long): Result<Long> {
     val cur = current
     val st = cur.outfitState(outfitId)
-    val cost = 250L + (st.tier * 180L)
+    val cost = UpgradeCosts.outfitLevelUp(st.tier)
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence to upgrade outfit"))
     }
@@ -617,7 +648,7 @@ class ProgressionStore(
     if (cur.characterTier >= PowerTier.MAX_TIER) {
       return Result.failure(IllegalStateException("Character already at max Tier ${PowerTier.MAX_TIER} Multiversal"))
     }
-    val cost = cur.characterTier * 500L
+    val cost = UpgradeCosts.characterTier(cur.characterTier)
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence"))
     }
@@ -635,7 +666,7 @@ class ProgressionStore(
     if (cur.characterStarLevel >= StarRankMeta.MAX_STARS) {
       return Result.failure(IllegalStateException("Character already at max ${StarRankMeta.MAX_STARS}★"))
     }
-    val cost = cur.characterStarLevel * 600L
+    val cost = UpgradeCosts.characterStar(cur.characterStarLevel)
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence"))
     }
@@ -654,7 +685,7 @@ class ProgressionStore(
     if (st.starLevel >= StarRankMeta.MAX_STARS) {
       return Result.failure(IllegalStateException("Outfit already at max ${StarRankMeta.MAX_STARS}★"))
     }
-    val cost = st.starLevel * 500L
+    val cost = UpgradeCosts.outfitStar(st.starLevel)
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence"))
     }
@@ -674,7 +705,7 @@ class ProgressionStore(
     if (curStar >= StarRankMeta.MAX_STARS) {
       return Result.failure(IllegalStateException("Mod already at max ${StarRankMeta.MAX_STARS}★"))
     }
-    val cost = curStar * 450L
+    val cost = UpgradeCosts.armoryModStar(curStar)
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence"))
     }
@@ -698,7 +729,7 @@ class ProgressionStore(
     if (curRank >= 20) {
       return Result.failure(IllegalStateException("Outfit $part already at max Rank 20"))
     }
-    val cost = 180L + (curRank * 120L)
+    val cost = UpgradeCosts.outfitSubSystem(curRank)
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence"))
     }
@@ -740,7 +771,7 @@ class ProgressionStore(
     if (curTier >= 25) {
       return Result.failure(IllegalStateException("$feature already at max Tier 25"))
     }
-    val cost = curTier * 300L
+    val cost = UpgradeCosts.areaFeatureTier(curTier)
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence"))
     }
@@ -765,7 +796,7 @@ class ProgressionStore(
     if (area.starLevel >= StarRankMeta.MAX_STARS) {
       return Result.failure(IllegalStateException("Area already at max ${StarRankMeta.MAX_STARS}★"))
     }
-    val cost = area.starLevel * 450L
+    val cost = UpgradeCosts.areaStar(area.starLevel)
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence"))
     }
@@ -822,7 +853,7 @@ class ProgressionStore(
     if (curRank >= spec.maxRank) {
       return Result.failure(IllegalStateException("${spec.name} is already Max Rank ${spec.maxRank}"))
     }
-    val cost = 250L + (curRank * 200L)
+    val cost = UpgradeCosts.perkDrink(curRank)
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence"))
     }
@@ -857,7 +888,7 @@ class ProgressionStore(
     if (bot.tier >= 25 && bot.level >= 50) {
       return Result.failure(IllegalStateException("Vacuum Bot is already Tier 25 Multiversal Max"))
     }
-    val cost = 220L + (bot.tier * 160L)
+    val cost = UpgradeCosts.vacuumBot(bot.tier)
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence"))
     }
@@ -878,7 +909,7 @@ class ProgressionStore(
     if (bot.starLevel >= StarRankMeta.MAX_STARS) {
       return Result.failure(IllegalStateException("Vacuum Bot already at max ${StarRankMeta.MAX_STARS}★"))
     }
-    val cost = bot.starLevel * 400L
+    val cost = UpgradeCosts.vacuumBotStar(bot.starLevel)
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence"))
     }
@@ -1023,7 +1054,7 @@ class ProgressionStore(
     if (node.starLevel >= StarRankMeta.MAX_STARS) {
       return Result.failure(IllegalStateException("${node.title} already at max ${StarRankMeta.MAX_STARS}★"))
     }
-    val cost = node.starLevel * 400L
+    val cost = UpgradeCosts.skillStar(node.starLevel)
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence"))
     }
@@ -1043,7 +1074,7 @@ class ProgressionStore(
     if (curTier >= 25) {
       return Result.failure(IllegalStateException("Weapon already at max Tier 25 Multiversal"))
     }
-    val cost = curTier * 450L
+    val cost = UpgradeCosts.weaponTier(curTier)
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence"))
     }
@@ -1063,7 +1094,7 @@ class ProgressionStore(
     if (curStar >= StarRankMeta.MAX_STARS) {
       return Result.failure(IllegalStateException("Weapon already at max ${StarRankMeta.MAX_STARS}★"))
     }
-    val cost = curStar * 500L
+    val cost = UpgradeCosts.weaponStar(curStar)
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence"))
     }
@@ -1082,7 +1113,7 @@ class ProgressionStore(
     if (curTier >= 25) {
       return Result.failure(IllegalStateException("Wonder Weapon already at max Tier 25 Multiversal"))
     }
-    val cost = curTier * 500L
+    val cost = UpgradeCosts.wonderTier(curTier)
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence"))
     }
@@ -1102,7 +1133,7 @@ class ProgressionStore(
     if (curStar >= StarRankMeta.MAX_STARS) {
       return Result.failure(IllegalStateException("Wonder Weapon already at max ${StarRankMeta.MAX_STARS}★"))
     }
-    val cost = curStar * 550L
+    val cost = UpgradeCosts.wonderStar(curStar)
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence"))
     }
@@ -1877,9 +1908,12 @@ class ProgressionStore(
       }
     }
     val jsonString = root.toString()
+    val integritySeal = AppSecurityManager.signPayload(jsonString)
+    lastLoadedIntegrityValid = true
     prefs.edit {
       putString(KEY_STATE_JSON, jsonString)
       putString(KEY_STATE_JSON_LEGACY, jsonString)
+      putString(KEY_STATE_HASH, integritySeal)
     }
   }
 
@@ -1910,7 +1944,12 @@ class ProgressionStore(
         }
       }
     }
-    if (raw.isNullOrBlank()) return OperatorProgressionState()
+    if (raw.isNullOrBlank()) {
+      lastLoadedIntegrityValid = true
+      return OperatorProgressionState()
+    }
+    val storedSeal = prefs.getString(KEY_STATE_HASH, null)
+    lastLoadedIntegrityValid = storedSeal == null || AppSecurityManager.verifyPayload(raw, storedSeal)
     return runCatching {
       val root = JSONObject(raw)
       val unlockedArr = root.optJSONArray("unlockedPasses")
@@ -2440,5 +2479,6 @@ class ProgressionStore(
     const val PREFS_PREFIX = "unknown_os_progression"
     private const val KEY_STATE_JSON = "progression_json_v2"
     private const val KEY_STATE_JSON_LEGACY = "progression_json"
+    private const val KEY_STATE_HASH = "progression_sha256_v1"
   }
 }
