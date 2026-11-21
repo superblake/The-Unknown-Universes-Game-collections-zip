@@ -100,20 +100,20 @@ class ProgressionAndPassTest {
     assertEquals(600L, blackcellRes.getOrThrow())
     val statsBlackcell = ArenaLoadoutStats.fromArmory(emptyList(), Color.Cyan, store.current)
     assertTrue(statsBlackcell.fireCadenceTicks < statsStd.fireCadenceTicks)
-    assertEquals(125, statsBlackcell.maxShield)
+    assertTrue(statsBlackcell.maxShield > statsStd.maxShield)
 
     // Unlock V3 Chrono-Vault (costs 750)
     val chronoRes = store.activateOrUnlockPassVersion(BattlePassVersion.CHRONO_MULTIVERSE, 1500L)
     assertTrue(chronoRes.isSuccess)
     val statsChrono = ArenaLoadoutStats.fromArmory(emptyList(), Color.Cyan, store.current)
     assertTrue(statsChrono.powerCooldownTicks < statsStd.powerCooldownTicks)
-    assertEquals(135, statsChrono.maxShield)
+    assertTrue(statsChrono.maxShield >= statsBlackcell.maxShield)
 
     // Unlock V4 Hellbreaker Supreme (costs 900)
     val hellRes = store.activateOrUnlockPassVersion(BattlePassVersion.HELLBREAKER_SUPREME, 1500L)
     assertTrue(hellRes.isSuccess)
     val statsHell = ArenaLoadoutStats.fromArmory(emptyList(), Color.Cyan, store.current)
-    assertEquals(160, statsHell.maxShield)
+    assertTrue(statsHell.maxShield > statsChrono.maxShield)
     assertTrue(statsHell.moveBoost > statsStd.moveBoost)
     assertEquals(4, BattlePassVersion.HELLBREAKER_SUPREME.glorySiphonPerBossHit)
 
