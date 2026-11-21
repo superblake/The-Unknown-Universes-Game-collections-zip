@@ -9,10 +9,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.local.AppSettings
 import com.example.data.local.ProgressionStore
@@ -377,8 +379,11 @@ class LobbyStoreAndTiersTest {
     composeRule.onNodeWithTag("os_dock_store").assertIsDisplayed()
     composeRule.onNodeWithTag("os_dock_achievements").assertIsDisplayed()
 
+    composeRule.onNodeWithTag("os_desktop_list").performScrollToNode(hasTestTag("lobby_config_card"))
     composeRule.onNodeWithTag("lobby_config_card").performScrollTo().assertIsDisplayed()
+    composeRule.onNodeWithTag("os_desktop_list").performScrollToNode(hasTestTag("lobby_mode_duos"))
     composeRule.onNodeWithTag("lobby_mode_duos").performScrollTo().performClick()
+    composeRule.onNodeWithTag("os_desktop_list").performScrollToNode(hasTestTag("lobby_cap_32"))
     composeRule.onNodeWithTag("lobby_cap_32").performScrollTo().performClick()
 
     assertEquals(LobbyPartyMode.DUOS, store.current.lobbyConfig.partyMode)
@@ -386,6 +391,7 @@ class LobbyStoreAndTiersTest {
     composeRule.onNodeWithTag("lobby_size_badge").assertTextContains("MEGA 32P")
 
     // Open full Lobby & Bot Roster dialog directly from OsDesktopScreen button
+    composeRule.onNodeWithTag("os_desktop_list").performScrollToNode(hasTestTag("open_lobby_roster_btn"))
     composeRule.onNodeWithTag("open_lobby_roster_btn").performScrollTo().performClick()
     composeRule.onNodeWithTag("lobby_roster_dialog").assertIsDisplayed()
     composeRule.onNodeWithTag("bot_diff_apex").performScrollTo().performClick()

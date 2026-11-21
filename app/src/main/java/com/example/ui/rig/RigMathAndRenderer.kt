@@ -222,7 +222,12 @@ fun DrawScope.drawRigCharacter(
   cloakOverride: Boolean? = null,
   visorColorOverride: Color? = null,
   auraTrailId: String = "none",
+  outfitId: String = "",
 ) {
+  val isBatman = outfitId.startsWith("batman") || archetype == "batman"
+  val isSpiderMan = outfitId.startsWith("spiderman") || archetype == "spiderman"
+  val isIronMan = outfitId.startsWith("ironman")
+  val isIronSpider = outfitId == "spiderman_v3"
   val bodyStroke = if (highContrast) 13f else 11f
   val armorColor =
     if (visorColorOverride != null || cloakOverride != null) primaryColor
@@ -264,24 +269,46 @@ fun DrawScope.drawRigCharacter(
     )
   }
 
-  // Flowing trenchcoat / hero cape behind torso
-  val showCloak = cloakOverride ?: (archetype == "chrono" || archetype == "starblade" || archetype == "biomorph")
+  // Flowing trenchcoat / hero cape behind torso + Iron Spider golden waldoes
+  val showCloak = cloakOverride ?: (isBatman || archetype == "chrono" || archetype == "starblade" || archetype == "biomorph")
+  if (isIronSpider) {
+    val waldoGold = Color(0xFFFFD54F)
+    val armOffsets = listOf(
+      Pair(Offset(-36f, -26f), Offset(-48f, 10f)),
+      Pair(Offset(36f, -26f), Offset(48f, 10f)),
+      Pair(Offset(-30f, -44f), Offset(-44f, -12f)),
+      Pair(Offset(30f, -44f), Offset(44f, -12f)),
+    )
+    armOffsets.forEach { (elbowOff, tipOff) ->
+      val elbow = Offset(skeleton.chest.x + elbowOff.x, skeleton.chest.y + elbowOff.y)
+      val tip = Offset(skeleton.chest.x + tipOff.x, skeleton.chest.y + tipOff.y)
+      drawLine(waldoGold, skeleton.chest, elbow, strokeWidth = 5f, cap = StrokeCap.Round)
+      drawLine(Color(0xFF00E5FF), elbow, tip, strokeWidth = 3.5f, cap = StrokeCap.Round)
+      drawCircle(waldoGold, radius = 3.5f, center = elbow)
+    }
+  }
   if (showCloak) {
-    val capeColor = when (archetype) {
-      "biomorph" -> Color(0xFF3A0E24)
-      "chrono" -> Color(0xFF1D2C4D)
+    val capeColor = when {
+      isBatman -> Color(0xFF0B0E17)
+      archetype == "biomorph" -> Color(0xFF3A0E24)
+      archetype == "chrono" -> Color(0xFF1D2C4D)
       else -> armorColor.copy(alpha = 0.28f)
     }
     val capePath = (capePathScratch ?: Path()).apply {
       reset()
-      moveTo(skeleton.lShoulder.x - 4f, skeleton.lShoulder.y)
-      lineTo(skeleton.rShoulder.x + 4f, skeleton.rShoulder.y)
-      lineTo(skeleton.rFoot.x + 14f, footY - 8f)
-      lineTo(skeleton.lFoot.x - 14f, footY - 8f)
+      moveTo(skeleton.lShoulder.x - 5f, skeleton.lShoulder.y)
+      lineTo(skeleton.rShoulder.x + 5f, skeleton.rShoulder.y)
+      lineTo(skeleton.rFoot.x + if (isBatman) 20f else 14f, footY - 6f)
+      if (isBatman) {
+        lineTo(skeleton.pelvis.x + 10f, footY - 14f)
+        lineTo(skeleton.pelvis.x, footY - 5f)
+        lineTo(skeleton.pelvis.x - 10f, footY - 14f)
+      }
+      lineTo(skeleton.lFoot.x - if (isBatman) 20f else 14f, footY - 6f)
       close()
     }
-    drawPath(capePath, color = capeColor.copy(alpha = 0.78f))
-    drawPath(capePath, color = armorColor.copy(alpha = 0.45f), style = Stroke(width = 2f))
+    drawPath(capePath, color = capeColor.copy(alpha = if (isBatman) 0.90f else 0.78f))
+    drawPath(capePath, color = armorColor.copy(alpha = 0.55f), style = Stroke(width = 2f))
   }
 
   // Legs + Armored Greaves/Boots
@@ -310,18 +337,37 @@ fun DrawScope.drawRigCharacter(
   drawPath(torsoPath, color = armorColor.copy(alpha = 0.42f))
   drawPath(torsoPath, color = if (highContrast) Color.White else armorColor, style = Stroke(width = if (highContrast) 4.2f else 3.5f))
 
-  // Chest Core / Division SHD Beacon / Stargate Crest
+  // Chest Core / Bat Emblem / Spider Emblem / Iron Man Arc Reactor
   val chestMid = Offset((skeleton.chest.x + skeleton.pelvis.x) * 0.5f, (skeleton.chest.y + skeleton.pelvis.y) * 0.5f)
   if (dynamicGlow) {
     drawCircle(color = secondaryColor.copy(alpha = 0.32f), radius = 10f, center = chestMid)
   }
-  drawCircle(color = secondaryColor, radius = 5f, center = chestMid)
-  // Tactical belt
+  when {
+    isBatman -> {
+      // Bat-emblem wings silhouette
+      drawOval(color = secondaryColor, topLeft = Offset(chestMid.x - 10f, chestMid.y - 5f), size = androidx.compose.ui.geometry.Size(20f, 10f))
+      drawLine(Color(0xFF0A0D14), Offset(chestMid.x - 8f, chestMid.y), Offset(chestMid.x + 8f, chestMid.y), strokeWidth = 3.5f, cap = StrokeCap.Round)
+    }
+    isSpiderMan -> {
+      val spCol = if (outfitId == "spiderman_v2") Color.White else if (isIronSpider) Color(0xFFFFD54F) else Color(0xFF0A0D14)
+      drawCircle(color = spCol, radius = 4.5f, center = chestMid)
+      for (leg in -1..1 step 2) {
+        drawLine(spCol, chestMid, Offset(chestMid.x + leg * 9f, chestMid.y - 6f), strokeWidth = 1.8f)
+        drawLine(spCol, chestMid, Offset(chestMid.x + leg * 10f, chestMid.y + 5f), strokeWidth = 1.8f)
+      }
+    }
+    isIronMan -> {
+      drawCircle(color = Color(0xFF00E5FF), radius = 6.5f, center = chestMid)
+      drawCircle(color = Color.White, radius = 3.2f, center = chestMid)
+    }
+    else -> drawCircle(color = secondaryColor, radius = 5f, center = chestMid)
+  }
+  // Tactical / Utility belt
   drawLine(
-    color = secondaryColor.copy(alpha = 0.8f),
+    color = if (isBatman) Color(0xFFFFD54F) else secondaryColor.copy(alpha = 0.8f),
     start = Offset(skeleton.lHip.x - 4f, skeleton.pelvis.y),
     end = Offset(skeleton.rHip.x + 4f, skeleton.pelvis.y),
-    strokeWidth = 4f,
+    strokeWidth = if (isBatman) 5f else 4f,
     cap = StrokeCap.Round,
   )
 
@@ -383,19 +429,71 @@ fun DrawScope.drawRigCharacter(
     }
   }
 
-  // Helmet / Head + Archetype Visor
-  drawCircle(color = Color(0xFF0E1629), radius = 17f, center = skeleton.head)
+  // Helmet / Head + Archetype / Batman Cowl / Spider-Man Lenses
+  val headFill = when {
+    isSpiderMan && outfitId != "spiderman_v2" -> Color(0xFFB71C1C)
+    isIronMan -> Color(0xFFC62828)
+    else -> Color(0xFF0E1629)
+  }
+  if (isBatman) {
+    // Pointed Bat-Cowl Ears!
+    val cowlCol = Color(0xFF0E1629)
+    val rimCol = if (highContrast) Color.White else armorColor
+    val lEar = Path().apply {
+      moveTo(skeleton.head.x - 13f, skeleton.head.y - 8f)
+      lineTo(skeleton.head.x - 10f, skeleton.head.y - 28f)
+      lineTo(skeleton.head.x - 4f, skeleton.head.y - 14f)
+      close()
+    }
+    val rEar = Path().apply {
+      moveTo(skeleton.head.x + 13f, skeleton.head.y - 8f)
+      lineTo(skeleton.head.x + 10f, skeleton.head.y - 28f)
+      lineTo(skeleton.head.x + 4f, skeleton.head.y - 14f)
+      close()
+    }
+    drawPath(lEar, color = cowlCol)
+    drawPath(rEar, color = cowlCol)
+    drawPath(lEar, color = rimCol, style = Stroke(width = 2.2f))
+    drawPath(rEar, color = rimCol, style = Stroke(width = 2.2f))
+  }
+  drawCircle(color = headFill, radius = 17f, center = skeleton.head)
   drawCircle(color = if (highContrast) Color.White else armorColor, radius = 17f, center = skeleton.head, style = Stroke(width = if (highContrast) 4f else 3.2f))
-  if (archetype == "infernal") {
+  if (archetype == "infernal" && !isBatman && !isIronMan) {
     drawLine(Color(0xFFFFAB40), Offset(skeleton.head.x - 9f, skeleton.head.y - 14f), Offset(skeleton.head.x + 9f, skeleton.head.y - 14f), strokeWidth = 3.5f, cap = StrokeCap.Round)
   }
-  drawLine(
-    color = visorColorOverride ?: secondaryColor,
-    start = Offset(skeleton.head.x - 6f, skeleton.head.y - 2f),
-    end = Offset(skeleton.head.x + 11f, skeleton.head.y - 2f),
-    strokeWidth = 5f,
-    cap = StrokeCap.Round,
-  )
+  if (isSpiderMan) {
+    // Expressive angular white Spider-Man mask eye lenses!
+    val lensCol = visorColorOverride ?: Color.White
+    val lEye = Path().apply {
+      moveTo(skeleton.head.x - 11f, skeleton.head.y - 6f)
+      lineTo(skeleton.head.x - 2f, skeleton.head.y - 1f)
+      lineTo(skeleton.head.x - 9f, skeleton.head.y + 4f)
+      close()
+    }
+    val rEye = Path().apply {
+      moveTo(skeleton.head.x + 12f, skeleton.head.y - 6f)
+      lineTo(skeleton.head.x + 3f, skeleton.head.y - 1f)
+      lineTo(skeleton.head.x + 10f, skeleton.head.y + 4f)
+      close()
+    }
+    drawPath(lEye, color = lensCol)
+    drawPath(rEye, color = lensCol)
+    drawPath(lEye, color = Color.Black, style = Stroke(width = 1.6f))
+    drawPath(rEye, color = Color.Black, style = Stroke(width = 1.6f))
+  } else if (isBatman) {
+    // White cowl eye slits
+    val cowlEye = visorColorOverride ?: Color.White
+    drawLine(cowlEye, Offset(skeleton.head.x - 9f, skeleton.head.y - 3f), Offset(skeleton.head.x - 2f, skeleton.head.y - 1f), strokeWidth = 3.5f, cap = StrokeCap.Round)
+    drawLine(cowlEye, Offset(skeleton.head.x + 3f, skeleton.head.y - 1f), Offset(skeleton.head.x + 10f, skeleton.head.y - 3f), strokeWidth = 3.5f, cap = StrokeCap.Round)
+  } else {
+    drawLine(
+      color = visorColorOverride ?: secondaryColor,
+      start = Offset(skeleton.head.x - 6f, skeleton.head.y - 2f),
+      end = Offset(skeleton.head.x + 11f, skeleton.head.y - 2f),
+      strokeWidth = 5f,
+      cap = StrokeCap.Round,
+    )
+  }
 
   if (showBonesOverlay) {
     drawLine(Color.White.copy(alpha = 0.75f), skeleton.pelvis, skeleton.chest, strokeWidth = 2f)
@@ -451,29 +549,60 @@ fun DrawScope.drawArenaHostile(
   highContrast: Boolean = false,
   dynamicGlow: Boolean = true,
   overrideColor: Color? = null,
+  scale: Float = 1.0f,
 ) {
+  val effScale = scale.coerceIn(0.45f, 1.55f)
   val baseRadius = when {
     isBoss -> 28f
-    archetype == "mech" -> 21f
+    archetype == "mech" || archetype == "clockwork_automaton" -> 21f
     isElite -> 19f
-    archetype == "rusher" -> 12f
-    else -> 14.5f
-  }
+    archetype == "rusher" || archetype == "water_hive_swarm" -> 12.5f
+    else -> 15f
+  } * effScale
   val primary = when {
     stasisActive -> Color(0xFFFFD54F)
     overrideColor != null -> overrideColor
     archetype == "boss_hydra" -> Color(0xFF00E5FF)
     archetype == "boss_croc" -> Color(0xFF00E676)
-    archetype == "mech" || archetype == "boss_mech" -> Color(0xFFFF8F00)
+    archetype == "boss_venom" -> Color(0xFFE040FB)
+    archetype == "boss_goblin" -> Color(0xFFFF6D00)
+    archetype == "boss_bane" -> Color(0xFF00E676)
+    archetype == "mech" || archetype == "boss_mech" || archetype == "ultron_sentry" -> Color(0xFFFF8F00)
+    archetype == "blackwatch" -> Color(0xFFD50000)
+    archetype == "gentek_mutant" -> Color(0xFFFF1744)
+    archetype == "symbiote_stalker" -> Color(0xFFE040FB)
+    archetype == "oscorp_goblin_drone" -> Color(0xFF76FF03)
+    archetype == "arkham_thug" || archetype == "blackgate_enforcer" -> Color(0xFF448AFF)
+    archetype == "joker_wild" -> Color(0xFFAA00FF)
+    archetype == "reaper_conduit" -> Color(0xFF00E5FF)
+    archetype == "water_hive_swarm" -> Color(0xFF00E676)
+    archetype == "dup_conduit" -> Color(0xFFFF9100)
+    archetype == "necromorph" -> Color(0xFFFF6D00)
+    archetype == "clockwork_automaton" -> Color(0xFFFFD54F)
+    archetype == "cosmic_raider" -> Color(0xFFAA00FF)
+    archetype == "rift_phantom" -> Color(0xFF00E5FF)
     archetype == "slasher" -> Color(0xFFFF3D71)
     archetype == "trooper" -> Color(0xFF7C4DFF)
     isElite -> Color(0xFFFF1744)
+    worldId == "gotham_arkham" -> Color(0xFFFFD54F)
+    worldId == "spiderverse_queens" -> Color(0xFFE53935)
+    worldId == "stark_orbital" -> Color(0xFFFF3D71)
+    worldId == "empire_city_infamous" -> Color(0xFF00E5FF)
+    worldId == "ship_of_heroes_apotheosis" -> Color(0xFFE040FB)
+    worldId == "mr_crossover_nexus" -> Color(0xFF00E676)
     worldId == "sector_zero" -> Color(0xFF00E676)
     worldId == "blacklight_conduit" -> Color(0xFFE040FB)
     worldId == "hellbreaker_citadel" -> Color(0xFFFF6D00)
     worldId == "chrono_vault" -> Color(0xFF448AFF)
     else -> Color(0xFFFF3D71)
   }
+
+  // 2.5D grounded contact shadow
+  drawOval(
+    color = Color.Black.copy(alpha = 0.45f),
+    topLeft = Offset(center.x - baseRadius * 1.12f, center.y + baseRadius * 0.56f),
+    size = androidx.compose.ui.geometry.Size(baseRadius * 2.24f, baseRadius * 0.64f),
+  )
 
   // Aura shadow (skips soft bloom when dynamicGlow is disabled)
   if (dynamicGlow) {
@@ -488,12 +617,13 @@ fun DrawScope.drawArenaHostile(
     )
   }
 
-  val wobble = if (reduceMotion) 0f else sin(animPhase) * 3.5f
+  val wobble = if (reduceMotion) 0f else sin(animPhase) * 3.5f * effScale
 
   // Shoulders / Silhouette body
-  if (archetype == "mech" || archetype == "boss_mech") {
+  if (archetype == "mech" || archetype == "boss_mech" || archetype == "clockwork_automaton") {
+    val chassisFill = if (archetype == "clockwork_automaton") Color(0xFF281F10) else Color(0xFF1A2234)
     drawRect(
-      color = Color(0xFF1A2234),
+      color = chassisFill,
       topLeft = Offset(center.x - baseRadius, center.y - baseRadius * 0.78f),
       size = androidx.compose.ui.geometry.Size(baseRadius * 2f, baseRadius * 1.55f),
     )
@@ -503,11 +633,18 @@ fun DrawScope.drawArenaHostile(
       size = androidx.compose.ui.geometry.Size(baseRadius * 2f, baseRadius * 1.55f),
       style = Stroke(width = if (highContrast) 4f else 3f),
     )
-    drawLine(Color(0xFFFFAB40), Offset(center.x - baseRadius * 0.8f, center.y - baseRadius * 0.6f), Offset(center.x - baseRadius * 0.8f, center.y - baseRadius * 1.2f), strokeWidth = 5f, cap = StrokeCap.Round)
-    drawLine(Color(0xFFFFAB40), Offset(center.x + baseRadius * 0.8f, center.y - baseRadius * 0.6f), Offset(center.x + baseRadius * 0.8f, center.y - baseRadius * 1.2f), strokeWidth = 5f, cap = StrokeCap.Round)
+    val pylonColor = if (archetype == "clockwork_automaton") Color(0xFFFFD54F) else Color(0xFFFFAB40)
+    drawLine(pylonColor, Offset(center.x - baseRadius * 0.8f, center.y - baseRadius * 0.6f), Offset(center.x - baseRadius * 0.8f, center.y - baseRadius * 1.2f), strokeWidth = 5f * effScale, cap = StrokeCap.Round)
+    drawLine(pylonColor, Offset(center.x + baseRadius * 0.8f, center.y - baseRadius * 0.6f), Offset(center.x + baseRadius * 0.8f, center.y - baseRadius * 1.2f), strokeWidth = 5f * effScale, cap = StrokeCap.Round)
   } else {
+    val fillTint = when (archetype) {
+      "rift_phantom" -> Color(0x99062436)
+      "water_hive_swarm" -> Color(0xFF0A241B)
+      "cosmic_raider" -> Color(0xFF1E0B2E)
+      else -> Color(0xFF101728)
+    }
     drawOval(
-      color = Color(0xFF101728),
+      color = fillTint,
       topLeft = Offset(center.x - baseRadius, center.y - baseRadius * 0.72f),
       size = androidx.compose.ui.geometry.Size(baseRadius * 2f, baseRadius * 1.45f),
     )
@@ -519,44 +656,82 @@ fun DrawScope.drawArenaHostile(
     )
   }
 
-  // Distinct archetype limbs
+  // Distinct archetype limbs & weapons
   when (archetype) {
-    "slasher" -> {
-      drawLine(Color(0xFFFFAB40), Offset(center.x - baseRadius * 0.7f, center.y - 6f), Offset(center.x - baseRadius * 1.45f, center.y - 16f + wobble), strokeWidth = 4f, cap = StrokeCap.Round)
-      drawLine(primary, Offset(center.x - baseRadius * 1.45f, center.y - 16f + wobble), Offset(center.x - baseRadius * 1.15f, center.y + 12f), strokeWidth = 3f, cap = StrokeCap.Round)
-      drawLine(Color(0xFFFFAB40), Offset(center.x + baseRadius * 0.7f, center.y - 6f), Offset(center.x + baseRadius * 1.45f, center.y - 16f - wobble), strokeWidth = 4f, cap = StrokeCap.Round)
-      drawLine(primary, Offset(center.x + baseRadius * 1.45f, center.y - 16f - wobble), Offset(center.x + baseRadius * 1.15f, center.y + 12f), strokeWidth = 3f, cap = StrokeCap.Round)
+    "slasher", "necromorph" -> {
+      val bladeCol = if (archetype == "necromorph") Color(0xFFFFD180) else Color(0xFFFFAB40)
+      drawLine(bladeCol, Offset(center.x - baseRadius * 0.7f, center.y - 6f * effScale), Offset(center.x - baseRadius * 1.55f, center.y - 18f * effScale + wobble), strokeWidth = 4.2f * effScale, cap = StrokeCap.Round)
+      drawLine(primary, Offset(center.x - baseRadius * 1.55f, center.y - 18f * effScale + wobble), Offset(center.x - baseRadius * 1.15f, center.y + 12f * effScale), strokeWidth = 3f * effScale, cap = StrokeCap.Round)
+      drawLine(bladeCol, Offset(center.x + baseRadius * 0.7f, center.y - 6f * effScale), Offset(center.x + baseRadius * 1.55f, center.y - 18f * effScale - wobble), strokeWidth = 4.2f * effScale, cap = StrokeCap.Round)
+      drawLine(primary, Offset(center.x + baseRadius * 1.55f, center.y - 18f * effScale - wobble), Offset(center.x + baseRadius * 1.15f, center.y + 12f * effScale), strokeWidth = 3f * effScale, cap = StrokeCap.Round)
+    }
+    "gentek_mutant" -> {
+      drawLine(Color(0xFFE040FB), Offset(center.x - baseRadius * 0.8f, center.y), Offset(center.x - baseRadius * 1.65f, center.y - 8f * effScale + wobble), strokeWidth = 6f * effScale, cap = StrokeCap.Round)
+      drawCircle(Color(0xFFFF1744), radius = 5.5f * effScale, center = Offset(center.x - baseRadius * 1.65f, center.y - 8f * effScale + wobble))
+      drawLine(primary, Offset(center.x + baseRadius * 0.8f, center.y), Offset(center.x + baseRadius * 1.25f, center.y + 10f * effScale - wobble), strokeWidth = 3.5f * effScale, cap = StrokeCap.Round)
+    }
+    "water_hive_swarm" -> {
+      for (sp in -1..1) {
+        drawLine(Color(0xFF00E5FF), Offset(center.x + sp * 5f * effScale, center.y - baseRadius * 0.7f), Offset(center.x + sp * 9f * effScale, center.y - baseRadius * 1.35f + wobble * 0.4f), strokeWidth = 2.6f * effScale, cap = StrokeCap.Round)
+      }
+    }
+    "dup_conduit" -> {
+      val orbitX = cos(animPhase) * baseRadius * 1.35f
+      val orbitY = sin(animPhase) * baseRadius * 0.65f
+      drawRect(Color(0xFFFFAB40), topLeft = Offset(center.x + orbitX - 3.5f * effScale, center.y + orbitY - 3.5f * effScale), size = androidx.compose.ui.geometry.Size(7f * effScale, 7f * effScale))
+      drawRect(Color(0xFF90A4AE), topLeft = Offset(center.x - orbitX - 3.5f * effScale, center.y - orbitY - 3.5f * effScale), size = androidx.compose.ui.geometry.Size(7f * effScale, 7f * effScale))
+    }
+    "cosmic_raider" -> {
+      drawLine(Color(0xFF40C4FF), Offset(center.x + baseRadius * 0.6f, center.y + 4f * effScale), Offset(center.x + baseRadius * 1.55f, center.y - 12f * effScale), strokeWidth = 3.5f * effScale, cap = StrokeCap.Round)
+      drawCircle(Color(0xFFE040FB), radius = 4f * effScale, center = Offset(center.x + baseRadius * 1.55f, center.y - 12f * effScale))
+    }
+    "rift_phantom" -> {
+      drawLine(Color(0xFF00E5FF).copy(alpha = 0.6f), Offset(center.x - baseRadius * 0.5f, center.y + baseRadius * 0.5f), Offset(center.x - baseRadius * 0.8f, center.y + baseRadius * 1.1f + wobble), strokeWidth = 3f * effScale, cap = StrokeCap.Round)
+      drawLine(Color(0xFF00E5FF).copy(alpha = 0.6f), Offset(center.x + baseRadius * 0.5f, center.y + baseRadius * 0.5f), Offset(center.x + baseRadius * 0.8f, center.y + baseRadius * 1.1f - wobble), strokeWidth = 3f * effScale, cap = StrokeCap.Round)
     }
     "boss_hydra" -> {
       for (h in -1..1) {
-        val hx = center.x + h * 13f
-        val hy = center.y - baseRadius * 0.9f + kotlin.math.abs(h) * 5f + wobble * 0.6f
-        drawLine(primary, center, Offset(hx, hy), strokeWidth = 5f, cap = StrokeCap.Round)
-        drawCircle(Color.White, radius = 6f, center = Offset(hx, hy))
+        val hx = center.x + h * 13f * effScale
+        val hy = center.y - baseRadius * 0.9f + kotlin.math.abs(h) * 5f * effScale + wobble * 0.6f
+        drawLine(primary, center, Offset(hx, hy), strokeWidth = 5f * effScale, cap = StrokeCap.Round)
+        drawCircle(Color.White, radius = 6f * effScale, center = Offset(hx, hy))
       }
     }
-    "trooper" -> {
-      drawLine(Color(0xFF90A4AE), Offset(center.x + baseRadius * 0.6f, center.y + 2f), Offset(center.x + baseRadius * 1.35f, center.y + 4f), strokeWidth = 4.5f, cap = StrokeCap.Round)
-      drawCircle(primary, radius = 3.5f, center = Offset(center.x + baseRadius * 1.35f, center.y + 4f))
+    "symbiote_stalker", "boss_venom" -> {
+      drawLine(Color(0xFFE040FB), Offset(center.x - baseRadius * 0.7f, center.y - 4f), Offset(center.x - baseRadius * 1.75f, center.y - 16f * effScale + wobble), strokeWidth = 5f * effScale, cap = StrokeCap.Round)
+      drawLine(Color(0xFFE040FB), Offset(center.x + baseRadius * 0.7f, center.y - 4f), Offset(center.x + baseRadius * 1.75f, center.y - 16f * effScale - wobble), strokeWidth = 5f * effScale, cap = StrokeCap.Round)
+      drawCircle(Color.White, radius = 4f * effScale, center = Offset(center.x - 5f * effScale, center.y - 6f * effScale))
+      drawCircle(Color.White, radius = 4f * effScale, center = Offset(center.x + 5f * effScale, center.y - 6f * effScale))
+    }
+    "oscorp_goblin_drone", "boss_goblin" -> {
+      // Sky-Glider wings & Pumpkin orb
+      drawLine(Color(0xFF90A4AE), Offset(center.x - baseRadius * 1.55f, center.y + 8f * effScale), Offset(center.x + baseRadius * 1.55f, center.y + 8f * effScale), strokeWidth = 4.5f * effScale, cap = StrokeCap.Round)
+      drawCircle(Color(0xFFFF6D00), radius = 5f * effScale, center = Offset(center.x + baseRadius * 1.2f, center.y - 8f * effScale + wobble))
+    }
+    "trooper", "blackwatch", "blackgate_enforcer", "ultron_sentry" -> {
+      drawLine(Color(0xFF90A4AE), Offset(center.x + baseRadius * 0.6f, center.y + 2f * effScale), Offset(center.x + baseRadius * 1.38f, center.y + 4f * effScale), strokeWidth = 4.5f * effScale, cap = StrokeCap.Round)
+      drawCircle(primary, radius = 3.5f * effScale, center = Offset(center.x + baseRadius * 1.38f, center.y + 4f * effScale))
     }
     else -> {
-      drawLine(primary, Offset(center.x - baseRadius * 0.85f, center.y - 2f), Offset(center.x - baseRadius * 1.15f, center.y + 8f + wobble), strokeWidth = 3.5f, cap = StrokeCap.Round)
-      drawLine(primary, Offset(center.x + baseRadius * 0.85f, center.y - 2f), Offset(center.x + baseRadius * 1.15f, center.y + 8f - wobble), strokeWidth = 3.5f, cap = StrokeCap.Round)
+      drawLine(primary, Offset(center.x - baseRadius * 0.85f, center.y - 2f * effScale), Offset(center.x - baseRadius * 1.15f, center.y + 8f * effScale + wobble), strokeWidth = 3.5f * effScale, cap = StrokeCap.Round)
+      drawLine(primary, Offset(center.x + baseRadius * 0.85f, center.y - 2f * effScale), Offset(center.x + baseRadius * 1.15f, center.y + 8f * effScale - wobble), strokeWidth = 3.5f * effScale, cap = StrokeCap.Round)
     }
   }
 
   // Head + Glowing Eyes / Visor
-  drawCircle(color = Color(0xFF0B101C), radius = baseRadius * 0.52f, center = Offset(center.x, center.y - 4f))
-  drawCircle(color = primary, radius = baseRadius * 0.52f, center = Offset(center.x, center.y - 4f), style = Stroke(width = 2f))
+  val headCenter = Offset(center.x, center.y - 4f * effScale)
+  drawCircle(color = Color(0xFF0B101C), radius = baseRadius * 0.52f, center = headCenter)
+  drawCircle(color = primary, radius = baseRadius * 0.52f, center = headCenter, style = Stroke(width = 2f * effScale))
   val eyeColor = if (stasisActive) Color(0xFFFFD54F) else if (isElite || isBoss || highContrast) Color.White else primary
-  drawCircle(eyeColor, radius = if (isBoss) 3.5f else 2.5f, center = Offset(center.x - 4f, center.y - 5f))
-  drawCircle(eyeColor, radius = if (isBoss) 3.5f else 2.5f, center = Offset(center.x + 4f, center.y - 5f))
+  drawCircle(eyeColor, radius = (if (isBoss) 3.5f else 2.5f) * effScale, center = Offset(headCenter.x - 4f * effScale, headCenter.y - 1f * effScale))
+  drawCircle(eyeColor, radius = (if (isBoss) 3.5f else 2.5f) * effScale, center = Offset(headCenter.x + 4f * effScale, headCenter.y - 1f * effScale))
 
   // Boss / Elite / Damaged HP pip bar
   if (isBoss || isElite || hp < maxHp) {
     val barW = baseRadius * 2f
     val ratio = (hp.toFloat() / maxHp.coerceAtLeast(1)).coerceIn(0f, 1f)
-    drawLine(Color(0xAA000000), Offset(center.x - barW * 0.5f, center.y - baseRadius - 8f), Offset(center.x + barW * 0.5f, center.y - baseRadius - 8f), strokeWidth = 5f, cap = StrokeCap.Round)
-    drawLine(primary, Offset(center.x - barW * 0.5f, center.y - baseRadius - 8f), Offset(center.x - barW * 0.5f + barW * ratio, center.y - baseRadius - 8f), strokeWidth = 3.5f, cap = StrokeCap.Round)
+    val barY = center.y - baseRadius - 8f * effScale
+    drawLine(Color(0xAA000000), Offset(center.x - barW * 0.5f, barY), Offset(center.x + barW * 0.5f, barY), strokeWidth = 5f * effScale, cap = StrokeCap.Round)
+    drawLine(primary, Offset(center.x - barW * 0.5f, barY), Offset(center.x - barW * 0.5f + barW * ratio, barY), strokeWidth = 3.5f * effScale, cap = StrokeCap.Round)
   }
 }

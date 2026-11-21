@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,6 +22,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -90,8 +93,12 @@ import androidx.compose.material3.TextButton
 import com.example.data.model.ChatChannel
 import com.example.data.model.SocialCatalog
 import com.example.ui.theme.AppIcons
+import com.example.util.GamepadInputBridge
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.util.Locale
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 @Composable
 fun ArenaScreen(
@@ -175,6 +182,51 @@ fun ArenaScreen(
   var thumbOffsetY by remember { mutableFloatStateOf(0f) }
   var hudFps by remember { mutableIntStateOf(60) }
   var showTacticalLiveChatDialog by remember { mutableStateOf(false) }
+  val gamepad by GamepadInputBridge.state.collectAsStateWithLifecycle()
+
+  LaunchedEffect(
+    gamepad.connected,
+    gamepad.leftX,
+    gamepad.leftY,
+    gamepad.rightX,
+    gamepad.rightY,
+    gamepad.r2Trigger,
+    gamepad.l2Trigger,
+  ) {
+    if (!gamepad.connected || isPausedForSettings || sim.hudRunEnded) return@LaunchedEffect
+    sim.joyDx = gamepad.leftX
+    sim.joyDy = gamepad.leftY
+    thumbOffsetX = gamepad.leftX * 22f * settings.joystickScale
+    thumbOffsetY = gamepad.leftY * 22f * settings.joystickScale
+
+    val rx = gamepad.rightX
+    val ry = gamepad.rightY
+    val rMagSq = rx * rx + ry * ry
+    if (rMagSq > 0.04f) {
+      val len = sqrt(rMagSq).coerceAtLeast(0.01f)
+      sim.aimX = rx / len
+      sim.aimY = ry / len
+      sim.fireVolley()
+    } else if (gamepad.r2Trigger > 0.35f) {
+      sim.fireVolley()
+    }
+    if (gamepad.l2Trigger > 0.40f) {
+      sim.triggerPower()
+    }
+  }
+
+  LaunchedEffect(gamepad.actionSeq) {
+    if (gamepad.actionSeq <= 0L || isPausedForSettings || sim.hudRunEnded) return@LaunchedEffect
+    when (gamepad.lastActionButtonCode) {
+      KeyEvent.KEYCODE_BUTTON_A -> sim.triggerDash()
+      KeyEvent.KEYCODE_BUTTON_X -> sim.interactNearestWorldObject()
+      KeyEvent.KEYCODE_BUTTON_Y -> sim.activateEquippedWonderSlot()
+      KeyEvent.KEYCODE_BUTTON_B -> sim.triggerConsumable()
+      KeyEvent.KEYCODE_BUTTON_L1 -> sim.triggerLethal()
+      KeyEvent.KEYCODE_BUTTON_R1 -> sim.cycleActiveWeapon()
+      KeyEvent.KEYCODE_BUTTON_THUMBR -> sim.triggerAllTraps()
+    }
+  }
 
   fun syncKeyboardAxes() {
     var dx = 0f
@@ -237,6 +289,7 @@ fun ArenaScreen(
     modifier = Modifier
       .fillMaxSize()
       .background(if (settings.effectiveHighContrast) Color.Black else Color(0xFF060911))
+      .windowInsetsPadding(WindowInsets.displayCutout)
       .padding(outerMargin)
       .focusRequester(focusRequester)
       .focusable()
@@ -253,9 +306,9 @@ fun ArenaScreen(
               true
             }
             KeyEvent.KEYCODE_SPACE, KeyEvent.KEYCODE_BUTTON_A -> { sim.fireVolley(forceManual = true); true }
-            KeyEvent.KEYCODE_E, KeyEvent.KEYCODE_BUTTON_X -> { sim.triggerPower(); true }
+            KeyEvent.KEYCODE_E, KeyEvent.KEYCODE_BUTTON_X -> { sim.interactNearestWorldObject(); true }
             KeyEvent.KEYCODE_Q, KeyEvent.KEYCODE_BUTTON_Y -> { sim.triggerConsumable(); true }
-            KeyEvent.KEYCODE_F, KeyEvent.KEYCODE_BUTTON_L1 -> { sim.triggerWorldInteract(); true }
+            KeyEvent.KEYCODE_F, KeyEvent.KEYCODE_BUTTON_L1 -> { sim.interactNearestWorldObject(); true }
             KeyEvent.KEYCODE_R -> { sim.cycleActiveWeapon(); true }
             KeyEvent.KEYCODE_T -> { sim.triggerAllTraps(); true }
             KeyEvent.KEYCODE_Z -> { sim.activateEquippedWonderSlot(); true }
@@ -304,20 +357,21 @@ fun ArenaScreen(
             }
             Column {
               val elimTarget = if (mode.id == "multiplayer") "${sim.hudElims}/25" else "${sim.hudElims}"
+              val densStr = String.format(Locale.US, "%.2fx", progression.levelCustom.enemyDensityMultiplier)
               Text(
-                text = "${activeAreaSpec.name.substringBefore(" (")} (${activeAreaState.ageYears}y) • ${mode.shortTag} • PACK ${formatRoundRoman(sim.hudPackTier.toLong())}",
+                text = "${activeAreaSpec.name.substringBefore(" (")} • ${mode.shortTag} • PACK ${formatRoundRoman(sim.hudPackTier.toLong())} • ${sim.loadout.difficultyTier.label.uppercase()} $densStr",
                 style = MaterialTheme.typography.titleSmall,
                 color = palette.playerAccent,
                 maxLines = 1,
               )
               Text(
-                text = "SCORE ${sim.hudScore} • ELIMS $elimTarget • SHD ${sim.hudShield}/${sim.loadout.maxShield} • VAC ${sim.hudVacuumChargePct}%",
+                text = "PWR ${sim.loadout.powerLevel} • LT ${sim.loadout.lightLevel} • SCORE ${sim.hudScore} • ELIMS $elimTarget • SHD ${sim.hudShield}/${sim.loadout.maxShield}",
                 style = MaterialTheme.typography.labelSmall,
                 color = Color.White,
                 maxLines = 1,
               )
               Text(
-                text = "${activeOutfit.nameWithVersion} • LV ${sim.loadout.playerLevel} • ${sim.loadout.activePassVersion.title.substringBefore(":")} • ${sim.hudActiveWeaponName} (${sim.activeWeaponIndex + 1}/${sim.equippedWeaponIds.size}) • ${progression.lobbyConfig.targetPlayers}P (${sim.hudBotCount} BOTS)",
+                text = "${activeOutfit.nameWithVersion} (${sim.loadout.characterRarity.label}) • LV ${sim.loadout.playerLevel} (x${String.format(Locale.US, "%.2f", sim.loadout.levelMilestoneMult)}) • ${sim.loadout.activePassVersion.title.substringBefore(":")} • ${sim.hudActiveWeaponName}",
                 style = MaterialTheme.typography.labelSmall,
                 color = Color(sim.loadout.activePassVersion.accentHex),
                 modifier = Modifier.testTag("arena_level_weapon_hud"),
@@ -423,6 +477,30 @@ fun ArenaScreen(
           val dropText = sim.hudActiveDropText
           val bld = sim.hudActiveBuildingName
           when {
+            sim.hudInRestCamp -> {
+              Text(
+                text = "CAMP SAFE ZONE: x3 SHIELD REGEN",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF00E676),
+              )
+            }
+            sim.hudActiveHazardLabel != null -> {
+              Text(
+                text = "HAZARD: ${sim.hudActiveHazardLabel} (HIGH LOOT)",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFFFAB40),
+              )
+            }
+            sim.hudInOuterFrontier -> {
+              Text(
+                text = "OUTER RIFT FRONTIER • NO BOUNDARIES",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFE040FB),
+              )
+            }
             activeWonder != null -> {
               Surface(
                 shape = RoundedCornerShape(6.dp),
@@ -456,7 +534,7 @@ fun ArenaScreen(
             }
             !settings.simplifiedHud -> {
               Text(
-                text = "SHARDS:${progression.blastShards + sim.blastShardsEarned} • ${sim.loadout.resonance.summary}",
+                text = "VAC ${sim.hudVacuumChargePct}% • SHARDS:${progression.blastShards + sim.blastShardsEarned}",
                 style = MaterialTheme.typography.labelSmall,
                 color = palette.safeExfil,
               )
@@ -479,7 +557,8 @@ fun ArenaScreen(
               val h = size.height.toFloat().coerceAtLeast(1f)
               val cx0 = sim.cameraOriginX()
               val cy0 = sim.cameraOriginY()
-              sim.setTouchAim(cx0 + (down.position.x / w), cy0 + (down.position.y / h), active = true)
+              val (wx0, wy0) = screenToWorldCoords(down.position.x, down.position.y, cx0, cy0, w, h)
+              sim.setTouchAim(wx0, wy0, active = true)
               sim.fireVolley(forceManual = true)
               while (true) {
                 val event = awaitPointerEvent()
@@ -491,7 +570,8 @@ fun ArenaScreen(
                 change.consume()
                 val cx = sim.cameraOriginX()
                 val cy = sim.cameraOriginY()
-                sim.setTouchAim(cx + (change.position.x / w), cy + (change.position.y / h), active = true)
+                val (wx, wy) = screenToWorldCoords(change.position.x, change.position.y, cx, cy, w, h)
+                sim.setTouchAim(wx, wy, active = true)
               }
             }
           }
@@ -539,17 +619,20 @@ fun ArenaScreen(
         )
 
         if (mode.id == "br") {
-          drawCircle(
+          val brC = worldToPerspectiveScreen(ARENA_CENTER, ARENA_CENTER, camX, camY, w, h)
+          val brScale = perspectiveScaleForRelY(ARENA_CENTER - camY)
+          val brR = sim.brRingRadius * minOf(w, h) * brScale
+          drawOval(
             color = palette.dropHazard,
-            radius = sim.brRingRadius * minOf(w, h),
-            center = Offset((ARENA_CENTER - camX) * w, (ARENA_CENTER - camY) * h),
+            topLeft = Offset(brC.x - brR, brC.y - brR * 0.72f),
+            size = Size(brR * 2f, brR * 1.44f),
             style = Stroke(width = if (highContrast) 6f else 4f),
           )
         }
 
         if (mode.id == "dmz") {
           val exfilReady = sim.hudIntelCollected >= 3
-          val exfilCenter = Offset((ARENA_CENTER - camX) * w, (0.30f - camY) * h)
+          val exfilCenter = worldToPerspectiveScreen(ARENA_CENTER, ARENA_CENTER - 1.25f, camX, camY, w, h)
           drawCircle(
             color = if (exfilReady) palette.safeExfil else palette.dropBuff.copy(alpha = 0.65f),
             radius = 32f,
@@ -570,7 +653,7 @@ fun ArenaScreen(
           for (i in 0 until sim.intels.size) {
             val intel = sim.intels[i]
             if (!intel.collected) {
-              val ip = Offset((intel.x - camX) * w, (intel.y - camY) * h)
+              val ip = worldToPerspectiveScreen(intel.x, intel.y, camX, camY, w, h)
               if (glowOn) drawCircle(palette.dropBuff.copy(alpha = 0.25f), radius = 20f, center = ip)
               drawCircle(palette.dropBuff, radius = 11f, center = ip)
             }
@@ -588,7 +671,8 @@ fun ArenaScreen(
         // Power-up Field Drops
         for (i in 0 until sim.drops.size) {
           val d = sim.drops[i]
-          val pos = Offset((d.x - camX) * w, (d.y - camY) * h)
+          val pos = worldToPerspectiveScreen(d.x, d.y, camX, camY, w, h)
+          val dScale = perspectiveScaleForRelY(d.y - camY)
           if (pos.x < -30f || pos.x > w + 30f || pos.y < -30f || pos.y > h + 30f) continue
           val dCol = when (d.kind) {
             ArenaDropKind.NUKE -> palette.playerAccent
@@ -596,28 +680,32 @@ fun ArenaScreen(
             ArenaDropKind.MAX_ARMOR -> palette.safeExfil
             ArenaDropKind.DOUBLE_ESSENCE -> palette.dropBuff
           }
-          if (glowOn) drawCircle(dCol.copy(alpha = 0.24f + pulse * 0.18f), radius = 18f, center = pos)
-          drawCircle(dCol, radius = if (highContrast) 12f else 10f, center = pos, style = Stroke(width = 3f))
-          drawCircle(Color.White, radius = 4f, center = pos)
+          if (glowOn) drawCircle(dCol.copy(alpha = 0.24f + pulse * 0.18f), radius = 18f * dScale, center = pos)
+          drawCircle(dCol, radius = (if (highContrast) 12f else 10f) * dScale, center = pos, style = Stroke(width = 3f))
+          drawCircle(Color.White, radius = 4f * dScale, center = pos)
         }
 
         // Random Mystery Wonder Weapon Pickups
         for (i in 0 until sim.wonderPickups.size) {
           val wp = sim.wonderPickups[i]
-          val pos = Offset((wp.x - camX) * w, (wp.y - camY) * h)
+          val pos = worldToPerspectiveScreen(wp.x, wp.y, camX, camY, w, h)
+          val wpScale = perspectiveScaleForRelY(wp.y - camY)
           if (pos.x < -30f || pos.x > w + 30f || pos.y < -30f || pos.y > h + 30f) continue
           val wCol = Color(wp.kind.accentHex)
-          if (glowOn) drawCircle(wCol.copy(alpha = 0.28f + pulse * 0.22f), radius = 22f, center = pos)
-          drawRect(color = Color(0xFF0A1222), topLeft = Offset(pos.x - 11f, pos.y - 11f), size = Size(22f, 22f))
-          drawRect(color = wCol, topLeft = Offset(pos.x - 11f, pos.y - 11f), size = Size(22f, 22f), style = Stroke(width = 3f))
-          drawCircle(Color.White, radius = 4.5f, center = pos)
+          val boxHalf = 11f * wpScale
+          if (glowOn) drawCircle(wCol.copy(alpha = 0.28f + pulse * 0.22f), radius = 22f * wpScale, center = pos)
+          drawRect(color = Color(0xFF0A1222), topLeft = Offset(pos.x - boxHalf, pos.y - boxHalf), size = Size(boxHalf * 2f, boxHalf * 2f))
+          drawRect(color = wCol, topLeft = Offset(pos.x - boxHalf, pos.y - boxHalf), size = Size(boxHalf * 2f, boxHalf * 2f), style = Stroke(width = 3f))
+          drawCircle(Color.White, radius = 4.5f * wpScale, center = pos)
         }
 
         if (sim.pulseRingRadius > 0f && !settings.reduceFlashes) {
-          drawCircle(
+          val pCenter = worldToPerspectiveScreen(sim.playerX, sim.playerY, camX, camY, w, h)
+          val pR = sim.pulseRingRadius * minOf(w, h) * 0.8f
+          drawOval(
             color = palette.playerAccent.copy(alpha = 0.65f),
-            radius = sim.pulseRingRadius * minOf(w, h),
-            center = Offset((sim.playerX - camX) * w, (sim.playerY - camY) * h),
+            topLeft = Offset(pCenter.x - pR, pCenter.y - pR * 0.68f),
+            size = Size(pR * 2f, pR * 1.36f),
             style = Stroke(width = 7f),
           )
         }
@@ -626,8 +714,8 @@ fun ArenaScreen(
         for (i in 0 until sim.arcs.size) {
           val arc = sim.arcs[i]
           val a = (arc.life / 18f).coerceIn(0f, 1f)
-          val p1 = Offset((arc.x1 - camX) * w, (arc.y1 - camY) * h)
-          val p2 = Offset((arc.x2 - camX) * w, (arc.y2 - camY) * h)
+          val p1 = worldToPerspectiveScreen(arc.x1, arc.y1, camX, camY, w, h)
+          val p2 = worldToPerspectiveScreen(arc.x2, arc.y2, camX, camY, w, h)
           if (glowOn) {
             drawLine(color = arc.color.copy(alpha = a * 0.78f), start = p1, end = p2, strokeWidth = 6f * a, cap = StrokeCap.Round)
           }
@@ -637,18 +725,19 @@ fun ArenaScreen(
         // Projectiles
         for (i in 0 until sim.bolts.size) {
           val b = sim.bolts[i]
-          val head = Offset((b.x - camX) * w, (b.y - camY) * h)
+          val head = worldToPerspectiveScreen(b.x, b.y, camX, camY, w, h)
+          val bScale = perspectiveScaleForRelY(b.y - camY)
           if (head.x < -30f || head.x > w + 30f || head.y < -30f || head.y > h + 30f) continue
           if (b.isEnemyShot) {
-            if (glowOn) drawCircle(palette.enemyShot.copy(alpha = 0.45f), radius = 10f, center = head)
-            drawCircle(palette.enemyShot, radius = if (highContrast) 7f else 5f, center = head)
+            if (glowOn) drawCircle(palette.enemyShot.copy(alpha = 0.45f), radius = 10f * bScale, center = head)
+            drawCircle(palette.enemyShot, radius = (if (highContrast) 7f else 5f) * bScale, center = head)
           } else {
-            val tail = Offset((b.x - b.vx * 2.2f - camX) * w, (b.y - b.vy * 2.2f - camY) * h)
+            val tail = worldToPerspectiveScreen(b.x - b.vx * 2.2f, b.y - b.vy * 2.2f, camX, camY, w, h)
             val boltCol = if (settings.colorBlindMode == ColorBlindMode.NONE) b.color else palette.playerAccent
             if (glowOn) {
-              drawLine(boltCol.copy(alpha = 0.58f), tail, head, strokeWidth = if (b.isSupercharged) 10f else 6.5f, cap = StrokeCap.Round)
+              drawLine(boltCol.copy(alpha = 0.58f), tail, head, strokeWidth = (if (b.isSupercharged) 10f else 6.5f) * bScale, cap = StrokeCap.Round)
             }
-            drawLine(Color.White, tail, head, strokeWidth = 3f, cap = StrokeCap.Round)
+            drawLine(Color.White, tail, head, strokeWidth = 3f * bScale, cap = StrokeCap.Round)
           }
         }
 
@@ -656,27 +745,27 @@ fun ArenaScreen(
         if (settings.particleDensity != ParticleDensity.OFF) {
           for (i in 0 until sim.sparks.size) {
             val sp = sim.sparks[i]
-            val sx = (sp.x - camX) * w
-            val sy = (sp.y - camY) * h
-            val r = (sp.maxLife - sp.life).coerceAtLeast(3f) * 1.8f
+            val spPos = worldToPerspectiveScreen(sp.x, sp.y, camX, camY, w, h)
+            val spScale = perspectiveScaleForRelY(sp.y - camY)
+            val r = (sp.maxLife - sp.life).coerceAtLeast(3f) * 1.8f * spScale
             drawCircle(
               color = sp.color.copy(alpha = (sp.life / sp.maxLife).coerceIn(0f, 1f)),
               radius = r,
-              center = Offset(sx, sy),
+              center = spPos,
               style = Stroke(width = 2.5f),
             )
           }
         }
 
-        // Animated Lore Hostiles & Bosses
+        // Animated Lore & Original Hostiles & Bosses with 2.5D depth scaling
         val overrideEnemyCol = if (settings.colorBlindMode != ColorBlindMode.NONE || highContrast) palette.hostile else null
         for (i in 0 until sim.hostiles.size) {
           val e = sim.hostiles[i]
-          val ex = (e.x - camX) * w
-          val ey = (e.y - camY) * h
-          if (ex < -60f || ex > w + 60f || ey < -60f || ey > h + 60f) continue
+          val ePos = worldToPerspectiveScreen(e.x, e.y, camX, camY, w, h)
+          if (ePos.x < -70f || ePos.x > w + 70f || ePos.y < -70f || ePos.y > h + 70f) continue
+          val eScale = perspectiveScaleForRelY(e.y - camY)
           drawArenaHostile(
-            center = Offset(ex, ey),
+            center = ePos,
             worldId = world.id,
             isElite = e.isElite,
             stasisActive = sim.stasisTicks > 0f,
@@ -689,6 +778,7 @@ fun ArenaScreen(
             highContrast = highContrast,
             dynamicGlow = glowOn,
             overrideColor = if (e.isBoss && overrideEnemyCol != null) palette.boss else overrideEnemyCol,
+            scale = eScale,
           )
         }
 
@@ -696,15 +786,19 @@ fun ArenaScreen(
         for (i in 0 until sim.arenaBots.size) {
           val bot = sim.arenaBots[i]
           if (bot.hp <= 0) continue
-          val bx = (bot.x - camX) * w
-          val by = (bot.y - camY) * h
-          if (bx < -50f || bx > w + 50f || by < -50f || by > h + 50f) continue
-          val botOrigin = Offset(bx, by)
+          val botOrigin = worldToPerspectiveScreen(bot.x, bot.y, camX, camY, w, h)
+          if (botOrigin.x < -50f || botOrigin.x > w + 50f || botOrigin.y < -50f || botOrigin.y > h + 50f) continue
+          val botScale = perspectiveScaleForRelY(bot.y - camY)
           val botRingCol = if (bot.isAllied) palette.safeExfil else palette.dropBuff
-          drawCircle(color = botRingCol.copy(alpha = 0.72f), radius = 20f, center = botOrigin, style = Stroke(width = 2.4f))
+          drawOval(
+            color = botRingCol.copy(alpha = 0.72f),
+            topLeft = Offset(botOrigin.x - 20f * botScale, botOrigin.y - 12f * botScale),
+            size = Size(40f * botScale, 24f * botScale),
+            style = Stroke(width = 2.4f),
+          )
           val botSkel = RigEvaluator.evaluate(
             origin = botOrigin,
-            scalePx = 56f,
+            scalePx = 56f * botScale,
             poseAngles = UniverseCatalog.defaultPoseMap(),
             clip = if (settings.reduceMotion) "idle" else "sprint",
             frame = if (settings.reduceMotion) 0f else (sim.frameTick + i * 11f),
@@ -729,9 +823,9 @@ fun ArenaScreen(
 
         // Aim Reticle
         val retPos = if (sim.touchAimActive) {
-          Offset((sim.touchAimX - camX) * w, (sim.touchAimY - camY) * h)
+          worldToPerspectiveScreen(sim.touchAimX, sim.touchAimY, camX, camY, w, h)
         } else {
-          Offset((sim.playerX + sim.aimX * 0.085f - camX) * w, (sim.playerY + sim.aimY * 0.085f - camY) * h)
+          worldToPerspectiveScreen(sim.playerX + sim.aimX * 0.11f, sim.playerY + sim.aimY * 0.11f, camX, camY, w, h)
         }
         val opticCol = if (settings.colorBlindMode == ColorBlindMode.NONE && !highContrast) {
           sim.loadout.tracerColor
@@ -746,9 +840,11 @@ fun ArenaScreen(
           isMoving -> "sprint"
           else -> activeRig?.activeClip ?: "idle"
         }
+        val playerScreen = worldToPerspectiveScreen(sim.playerX, sim.playerY, camX, camY, w, h)
+        val playerPerspScale = perspectiveScaleForRelY(sim.playerY - camY)
         val skel = RigEvaluator.evaluate(
-          origin = Offset((sim.playerX - camX) * w, (sim.playerY - camY) * h),
-          scalePx = 70f * (activeRig?.rigScale?.toFloat() ?: 1f),
+          origin = playerScreen,
+          scalePx = 74f * (activeRig?.rigScale?.toFloat() ?: 1f) * playerPerspScale,
           poseAngles = activeRig?.poseAngles ?: UniverseCatalog.defaultPoseMap(),
           clip = playerClip,
           frame = if (settings.reduceMotion) 0f else sim.frameTick,
@@ -779,39 +875,72 @@ fun ArenaScreen(
           cloakOverride = activeOutfit.cloakEnabled,
           visorColorOverride = if (settings.colorBlindMode == ColorBlindMode.NONE && !highContrast) Color(visorHex) else null,
           auraTrailId = activeOutfit.auraId,
+          outfitId = activeOutfit.id,
         )
 
-        // Full-Arena 2.2x2.2 Mini-Radar showing buildings, traps, hostiles, bots & player
+        // Player-Centered Open-World Mini-Radar (±2.6f local radius around player across Verdansk & Outer Frontier)
         if (settings.showMiniRadar && !settings.simplifiedHud) {
-          val radarR = 38f
+          val radarR = 42f
           val radarCenter = Offset(w - radarR - 14f, radarR + 14f)
-          drawCircle(Color(0xCC080D1A), radius = radarR, center = radarCenter)
-          drawCircle(palette.playerAccent.copy(alpha = 0.75f), radius = radarR, center = radarCenter, style = Stroke(width = 2f))
+          val radarScope = 2.6f
+          drawCircle(Color(0xD2080D1A), radius = radarR, center = radarCenter)
+          drawCircle(
+            color = (if (sim.hudInOuterFrontier) Color(0xFFE040FB) else palette.playerAccent).copy(alpha = 0.80f),
+            radius = radarR,
+            center = radarCenter,
+            style = Stroke(width = 2f),
+          )
+          fun plotRadar(wx: Float, wy: Float): Offset? {
+            val dx = (wx - sim.playerX) / radarScope
+            val dy = (wy - sim.playerY) / radarScope
+            if (dx * dx + dy * dy > 0.96f) return null
+            return Offset(radarCenter.x + dx * radarR, radarCenter.y + dy * radarR)
+          }
           for (bi in 0 until sim.buildings.size) {
             val b = sim.buildings[bi]
-            val rx = radarCenter.x + (((b.x + b.width * 0.5f) / ARENA_WORLD_SIZE) - 0.5f) * radarR * 1.7f
-            val ry = radarCenter.y + (((b.y + b.height * 0.5f) / ARENA_WORLD_SIZE) - 0.5f) * radarR * 1.7f
-            drawCircle(if (b.explored) Color(0xFF00E676) else b.accentColor, radius = 2.2f, center = Offset(rx, ry))
+            plotRadar(b.x + b.width * 0.5f, b.y + b.height * 0.5f)?.let { pt ->
+              drawCircle(if (b.explored) Color(0xFF00E676) else b.accentColor, radius = 2.5f, center = pt)
+            }
           }
-          drawCircle(
-            palette.radarPlayer,
-            radius = 3.8f,
-            center = Offset(
-              radarCenter.x + ((sim.playerX / ARENA_WORLD_SIZE) - 0.5f) * radarR * 1.7f,
-              radarCenter.y + ((sim.playerY / ARENA_WORLD_SIZE) - 0.5f) * radarR * 1.7f,
-            ),
-          )
+          for (ci in 0 until sim.restCamps.size) {
+            val camp = sim.restCamps[ci]
+            plotRadar(camp.x, camp.y)?.let { pt ->
+              drawCircle(Color(0xFF00E676), radius = 3f, center = pt, style = Stroke(width = 1.6f))
+            }
+          }
+          for (si in 0 until sim.worldStations.size) {
+            val st = sim.worldStations[si]
+            plotRadar(st.x, st.y)?.let { pt ->
+              drawCircle(st.kind.color, radius = 2.4f, center = pt)
+            }
+          }
+          for (li in 0 until sim.lootCrates.size) {
+            val cr = sim.lootCrates[li]
+            if (!cr.opened) {
+              plotRadar(cr.x, cr.y)?.let { pt ->
+                drawCircle(Color(cr.rarity.colorHex), radius = 2.2f, center = pt)
+              }
+            }
+          }
+          for (ei in 0 until sim.catEasterEggs.size) {
+            val cat = sim.catEasterEggs[ei]
+            if (!cat.found) {
+              plotRadar(cat.x, cat.y)?.let { pt ->
+                drawCircle(Color(0xFFFFD54F), radius = 2.4f, center = pt)
+              }
+            }
+          }
           for (i in 0 until sim.hostiles.size) {
             val e = sim.hostiles[i]
-            drawCircle(
-              color = if (e.isBoss) palette.boss else palette.hostile,
-              radius = if (e.isBoss) 3.8f else 2.2f,
-              center = Offset(
-                radarCenter.x + ((e.x / ARENA_WORLD_SIZE) - 0.5f) * radarR * 1.7f,
-                radarCenter.y + ((e.y / ARENA_WORLD_SIZE) - 0.5f) * radarR * 1.7f,
-              ),
-            )
+            plotRadar(e.x, e.y)?.let { pt ->
+              drawCircle(
+                color = if (e.isBoss) palette.boss else palette.hostile,
+                radius = if (e.isBoss) 3.8f else 2.2f,
+                center = pt,
+              )
+            }
           }
+          drawCircle(palette.radarPlayer, radius = 3.8f, center = radarCenter)
         }
 
         if (sim.damageFlashTicks > 0f && !settings.reduceFlashes) {
@@ -1093,11 +1222,16 @@ fun ArenaScreen(
               modifier = Modifier.height(btnHeight).testTag("arena_surge_btn"),
             ) { Text(if (sim.hudConsumableCdSec == 0) "SURGE" else "${sim.hudConsumableCdSec}s", style = MaterialTheme.typography.labelSmall) }
             OutlinedButton(
-              onClick = { triggerHaptic(); sim.triggerWorldInteract() },
-              enabled = sim.hudInteractCdSec == 0,
+              onClick = { triggerHaptic(); sim.interactNearestWorldObject() },
+              enabled = sim.hudInteractCdSec == 0 || sim.hudNearbyPrompt != null,
               shape = RoundedCornerShape(10.dp),
               modifier = Modifier.height(btnHeight).testTag("arena_interact_btn"),
-            ) { Text(if (sim.hudInteractCdSec == 0) world.interactActionLabel else "${sim.hudInteractCdSec}s", style = MaterialTheme.typography.labelSmall) }
+            ) {
+              Text(
+                text = sim.hudNearbyPrompt ?: if (sim.hudInteractCdSec == 0) world.interactActionLabel else "${sim.hudInteractCdSec}s",
+                style = MaterialTheme.typography.labelSmall,
+              )
+            }
             OutlinedButton(
               onClick = { triggerHaptic(); sim.triggerLethal() },
               enabled = sim.hudLethalCdSec == 0,

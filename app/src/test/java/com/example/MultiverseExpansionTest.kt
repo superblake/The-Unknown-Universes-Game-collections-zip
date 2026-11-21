@@ -213,7 +213,7 @@ class MultiverseExpansionTest {
   @Test
   fun areasAndAging_transitionsYoungMatureAncientAndRejuvenatesToYoung() {
     val store = ProgressionStore(context, "exp_test")
-    assertEquals(8, MultiverseArsenalCatalog.customAreas.size)
+    assertEquals(12, MultiverseArsenalCatalog.customAreas.size)
     store.selectArea("area_batcave")
     assertEquals("area_batcave", store.current.activeAreaId)
 

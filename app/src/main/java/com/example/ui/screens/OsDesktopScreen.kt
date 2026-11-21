@@ -113,6 +113,8 @@ fun OsDesktopScreen(
   onOpenMatchBrowser: (Int) -> Unit = {},
   onOpenSocialHub: (Int) -> Unit = {},
   onEquipOutfit: (String) -> Unit = {},
+  onSelectArea: (String) -> Unit = {},
+  onHuntHeroFrontier: () -> Unit = {},
   onSignOut: () -> Unit,
 ) {
   val activeWorld = UniverseCatalog.worldById(profile.activeUniverseId)
@@ -151,7 +153,7 @@ fun OsDesktopScreen(
     }
 
   LazyColumn(
-    modifier = Modifier.fillMaxSize(),
+    modifier = Modifier.fillMaxSize().testTag("os_desktop_list"),
     contentPadding = PaddingValues(16.dp),
     verticalArrangement = Arrangement.spacedBy(16.dp),
   ) {
@@ -208,8 +210,17 @@ fun OsDesktopScreen(
               val activeAreaSpec = progression.activeAreaSpec()
               val activeAreaState = progression.areaState(activeAreaSpec.id)
               val resonance = progression.essenceResonance(profile.totalEssence)
+              val powerLight = progression.computePowerAndLightLevel(profile.totalEssence)
+              val activeRarity = progression.outfitRarity(activeOutfit.id)
               Text(
-                text = "LV ${progression.playerLevel} (${progression.playerRankTitle}) • ${activeOutfit.nameWithVersion} • ${activeWeapon.name}",
+                text = "PWR ${powerLight.powerLevel} • LT ${powerLight.lightLevel} (${powerLight.tierLabel}) • ${progression.levelCustom.worldDifficultyTier.label.uppercase()}",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFFFD54F),
+                modifier = Modifier.testTag("os_power_light_badge"),
+              )
+              Text(
+                text = "LV ${progression.playerLevel} (${progression.playerRankTitle}) • ${activeOutfit.nameWithVersion} [${activeRarity.label}] • ${activeWeapon.name}",
                 style = MaterialTheme.typography.labelSmall,
                 color = Color(progression.activePassVersion.accentHex),
                 modifier = Modifier.testTag("os_level_rank_badge"),
@@ -329,9 +340,9 @@ fun OsDesktopScreen(
           .testTag("os_missions_card"),
       ) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-          Text("630 MULTIVERSE & CAMPAIGN MISSIONS", style = MaterialTheme.typography.titleSmall, color = Color(0xFF00E676))
+          Text("${com.example.data.model.MissionsCatalog.allMissions.size} MULTIVERSE & CAMPAIGN MISSIONS", style = MaterialTheme.typography.titleSmall, color = Color(0xFF00E676))
           Text(
-            text = "45 Missions per World & Arena • Story Campaign & Mended Convergence Ready",
+            text = "45 Missions per ${UniverseCatalog.worlds.size} Worlds & ${MultiverseArsenalCatalog.customAreas.size} Arenas • Gotham, Spider-Verse & Frontier Ready",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 2,
@@ -501,14 +512,15 @@ fun OsDesktopScreen(
       }
     }
 
-    // Playable Original & Crossover Characters Quick-Swap Strip
+    // Playable Original, Batman, Spider-Man & Crossover Characters Quick-Swap Strip
     item {
-      var showAllDesktopHeroes by remember { mutableStateOf(false) }
-      val heroList = remember(showAllDesktopHeroes) {
-        if (showAllDesktopHeroes) {
-          MultiverseArsenalCatalog.outfits
-        } else {
-          MultiverseArsenalCatalog.outfits.filter { it.isOriginalCharacter }
+      var selectedDesktopGroup by remember { mutableStateOf(com.example.data.model.CharacterUniverseGroup.ALL) }
+      var originalsOnlyFilter by remember { mutableStateOf(false) }
+      val heroList = remember(selectedDesktopGroup, originalsOnlyFilter) {
+        when {
+          originalsOnlyFilter -> MultiverseArsenalCatalog.outfits.filter { it.isOriginalCharacter }
+          selectedDesktopGroup == com.example.data.model.CharacterUniverseGroup.ALL -> MultiverseArsenalCatalog.outfits
+          else -> MultiverseArsenalCatalog.outfits.filter { it.characterGroup == selectedDesktopGroup }
         }
       }
       val activeSpec = progression.activeOutfitSpec()
@@ -543,25 +555,50 @@ fun OsDesktopScreen(
                 color = if (activeSpec.isOriginalCharacter) Color(0xFF00E676) else MaterialTheme.colorScheme.onSurfaceVariant,
               )
             }
-            OutlinedButton(
-              onClick = { showAllDesktopHeroes = !showAllDesktopHeroes },
-              shape = RoundedCornerShape(8.dp),
-              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-              modifier = Modifier.height(34.dp).testTag("os_toggle_all_characters_btn"),
-            ) {
-              Text(if (showAllDesktopHeroes) "Originals Only" else "All ${MultiverseArsenalCatalog.outfits.size}", style = MaterialTheme.typography.labelSmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+              OutlinedButton(
+                onClick = onHuntHeroFrontier,
+                shape = RoundedCornerShape(8.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                modifier = Modifier.height(34.dp).testTag("os_hero_frontier_btn"),
+              ) {
+                Text("Hero Frontier", style = MaterialTheme.typography.labelSmall, color = Color(0xFF00E5FF))
+              }
+              OutlinedButton(
+                onClick = { originalsOnlyFilter = !originalsOnlyFilter },
+                shape = RoundedCornerShape(8.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                modifier = Modifier.height(34.dp).testTag("os_toggle_all_characters_btn"),
+              ) {
+                Text(if (originalsOnlyFilter) "All ${MultiverseArsenalCatalog.outfits.size}" else "Originals", style = MaterialTheme.typography.labelSmall)
+              }
+            }
+          }
+          LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(com.example.data.model.CharacterUniverseGroup.entries, key = { it.id }) { grp ->
+              val chipSelected = !originalsOnlyFilter && selectedDesktopGroup == grp
+              androidx.compose.material3.FilterChip(
+                selected = chipSelected,
+                onClick = {
+                  originalsOnlyFilter = false
+                  selectedDesktopGroup = grp
+                },
+                label = { Text(grp.label, style = MaterialTheme.typography.labelSmall) },
+                modifier = Modifier.testTag("os_char_filter_${grp.id}"),
+              )
             }
           }
           LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(heroList, key = { it.id }) { spec ->
               val isSelected = progression.equippedOutfitId == spec.id
+              val rarity = progression.outfitRarity(spec.id)
               val accent = Color(spec.secondaryHex)
               Surface(
                 onClick = { onEquipOutfit(spec.id) },
                 shape = RoundedCornerShape(12.dp),
                 color = if (isSelected) accent.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier
-                  .width(172.dp)
+                  .width(178.dp)
                   .border(
                     width = if (isSelected) 2.dp else 1.dp,
                     color = if (isSelected) accent else MaterialTheme.colorScheme.outline,
@@ -576,9 +613,9 @@ fun OsDesktopScreen(
                     verticalAlignment = Alignment.CenterVertically,
                   ) {
                     Text(
-                      text = spec.originTag.uppercase(),
+                      text = "${spec.originTag.uppercase()} • ${rarity.label}",
                       style = MaterialTheme.typography.labelSmall,
-                      color = accent,
+                      color = Color(rarity.colorHex),
                       maxLines = 1,
                       overflow = TextOverflow.Ellipsis,
                       modifier = Modifier.weight(1f),
@@ -595,7 +632,7 @@ fun OsDesktopScreen(
                     overflow = TextOverflow.Ellipsis,
                   )
                   Text(
-                    text = if (isSelected) "EQUIPPED" else "+${spec.baseShieldBonus} SHD • +${spec.baseDamageBonus} DMG",
+                    text = if (isSelected) "EQUIPPED (${progression.outfitShards(spec.id)} Shards)" else "+${spec.baseShieldBonus} SHD • +${spec.baseDamageBonus} DMG",
                     style = MaterialTheme.typography.labelSmall,
                     color = if (isSelected) Color(0xFF00E676) else MaterialTheme.colorScheme.onSurfaceVariant,
                   )
@@ -904,7 +941,7 @@ fun OsDesktopScreen(
     // Game Modes Switcher
     item {
       Text(
-        text = "DEPLOYMENT MODES (ZOMBIES • DMZ • BR • MP • SANDBOX)",
+        text = "DEPLOYMENT MODES (${UniverseCatalog.modes.size} MODES • HERO PATROL • BOSS RUSH • ONSLAUGHT)",
         style = MaterialTheme.typography.titleMedium,
         color = MaterialTheme.colorScheme.primary,
       )
@@ -926,7 +963,7 @@ fun OsDesktopScreen(
               )
               .testTag("mode_chip_${mode.id}"),
           ) {
-            Column(modifier = Modifier.width(176.dp).padding(12.dp)) {
+            Column(modifier = Modifier.width(184.dp).padding(12.dp)) {
               Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -941,12 +978,86 @@ fun OsDesktopScreen(
                   text = mode.label,
                   style = MaterialTheme.typography.titleMedium,
                   color = MaterialTheme.colorScheme.onSurface,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
                 )
               }
               Spacer(Modifier.height(4.dp))
               Text(
                 text = mode.summary,
                 style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+              )
+            }
+          }
+        }
+      }
+    }
+
+    // Playable Arenas & Custom Locations Switcher
+    item {
+      Text(
+        text = "PLAYABLE ARENAS & LOCATIONS (${MultiverseArsenalCatalog.customAreas.size} ARENAS • BATCAVE • QUEENS • STARK • CONVERGENCE)",
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.primary,
+      )
+    }
+
+    item {
+      LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        items(MultiverseArsenalCatalog.customAreas, key = { it.id }) { area ->
+          val isSelected = area.id == progression.activeAreaId
+          val areaSt = progression.areaState(area.id)
+          val accent = Color(area.accentHex)
+          val linkedWorld = UniverseCatalog.worldById(area.linkedWorldId)
+          Surface(
+            onClick = { onSelectArea(area.id) },
+            shape = RoundedCornerShape(16.dp),
+            color = if (isSelected) accent.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surface,
+            modifier = Modifier
+              .width(232.dp)
+              .border(
+                width = if (isSelected) 2.dp else 1.dp,
+                color = if (isSelected) accent else MaterialTheme.colorScheme.outline,
+                shape = RoundedCornerShape(16.dp),
+              )
+              .testTag("os_arena_card_${area.id}"),
+          ) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                Text(
+                  text = "${linkedWorld.title.substringBefore(":")} • ${areaSt.ageYears}y",
+                  style = MaterialTheme.typography.labelSmall,
+                  color = accent,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                  modifier = Modifier.weight(1f),
+                )
+                if (isSelected) {
+                  Text(
+                    text = "ACTIVE",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFF00E676),
+                    fontWeight = FontWeight.Bold,
+                  )
+                }
+              }
+              Text(
+                text = area.name,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+              )
+              Text(
+                text = area.description,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,

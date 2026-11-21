@@ -59,13 +59,13 @@ class StarLevelsMissionsAndCampaignTest {
   }
 
   @Test
-  fun missionsCatalog_hasExactly630MissionsWith45PerWorldAndArena() {
-    assertEquals(6, UniverseCatalog.worlds.size)
-    assertEquals(8, MultiverseArsenalCatalog.customAreas.size)
+  fun missionsCatalog_hasExactly1080MissionsWith45PerWorldAndArena() {
+    assertEquals(12, UniverseCatalog.worlds.size)
+    assertEquals(12, MultiverseArsenalCatalog.customAreas.size)
 
-    assertEquals(270, MissionsCatalog.worldMissions.size)
-    assertEquals(360, MissionsCatalog.arenaMissions.size)
-    assertEquals(630, MissionsCatalog.allMissions.size)
+    assertEquals(540, MissionsCatalog.worldMissions.size)
+    assertEquals(540, MissionsCatalog.arenaMissions.size)
+    assertEquals(1080, MissionsCatalog.allMissions.size)
 
     UniverseCatalog.worlds.forEach { world ->
       val list = MissionsCatalog.missionsForWorld(world.id)

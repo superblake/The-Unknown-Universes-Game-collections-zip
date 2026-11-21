@@ -176,8 +176,9 @@ object MissionsCatalog {
   val arenaMissions: List<MissionSpec> by lazy {
     MultiverseArsenalCatalog.customAreas.flatMap { area ->
       val shortName = area.name.substringBefore(" (")
-      val isConvergence = area.id == "area_mended_convergence"
-      val isCampaignArea = area.id == "area_campaign_nexus"
+        val isConvergence = area.id == "area_mended_convergence"
+        val isCampaignArea = area.id == "area_campaign_nexus"
+        val isFrontier = area.id == "area_hero_frontier"
       (1..MISSIONS_PER_ARENA).map { num ->
         val bld = area.buildingNames[(num - 1) % area.buildingNames.size]
         val tpl = templates[(num + 2) % templates.size]
@@ -185,12 +186,13 @@ object MissionsCatalog {
         val titlePrefix = when {
           isConvergence -> "Convergence $num: "
           isCampaignArea -> "Story Arena $num: "
+          isFrontier -> "Hero Hunt $num: "
           else -> "A${num.toString().padStart(2, '0')}: "
         }
-        val extraStoryFlavor = if (isConvergence) {
-          " Stabilize the healing fusion before final reality restoration."
-        } else {
-          ""
+        val extraStoryFlavor = when {
+          isConvergence -> " Stabilize the healing fusion before final reality restoration."
+          isFrontier -> " Locate Character Beacons and harvest Shards to elevate hero rarity."
+          else -> ""
         }
         MissionSpec(
           id = "mis_arena_${area.id}_${num.toString().padStart(2, '0')}",

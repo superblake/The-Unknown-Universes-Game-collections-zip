@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.model.BlastCoreColor
+import com.example.data.model.CharacterRarity
 import com.example.data.model.CharacterUniverseGroup
 import com.example.data.model.EssenceColor
 import com.example.data.model.HeroOutfitSpec
@@ -64,6 +65,9 @@ fun OutfitsMenuTab(
   onUpgradeOutfit: (String) -> Unit,
   onUpgradeOutfitSubSystem: (String, String) -> Unit,
   onUpgradeOutfitStar: (String) -> Unit = {},
+  onUpgradeOutfitRarity: (String) -> Unit = {},
+  onRecruitCharacterShard: (String?) -> Unit = {},
+  onHuntHeroFrontier: () -> Unit = {},
 ) {
   var selectedGroup by remember { mutableStateOf(CharacterUniverseGroup.ALL) }
   val outfits = remember(selectedGroup) {
@@ -75,6 +79,8 @@ fun OutfitsMenuTab(
   }
   val activeSpec = progression.activeOutfitSpec()
   val activeState = progression.outfitState(activeSpec.id)
+  val activeRarity = progression.outfitRarity(activeSpec.id)
+  val activeShards = progression.outfitShards(activeSpec.id)
   val capePath = remember { Path() }
   val torsoPath = remember { Path() }
 
@@ -91,89 +97,124 @@ fun OutfitsMenuTab(
           .fillMaxWidth()
           .border(1.5.dp, Color(activeSpec.secondaryHex).copy(alpha = 0.75f), RoundedCornerShape(16.dp)),
       ) {
-        Row(
-          modifier = Modifier.padding(14.dp),
-          horizontalArrangement = Arrangement.spacedBy(12.dp),
-          verticalAlignment = Alignment.CenterVertically,
-        ) {
-          Box(
-            modifier = Modifier
-              .size(width = 96.dp, height = 118.dp)
-              .clip(RoundedCornerShape(12.dp))
-              .background(Color(0xFF0A101E))
-              .border(1.dp, Color(activeSpec.secondaryHex).copy(alpha = 0.6f), RoundedCornerShape(12.dp)),
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
           ) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-              val skel = RigEvaluator.evaluate(
-                origin = Offset(size.width * 0.5f, size.height * 0.56f),
-                scalePx = size.height * 0.52f,
-                poseAngles = UniverseCatalog.defaultPoseMap(),
-                clip = "idle",
-                frame = 10f,
-                ikEnabled = true,
-                animationSpeedMultiplier = progression.characterCustom.animationSpeedMultiplier,
+            Box(
+              modifier = Modifier
+                .size(width = 96.dp, height = 118.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFF0A101E))
+                .border(1.dp, Color(activeSpec.secondaryHex).copy(alpha = 0.6f), RoundedCornerShape(12.dp)),
+            ) {
+              Canvas(modifier = Modifier.fillMaxSize()) {
+                val skel = RigEvaluator.evaluate(
+                  origin = Offset(size.width * 0.5f, size.height * 0.56f),
+                  scalePx = size.height * 0.52f,
+                  poseAngles = UniverseCatalog.defaultPoseMap(),
+                  clip = "idle",
+                  frame = 10f,
+                  ikEnabled = true,
+                  animationSpeedMultiplier = progression.characterCustom.animationSpeedMultiplier,
+                )
+                drawRigCharacter(
+                  skeleton = skel,
+                  archetype = activeSpec.rigArchetype,
+                  primaryColor = Color(activeSpec.primaryHex),
+                  secondaryColor = Color(activeSpec.secondaryHex),
+                  showBonesOverlay = false,
+                  capePathScratch = capePath,
+                  torsoPathScratch = torsoPath,
+                  cloakOverride = activeSpec.cloakEnabled,
+                  visorColorOverride = Color(activeSpec.visorHex),
+                  auraTrailId = activeSpec.auraId,
+                  outfitId = activeSpec.id,
+                )
+              }
+            }
+
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+              Text(
+                text = "ACTIVE CHARACTER: ${activeSpec.nameWithVersion}",
+                style = MaterialTheme.typography.titleMedium,
+                color = Color(activeSpec.secondaryHex),
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.testTag("active_outfit_banner"),
               )
-              drawRigCharacter(
-                skeleton = skel,
-                archetype = activeSpec.rigArchetype,
-                primaryColor = Color(activeSpec.primaryHex),
-                secondaryColor = Color(activeSpec.secondaryHex),
-                showBonesOverlay = false,
-                capePathScratch = capePath,
-                torsoPathScratch = torsoPath,
-                cloakOverride = activeSpec.cloakEnabled,
-                visorColorOverride = Color(activeSpec.visorHex),
-                auraTrailId = activeSpec.auraId,
+              Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                  shape = RoundedCornerShape(6.dp),
+                  color = Color(activeRarity.colorHex).copy(alpha = 0.2f),
+                ) {
+                  Text(
+                    text = "${activeRarity.label.uppercase()} (x${String.format(Locale.US, "%.2f", activeRarity.statMultiplier)}) • $activeShards SHARDS",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(activeRarity.colorHex),
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                  )
+                }
+              }
+              if (activeSpec.isOriginalCharacter) {
+                Surface(
+                  shape = RoundedCornerShape(6.dp),
+                  color = Color(0xFF00E676).copy(alpha = 0.18f),
+                ) {
+                  Text(
+                    text = "${activeSpec.originTag.uppercase()} • ORIGINAL HERO +25% POWER BUFF",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF00E676),
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                  )
+                }
+              }
+              Text(activeSpec.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+              Text(
+                text = "Base: +${activeSpec.baseShieldBonus} SHD • +${activeSpec.baseDamageBonus} DMG • +${(activeSpec.baseMoveBonus * 100).toInt()}% SPD",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFFFFD54F),
+              )
+              Text(
+                text = "Lv.${activeState.level}/1000 • Tier ${activeState.tier}/25 • ${activeState.starLevel}★ (${StarRankMeta.forStars(activeState.starLevel).label})",
+                style = MaterialTheme.typography.labelMedium,
+                color = Color(0xFF00E5FF),
+                fontWeight = FontWeight.Bold,
+              )
+              Text(
+                text = "Own Skill R${activeState.skillRank} • Gear R${activeState.gearRank} • Equip R${activeState.equipmentRank}",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFF00E676),
               )
             }
           }
 
-          Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-              text = "ACTIVE CHARACTER: ${activeSpec.nameWithVersion}",
-              style = MaterialTheme.typography.titleMedium,
-              color = Color(activeSpec.secondaryHex),
-              fontWeight = FontWeight.Bold,
-              modifier = Modifier.testTag("active_outfit_banner"),
-            )
-            if (activeSpec.isOriginalCharacter) {
-              Surface(
-                shape = RoundedCornerShape(6.dp),
-                color = Color(0xFF00E676).copy(alpha = 0.18f),
-              ) {
-                Text(
-                  text = "${activeSpec.originTag.uppercase()} • ORIGINAL HERO +25% POWER BUFF",
-                  style = MaterialTheme.typography.labelSmall,
-                  fontWeight = FontWeight.Bold,
-                  color = Color(0xFF00E676),
-                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                )
-              }
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+              onClick = onHuntHeroFrontier,
+              colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF), contentColor = Color.Black),
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(44.dp).testTag("hunt_frontier_btn"),
+            ) {
+              Text("Hunt Hero Frontier", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
             }
-            Text(activeSpec.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
-            Text(
-              text = "Base: +${activeSpec.baseShieldBonus} SHD • +${activeSpec.baseDamageBonus} DMG • +${(activeSpec.baseMoveBonus * 100).toInt()}% SPD",
-              style = MaterialTheme.typography.labelSmall,
-              color = Color(0xFFFFD54F),
-            )
-            Text(
-              text = "Lv.${activeState.level}/1000 • Tier ${activeState.tier}/25 • ${activeState.starLevel}★ (${StarRankMeta.forStars(activeState.starLevel).label})",
-              style = MaterialTheme.typography.labelMedium,
-              color = Color(0xFF00E5FF),
-              fontWeight = FontWeight.Bold,
-            )
-            Text(
-              text = "Own Skill R${activeState.skillRank} • Gear R${activeState.gearRank} • Equip R${activeState.equipmentRank}",
-              style = MaterialTheme.typography.labelSmall,
-              color = Color(0xFF00E676),
-            )
+            OutlinedButton(
+              onClick = { onRecruitCharacterShard(null) },
+              enabled = totalBlueEssence >= 200L,
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(44.dp).testTag("recruit_shard_beacon_btn"),
+            ) {
+              Text("Beacon Loot (200 B)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            }
           }
         }
       }
     }
 
     item {
-      Text("PLAYABLE CHARACTERS (${MultiverseArsenalCatalog.outfits.size} VERSIONS • ORIGINALS +25%)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+      Text("PLAYABLE CHARACTERS (${MultiverseArsenalCatalog.outfits.size} VERSIONS • SHARD RARITY & +25% ORIGINALS)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
       Spacer(Modifier.height(6.dp))
       LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(CharacterUniverseGroup.entries, key = { it.id }) { group ->
@@ -192,6 +233,9 @@ fun OutfitsMenuTab(
       val isEquipped = progression.equippedOutfitId == spec.id
       val tierMeta = ProgressionCatalog.tierMeta(st.tier)
       val starMeta = StarRankMeta.forStars(st.starLevel)
+      val rarity = progression.outfitRarity(spec.id)
+      val nextRarity = rarity.nextRarity()
+      val shards = progression.outfitShards(spec.id)
       val upgCost = UpgradeCosts.outfitLevelUp(st.tier)
       val starCost = UpgradeCosts.outfitStar(st.starLevel)
       val skillCost = UpgradeCosts.outfitSubSystem(st.skillRank)
@@ -247,6 +291,18 @@ fun OutfitsMenuTab(
                     fontWeight = FontWeight.Bold,
                     color = if (isEquipped) accent else MaterialTheme.colorScheme.onSurface,
                   )
+                  Surface(
+                    shape = RoundedCornerShape(5.dp),
+                    color = Color(rarity.colorHex).copy(alpha = 0.22f),
+                  ) {
+                    Text(
+                      text = rarity.label.uppercase(),
+                      style = MaterialTheme.typography.labelSmall,
+                      fontWeight = FontWeight.Bold,
+                      color = Color(rarity.colorHex),
+                      modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                    )
+                  }
                   if (spec.isOriginalCharacter) {
                     Surface(
                       shape = RoundedCornerShape(5.dp),
@@ -286,12 +342,12 @@ fun OutfitsMenuTab(
           }
 
           Text(
-            text = "Stats: +${spec.baseShieldBonus} SHD • +${spec.baseDamageBonus} DMG • +${(spec.baseMoveBonus * 100).toInt()}% SPD • Skill: ${spec.signatureSkillSummary}",
+            text = "Stats: +${spec.baseShieldBonus} SHD • +${spec.baseDamageBonus} DMG • +${(spec.baseMoveBonus * 100).toInt()}% SPD • Rarity x${String.format(Locale.US, "%.2f", rarity.statMultiplier)}",
             style = MaterialTheme.typography.labelSmall,
             color = Color(0xFF00E5FF),
           )
           Text(
-            text = "Signature Loadout: ${spec.signatureGearSummary}",
+            text = "Shards: $shards${if (nextRarity != null) " / ${rarity.shardsForNext} -> ${nextRarity.label}" else " (MAX MYTHIC)"} • ${spec.signatureGearSummary}",
             style = MaterialTheme.typography.labelSmall,
             color = Color(0xFFFFD54F),
           )
@@ -323,6 +379,33 @@ fun OutfitsMenuTab(
               modifier = Modifier.weight(1f).height(44.dp).testTag("upgrade_outfit_star_${spec.id}"),
             ) {
               Text(if (st.starLevel >= StarRankMeta.MAX_STARS) "10★" else "★+1 ($starCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            }
+          }
+
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedButton(
+              onClick = { onUpgradeOutfitRarity(spec.id) },
+              enabled = nextRarity != null && shards >= rarity.shardsForNext,
+              shape = RoundedCornerShape(8.dp),
+              contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+              modifier = Modifier.weight(1f).height(40.dp).testTag("upgrade_rarity_${spec.id}"),
+            ) {
+              Text(
+                text = if (nextRarity == null) "MYTHIC MAX" else "Fuse ${nextRarity.label} ($shards/${rarity.shardsForNext})",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+              )
+            }
+            OutlinedButton(
+              onClick = { onRecruitCharacterShard(spec.id) },
+              enabled = totalBlueEssence >= 200L,
+              shape = RoundedCornerShape(8.dp),
+              contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+              modifier = Modifier.weight(0.8f).height(40.dp).testTag("recruit_shard_${spec.id}"),
+            ) {
+              Text("+Shard (200 B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1)
             }
           }
 

@@ -87,7 +87,7 @@ android {
   }
   testOptions { unitTests { isIncludeAndroidResources = true } }
   androidResources {
-    noCompress += listOf("mp4")
+    noCompress += listOf("mp4", "m4a")
   }
   dependenciesInfo {
     includeInApk = false

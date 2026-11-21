@@ -31,17 +31,21 @@ object PortablePackageGenerator {
 
   /**
    * Generates a real, self-contained HTML5/Canvas + W3C Gamepad API + iOS Safari touch-compatible
-   * playable build of The Unknown Universes that runs offline in browsers across iOS, PS5/Xbox/PC
-   * without needing console devkits or App Store distribution.
+   * playable build of The Unknown Universes with decreased graphics & tuned performance across
+   * all game collection sections (Arena, Worlds & Hero Frontier, Characters & Rarity, Weapons & Wonder,
+   * Armory & Rigs) that runs offline in browsers across iOS, PS5/PS4/PS3, Nintendo, Xbox, and PC.
    */
   fun generatePlayableHtmlPackage(
     profile: OperatorProfile,
     armory: List<ArmoryItem>,
     rig: RigAsset?,
+    progression: com.example.data.model.OperatorProgressionState = com.example.data.model.OperatorProgressionState(),
+    graphicsTier: String = "medium",
+    platformTargetId: String = profile.consolePreset,
   ): String {
     val world = UniverseCatalog.worldById(profile.activeUniverseId)
     val mode = UniverseCatalog.modeById(profile.activeMode)
-    val console = UniverseCatalog.consoleById(profile.consolePreset)
+    val console = UniverseCatalog.consoleById(platformTargetId)
     val equipped = armory.filter { it.equipped }
     val accentHex = String.format("#%06X", 0xFFFFFF and world.accentHex.toInt())
     val secondaryHex = String.format("#%06X", 0xFFFFFF and world.secondaryHex.toInt())
@@ -49,11 +53,74 @@ object PortablePackageGenerator {
     val rigClip = rig?.activeClip ?: "idle"
     val equippedNames =
       if (equipped.isEmpty()) "Standard Loadout" else equipped.joinToString(" • ") { "${it.name} T${it.tier}" }
+    val pwr = progression.computePowerAndLightLevel(profile.totalEssence)
+    val activeHero = progression.activeOutfitSpec()
+    val heroRarity = progression.outfitRarity(activeHero.id)
+    val activeWpn = com.example.data.model.ProgressionCatalog.weaponById(progression.weaponCustom.equippedWeaponId)
     val safeCallsign = escapeHtml(profile.callsign)
     val safeWorld = escapeHtml(world.title)
     val safeMode = escapeHtml(mode.label)
     val safeConsole = escapeHtml(console.label)
     val safeLoadout = escapeHtml(equippedNames)
+
+    val worldsJson = JSONArray().apply {
+      UniverseCatalog.worlds.forEach { w ->
+        put(JSONObject().apply {
+          put("id", w.id); put("title", w.title); put("subtitle", w.subtitle)
+          put("inspirations", w.inspirations); put("mechanic", w.signatureMechanic)
+          put("modes", w.supportedModes.joinToString(", ").uppercase())
+          put("accent", String.format("#%06X", 0xFFFFFF and w.accentHex.toInt()))
+        })
+      }
+    }.toString().replace("</", "<\\/")
+
+    val modesJson = JSONArray().apply {
+      UniverseCatalog.modes.forEach { m ->
+        put(JSONObject().apply {
+          put("id", m.id); put("label", m.label); put("tag", m.shortTag); put("summary", m.summary)
+        })
+      }
+    }.toString().replace("</", "<\\/")
+
+    val areasJson = JSONArray().apply {
+      com.example.data.model.MultiverseArsenalCatalog.customAreas.forEach { a ->
+        put(JSONObject().apply {
+          put("id", a.id); put("name", a.name); put("origin", a.storyEraNote); put("summary", a.description)
+        })
+      }
+    }.toString().replace("</", "<\\/")
+
+    val charsJson = JSONArray().apply {
+      com.example.data.model.MultiverseArsenalCatalog.outfits.forEach { c ->
+        val r = progression.outfitRarity(c.id)
+        put(JSONObject().apply {
+          put("id", c.id); put("name", c.nameWithVersion); put("origin", c.originTag)
+          put("group", c.characterGroup.label); put("isOriginal", c.isOriginalCharacter); put("rarity", r.label)
+          put("shd", c.baseShieldBonus); put("dmg", c.baseDamageBonus)
+          put("skill", c.signatureSkillSummary)
+        })
+      }
+    }.toString().replace("</", "<\\/")
+
+    val wpnsJson = JSONArray().apply {
+      com.example.data.model.ProgressionCatalog.weapons.forEach { w ->
+        put(JSONObject().apply {
+          put("id", w.id); put("name", w.name); put("origin", w.universeOrigin)
+          put("dmg", w.baseDamage); put("spread", w.baseSpreadCount); put("pierce", w.basePierce)
+        })
+      }
+    }.toString().replace("</", "<\\/")
+
+    val wondersJson = JSONArray().apply {
+      com.example.data.model.WonderWeaponKind.entries.forEach { w ->
+        put(JSONObject().apply {
+          put("id", w.id); put("name", w.displayName); put("tag", w.shortTag); put("desc", w.description)
+        })
+      }
+    }.toString().replace("</", "<\\/")
+
+    val enemyDensity = progression.levelCustom.enemyDensityMultiplier.coerceIn(0.75f, 2.5f)
+    val diffTier = progression.levelCustom.worldDifficultyTier
 
     return """<!DOCTYPE html>
 <html lang="en">
@@ -62,151 +129,351 @@ object PortablePackageGenerator {
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<title>The Unknown Universes — UnknownOS Portable</title>
+<title>The Unknown Universes — UnknownOS HTML5 Edition</title>
 <style>
-  :root { --accent: $accentHex; --sec: $secondaryHex; --bg: #070a12; --panel: #0e1525; }
+  :root { --accent: $accentHex; --sec: $secondaryHex; --bg: #070a12; --panel: #0e1525; --border: #253454; }
   * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
   body { margin: 0; background: var(--bg); color: #f0f4ff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
-  header { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid #283655; font-size: 13px; }
+  header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--border); font-size: 12px; gap: 8px; flex-wrap: wrap; }
   .badge { padding: 3px 8px; border-radius: 999px; background: rgba(0,229,255,0.14); border: 1px solid var(--accent); color: var(--accent); font-weight: 700; font-size: 11px; }
-  #stageWrap { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; }
+  nav { display: flex; gap: 6px; padding: 6px 12px; background: #0a101d; border-bottom: 1px solid var(--border); overflow-x: auto; }
+  .nav-btn { background: #131c31; color: #b0c4e8; border: 1px solid var(--border); border-radius: 8px; padding: 6px 11px; font-weight: 700; font-size: 11px; cursor: pointer; white-space: nowrap; }
+  .nav-btn.active { background: rgba(0,229,255,0.18); color: var(--accent); border-color: var(--accent); }
+  main { position: relative; flex: 1; overflow: hidden; }
+  .section { display: none; width: 100%; height: 100%; overflow-y: auto; }
+  .section.active { display: block; }
+  #sec-arena { overflow: hidden; position: relative; }
   canvas { width: 100%; height: 100%; display: block; touch-action: none; }
-  .hud { position: absolute; left: 12px; top: 12px; background: rgba(14,21,37,0.82); padding: 10px 12px; border-radius: 10px; border: 1px solid #283655; font-size: 12px; line-height: 1.45; pointer-events: none; }
-  .controls { position: absolute; bottom: 16px; right: 16px; display: flex; gap: 10px; }
-  button { background: var(--panel); color: #fff; border: 1.5px solid var(--accent); border-radius: 12px; padding: 12px 16px; font-weight: 700; font-size: 13px; cursor: pointer; }
-  button:active { background: var(--accent); color: #001; }
+  .hud { position: absolute; left: 10px; top: 10px; background: rgba(14,21,37,0.84); padding: 8px 11px; border-radius: 10px; border: 1px solid var(--border); font-size: 11px; line-height: 1.4; pointer-events: none; max-width: 72%; }
+  .top-right-hud { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+  .controls { position: absolute; bottom: 14px; right: 14px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .ctrl-btn { background: var(--panel); color: #fff; border: 1.5px solid var(--accent); border-radius: 10px; padding: 10px 13px; font-weight: 700; font-size: 12px; cursor: pointer; }
+  .ctrl-btn:active { background: var(--accent); color: #001; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; padding: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px; font-size: 12px; }
+  .card h4 { margin: 0 0 4px; color: var(--accent); font-size: 14px; }
+  .pill { display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 10px; border: 1px solid var(--border); color: #ffd54f; margin-right: 4px; }
+  select { background: #131c31; color: #fff; border: 1px solid var(--accent); border-radius: 6px; padding: 4px 8px; font-size: 11px; }
 </style>
 </head>
 <body>
 <header>
-  <div><strong>UNKNOWN<span style="color:var(--accent)">OS</span></strong> • $safeWorld</div>
-  <div class="badge">$safeMode • $safeConsole</div>
+  <div><strong>UNKNOWN<span style="color:var(--accent)">OS</span></strong> • $safeWorld • <span style="color:#ffd54f">PWR ${pwr.powerLevel} / LT ${pwr.lightLevel}</span></div>
+  <div class="badge">$safeMode • $safeConsole • ${escapeHtml(diffTier.label)}</div>
 </header>
-<div id="stageWrap">
-  <canvas id="arena"></canvas>
-  <div class="hud">
-    <div><strong>Operator:</strong> $safeCallsign</div>
-    <div><strong>Rig:</strong> ${escapeHtml(rigName)} (${escapeHtml(rigClip)})</div>
-    <div><strong>Loadout:</strong> $safeLoadout</div>
-    <div id="stats">Score: 0 | Wave: 1 | Shield: 100 | Gamepad: Waiting</div>
-    <div style="opacity:.75;margin-top:4px;">WASD/Arrows or Left Stick to Move • Space/Fire • E/Power</div>
+<nav>
+  <button class="nav-btn active" onclick="switchSection('arena',this)">2.5D Arena</button>
+  <button class="nav-btn" onclick="switchSection('worlds',this)">Worlds &amp; Frontier (${UniverseCatalog.worlds.size + UniverseCatalog.modes.size + com.example.data.model.MultiverseArsenalCatalog.customAreas.size})</button>
+  <button class="nav-btn" onclick="switchSection('chars',this)">Characters &amp; Rarity (${com.example.data.model.MultiverseArsenalCatalog.outfits.size})</button>
+  <button class="nav-btn" onclick="switchSection('weapons',this)">Weapons &amp; Wonder (${com.example.data.model.ProgressionCatalog.weapons.size + com.example.data.model.WonderWeaponKind.entries.size})</button>
+  <button class="nav-btn" onclick="switchSection('rigs',this)">Armory &amp; Rig</button>
+</nav>
+<main>
+  <div id="sec-arena" class="section active">
+    <canvas id="arena"></canvas>
+    <div class="hud">
+      <div><strong>Op:</strong> $safeCallsign (${escapeHtml(activeHero.nameWithVersion)} [${escapeHtml(heroRarity.label)}]) • <strong>Wpn:</strong> ${escapeHtml(activeWpn.name)}</div>
+      <div id="stats">Score: 0 | Wave: 1 | Shield: 100 | PaP T1 | Prompt: Roam Frontier</div>
+      <div id="envHud" style="color:#8be9fd;">Camps • PaP • Perks • Hazards (Higher Loot) • Cat Eggs • Unbounded World</div>
+    </div>
+    <div class="top-right-hud">
+      <select id="gfxSel" title="HTML5 Graphics Quality (Decreased Load)">
+        <option value="low" ${if (graphicsTier == "low") "selected" else ""}>GFX: Low (60fps Lite)</option>
+        <option value="medium" ${if (graphicsTier == "medium") "selected" else ""}>GFX: Medium (Balanced 2.5D)</option>
+        <option value="high" ${if (graphicsTier == "high") "selected" else ""}>GFX: High (Extended Shadows)</option>
+      </select>
+    </div>
+    <div class="controls">
+      <button class="ctrl-btn" id="btnInteract">INTERACT [E]</button>
+      <button class="ctrl-btn" id="btnFire">FIRE</button>
+      <button class="ctrl-btn" id="btnPower">POWER</button>
+      <button class="ctrl-btn" id="btnDash">DASH</button>
+    </div>
   </div>
-  <div class="controls">
-    <button id="btnFire">FIRE</button>
-    <button id="btnPower">POWER</button>
-    <button id="btnDash">DASH</button>
-  </div>
-</div>
+  <div id="sec-worlds" class="section"><div id="worldsGrid" class="grid"></div></div>
+  <div id="sec-chars" class="section"><div id="charsGrid" class="grid"></div></div>
+  <div id="sec-weapons" class="section"><div id="weaponsGrid" class="grid"></div></div>
+  <div id="sec-rigs" class="section"><div id="rigsGrid" class="grid"></div></div>
+</main>
 <script>
+const WORLDS = $worldsJson;
+const MODES = $modesJson;
+const AREAS = $areasJson;
+const CHARS = $charsJson;
+const WPNS = $wpnsJson;
+const WONDERS = $wondersJson;
+const RIG_INFO = { name: "${escapeHtml(rigName)}", clip: "${escapeHtml(rigClip)}", loadout: "$safeLoadout", callsign: "$safeCallsign", pwr: ${pwr.powerLevel}, light: ${pwr.lightLevel} };
+const PLATFORM_PROFILE = "${escapeHtml(console.id)}";
+
+function switchSection(id, btn){
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('sec-'+id).classList.add('active');
+  btn.classList.add('active');
+}
+
+function renderCollections(){
+  document.getElementById('worldsGrid').innerHTML =
+    MODES.map(m => '<div class="card"><h4>[MODE: '+m.tag+'] '+m.label+'</h4><p>'+m.summary+'</p></div>').join('') +
+    AREAS.map(a => '<div class="card"><h4>[ARENA] '+a.name+'</h4><div class="pill">'+a.origin+'</div><p>'+a.summary+'</p></div>').join('') +
+    WORLDS.map(w => '<div class="card"><h4>[WORLD] '+w.title+'</h4><div class="pill">'+w.modes+'</div><p>'+w.inspirations+' — '+w.mechanic+'</p></div>').join('');
+  document.getElementById('charsGrid').innerHTML = CHARS.map(c =>
+    '<div class="card"><h4>'+c.name+'</h4><span class="pill">'+c.group+'</span><span class="pill">'+c.rarity+'</span>'+(c.isOriginal?'<span class="pill" style="color:#00e676">ORIGINAL +25%</span>':'')+'<p>'+c.origin+' • +'+c.shd+' SHD • +'+c.dmg+' DMG • '+c.skill+'</p></div>'
+  ).join('');
+  document.getElementById('weaponsGrid').innerHTML =
+    WPNS.map(w => '<div class="card"><h4>'+w.name+'</h4><div class="pill">'+w.origin+'</div><p>DMG '+w.dmg+' • Spread '+w.spread+' • Pierce '+w.pierce+'</p></div>').join('') +
+    WONDERS.map(w => '<div class="card"><h4>[WONDER] '+w.name+' ('+w.tag+')</h4><p>'+w.desc+'</p></div>').join('');
+  document.getElementById('rigsGrid').innerHTML =
+    '<div class="card"><h4>Operator Rig: '+RIG_INFO.name+'</h4><p>Clip: '+RIG_INFO.clip+' • PWR '+RIG_INFO.pwr+' / LIGHT '+RIG_INFO.light+'</p><p>Loadout: '+RIG_INFO.loadout+'</p></div>';
+}
+renderCollections();
+
 const canvas = document.getElementById('arena');
 const ctx = canvas.getContext('2d');
 const statsEl = document.getElementById('stats');
+const envHud = document.getElementById('envHud');
+const gfxSel = document.getElementById('gfxSel');
 function resize(){ canvas.width = canvas.clientWidth; canvas.height = canvas.clientHeight; }
 window.addEventListener('resize', resize); resize();
 
 const state = {
-  px: 0.5, py: 0.5, vx: 0, vy: 0, score: 0, wave: 1, shield: 100,
-  powerCd: 0, bolts: [], enemies: [], keys: {}, frame: 0, padName: 'Keyboard/Touch'
+  px: 5.0, py: 5.0, aimX: 1, aimY: 0, vx: 0, vy: 0, score: 0, wave: 1, shield: 120,
+  papTier: 1, cratesOpened: 0, catsFound: 0, powerCd: 0, bolts: [], enemies: [], keys: {}, frame: 0,
+  padName: 'Keyboard/Touch', prompt: 'Open Frontier — No Borders',
+  camps: [{x:4.4,y:4.8,label:'North Rest Camp'},{x:6.3,y:5.6,label:'Verdansk Depot Camp'}],
+  stations: [{x:5.3,y:4.7,k:'PAP',label:'Pack-A-Punch'},{x:4.6,y:5.4,k:'PERK',label:'Perk Machine'},{x:5.7,y:5.2,k:'AMMO',label:'Ammo Crate'}],
+  hazards: [{x:3.2,y:3.8,k:'ICE'},{x:6.9,y:3.5,k:'FIRE'},{x:3.4,y:6.6,k:'TOXIC'},{x:7.0,y:6.5,k:'ELECTRIC'},{x:8.4,y:5.0,k:'WINDY'}],
+  crates: [{x:3.3,y:3.9,tier:'Hazard Exotic',open:false},{x:7.0,y:3.6,tier:'Hazard Legendary',open:false},{x:11.2,y:5.0,tier:'Frontier Rare',open:false}],
+  cats: [{x:4.0,y:4.1,found:false},{x:6.7,y:6.2,found:false}]
 };
 
 function spawnWave(n){
-  for(let i=0;i<n*4;i++){
+  const count = Math.min(48, Math.round((4 + n*2) * ${enemyDensity} * 0.85));
+  for(let i=0;i<count;i++){
     const a = Math.random()*Math.PI*2;
+    const dist = 1.6 + Math.random()*1.4;
     state.enemies.push({
-      x: 0.5 + Math.cos(a)*0.46, y: 0.5 + Math.sin(a)*0.46,
-      hp: 1 + Math.floor(n/2), speed: 0.0012 + n*0.00018
+      x: state.px + Math.cos(a)*dist, y: state.py + Math.sin(a)*dist,
+      hp: Math.max(1, Math.round((1 + Math.floor(n/2)) * ${diffTier.enemyHpScale})),
+      speed: (0.0085 + n*0.0012) * ${diffTier.enemySpeedScale}
     });
   }
 }
 spawnWave(1);
 
+function interactWorld(){
+  for(const c of state.cats){ if(!c.found && Math.hypot(c.x-state.px,c.y-state.py)<0.55){ c.found=true; state.catsFound++; state.score+=450; state.prompt='Cat Easter Egg Found! +450 Loot Crate'; return; } }
+  for(const cr of state.crates){ if(!cr.open && Math.hypot(cr.x-state.px,cr.y-state.py)<0.6){ cr.open=true; state.cratesOpened++; state.score+=300; state.shield=Math.min(200,state.shield+35); state.prompt='Opened '+cr.tier+' Crate!'; return; } }
+  for(const st of state.stations){ if(Math.hypot(st.x-state.px,st.y-state.py)<0.65){ if(st.k==='PAP'){state.papTier=Math.min(25,state.papTier+1);state.prompt='Pack-A-Punch -> T'+state.papTier;} else if(st.k==='PERK'){state.score+=150;state.prompt='Perk Drink Active!';} else{state.shield=Math.min(200,state.shield+25);state.prompt='Ammo Resupplied!';} return; } }
+  for(const cp of state.camps){ if(Math.hypot(cp.x-state.px,cp.y-state.py)<0.7){ state.shield=200; state.prompt='Rested at '+cp.label+' (Full Shield)'; return; } }
+}
+
 window.addEventListener('keydown', e => {
   state.keys[e.code] = true;
   if(e.code === 'Space') fireBolt();
-  if(e.code === 'KeyE') triggerPower();
+  if(e.code === 'KeyE' || e.code === 'KeyF') interactWorld();
+  if(e.code === 'KeyQ') triggerPower();
 });
 window.addEventListener('keyup', e => { state.keys[e.code] = false; });
 canvas.addEventListener('pointerdown', e => {
   const r = canvas.getBoundingClientRect();
-  const tx = (e.clientX - r.left)/r.width, ty = (e.clientY - r.top)/r.height;
-  fireBoltTowards(tx - state.px, ty - state.py);
+  const dx = (e.clientX - r.left)/r.width - 0.5, dy = (e.clientY - r.top)/r.height - 0.54;
+  fireBoltTowards(dx, dy);
 });
-document.getElementById('btnFire').onclick = () => fireBolt();
-document.getElementById('btnPower').onclick = () => triggerPower();
-document.getElementById('btnDash').onclick = () => { state.vx *= 2.2; state.vy *= 2.2; };
+document.getElementById('btnInteract').onclick = interactWorld;
+document.getElementById('btnFire').onclick = fireBolt;
+document.getElementById('btnPower').onclick = triggerPower;
+document.getElementById('btnDash').onclick = () => { state.vx *= 2.4; state.vy *= 2.4; };
 
-function fireBolt(){ fireBoltTowards(1, 0); }
+function fireBolt(){ fireBoltTowards(state.aimX, state.aimY); }
 function fireBoltTowards(dx, dy){
   const len = Math.hypot(dx, dy) || 1;
-  state.bolts.push({ x: state.px, y: state.py, vx: (dx/len)*0.014, vy: (dy/len)*0.014, life: 60 });
+  state.aimX = dx/len; state.aimY = dy/len;
+  state.bolts.push({ x: state.px, y: state.py, vx: state.aimX*0.09, vy: state.aimY*0.09, life: 45 });
 }
 function triggerPower(){
   if(state.powerCd > 0) return;
-  state.powerCd = 180;
-  state.enemies = state.enemies.filter(e => Math.hypot(e.x - state.px, e.y - state.py) > 0.24);
-  state.score += 120;
+  state.powerCd = 160;
+  state.enemies = state.enemies.filter(e => Math.hypot(e.x - state.px, e.y - state.py) > 1.4);
+  state.score += 180;
 }
 
 function pollGamepad(){
   const pads = navigator.getGamepads ? navigator.getGamepads() : [];
   for(const p of pads){
     if(!p) continue;
-    state.padName = p.id.slice(0, 22);
-    if(Math.abs(p.axes[0]) > 0.18) state.vx += p.axes[0]*0.004;
-    if(Math.abs(p.axes[1]) > 0.18) state.vy += p.axes[1]*0.004;
+    state.padName = PLATFORM_PROFILE + ': ' + p.id.slice(0, 16);
+    if(Math.abs(p.axes[0]) > 0.16) state.vx += p.axes[0]*0.014;
+    if(Math.abs(p.axes[1]) > 0.16) state.vy += p.axes[1]*0.014;
+    if(Math.hypot(p.axes[2]||0, p.axes[3]||0) > 0.22){
+      state.aimX = p.axes[2]; state.aimY = p.axes[3];
+      if(state.frame % 9 === 0) fireBolt();
+    }
     if(p.buttons[0]?.pressed && state.frame % 10 === 0) fireBolt();
+    if(p.buttons[2]?.pressed && state.frame % 18 === 0) interactWorld();
     if(p.buttons[3]?.pressed) triggerPower();
     break;
   }
 }
 
+function proj(wx, wy, w, h){
+  const rx = wx - state.px, ry = wy - state.py;
+  const pScale = 1 / (1 - Math.max(-0.55, Math.min(0.6, ry*0.14)));
+  return { x: w*0.5 + rx * (w*0.22) * pScale, y: h*0.54 + ry * (h*0.20) * pScale, s: pScale };
+}
+
 function tick(){
   state.frame++;
   if(state.powerCd > 0) state.powerCd--;
-  const spd = 0.0042;
+  const spd = 0.011;
   if(state.keys['KeyW']||state.keys['ArrowUp']) state.vy -= spd;
   if(state.keys['KeyS']||state.keys['ArrowDown']) state.vy += spd;
   if(state.keys['KeyA']||state.keys['ArrowLeft']) state.vx -= spd;
   if(state.keys['KeyD']||state.keys['ArrowRight']) state.vx += spd;
   pollGamepad();
-  state.px = Math.max(0.05, Math.min(0.95, state.px + state.vx));
-  state.py = Math.max(0.08, Math.min(0.92, state.py + state.vy));
-  state.vx *= 0.8; state.vy *= 0.8;
+  // Unbounded open world beyond 10x10 Verdansk sector!
+  state.px += state.vx; state.py += state.vy;
+  state.vx *= 0.78; state.vy *= 0.78;
 
   for(const b of state.bolts){ b.x += b.vx; b.y += b.vy; b.life--; }
   state.bolts = state.bolts.filter(b => b.life > 0);
-
   for(const e of state.enemies){
     const dx = state.px - e.x, dy = state.py - e.y, d = Math.hypot(dx, dy) || 1;
     e.x += (dx/d)*e.speed; e.y += (dy/d)*e.speed;
-    if(d < 0.03 && state.frame % 25 === 0) state.shield = Math.max(0, state.shield - 8);
+    if(d < 0.2 && state.frame % 28 === 0) state.shield = Math.max(0, state.shield - 7);
     for(const b of state.bolts){
-      if(Math.hypot(b.x - e.x, b.y - e.y) < 0.03){ e.hp--; b.life = 0; state.score += 50; }
+      if(Math.hypot(b.x - e.x, b.y - e.y) < 0.24){ e.hp -= Math.max(1, Math.floor(state.papTier/2)+1); b.life = 0; state.score += 55; }
     }
   }
   state.enemies = state.enemies.filter(e => e.hp > 0);
   if(state.enemies.length === 0){ state.wave++; spawnWave(state.wave); }
 
   const w = canvas.width, h = canvas.height;
+  const gfx = gfxSel.value;
   ctx.fillStyle = '#070a12'; ctx.fillRect(0,0,w,h);
-  ctx.strokeStyle = 'rgba(40,54,85,0.45)';
-  for(let gx=0; gx<w; gx+=48){ ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,h); ctx.stroke(); }
-  for(let gy=0; gy<h; gy+=48){ ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(w,gy); ctx.stroke(); }
+  // Tilted 2.5D horizon band
+  const grad = ctx.createLinearGradient(0,0,0,h*0.26);
+  grad.addColorStop(0,'#111c36'); grad.addColorStop(1,'#070a12');
+  ctx.fillStyle = grad; ctx.fillRect(0,0,w,h*0.26);
+
+  if(gfx !== 'low'){
+    ctx.strokeStyle = 'rgba(0,229,255,0.16)'; ctx.lineWidth = 1;
+    for(let i=-4;i<=4;i++){
+      const gx = Math.floor(state.px)+i;
+      const a = proj(gx, state.py-2.4, w, h), b = proj(gx, state.py+2.4, w, h);
+      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    }
+    for(let j=-3;j<=3;j++){
+      const gy = Math.floor(state.py)+j;
+      const a = proj(state.px-2.8, gy, w, h), b = proj(state.px+2.8, gy, w, h);
+      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    }
+  }
+
+  for(const hz of state.hazards){ const p=proj(hz.x,hz.y,w,h); ctx.fillStyle='rgba(255,82,82,0.22)'; ctx.beginPath(); ctx.arc(p.x,p.y,22*p.s,0,Math.PI*2); ctx.fill(); }
+  for(const cp of state.camps){ const p=proj(cp.x,cp.y,w,h); ctx.fillStyle='#ff9100'; ctx.beginPath(); ctx.arc(p.x,p.y,11*p.s,0,Math.PI*2); ctx.fill(); }
+  for(const st of state.stations){ const p=proj(st.x,st.y,w,h); ctx.fillStyle='#00e5ff'; ctx.fillRect(p.x-8*p.s,p.y-12*p.s,16*p.s,20*p.s); }
+  for(const cr of state.crates){ if(cr.open) continue; const p=proj(cr.x,cr.y,w,h); ctx.fillStyle='#ffd54f'; ctx.fillRect(p.x-7*p.s,p.y-7*p.s,14*p.s,11*p.s); }
+  for(const c of state.cats){ if(c.found) continue; const p=proj(c.x,c.y,w,h); ctx.fillStyle='#ff4081'; ctx.beginPath(); ctx.arc(p.x,p.y,6*p.s,0,Math.PI*2); ctx.fill(); }
 
   ctx.fillStyle = '$secondaryHex';
-  for(const e of state.enemies){ ctx.beginPath(); ctx.arc(e.x*w, e.y*h, 11, 0, Math.PI*2); ctx.fill(); }
+  for(const e of state.enemies){
+    const p=proj(e.x,e.y,w,h);
+    if(gfx==='high'){ ctx.fillStyle='rgba(0,0,0,0.45)'; ctx.beginPath(); ctx.ellipse(p.x,p.y+8*p.s,10*p.s,4*p.s,0,0,Math.PI*2); ctx.fill(); }
+    ctx.fillStyle = '$secondaryHex';
+    ctx.beginPath(); ctx.arc(p.x,p.y,10*p.s,0,Math.PI*2); ctx.fill();
+  }
   ctx.fillStyle = '#ffeb3b';
-  for(const b of state.bolts){ ctx.beginPath(); ctx.arc(b.x*w, b.y*h, 5, 0, Math.PI*2); ctx.fill(); }
+  for(const b of state.bolts){ const p=proj(b.x,b.y,w,h); ctx.beginPath(); ctx.arc(p.x,p.y,4.5*p.s,0,Math.PI*2); ctx.fill(); }
 
+  const me = proj(state.px, state.py, w, h);
   ctx.strokeStyle = '$accentHex'; ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.arc(state.px*w, state.py*h, 15, 0, Math.PI*2); ctx.stroke();
-  statsEl.textContent = 'Score: '+state.score+' | Wave: '+state.wave+' | Shield: '+state.shield+' | Input: '+state.padName;
+  ctx.beginPath(); ctx.arc(me.x, me.y, 14*me.s, 0, Math.PI*2); ctx.stroke();
+
+  const outZone = (state.px < 0 || state.px > 10 || state.py < 0 || state.py > 10) ? 'OUTER FRONTIER' : 'VERDANSK CORE';
+  statsEl.textContent = 'Score: '+state.score+' | Wave: '+state.wave+' | SHD: '+state.shield+' | PaP T'+state.papTier+' | Cats: '+state.catsFound+' | Crates: '+state.cratesOpened;
+  envHud.textContent = outZone+' ('+state.px.toFixed(1)+', '+state.py.toFixed(1)+') • Input: '+state.padName+' • '+state.prompt;
   requestAnimationFrame(tick);
 }
 tick();
 </script>
 </body>
 </html>"""
+  }
+
+  /**
+   * Generates a runnable Windows Standalone HTA executable launcher (.hta) wrapping the full HTML5 engine.
+   */
+  fun generatePcExecutableHta(
+    profile: OperatorProfile,
+    armory: List<ArmoryItem>,
+    rig: RigAsset?,
+    progression: com.example.data.model.OperatorProgressionState = com.example.data.model.OperatorProgressionState(),
+    graphicsTier: String = "medium",
+  ): String {
+    val html = generatePlayableHtmlPackage(profile, armory, rig, progression, graphicsTier, "pc_desktop")
+    val htaHeader = """<HTA:APPLICATION ID="UnknownUniversesPC" APPLICATIONNAME="The Unknown Universes" BORDER="thin" CAPTION="yes" MAXIMIZEBUTTON="yes" MINIMIZEBUTTON="yes" SYSMENU="yes" WINDOWSTATE="maximize" />"""
+    return html.replaceFirst("</head>", "$htaHeader\n</head>")
+  }
+
+  /**
+   * Generates real target-platform build manifests & controller config packages for
+   * PlayStation (PS5/PS4/PS3), Nintendo Switch, Xbox UWP AppxManifest XML, iOS PWA, and PC EXE spec.
+   */
+  fun generateConsolePackageManifest(
+    profile: OperatorProfile,
+    progression: com.example.data.model.OperatorProgressionState,
+    platformTargetId: String,
+    graphicsTier: String = "medium",
+  ): String {
+    val world = UniverseCatalog.worldById(profile.activeUniverseId)
+    val console = UniverseCatalog.consoleById(platformTargetId)
+    val pwr = progression.computePowerAndLightLevel(profile.totalEssence)
+    val hero = progression.activeOutfitSpec()
+
+    if (platformTargetId == "xbox_series") {
+      return """<?xml version="1.0" encoding="utf-8"?>
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10">
+  <Identity Name="UnknownOS.TheUnknownUniverses" Publisher="CN=${escapeHtml(profile.callsign)}" Version="${BuildConfig.VERSION_NAME}.0" ProcessorArchitecture="x64" />
+  <Properties>
+    <DisplayName>The Unknown Universes (${escapeHtml(world.title)})</DisplayName>
+    <PublisherDisplayName>UnknownOS Studio</PublisherDisplayName>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Xbox" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.19041.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+  <Capabilities><Capability Name="internetClient" /></Capabilities>
+  <Applications>
+    <Application Id="App" EntryPoint="Windows.WebAppHost">
+      <uap:VisualElements DisplayName="The Unknown Universes (${escapeHtml(console.label)})" BackgroundColor="#070A12" Description="PWR ${pwr.powerLevel} | LIGHT ${pwr.lightLevel} | Hero: ${escapeHtml(hero.nameWithVersion)} | GFX: $graphicsTier" />
+    </Application>
+  </Applications>
+</Package>"""
+    }
+
+    val obj = JSONObject().apply {
+      put("project", "The Unknown Universes — Cross-Platform Export")
+      put("targetPlatformId", console.id)
+      put("platformLabel", console.label)
+      put("platformFamily", console.platformFamily)
+      put("artifactFormat", when (platformTargetId) {
+        "ps5_dualsense" -> "PlayStation WebGPU/Gamepad Package (PS5/PS4/PS3)"
+        "switch_handheld" -> "Nintendo Switch Horizon Handheld 720p/1080p Spec"
+        "ios_safari" -> "iOS Safari Standalone PWA + MFi Controller Profile"
+        "pc_desktop" -> "Windows PC Standalone (.HTA / WebView2 .EXE Wrapper)"
+        else -> "Universal HTML5 Bundle"
+      })
+      put("graphicsQualityTier", graphicsTier)
+      put("activeWorld", world.title)
+      put("activeCharacter", hero.nameWithVersion)
+      put("powerLevel", pwr.powerLevel)
+      put("lightLevel", pwr.lightLevel)
+      put("dualStickGamepadMapping", JSONArray(console.buttonLegend))
+      put("engineNotes", console.browserEngineNote)
+    }
+    return obj.toString(2)
   }
 
   /**

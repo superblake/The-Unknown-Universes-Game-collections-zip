@@ -942,6 +942,31 @@ class UniverseViewModel(
     }
   }
 
+  fun upgradeOutfitRarity(outfitId: String) {
+    val store = progressionStore ?: return
+    val res = store.upgradeOutfitRarityWithShards(outfitId)
+    val name = MultiverseArsenalCatalog.outfitById(outfitId).nameWithVersion
+    _statusBanner.value = if (res.isSuccess) {
+      "$name ascended to ${res.getOrThrow().label.uppercase()} Rarity!"
+    } else {
+      res.exceptionOrNull()?.message ?: "Need more Character Shards"
+    }
+  }
+
+  fun recruitCharacterShard(currentBlueEssence: Long, targetOutfitId: String? = null) {
+    val store = progressionStore ?: return
+    val res = store.recruitCharacterShardDrop(currentBlueEssence, targetOutfitId)
+    if (res.isFailure) {
+      _statusBanner.value = res.exceptionOrNull()?.message ?: "Cannot recruit Character Shards"
+      return
+    }
+    val (name, shards, cost) = res.getOrThrow()
+    viewModelScope.launch {
+      if (cost > 0L) repository.adjustOperatorEssence(currentUserId, -cost)
+      _statusBanner.value = "Character Beacon Loot: +$shards Shards for $name (-$cost B)"
+    }
+  }
+
   fun selectCustomArea(areaId: String) {
     val store = progressionStore ?: return
     store.selectArea(areaId)

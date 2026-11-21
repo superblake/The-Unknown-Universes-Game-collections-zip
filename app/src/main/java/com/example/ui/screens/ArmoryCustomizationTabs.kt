@@ -477,6 +477,8 @@ fun CharacterCustomizationTab(
   val charStarMeta = ProgressionCatalog.starMeta(progression.characterStarLevel)
   val charTierCost = UpgradeCosts.characterTier(progression.characterTier)
   val charStarCost = UpgradeCosts.characterStar(progression.characterStarLevel)
+  val powerLight = progression.computePowerAndLightLevel(totalBlueEssence)
+  val milestoneSummary = ProgressionCatalog.milestoneBonusSummary(progression.playerLevel)
   var originalsOnlyFilter by remember { mutableStateOf(false) }
   val characterRoster = remember(originalsOnlyFilter) {
     if (originalsOnlyFilter) {
@@ -533,6 +535,7 @@ fun CharacterCustomizationTab(
                   cloakOverride = cc.cloakEnabled,
                   visorColorOverride = Color(visorHex),
                   auraTrailId = cc.auraTrailId,
+                  outfitId = activeSpec.id,
                 )
               }
             }
@@ -545,6 +548,18 @@ fun CharacterCustomizationTab(
                 color = Color(activeSpec.secondaryHex),
                 modifier = Modifier.testTag("character_active_hero_name"),
               )
+              Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = Color(0xFFFFD54F).copy(alpha = 0.16f),
+              ) {
+                Text(
+                  text = "PWR ${powerLight.powerLevel} • LIGHT ${powerLight.lightLevel} (${powerLight.tierLabel})",
+                  style = MaterialTheme.typography.labelSmall,
+                  fontWeight = FontWeight.Bold,
+                  color = Color(0xFFFFD54F),
+                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp).testTag("character_power_light_badge"),
+                )
+              }
               if (activeSpec.isOriginalCharacter) {
                 Surface(
                   shape = RoundedCornerShape(6.dp),
@@ -566,6 +581,13 @@ fun CharacterCustomizationTab(
                 modifier = Modifier.testTag("player_level_rank_text"),
               )
               Text(
+                text = milestoneSummary,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFE040FB),
+                modifier = Modifier.testTag("character_milestone_banner"),
+              )
+              Text(
                 text = "Tier ${progression.characterTier}/25 (${charTierMeta.label}) • ${progression.characterStarLevel}★/10★ (${charStarMeta.label})",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
@@ -580,7 +602,7 @@ fun CharacterCustomizationTab(
               )
               val shieldBonus = ((progression.playerLevel - 1) * 2).coerceAtMost(600) + progression.playerPrestige * 25
               Text(
-                text = "Hero Bonus: +${activeSpec.baseShieldBonus} SHD / +${activeSpec.baseDamageBonus} DMG • Passive: +$shieldBonus SHD",
+                text = "Hero Bonus: +${activeSpec.baseShieldBonus} SHD / +${activeSpec.baseDamageBonus} DMG • Milestone x${String.format(Locale.US, "%.2f", ProgressionCatalog.levelStatMultiplier(progression.playerLevel))} • +$shieldBonus SHD",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
               )
@@ -829,10 +851,41 @@ fun LevelCustomizationTab(
 ) {
   val lc = progression.levelCustom
   LazyColumn(
-    modifier = Modifier.fillMaxSize(),
+    modifier = Modifier.fillMaxSize().testTag("level_customization_list"),
     contentPadding = PaddingValues(16.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp),
   ) {
+    item {
+      Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth().border(1.dp, Color(lc.worldDifficultyTier.accentHex).copy(alpha = 0.65f), RoundedCornerShape(14.dp)),
+      ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          Text(
+            text = "WORLD DIFFICULTY TIER (${lc.worldDifficultyTier.label.uppercase()})",
+            style = MaterialTheme.typography.titleSmall,
+            color = Color(lc.worldDifficultyTier.accentHex),
+          )
+          Text(
+            text = "Enemy HP x${String.format(Locale.US, "%.2f", lc.worldDifficultyTier.enemyHpScale)} • Speed x${String.format(Locale.US, "%.2f", lc.worldDifficultyTier.enemySpeedScale)} • Rewards x${String.format(Locale.US, "%.2f", lc.worldDifficultyTier.rewardScale)}",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color(0xFFFFD54F),
+          )
+          LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(com.example.data.model.WorldDifficultyTier.entries, key = { it.id }) { tier ->
+              FilterChip(
+                selected = lc.worldDifficultyTier == tier,
+                onClick = { onUpdateLevelCustom { it.copy(worldDifficultyTier = tier) } },
+                label = { Text(tier.label) },
+                modifier = Modifier.testTag("difficulty_tier_${tier.id}"),
+              )
+            }
+          }
+        }
+      }
+    }
+
     item {
       CustomizationChipGroup(
         title = "ARENA SKY & ATMOSPHERE THEME",
@@ -861,14 +914,14 @@ fun LevelCustomizationTab(
       ) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
           Text(
-            text = "Enemy Wave Density: ${String.format(Locale.US, "%.2fx", lc.enemyDensityMultiplier)}",
+            text = "Enemy Wave Density: ${String.format(Locale.US, "%.2fx", lc.enemyDensityMultiplier)} (up to 2.5x Swarm)",
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary,
           )
           Slider(
-            value = lc.enemyDensityMultiplier,
-            onValueChange = { v -> onUpdateLevelCustom { it.copy(enemyDensityMultiplier = v.coerceIn(0.75f, 1.5f)) } },
-            valueRange = 0.75f..1.5f,
+            value = lc.enemyDensityMultiplier.coerceIn(0.75f, 2.5f),
+            onValueChange = { v -> onUpdateLevelCustom { it.copy(enemyDensityMultiplier = v.coerceIn(0.75f, 2.5f)) } },
+            valueRange = 0.75f..2.5f,
             modifier = Modifier.testTag("level_density_slider"),
           )
           Text("FLOOR GRID ACCENT COLOR", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)

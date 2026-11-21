@@ -159,6 +159,9 @@ fun ArmoryScreen(
   onUpgradeSkillStar: (String) -> Unit = {},
   onUpgradeVacuumBotStar: () -> Unit = {},
   onUpgradeAreaStar: (String) -> Unit = {},
+  onUpgradeOutfitRarity: (String) -> Unit = {},
+  onRecruitCharacterShard: (String?) -> Unit = {},
+  onHuntHeroFrontier: () -> Unit = {},
 ) {
   val categories = listOf("all", "perk", "power", "upgrade", "consumable")
   var selectedSection by remember { mutableStateOf(ArmorySection.MODS) }
@@ -177,6 +180,7 @@ fun ArmoryScreen(
     progression.combinedEssence,
     progression.blastShards,
   ) { progression.essenceResonance(totalEssence) }
+  val powerLight = progression.computePowerAndLightLevel(totalEssence)
 
   Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
     Surface(
@@ -195,7 +199,7 @@ fun ArmoryScreen(
           Column(modifier = Modifier.weight(1f)) {
             Text("MULTIVERSE ARMORY", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
             Text(
-              text = "Lv.${progression.playerLevel} ${progression.playerRankTitle} • ${progression.activeOutfitSpec().nameWithVersion}",
+              text = "PWR ${powerLight.powerLevel} • LT ${powerLight.lightLevel} • Lv.${progression.playerLevel} • ${progression.activeOutfitSpec().nameWithVersion}",
               style = MaterialTheme.typography.labelSmall,
               color = MaterialTheme.colorScheme.primary,
             )
@@ -371,6 +375,9 @@ fun ArmoryScreen(
           onUpgradeOutfit = onUpgradeOutfit,
           onUpgradeOutfitSubSystem = onUpgradeOutfitSubSystem,
           onUpgradeOutfitStar = onUpgradeOutfitStar,
+          onUpgradeOutfitRarity = onUpgradeOutfitRarity,
+          onRecruitCharacterShard = onRecruitCharacterShard,
+          onHuntHeroFrontier = onHuntHeroFrontier,
         )
 
         ArmorySection.WEAPONS -> WeaponCustomizationTab(

@@ -325,6 +325,7 @@ fun ForgeRigScreen(
               cloakOverride = progression.characterCustom.cloakEnabled,
               visorColorOverride = Color(visorHex),
               auraTrailId = progression.characterCustom.auraTrailId,
+              outfitId = progression.equippedOutfitId,
             )
 
             // Blender-style Top-Right XYZ Orientation Gizmo

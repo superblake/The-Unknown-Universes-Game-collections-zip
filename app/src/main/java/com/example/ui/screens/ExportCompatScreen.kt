@@ -71,11 +71,13 @@ fun ExportCompatScreen(
   onConfirmSaveImport: (SaveBundlePreview, Boolean) -> Unit = { _, _ -> },
   onSelectConsolePreset: (String) -> Unit,
   onStatusMessage: (String) -> Unit,
+  progression: com.example.data.model.OperatorProgressionState = com.example.data.model.OperatorProgressionState(),
 ) {
   val context = LocalContext.current
   val activeRig = rigs.firstOrNull { it.id == profile.activeRigId } ?: rigs.firstOrNull()
   val activeConsole = UniverseCatalog.consoleById(profile.consolePreset)
 
+  var graphicsTier by remember { mutableStateOf("medium") }
   var bo3BoneMode by remember { mutableStateOf(Bo3BoneMappingMode.TREYARCH_CHARACTER) }
   var bo3UseInches by remember { mutableStateOf(true) }
   var bo3Fps by remember { mutableStateOf(30) }
@@ -90,7 +92,7 @@ fun ExportCompatScreen(
   }
 
   var previewKind by remember { mutableStateOf("html") }
-  val previewText = remember(profile, armory, activeRig, previewKind, bo3Options) {
+  val previewText = remember(profile, armory, activeRig, progression, graphicsTier, previewKind, bo3Options) {
     when (previewKind) {
       "py" ->
         if (activeRig != null) PortablePackageGenerator.generateBlenderRigScript(activeRig)
@@ -107,8 +109,11 @@ fun ExportCompatScreen(
       "bo3_py" ->
         if (activeRig != null) Bo3ModToolsExporter.generateCoDBlenderBo3Script(activeRig, bo3Options)
         else "# Create a rig in ForgeRig Studio first"
+      "console" -> PortablePackageGenerator.generateConsolePackageManifest(profile, progression, profile.consolePreset, graphicsTier)
+      "xbox_xml" -> PortablePackageGenerator.generateConsolePackageManifest(profile, progression, "xbox_series", graphicsTier)
+      "pc_hta" -> PortablePackageGenerator.generatePcExecutableHta(profile, armory, activeRig, progression, graphicsTier)
       "json" -> PortablePackageGenerator.generatePortableJsonBundle(profile, armory, rigs)
-      else -> PortablePackageGenerator.generatePlayableHtmlPackage(profile, armory, activeRig)
+      else -> PortablePackageGenerator.generatePlayableHtmlPackage(profile, armory, activeRig, progression, graphicsTier, profile.consolePreset)
     }
   }
 
@@ -227,13 +232,23 @@ fun ExportCompatScreen(
       ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
           Text(
-            text = "DOWNLOAD PORTABLE PACKAGES (${activeConsole.label})",
+            text = "DOWNLOAD PORTABLE & CONSOLE PACKAGES (${activeConsole.label})",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary,
           )
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("low" to "GFX: Low (60fps)", "medium" to "GFX: Balanced", "high" to "GFX: High Shadows").forEach { (tier, lbl) ->
+              FilterChip(
+                selected = graphicsTier == tier,
+                onClick = { graphicsTier = tier },
+                label = { Text(lbl) },
+                modifier = Modifier.testTag("export_gfx_$tier"),
+              )
+            }
+          }
           Button(
             onClick = {
-              pendingFileContent = PortablePackageGenerator.generatePlayableHtmlPackage(profile, armory, activeRig)
+              pendingFileContent = PortablePackageGenerator.generatePlayableHtmlPackage(profile, armory, activeRig, progression, graphicsTier, profile.consolePreset)
               createDocumentLauncher.launch("unknown_universes_portable.html")
             },
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
@@ -243,6 +258,67 @@ fun ExportCompatScreen(
             Icon(AppIcons.Web, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Text(stringResource(R.string.export_html_btn), style = MaterialTheme.typography.labelLarge)
+          }
+
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+              onClick = {
+                pendingFileContent = PortablePackageGenerator.generatePcExecutableHta(profile, armory, activeRig, progression, graphicsTier)
+                previewKind = "pc_hta"
+                createDocumentLauncher.launch("UnknownUniverses_PC_Launcher.hta")
+              },
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(44.dp).testTag("download_pc_hta_btn"),
+            ) {
+              Text("PC App (.HTA)", style = MaterialTheme.typography.labelSmall)
+            }
+            OutlinedButton(
+              onClick = {
+                pendingFileContent = PortablePackageGenerator.generateConsolePackageManifest(profile, progression, "xbox_series", graphicsTier)
+                previewKind = "xbox_xml"
+                createDocumentLauncher.launch("AppxManifest_Xbox.xml")
+              },
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(44.dp).testTag("download_xbox_xml_btn"),
+            ) {
+              Text("Xbox (.XML)", style = MaterialTheme.typography.labelSmall)
+            }
+          }
+
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+              onClick = {
+                pendingFileContent = PortablePackageGenerator.generateConsolePackageManifest(profile, progression, "ps5_dualsense", graphicsTier)
+                previewKind = "console"
+                createDocumentLauncher.launch("UnknownUniverses_PlayStation.pspkg.json")
+              },
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(44.dp).testTag("download_ps_pkg_btn"),
+            ) {
+              Text("PlayStation", style = MaterialTheme.typography.labelSmall)
+            }
+            OutlinedButton(
+              onClick = {
+                pendingFileContent = PortablePackageGenerator.generateConsolePackageManifest(profile, progression, "switch_handheld", graphicsTier)
+                previewKind = "console"
+                createDocumentLauncher.launch("UnknownUniverses_Nintendo.nsp.json")
+              },
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(44.dp).testTag("download_switch_pkg_btn"),
+            ) {
+              Text("Nintendo", style = MaterialTheme.typography.labelSmall)
+            }
+            OutlinedButton(
+              onClick = {
+                pendingFileContent = PortablePackageGenerator.generatePlayableHtmlPackage(profile, armory, activeRig, progression, graphicsTier, "ios_safari")
+                previewKind = "html"
+                createDocumentLauncher.launch("UnknownUniverses_iOS_PWA.html")
+              },
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(44.dp).testTag("download_ios_pwa_btn"),
+            ) {
+              Text("iOS PWA", style = MaterialTheme.typography.labelSmall)
+            }
           }
 
           OutlinedButton(
@@ -472,6 +548,9 @@ fun ExportCompatScreen(
           ) {
             listOf(
               "html" to "HTML5 Build",
+              "console" to "Console Spec",
+              "xbox_xml" to "Xbox AppX XML",
+              "pc_hta" to "PC .HTA App",
               "py" to "Blender .PY",
               "xmodel" to "BO3 .XMODEL",
               "xanim" to "BO3 .XANIM",

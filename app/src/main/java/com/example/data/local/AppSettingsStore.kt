@@ -74,6 +74,12 @@ data class AppSettings(
   // 5. Free App Protection & Privacy
   val screenCaptureShield: Boolean = false,
   val chatSafetyFilter: Boolean = true,
+
+  // 6. Audio, Soundtrack & Fullscreen Display
+  val musicEnabled: Boolean = true,
+  val musicVolume: Float = 0.22f,
+  val selectedMusicTrack: Int = 0, // 0 = Auto Cycle, 1 = My Feelings of Music, 2 = Destiny Legendary Stories 1
+  val immersiveFullscreen: Boolean = true,
 ) {
   val effectiveDarkTheme: Boolean
     get() = themeMode != ThemeVisualMode.HIGH_CONTRAST_LIGHT
@@ -235,6 +241,8 @@ class AppSettingsStore(context: Context) {
     screenMarginDp = s.screenMarginDp.coerceIn(0, 16),
     textScale = s.textScale.coerceIn(1.0f, 1.4f),
     gameSpeedMultiplier = s.gameSpeedMultiplier.coerceIn(0.55f, 1.3f),
+    musicVolume = s.musicVolume.coerceIn(0.0f, 0.70f),
+    selectedMusicTrack = s.selectedMusicTrack.coerceIn(0, 2),
   )
 
   private fun loadFromPrefs(): AppSettings {
@@ -278,6 +286,10 @@ class AppSettingsStore(context: Context) {
         assistShieldBoost = prefs.getBoolean("assist_shield", d.assistShieldBoost),
         screenCaptureShield = prefs.getBoolean("screen_capture_shield", d.screenCaptureShield),
         chatSafetyFilter = prefs.getBoolean("chat_safety_filter", d.chatSafetyFilter),
+        musicEnabled = prefs.getBoolean("music_enabled", d.musicEnabled),
+        musicVolume = prefs.getFloat("music_volume", d.musicVolume),
+        selectedMusicTrack = prefs.getInt("selected_music_track", d.selectedMusicTrack),
+        immersiveFullscreen = prefs.getBoolean("immersive_fullscreen", d.immersiveFullscreen),
       )
     )
   }
@@ -313,6 +325,10 @@ class AppSettingsStore(context: Context) {
       putBoolean("assist_shield", s.assistShieldBoost)
       putBoolean("screen_capture_shield", s.screenCaptureShield)
       putBoolean("chat_safety_filter", s.chatSafetyFilter)
+      putBoolean("music_enabled", s.musicEnabled)
+      putFloat("music_volume", s.musicVolume)
+      putInt("selected_music_track", s.selectedMusicTrack)
+      putBoolean("immersive_fullscreen", s.immersiveFullscreen)
     }
   }
 

@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -67,6 +69,7 @@ import kotlin.math.roundToInt
 
 private enum class SettingsCategory(val id: String, val label: String) {
   ALL("all", "All"),
+  AUDIO("audio", "Music & Audio"),
   CONTROLS("controls", "Controls"),
   PERFORMANCE("performance", "Performance"),
   VISUAL("visual", "Visuals"),
@@ -107,7 +110,7 @@ fun SettingsDialog(
   ) {
     Surface(
       color = MaterialTheme.colorScheme.background,
-      modifier = Modifier.fillMaxSize().testTag("settings_dialog_root"),
+      modifier = Modifier.fillMaxSize().safeDrawingPadding().imePadding().testTag("settings_dialog_root"),
     ) {
       Column(
         modifier = Modifier.fillMaxSize(),
@@ -215,6 +218,52 @@ fun SettingsDialog(
                 onClick = onResetDefaults,
                 modifier = Modifier.fillMaxWidth().height(48.dp).testTag("preset_reset_btn"),
               ) { Text("Reset All Settings to Defaults") }
+            }
+          }
+
+          if (selectedCategory == SettingsCategory.ALL || selectedCategory == SettingsCategory.AUDIO) {
+            item {
+              SettingsSectionCard(
+                title = "SOUNDTRACK & AMBIENT MUSIC",
+                subtitle = "Soft background music using your bundled tracks (defaults to 22% so combat SFX and dialogue stay comfortable).",
+                icon = AppIcons.AutoAwesome,
+                accent = Color(0xFF00E5FF),
+              ) {
+                SettingSwitchRow(
+                  title = "Enable Background Music",
+                  description = "Plays your soundtrack gently across menus and Arena combat.",
+                  checked = settings.musicEnabled,
+                  tag = "switch_music_enabled",
+                  onCheckedChange = { v -> onUpdateSettings { it.copy(musicEnabled = v) } },
+                )
+                SettingSliderRow(
+                  title = "Music Volume (${(settings.musicVolume * 100).roundToInt()}%)",
+                  description = "Capped softly (up to 70%) so tracks never overpower gameplay.",
+                  value = settings.musicVolume,
+                  range = 0.0f..0.70f,
+                  steps = 13,
+                  tag = "slider_music_volume",
+                  onValueChange = { v -> onUpdateSettings { it.copy(musicVolume = v) } },
+                )
+                Text("Soundtrack Selection", style = MaterialTheme.typography.titleMedium)
+                Row(
+                  modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                  horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                  listOf(
+                    0 to "Auto Cycle Both",
+                    1 to "My Feelings of Music",
+                    2 to "Destiny Legendary Stories 1",
+                  ).forEach { (idx, label) ->
+                    FilterChip(
+                      selected = settings.selectedMusicTrack == idx,
+                      onClick = { onUpdateSettings { it.copy(selectedMusicTrack = idx) } },
+                      label = { Text(label) },
+                      modifier = Modifier.height(48.dp).testTag("chip_music_track_$idx"),
+                    )
+                  }
+                }
+              }
             }
           }
 
@@ -477,6 +526,14 @@ fun SettingsDialog(
                     )
                   }
                 }
+
+                SettingSwitchRow(
+                  title = "Full-Screen Immersive Arena",
+                  description = "Hides Android system bars and OS navigation rail during active Arena missions for maximum battlefield visibility.",
+                  checked = settings.immersiveFullscreen,
+                  tag = "switch_immersive_fullscreen",
+                  onCheckedChange = { v -> onUpdateSettings { it.copy(immersiveFullscreen = v) } },
+                )
 
                 SettingSwitchRow(
                   title = "Neon Glow & Aura Rings",

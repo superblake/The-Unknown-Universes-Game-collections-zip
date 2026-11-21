@@ -5,7 +5,12 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.WindowManager
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -98,12 +103,42 @@ class MainActivity : ComponentActivity() {
     super.onCreate(savedInstanceState)
     pendingOAuthRedirect.value = intent?.data
     enableEdgeToEdge()
+    com.example.util.BackgroundMusicManager.startAmbientMusic(this)
     setContent {
       AppNavigation(
         pendingOAuthRedirect = pendingOAuthRedirect.asStateFlow(),
         onConsumeRedirect = { pendingOAuthRedirect.value = null },
       )
     }
+  }
+
+  override fun onPause() {
+    super.onPause()
+    com.example.util.BackgroundMusicManager.pauseMusic()
+  }
+
+  override fun onResume() {
+    super.onResume()
+    com.example.util.BackgroundMusicManager.resumeMusic()
+  }
+
+  override fun onDestroy() {
+    super.onDestroy()
+    com.example.util.BackgroundMusicManager.stopAmbientMusic()
+  }
+
+  override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean {
+    if (com.example.util.GamepadInputBridge.onGenericMotionEvent(ev)) {
+      return true
+    }
+    return super.dispatchGenericMotionEvent(ev)
+  }
+
+  override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+    if (com.example.util.GamepadInputBridge.onKeyEvent(event)) {
+      return true
+    }
+    return super.dispatchKeyEvent(event)
   }
 
   override fun onNewIntent(intent: Intent) {
@@ -184,6 +219,19 @@ fun AppNavigation(
   }
   var progressionIntegrityValid by remember { mutableStateOf(true) }
   var verifyIntegrityFn by remember { mutableStateOf<() -> Boolean>({ true }) }
+
+  LaunchedEffect(
+    appSettings.musicEnabled,
+    appSettings.musicVolume,
+    appSettings.selectedMusicTrack,
+  ) {
+    com.example.util.BackgroundMusicManager.applySettings(
+      context = context,
+      enabled = appSettings.musicEnabled,
+      volume = appSettings.musicVolume,
+      trackMode = appSettings.selectedMusicTrack,
+    )
+  }
 
   DisposableEffect(appSettings.screenCaptureShield, context) {
     val window = (context as? Activity)?.window
@@ -391,18 +439,33 @@ fun UnknownOsShell(
     }
   }
 
+  val hideBarsForArena = appSettings.immersiveFullscreen && activeTab == OsWorkspaceTab.ARENA_PLAY
+  DisposableEffect(hideBarsForArena, context) {
+    val window = (context as? Activity)?.window
+    if (window != null) {
+      val controller = WindowCompat.getInsetsController(window, window.decorView)
+      if (hideBarsForArena) {
+        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller.hide(WindowInsetsCompat.Type.systemBars())
+      } else {
+        controller.show(WindowInsetsCompat.Type.systemBars())
+      }
+    }
+    onDispose {}
+  }
+
   BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
     val useNavRail = maxWidth >= 600.dp
 
     Scaffold(
-      contentWindowInsets = WindowInsets.safeDrawing,
+      contentWindowInsets = if (hideBarsForArena) WindowInsets(0, 0, 0, 0) else WindowInsets.safeDrawing,
       snackbarHost = {
         SnackbarHost(hostState = snackbarHostState) { data ->
           Snackbar(snackbarData = data)
         }
       },
       bottomBar = {
-        if (!useNavRail) {
+        if (!useNavRail && !hideBarsForArena) {
           NavigationBar(
             windowInsets = WindowInsets.navigationBars,
             containerColor = MaterialTheme.colorScheme.surface,
@@ -428,7 +491,7 @@ fun UnknownOsShell(
       Row(
         modifier = Modifier.fillMaxSize().padding(innerPadding)
       ) {
-        if (useNavRail) {
+        if (useNavRail && !hideBarsForArena) {
           NavigationRail(
             containerColor = MaterialTheme.colorScheme.surface,
             modifier = Modifier.fillMaxHeight(),
@@ -544,6 +607,11 @@ fun UnknownOsShell(
                     showSocialDialog = true
                   },
                   onEquipOutfit = viewModel::equipOutfit,
+                  onSelectArea = viewModel::selectCustomArea,
+                  onHuntHeroFrontier = {
+                    viewModel.selectCustomArea("area_hero_frontier")
+                    viewModel.selectTab(OsWorkspaceTab.ARENA_PLAY)
+                  },
                   onSignOut = onLockSession,
                 )
 
@@ -658,6 +726,12 @@ fun UnknownOsShell(
                   onUpgradeSkillStar = { nodeId -> viewModel.upgradeSkillStar(nodeId, state.profile.totalEssence) },
                   onUpgradeVacuumBotStar = { viewModel.upgradeVacuumBotStar(state.profile.totalEssence) },
                   onUpgradeAreaStar = { areaId -> viewModel.upgradeAreaStar(areaId, state.profile.totalEssence) },
+                  onUpgradeOutfitRarity = viewModel::upgradeOutfitRarity,
+                  onRecruitCharacterShard = { outfitId -> viewModel.recruitCharacterShard(state.profile.totalEssence, outfitId) },
+                  onHuntHeroFrontier = {
+                    viewModel.selectCustomArea("area_hero_frontier")
+                    viewModel.selectTab(OsWorkspaceTab.ARENA_PLAY)
+                  },
                 )
 
                 OsWorkspaceTab.MEDIA_VAULT -> MediaVaultScreen(
@@ -679,6 +753,7 @@ fun UnknownOsShell(
                   onConfirmSaveImport = viewModel::importSavePreview,
                   onSelectConsolePreset = viewModel::selectConsolePreset,
                   onStatusMessage = viewModel::showBanner,
+                  progression = progression,
                 )
               }
             }

@@ -7,9 +7,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.local.AppSettings
 import com.example.data.local.ProgressionStore
@@ -241,7 +244,8 @@ class ProgressionAndPassTest {
     assertEquals("blackcell_gold", store.current.characterCustom.suitThemeId)
 
     composeRule.onNodeWithTag("armory_tab_levels").performClick()
-    composeRule.onNodeWithTag("mutator_boss_rush").performClick()
+    composeRule.onNodeWithTag("level_customization_list").performScrollToNode(hasTestTag("mutator_boss_rush"))
+    composeRule.onNodeWithTag("mutator_boss_rush").performScrollTo().performClick()
     assertTrue(store.current.levelCustom.bossRushMutator)
 
     composeRule.onNodeWithTag("armory_tab_pass").performClick()

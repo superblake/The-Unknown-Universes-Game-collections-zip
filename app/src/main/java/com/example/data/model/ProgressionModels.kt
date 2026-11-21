@@ -65,7 +65,84 @@ enum class WonderWeaponKind(
     durationTicks = 1200f,
     baseDamage = 5,
   ),
+  RAY_SPHERE_OVERDRIVE(
+    id = "ww_ray_sphere",
+    displayName = "Ray-Sphere Conduit Core",
+    shortTag = "RAY-SPH",
+    description = "Cole McGrath & Blacklight hybrid orb unleashing triple lightning conduits.",
+    accentHex = 0xFF00E5FF,
+    durationTicks = 1260f,
+    baseDamage = 6,
+  ),
+  MERCER_BIOCLAW_SWARM(
+    id = "ww_mercer_swarm",
+    displayName = "Mercer Bio-Claw Devastator",
+    shortTag = "BIOCLAW",
+    description = "3-fang Prototype biomass fan that slices hordes and siphons +3 Shield.",
+    accentHex = 0xFFFF1744,
+    durationTicks = 1200f,
+    baseDamage = 6,
+  ),
+  GATE_HORIZON_CANNON(
+    id = "ww_gate_horizon",
+    displayName = "7-Chevron Horizon Cannon",
+    shortTag = "HORIZON",
+    description = "Stargate event-horizon launcher triggering heavy shockwaves & stasis.",
+    accentHex = 0xFFFFD54F,
+    durationTicks = 1320f,
+    baseDamage = 7,
+  ),
 }
+
+enum class CharacterRarity(
+  val rank: Int,
+  val label: String,
+  val colorHex: Long,
+  val statMultiplier: Float,
+  val shardsForNext: Int,
+) {
+  COMMON(1, "Common", 0xFF90A4AE, 1.00f, 3),
+  UNCOMMON(2, "Uncommon", 0xFF00E676, 1.18f, 6),
+  RARE(3, "Rare", 0xFF448AFF, 1.40f, 10),
+  EPIC(4, "Epic", 0xFF7C4DFF, 1.70f, 15),
+  LEGENDARY(5, "Legendary", 0xFFFFAB40, 2.10f, 22),
+  EXOTIC(6, "Exotic", 0xFFFFD54F, 2.55f, 30),
+  MYTHIC(7, "Mythic", 0xFFFF3D71, 3.10f, 0);
+
+  fun nextRarity(): CharacterRarity? = entries.firstOrNull { it.rank == rank + 1 }
+
+  companion object {
+    fun fromRank(rank: Int): CharacterRarity =
+      entries.firstOrNull { it.rank == rank.coerceIn(1, entries.size) } ?: COMMON
+  }
+}
+
+enum class WorldDifficultyTier(
+  val id: String,
+  val label: String,
+  val enemyHpScale: Float,
+  val enemySpeedScale: Float,
+  val rewardScale: Float,
+  val accentHex: Long,
+) {
+  NORMAL("normal", "Normal", 1.0f, 1.0f, 1.0f, 0xFF00E5FF),
+  HARDENED("hardened", "Hardened", 1.35f, 1.12f, 1.35f, 0xFF00E676),
+  VETERAN("veteran", "Veteran", 1.80f, 1.24f, 1.80f, 0xFFFFAB40),
+  NIGHTMARE("nightmare", "Nightmare", 2.40f, 1.36f, 2.45f, 0xFFFF3D71),
+  GRANDMASTER("grandmaster", "Grandmaster", 3.20f, 1.48f, 3.25f, 0xFFE040FB);
+
+  companion object {
+    fun fromId(id: String): WorldDifficultyTier =
+      entries.firstOrNull { it.id == id } ?: NORMAL
+  }
+}
+
+@Immutable
+data class PowerLightSummary(
+  val powerLevel: Int,
+  val lightLevel: Int,
+  val tierLabel: String,
+)
 
 enum class PowerTier(
   val level: Int,
@@ -299,6 +376,7 @@ data class LevelCustomization(
   val skyThemeId: String = "default_sector",
   val gridStyleId: String = "tactical_square",
   val enemyDensityMultiplier: Float = 1.0f,
+  val worldDifficultyTier: WorldDifficultyTier = WorldDifficultyTier.NORMAL,
   val wonderDropBoost: Boolean = false,
   val critSurgeMutator: Boolean = false,
   val instagibMutator: Boolean = false,
@@ -495,6 +573,10 @@ data class MatchProgressionReport(
   val trapKills: Int = 0,
   val worldId: String = "sector_zero",
   val areaId: String = "area_empire_city",
+  val characterShardsCollected: Long = 0L,
+  val catsFound: Int = 0,
+  val lootCratesOpened: Int = 0,
+  val recruitedOutfitIds: List<String> = emptyList(),
 )
 
 @Immutable
@@ -569,6 +651,10 @@ data class OperatorProgressionState(
   val chatMessages: List<ChatMessage> = SocialCatalog.defaultChatMessages,
   val clan: ClanData = SocialCatalog.defaultClan,
   val joinedMatch: MultiverseMatchListing? = null,
+  val outfitRarityMap: Map<String, Int> = emptyMap(),
+  val outfitShardMap: Map<String, Long> = emptyMap(),
+  val discoveredCatWorlds: Set<String> = emptySet(),
+  val lootCratesOpenedTotal: Long = 0L,
 ) {
   val playerLevel: Int
     get() = ProgressionCatalog.levelForXp(playerXp)
@@ -606,6 +692,39 @@ data class OperatorProgressionState(
 
   fun activeAreaSpec(): CustomAreaSpec =
     MultiverseArsenalCatalog.areaById(activeAreaId)
+
+  fun outfitRarity(id: String = equippedOutfitId): CharacterRarity {
+    val defaultRank = if (MultiverseArsenalCatalog.outfitById(id).isOriginalCharacter) CharacterRarity.RARE.rank else CharacterRarity.COMMON.rank
+    return CharacterRarity.fromRank(outfitRarityMap[id] ?: defaultRank)
+  }
+
+  fun outfitShards(id: String = equippedOutfitId): Long =
+    (outfitShardMap[id] ?: 0L).coerceAtLeast(0L)
+
+  fun computePowerAndLightLevel(totalBlueEssence: Long = 0L): PowerLightSummary {
+    val wpnId = weaponCustom.equippedWeaponId
+    val wpnScore = (weaponLevel(wpnId) * 4) + (weaponTier(wpnId) * 18) + (weaponStar(wpnId) * 15) + (weaponPrestige(wpnId) * 22)
+    val wonderScore = effectiveWonderList().sumOf { wId -> (wonderTier(wId) * 16) + (wonderStar(wId) * 12) } /
+      effectiveWonderList().size.coerceAtLeast(1)
+    val gearScore = gearMap.values.sumOf { g -> (g.level * 2) + (g.tier * 8) + (g.starLevel * 8) + (g.prestige * 12) } /
+      gearMap.size.coerceAtLeast(1)
+    val outfit = outfitState(equippedOutfitId)
+    val rarity = outfitRarity(equippedOutfitId)
+    val outfitScore = (outfit.level / 4) + (outfit.tier * 14) + (outfit.starLevel * 14) + (rarity.rank * 35)
+    val charScore = (ProgressionCatalog.milestoneTierCount(playerLevel) * 24) + (characterTier * 15) + (characterStarLevel * 14) + (playerPrestige * 20)
+    val powerLevel = (300 + wpnScore + wonderScore + gearScore + outfitScore + charScore).coerceAtLeast(300)
+    val lightBonus = (perkRanks.values.sum() * 4) + (blastCoreLevels.values.sum() * 3) +
+      ((totalBlueEssence / 500L).toInt().coerceAtMost(80)) + (rarity.rank * 28) + (discoveredCatWorlds.size * 15)
+    val lightLevel = (powerLevel + 240 + lightBonus).coerceAtLeast(540)
+    val label = when {
+      lightLevel >= 2200 -> "OMEGA LIGHT"
+      lightLevel >= 1700 -> "PINNACLE CAP"
+      lightLevel >= 1300 -> "ASCENDANT LIGHT"
+      lightLevel >= 950 -> "VANGUARD LIGHT"
+      else -> "RISEN LIGHT"
+    }
+    return PowerLightSummary(powerLevel = powerLevel, lightLevel = lightLevel, tierLabel = label)
+  }
 
   fun perkRank(perkId: String): Int = (perkRanks[perkId] ?: 0).coerceIn(0, 25)
 
@@ -724,6 +843,66 @@ object ProgressionCatalog {
       baseSpreadCount = 2,
       basePierce = 1,
       defaultTracerHex = 0xFFFFD54F,
+    ),
+    WeaponSpec(
+      id = "wpn_arc_amp",
+      name = "Empire Conduit Amp",
+      universeOrigin = "Cole McGrath",
+      summary = "Cole's electric Amp blade launcher firing high-voltage cyan shock arcs.",
+      baseDamage = 3,
+      baseCadenceTicks = 9.0f,
+      baseProjectileSpeed = 0.026f,
+      baseSpreadCount = 2,
+      basePierce = 2,
+      defaultTracerHex = 0xFF00E5FF,
+    ),
+    WeaponSpec(
+      id = "wpn_blacklight_carbine",
+      name = "Prototype Bio-Carbine",
+      universeOrigin = "Prototype",
+      summary = "Mutated BlacklightTendril Shard rifle tearing through bio-armored swarms.",
+      baseDamage = 3,
+      baseCadenceTicks = 9.5f,
+      baseProjectileSpeed = 0.023f,
+      baseSpreadCount = 2,
+      basePierce = 2,
+      defaultTracerHex = 0xFFFF1744,
+    ),
+    WeaponSpec(
+      id = "wpn_stargate_staff",
+      name = "Space & Time Staff Weapon",
+      universeOrigin = "Space & Time",
+      summary = "Original Stargate Ma'Tok plasma staff launching piercing golden bolts.",
+      baseDamage = 4,
+      baseCadenceTicks = 12.0f,
+      baseProjectileSpeed = 0.024f,
+      baseSpreadCount = 1,
+      basePierce = 3,
+      defaultTracerHex = 0xFFFFD54F,
+    ),
+    WeaponSpec(
+      id = "wpn_olympian_spear",
+      name = "Crucible Spartan Spear",
+      universeOrigin = "TUU God of War",
+      summary = "Draupnir-forged throwing spears blasting molten rings across bosses.",
+      baseDamage = 4,
+      baseCadenceTicks = 13.0f,
+      baseProjectileSpeed = 0.022f,
+      baseSpreadCount = 2,
+      basePierce = 2,
+      defaultTracerHex = 0xFFFF6D00,
+    ),
+    WeaponSpec(
+      id = "wpn_ship_phaser",
+      name = "Ship of Heroes Twin Phaser",
+      universeOrigin = "Ship of Heroes",
+      summary = "High-rate Apotheosis orbital pulse phaser with wide triple-beam spread.",
+      baseDamage = 2,
+      baseCadenceTicks = 7.8f,
+      baseProjectileSpeed = 0.027f,
+      baseSpreadCount = 3,
+      basePierce = 1,
+      defaultTracerHex = 0xFFE040FB,
     ),
   )
 
@@ -1156,6 +1335,38 @@ object ProgressionCatalog {
     }
     val maxNeed = xpRequiredForPlayerLevel(999)
     return maxNeed to maxNeed
+  }
+
+  val milestoneLevels: List<Int> = listOf(5, 10, 20, 35, 50, 75, 100, 150, 200, 350, 500, 750, 1000)
+
+  fun isMilestoneLevel(level: Int): Boolean = milestoneLevels.contains(level)
+
+  fun nextMilestoneLevel(level: Int): Int =
+    milestoneLevels.firstOrNull { it > level } ?: 1000
+
+  fun milestoneTierCount(level: Int): Int =
+    milestoneLevels.count { level >= it }
+
+  /**
+   * Non-linear milestone leveling: intermediate levels plateau with minimal passive change,
+   * while milestone breakthroughs (5, 10, 20, 35, 50, 75, 100, 150, 200, 350, 500, 750, 1000)
+   * grant dramatically larger cumulative stat jumps over time.
+   */
+  fun levelStatMultiplier(level: Int): Float {
+    val count = milestoneTierCount(level)
+    return 1.0f + (count * 0.14f) + ((count * count) * 0.022f)
+  }
+
+  fun milestoneBonusSummary(level: Int): String {
+    val unlocked = milestoneTierCount(level)
+    val nextMs = nextMilestoneLevel(level)
+    return if (isMilestoneLevel(level)) {
+      "MILESTONE LV.$level BREAKTHROUGH ACTIVE (x${String.format(java.util.Locale.US, "%.2f", levelStatMultiplier(level))} Stats)"
+    } else if (level >= 1000) {
+      "MAX OMEGA MILESTONE (x${String.format(java.util.Locale.US, "%.2f", levelStatMultiplier(level))} Stats)"
+    } else {
+      "Milestone $unlocked/${milestoneLevels.size} • Next Stat Jump at Lv.$nextMs"
+    }
   }
 
   fun rankTitleForLevel(level: Int, prestige: Int): String {

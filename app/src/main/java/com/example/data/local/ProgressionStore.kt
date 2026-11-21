@@ -9,6 +9,7 @@ import com.example.data.model.BlastCoreColor
 import com.example.data.model.BotDifficulty
 import com.example.data.model.ChallengeState
 import com.example.data.model.CharacterCustomization
+import com.example.data.model.CharacterRarity
 import com.example.data.model.CustomAreaState
 import com.example.data.model.EquipmentSlotType
 import com.example.data.model.EquipmentState
@@ -46,6 +47,7 @@ import com.example.data.model.SocialCatalog
 import com.example.data.model.UniverseCatalog
 import com.example.data.model.UpgradeCosts
 import com.example.data.model.WonderWeaponKind
+import com.example.data.model.WorldDifficultyTier
 import com.example.security.AppSecurityManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -697,6 +699,45 @@ class ProgressionStore(
       )
     )
     return Result.success(cost)
+  }
+
+  fun upgradeOutfitRarityWithShards(outfitId: String): Result<CharacterRarity> {
+    val cur = current
+    val curRarity = cur.outfitRarity(outfitId)
+    val nextRarity = curRarity.nextRarity()
+      ?: return Result.failure(IllegalStateException("Already at max ${CharacterRarity.MYTHIC.label} rarity!"))
+    val curShards = cur.outfitShards(outfitId)
+    val req = curRarity.shardsForNext.toLong()
+    if (curShards < req) {
+      return Result.failure(IllegalStateException("Need $req Character Shards (have $curShards). Hunt Shards in Hero Frontier or Crates!"))
+    }
+    save(
+      cur.copy(
+        outfitRarityMap = cur.outfitRarityMap + (outfitId to nextRarity.rank),
+        outfitShardMap = cur.outfitShardMap + (outfitId to (curShards - req)),
+      )
+    )
+    return Result.success(nextRarity)
+  }
+
+  fun recruitCharacterShardDrop(currentBlueEssence: Long, targetOutfitId: String? = null): Result<Triple<String, Long, Long>> {
+    val cur = current
+    val cost = 350L
+    if (currentBlueEssence < cost) {
+      return Result.failure(IllegalStateException("Need $cost Blue Essence to deploy Character Beacon"))
+    }
+    val targetSpec = targetOutfitId?.let { id -> MultiverseArsenalCatalog.outfits.firstOrNull { it.id == id } }
+      ?: MultiverseArsenalCatalog.outfits.filter { it.isOriginalCharacter }.randomOrNull()
+      ?: MultiverseArsenalCatalog.outfits.random()
+    val shardsGained = 4L
+    val prevShards = cur.outfitShards(targetSpec.id)
+    save(
+      cur.copy(
+        outfitShardMap = cur.outfitShardMap + (targetSpec.id to (prevShards + shardsGained)),
+        totalBlueEssenceSpent = cur.totalBlueEssenceSpent + cost,
+      )
+    )
+    return Result.success(Triple(targetSpec.nameWithVersion, shardsGained, cost))
   }
 
   fun upgradeArmoryItemStar(itemId: String, currentBlueEssence: Long): Result<Long> {
@@ -1417,10 +1458,11 @@ class ProgressionStore(
     val prevWpnLvl = cur.weaponLevel(report.weaponIdUsed)
 
     val boosterMult = if (cur.xpBoosterMatchesRemaining > 0) 2.0f else 1.0f
+    val diffRewardMult = cur.levelCustom.worldDifficultyTier.rewardScale
     val lobbyBonusMult = 1.0f + ((report.lobbySizePlayed.coerceAtLeast(1) - 1) * 0.025f).coerceAtMost(0.75f)
     val baseXp = (report.eliminations * 26L + report.bossEliminations * 140L + report.waveReached * 65L + if (report.extracted) 240L else 75L)
       .coerceAtLeast(60L)
-    val xpGained = (baseXp * boosterMult * lobbyBonusMult).toLong()
+    val xpGained = (baseXp * boosterMult * lobbyBonusMult * diffRewardMult).toLong()
 
     val baseWpnXp = (report.eliminations * 22L + report.bossEliminations * 95L + report.waveReached * 40L + report.wonderPickupsCollected * 35L)
       .coerceAtLeast(50L)
@@ -1486,6 +1528,21 @@ class ProgressionStore(
     val shardGain = report.blastShardsEarned + (report.buildingsExplored * 2L)
     val nextMissions = applyMatchToMissions(cur.missionProgress, report, shardGain)
 
+    val nextOutfitShards = cur.outfitShardMap.toMutableMap()
+    val equippedShards = (report.characterShardsCollected / 2L).coerceAtLeast(if (report.catsFound > 0) 2L else 0L)
+    if (equippedShards > 0L) {
+      nextOutfitShards[cur.equippedOutfitId] = (nextOutfitShards[cur.equippedOutfitId] ?: 0L) + equippedShards
+    }
+    report.recruitedOutfitIds.forEach { recId ->
+      nextOutfitShards[recId] = (nextOutfitShards[recId] ?: 0L) + 2L
+    }
+    val remainingShards = report.characterShardsCollected - equippedShards
+    if (remainingShards > 0L) {
+      val fallbackOriginal = MultiverseArsenalCatalog.outfits.firstOrNull { it.isOriginalCharacter }?.id ?: cur.equippedOutfitId
+      nextOutfitShards[fallbackOriginal] = (nextOutfitShards[fallbackOriginal] ?: 0L) + remainingShards
+    }
+    val nextCatWorlds = if (report.catsFound > 0) cur.discoveredCatWorlds + report.areaId else cur.discoveredCatWorlds
+
     val nextState = cur.copy(
       playerXp = cur.playerXp + xpGained,
       weaponXpMap = nextWpnMap,
@@ -1510,6 +1567,9 @@ class ProgressionStore(
       blastCoreInventory = nextCores,
       areaStates = cur.areaStates + (cur.activeAreaId to nextArea),
       outfitStates = cur.outfitStates + (cur.equippedOutfitId to nextOutfit),
+      outfitShardMap = nextOutfitShards,
+      discoveredCatWorlds = nextCatWorlds,
+      lootCratesOpenedTotal = cur.lootCratesOpenedTotal + report.lootCratesOpened.toLong(),
     )
     save(nextState)
 
@@ -1793,6 +1853,7 @@ class ProgressionStore(
         put("skyThemeId", next.levelCustom.skyThemeId)
         put("gridStyleId", next.levelCustom.gridStyleId)
         put("enemyDensityMultiplier", next.levelCustom.enemyDensityMultiplier.toDouble())
+        put("worldDifficultyTier", next.levelCustom.worldDifficultyTier.id)
         put("wonderDropBoost", next.levelCustom.wonderDropBoost)
         put("critSurgeMutator", next.levelCustom.critSurgeMutator)
         put("instagibMutator", next.levelCustom.instagibMutator)
@@ -1800,6 +1861,14 @@ class ProgressionStore(
         put("bossRushMutator", next.levelCustom.bossRushMutator)
         put("floorAccentHex", next.levelCustom.floorAccentHex)
       })
+      put("outfitRarityMap", JSONObject().apply {
+        next.outfitRarityMap.forEach { (k, v) -> put(k, v) }
+      })
+      put("outfitShardMap", JSONObject().apply {
+        next.outfitShardMap.forEach { (k, v) -> put(k, v) }
+      })
+      put("discoveredCatWorlds", JSONArray(next.discoveredCatWorlds.toList()))
+      put("lootCratesOpenedTotal", next.lootCratesOpenedTotal)
       put("privateMatchRules", JSONObject().apply {
         put("isPrivate", next.privateMatchRules.isPrivate)
         put("privacy", next.privateMatchRules.privacy.id)
@@ -2143,7 +2212,8 @@ class ProgressionStore(
         LevelCustomization(
           skyThemeId = lcObj.optString("skyThemeId", "default_sector"),
           gridStyleId = lcObj.optString("gridStyleId", "tactical_square"),
-          enemyDensityMultiplier = lcObj.optDouble("enemyDensityMultiplier", 1.0).toFloat().coerceIn(0.75f, 1.5f),
+          enemyDensityMultiplier = lcObj.optDouble("enemyDensityMultiplier", 1.0).toFloat().coerceIn(0.75f, 2.5f),
+          worldDifficultyTier = WorldDifficultyTier.fromId(lcObj.optString("worldDifficultyTier", WorldDifficultyTier.NORMAL.id)),
           wonderDropBoost = lcObj.optBoolean("wonderDropBoost", false),
           critSurgeMutator = lcObj.optBoolean("critSurgeMutator", false),
           instagibMutator = lcObj.optBoolean("instagibMutator", false),
@@ -2152,6 +2222,19 @@ class ProgressionStore(
           floorAccentHex = lcObj.optLong("floorAccentHex", 0xFF00E5FF),
         )
       } else LevelCustomization()
+
+      val outfitRarityMap = mutableMapOf<String, Int>()
+      root.optJSONObject("outfitRarityMap")?.let { obj ->
+        obj.keys().forEach { k -> outfitRarityMap[k] = obj.optInt(k, 1).coerceIn(1, CharacterRarity.entries.size) }
+      }
+      val outfitShardMap = mutableMapOf<String, Long>()
+      root.optJSONObject("outfitShardMap")?.let { obj ->
+        obj.keys().forEach { k -> outfitShardMap[k] = obj.optLong(k, 0L).coerceAtLeast(0L) }
+      }
+      val discoveredCatWorlds = mutableSetOf<String>()
+      root.optJSONArray("discoveredCatWorlds")?.let { arr ->
+        for (i in 0 until arr.length()) discoveredCatWorlds.add(arr.optString(i))
+      }
 
       val wonderList = mutableListOf<String>()
       root.optJSONArray("equippedWonderIds")?.let { arr ->
@@ -2466,6 +2549,10 @@ class ProgressionStore(
         chatMessages = loadedChats,
         clan = clanData,
         joinedMatch = loadedJoinedMatch,
+        outfitRarityMap = outfitRarityMap,
+        outfitShardMap = outfitShardMap,
+        discoveredCatWorlds = discoveredCatWorlds,
+        lootCratesOpenedTotal = root.optLong("lootCratesOpenedTotal", 0L),
       )
     }.getOrDefault(OperatorProgressionState())
   }
