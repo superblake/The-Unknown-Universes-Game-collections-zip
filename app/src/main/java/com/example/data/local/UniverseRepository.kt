@@ -8,6 +8,7 @@ import com.example.data.model.MatchRecord
 import com.example.data.model.OperatorProfile
 import com.example.data.model.RigAsset
 import com.example.data.model.UniverseCatalog
+import com.example.data.model.UpgradeCosts
 import com.example.data.remote.FirestoreSyncCodec
 import com.example.data.remote.UniverseCloudSync
 import com.google.firebase.Firebase
@@ -237,6 +238,9 @@ class UniverseRepository(
     }
   }
 
+  suspend fun getArmoryItem(userId: String, itemId: String): ArmoryItem? =
+    dao.getArmoryItemsOnce(userId).firstOrNull { it.id == itemId }
+
   suspend fun upgradeArmoryItem(
     userId: String,
     item: ArmoryItem,
@@ -244,26 +248,30 @@ class UniverseRepository(
     currentEssence: Long,
   ): Result<Unit> {
     require(item.id.isNotBlank()) { "ArmoryItem id required" }
-    val effectiveMaxTier = maxOf(item.maxTier, 25L)
-    if (item.tier >= effectiveMaxTier) {
-      return Result.failure(IllegalStateException("Already at max Tier $effectiveMaxTier"))
-    }
-    if (currentEssence < upgradeCost) {
-      return Result.failure(IllegalStateException("Need $upgradeCost Blue Essence to upgrade"))
-    }
     return try {
       val now = System.currentTimeMillis()
+      val liveItem = dao.getArmoryItemsOnce(userId).firstOrNull { it.id == item.id } ?: item
+      val effectiveMaxTier = maxOf(liveItem.maxTier, 25L)
+      if (liveItem.tier >= effectiveMaxTier) {
+        return Result.failure(IllegalStateException("Already at max Tier $effectiveMaxTier"))
+      }
+      val cost = if (liveItem.tier == item.tier && upgradeCost >= 0L) upgradeCost else UpgradeCosts.armoryModTier(liveItem.tier.toInt())
       val profile = dao.getProfileOnce(userId)
         ?: return Result.failure(IllegalStateException("Operator profile not found"))
-      val updatedItem = item.copy(
+      val availableEssence = if (currentEssence > 0L) minOf(profile.totalEssence, currentEssence) else profile.totalEssence
+      if (availableEssence < cost) {
+        return Result.failure(IllegalStateException("Need $cost Blue Essence to upgrade"))
+      }
+      val nextTier = liveItem.tier + 1L
+      val updatedItem = liveItem.copy(
         userId = userId,
-        tier = item.tier + 1L,
+        tier = nextTier,
         maxTier = effectiveMaxTier,
-        powerValue = (item.powerValue + 75L).coerceAtMost(1500L),
+        powerValue = (liveItem.powerValue + 75L).coerceAtMost(1500L),
         updatedAtMillis = now,
       )
       val updatedProfile = profile.copy(
-        totalEssence = (currentEssence - upgradeCost).coerceAtLeast(0L),
+        totalEssence = (profile.totalEssence - cost).coerceAtLeast(0L),
         updatedAtMillis = now,
       )
       dao.upsertArmoryItem(updatedItem)
@@ -273,6 +281,37 @@ class UniverseRepository(
         it.pushProfile(updatedProfile)
       }
       Result.success(Unit)
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      Result.failure(e)
+    }
+  }
+
+  suspend fun boostAllArmoryTiers(
+    userId: String,
+    delta: Int = 1,
+    targetTier: Int? = null,
+  ): Result<Int> {
+    return try {
+      val now = System.currentTimeMillis()
+      val items = dao.getArmoryItemsOnce(userId)
+      if (items.isEmpty()) return Result.success(0)
+      val updatedList = items.map { item ->
+        val effectiveMax = maxOf(item.maxTier, 25L)
+        val newTier = (targetTier?.toLong() ?: (item.tier + delta)).coerceIn(1L, effectiveMax)
+        item.copy(
+          tier = newTier,
+          maxTier = effectiveMax,
+          powerValue = (100L + newTier * 50L).coerceAtMost(1500L),
+          updatedAtMillis = now,
+        )
+      }
+      dao.upsertArmoryItems(updatedList)
+      mirrorCloud(userId) { sync ->
+        updatedList.forEach { sync.pushArmoryItem(it) }
+      }
+      Result.success(updatedList.size)
     } catch (e: CancellationException) {
       throw e
     } catch (e: Exception) {
@@ -537,10 +576,10 @@ class UniverseRepository(
     return try {
       val now = System.currentTimeMillis()
       val itemsToSave = buildList {
-        addAll(preview.armoryItems.map { it.copy(userId = userId, isCustom = true, updatedAtMillis = now) })
+        addAll(preview.armoryItems.map { it.copy(userId = userId, isCustom = true, maxTier = maxOf(it.maxTier, 25L), updatedAtMillis = now) })
         if (preview.armoryItems.isEmpty() && importModulePreset) {
           preview.generatedModule?.let {
-            add(it.copy(userId = userId, isCustom = true, updatedAtMillis = now))
+            add(it.copy(userId = userId, isCustom = true, maxTier = maxOf(it.maxTier, 25L), updatedAtMillis = now))
           }
         }
       }

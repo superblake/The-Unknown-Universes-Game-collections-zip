@@ -38,6 +38,7 @@ import com.example.data.model.PrivateMatchRules
 import com.example.data.model.ProgressionCatalog
 import com.example.data.model.RigAsset
 import com.example.data.model.SocialCatalog
+import com.example.data.model.UpgradeCosts
 import com.example.data.model.StarRankMeta
 import com.example.data.model.UniverseCatalog
 import com.example.data.model.WeaponCustomization
@@ -402,12 +403,112 @@ class UniverseViewModel(
   }
 
   fun upgradeArmoryItem(item: ArmoryItem, currentEssence: Long) {
-    val cost = item.tier * 300L
     viewModelScope.launch {
-      val res = repository.upgradeArmoryItem(currentUserId, item, cost, currentEssence)
-      _statusBanner.value =
-        if (res.isSuccess) "${item.name} upgraded to Tier ${item.tier + 1}"
-        else res.exceptionOrNull()?.message ?: "Upgrade failed"
+      val liveItem = repository.getArmoryItem(currentUserId, item.id) ?: item
+      val cost = UpgradeCosts.armoryModTier(liveItem.tier.toInt())
+      val res = repository.upgradeArmoryItem(currentUserId, liveItem, cost, currentEssence)
+      if (res.isSuccess) {
+        val updated = repository.getArmoryItem(currentUserId, item.id) ?: liveItem
+        _statusBanner.value = "${updated.name} upgraded to Tier ${updated.tier}/25 (${ProgressionCatalog.tierMeta(updated.tier.toInt()).label})!"
+      } else {
+        _statusBanner.value = res.exceptionOrNull()?.message ?: "Upgrade failed"
+      }
+    }
+  }
+
+  fun applyTierProtocolCode(code: String) {
+    val store = progressionStore
+    if (store == null) {
+      _statusBanner.value = "Progression store offline"
+      return
+    }
+    val res = store.applyProtocolCode(code)
+    if (res.isSuccess) {
+      viewModelScope.launch {
+        val upper = code.trim().uppercase(java.util.Locale.US)
+        when {
+          upper.contains("25") || upper.contains("MAX") || upper.contains("GOD") -> {
+            repository.boostAllArmoryTiers(currentUserId, targetTier = 25)
+          }
+          upper.contains("20") -> repository.boostAllArmoryTiers(currentUserId, targetTier = 20)
+          upper.contains("15") -> repository.boostAllArmoryTiers(currentUserId, targetTier = 15)
+          upper.contains("10") -> repository.boostAllArmoryTiers(currentUserId, targetTier = 10)
+          upper.contains("BOOST") || upper.contains("+5") -> repository.boostAllArmoryTiers(currentUserId, delta = 5)
+        }
+        if (upper == "ESSENCE999" || upper == "RICH") {
+          repository.adjustOperatorEssence(currentUserId, 500_000L)
+        }
+      }
+      _statusBanner.value = res.getOrThrow()
+    } else {
+      _statusBanner.value = res.exceptionOrNull()?.localizedMessage ?: "Invalid code"
+    }
+  }
+
+  fun boostAllTiers(delta: Int = 1) {
+    progressionStore?.boostAllTiers(delta)
+    viewModelScope.launch {
+      repository.boostAllArmoryTiers(currentUserId, delta = delta)
+    }
+    _statusBanner.value = "All systems boosted +$delta Tiers!"
+  }
+
+  fun maxAllTiers() {
+    progressionStore?.setAllTiers(25)
+    viewModelScope.launch {
+      repository.boostAllArmoryTiers(currentUserId, targetTier = 25)
+    }
+    _statusBanner.value = "All systems maxed to TIER 25 MULTIVERSAL!"
+  }
+
+  fun maxAllStars() {
+    progressionStore?.setAllStars(10)
+    _statusBanner.value = "All systems maxed to 10★ Omniverse Nova!"
+  }
+
+  fun grantEssenceBonus(amount: Long = 50_000L) {
+    viewModelScope.launch {
+      repository.adjustOperatorEssence(currentUserId, amount)
+      _statusBanner.value = "+$amount Blue Essence granted!"
+    }
+  }
+
+  fun importBo3ModToolsCuratedPack() {
+    viewModelScope.launch {
+      val preview = com.example.export.Bo3ModToolsImporter.getCuratedBo3ModPack(currentUserId)
+      val res = repository.importSteamWorkshopPreview(
+        userId = currentUserId,
+        preview = preview,
+        importModulePreset = true,
+        importRigPreset = true,
+      )
+      _statusBanner.value = if (res.isSuccess) {
+        "BO3 Mod Tools Pack Imported: Juggernog, Speed Cola, Double Tap, Widow's Wine & Wonder Weapons active!"
+      } else {
+        res.exceptionOrNull()?.localizedMessage ?: "BO3 import failed"
+      }
+    }
+  }
+
+  fun importBo3TextScript(rawText: String) {
+    val parseRes = com.example.export.Bo3ModToolsImporter.parseBo3PackageOrScript(rawText, currentUserId)
+    if (parseRes.isFailure) {
+      _statusBanner.value = parseRes.exceptionOrNull()?.localizedMessage ?: "Failed to parse BO3 input"
+      return
+    }
+    val preview = parseRes.getOrThrow()
+    viewModelScope.launch {
+      val res = repository.importSteamWorkshopPreview(
+        userId = currentUserId,
+        preview = preview,
+        importModulePreset = true,
+        importRigPreset = true,
+      )
+      _statusBanner.value = if (res.isSuccess) {
+        "BO3 Mod Tools imported '${preview.title}' accurately!"
+      } else {
+        res.exceptionOrNull()?.localizedMessage ?: "Import failed"
+      }
     }
   }
 

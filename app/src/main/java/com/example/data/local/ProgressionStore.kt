@@ -3,6 +3,7 @@ package com.example.data.local
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import java.util.Locale
 import com.example.data.model.AchievementState
 import com.example.data.model.BattlePassVersion
 import com.example.data.model.BlastCoreColor
@@ -1254,6 +1255,119 @@ class ProgressionStore(
     val rewardBlueEssence = 1000L
     save(cur.copy(weaponXpMap = nextMap, weaponPrestigeMap = nextPrestigeMap))
     return Result.success(rewardBlueEssence)
+  }
+
+  fun boostAllTiers(delta: Int = 1): Int {
+    val cur = current
+    val targetCharTier = (cur.characterTier + delta).coerceIn(1, PowerTier.MAX_TIER)
+    val nextWeapons = cur.weaponTierMap.mapValues { (_, t) -> (t + delta).coerceIn(1, PowerTier.MAX_TIER) }
+    val nextWonders = cur.wonderTierMap.mapValues { (_, t) -> (t + delta).coerceIn(1, PowerTier.MAX_TIER) }
+    val nextGear = cur.gearMap.mapValues { (_, g) -> g.copy(tier = (g.tier + delta).coerceIn(1, PowerTier.MAX_TIER)) }
+    val nextEq = cur.equipmentMap.mapValues { (_, e) -> e.copy(tier = (e.tier + delta).coerceIn(1, PowerTier.MAX_TIER)) }
+    val nextSkills = cur.skillNodes.mapValues { (_, s) -> s.copy(tier = (s.tier + delta).coerceIn(1, s.maxTier), unlocked = true) }
+    save(
+      cur.copy(
+        characterTier = targetCharTier,
+        weaponTierMap = nextWeapons,
+        wonderTierMap = nextWonders,
+        gearMap = nextGear,
+        equipmentMap = nextEq,
+        skillNodes = nextSkills,
+      )
+    )
+    return delta
+  }
+
+  fun setAllTiers(targetTier: Int = 25): Int {
+    val clamped = targetTier.coerceIn(1, PowerTier.MAX_TIER)
+    val cur = current
+    val nextWeapons = cur.weaponTierMap.mapValues { _ -> clamped }
+    val nextWonders = cur.wonderTierMap.mapValues { _ -> clamped }
+    val nextGear = cur.gearMap.mapValues { (_, g) -> g.copy(tier = clamped) }
+    val nextEq = cur.equipmentMap.mapValues { (_, e) -> e.copy(tier = clamped) }
+    val nextSkills = cur.skillNodes.mapValues { (_, s) -> s.copy(tier = minOf(clamped, s.maxTier), unlocked = true) }
+    save(
+      cur.copy(
+        characterTier = clamped,
+        weaponTierMap = nextWeapons,
+        wonderTierMap = nextWonders,
+        gearMap = nextGear,
+        equipmentMap = nextEq,
+        skillNodes = nextSkills,
+      )
+    )
+    return clamped
+  }
+
+  fun setAllStars(targetStars: Int = 10): Int {
+    val clamped = targetStars.coerceIn(1, StarRankMeta.MAX_STARS)
+    val cur = current
+    val nextWeapons = cur.weaponStarMap.mapValues { _ -> clamped }
+    val nextWonders = cur.wonderStarMap.mapValues { _ -> clamped }
+    val nextGear = cur.gearMap.mapValues { (_, g) -> g.copy(starLevel = clamped) }
+    val nextEq = cur.equipmentMap.mapValues { (_, e) -> e.copy(starLevel = clamped) }
+    val nextOutfits = cur.outfitStates.mapValues { (_, o) -> o.copy(starLevel = clamped) }
+    val nextSkills = cur.skillNodes.mapValues { (_, s) -> s.copy(starLevel = clamped) }
+    save(
+      cur.copy(
+        characterStarLevel = clamped,
+        weaponStarMap = nextWeapons,
+        wonderStarMap = nextWonders,
+        gearMap = nextGear,
+        equipmentMap = nextEq,
+        outfitStates = nextOutfits,
+        skillNodes = nextSkills,
+      )
+    )
+    return clamped
+  }
+
+  fun applyProtocolCode(rawCode: String): Result<String> {
+    val code = rawCode.trim().uppercase(Locale.US)
+    return when {
+      code.isEmpty() -> Result.failure(IllegalArgumentException("Please enter a protocol code."))
+      code == "TIER25" || code == "MAXTIERS" || code == "MAXTIER" || code == "MULTIVERSAL" -> {
+        setAllTiers(25)
+        Result.success("PROTOCOL ACCEPTED: All systems elevated to TIER 25 MULTIVERSAL!")
+      }
+      code == "TIER20" || code == "T20" -> {
+        setAllTiers(20)
+        Result.success("PROTOCOL ACCEPTED: All systems set to TIER 20 (Infinity)!")
+      }
+      code == "TIER15" || code == "T15" -> {
+        setAllTiers(15)
+        Result.success("PROTOCOL ACCEPTED: All systems set to TIER 15 (Apex)!")
+      }
+      code == "TIER10" || code == "T10" -> {
+        setAllTiers(10)
+        Result.success("PROTOCOL ACCEPTED: All systems set to TIER 10 (Omega)!")
+      }
+      code == "BOOST5" || code == "+5TIERS" || code == "TIER+5" -> {
+        boostAllTiers(5)
+        Result.success("PROTOCOL ACCEPTED: +5 Tiers applied to all weapons, gear, character & systems!")
+      }
+      code == "STARS10" || code == "MAXSTARS" || code == "10STARS" -> {
+        setAllStars(10)
+        Result.success("PROTOCOL ACCEPTED: 10★ Omniverse Nova star ranks unlocked across all equipment!")
+      }
+      code == "ESSENCE999" || code == "MAXESSENCE" || code == "RICH" -> {
+        val cur = current
+        save(cur.copy(redEssence = cur.redEssence + 100_000L, yellowEssence = cur.yellowEssence + 100_000L, greenEssence = cur.greenEssence + 100_000L, combinedEssence = cur.combinedEssence + 50_000L, blastShards = cur.blastShards + 500L))
+        Result.success("PROTOCOL ACCEPTED: +100k Multi-Color Essence & +500 Blast Shards granted!")
+      }
+      code == "UNLOCKALL" || code == "ALLUNLOCKED" || code == "GODMODE" -> {
+        setAllTiers(25)
+        setAllStars(10)
+        val cur = current
+        save(cur.copy(unlockedNgPlusTier = 5, activeNgPlusTier = 5))
+        Result.success("PROTOCOL ACCEPTED: Full Universe Unlocked (T25, 10★, NG+5, All Skills)!")
+      }
+      code == "BO3PERKS" || code == "TREYARCH" || code == "ZOMBIES" -> {
+        boostAllTiers(5)
+        Result.success("BO3 MOD TOOLS OVERDRIVE: +5 Tiers applied & Treyarch perks supercharged!")
+      }
+      else -> Result.failure(IllegalArgumentException("Unknown protocol code '$code'. Try TIER25, STARS10, BOOST5, ESSENCE999, or UNLOCKALL."))
+    }
   }
 
   fun activateOrUnlockPassVersion(version: BattlePassVersion, currentBlueEssence: Long): Result<Long> {

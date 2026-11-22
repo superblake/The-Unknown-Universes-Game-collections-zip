@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
@@ -58,6 +59,7 @@ import com.example.data.model.ArmoryItem
 import com.example.data.model.LinkedAccount
 import com.example.data.model.OperatorProfile
 import com.example.data.model.RigAsset
+import com.example.export.Bo3ModToolsImporter
 import com.example.export.SteamWorkshopCodec
 import com.example.export.SteamWorkshopExportConfig
 import com.example.export.SteamWorkshopImportPreview
@@ -341,6 +343,22 @@ fun SteamWorkshopCard(
               Spacer(Modifier.width(6.dp))
               Text(stringResource(R.string.steam_workshop_paste_btn), style = MaterialTheme.typography.labelMedium, maxLines = 1)
             }
+          }
+
+          Button(
+            onClick = {
+              val bo3Pack = Bo3ModToolsImporter.getCuratedBo3ModPack(profile.userId)
+              importModulePreset = true
+              importRigPreset = true
+              pendingImportPreview = bo3Pack
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF), contentColor = Color.Black),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("workshop_import_bo3_preset_btn"),
+          ) {
+            Icon(AppIcons.Bolt, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Import Curated BO3 Mod Tools Pack", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
           }
         }
       }

@@ -13,7 +13,18 @@ import com.google.firebase.firestore.FieldValue
 object FirestoreSyncCodec {
 
   private val validDocIdRegex = Regex("^[a-zA-Z0-9_\\-]+$")
-  private val allowedModes = setOf("zombies", "dmz", "br", "multiplayer", "sandbox")
+  private val allowedModes = setOf(
+    "zombies",
+    "dmz",
+    "br",
+    "multiplayer",
+    "sandbox",
+    "campaign",
+    "hero_patrol",
+    "boss_rush",
+    "onslaught",
+    "conduit_ctf",
+  )
   private val allowedPresets = setOf(
     "universal_web",
     "ps5_dualsense",

@@ -1145,6 +1145,7 @@ object ProgressionCatalog {
     "cryo_stasis" to "Cryo-Freeze (Slows Enemies)",
     "arc_chain" to "Arc Wire (Chain Lightning)",
     "vampiric_bio" to "Blacklight Leech (+Shield on Kill)",
+    "incendiary_core" to "Thermal Napalm (Burn Core)",
   )
 
   val suitThemes: List<Triple<String, String, Pair<Long, Long>>> = listOf(

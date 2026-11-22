@@ -5,6 +5,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -126,6 +129,12 @@ fun OsDesktopScreen(
   onSelectCollectionDifficulty: (String, CollectionDifficulty) -> Unit = { _, _ -> },
   onSelectNgPlusTier: (Int) -> Unit = {},
   onCompleteNgPlusRun: () -> Unit = {},
+  onApplyProtocolCode: (String) -> Unit = {},
+  onBoostAllTiers: (Int) -> Unit = {},
+  onMaxAllTiers: () -> Unit = {},
+  onMaxAllStars: () -> Unit = {},
+  onGrantEssenceBonus: () -> Unit = {},
+  onImportBo3Preset: () -> Unit = {},
   onSignOut: () -> Unit,
 ) {
   val activeWorld = UniverseCatalog.worldById(profile.activeUniverseId)
@@ -136,6 +145,7 @@ fun OsDesktopScreen(
 
   var showCallsignDialog by remember { mutableStateOf(false) }
   var showLobbyRosterDialog by remember { mutableStateOf(false) }
+  var showCodesDialog by remember { mutableStateOf(false) }
   var callsignDraft by remember(profile.callsign) { mutableStateOf(profile.callsign) }
   val claimableAchievements = achievements.count { it.unlocked && !it.claimed }
   val haptic = LocalHapticFeedback.current
@@ -291,47 +301,53 @@ fun OsDesktopScreen(
 
           // UnknownOS Window Dock Strip
           Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
           ) {
             OsDockChip(
-              modifier = Modifier.weight(1f),
+              modifier = Modifier.widthIn(min = 72.dp),
               label = "ARENA",
               accent = Color(activeWorld.accentHex),
               onClick = onLaunchArena,
             )
             OsDockChip(
-              modifier = Modifier.weight(1f).testTag("os_dock_store"),
+              modifier = Modifier.widthIn(min = 78.dp).testTag("os_tier_codes_btn"),
+              label = "⚡ CODES",
+              accent = Color(0xFF6200EE),
+              onClick = { showCodesDialog = true },
+            )
+            OsDockChip(
+              modifier = Modifier.widthIn(min = 72.dp).testTag("os_dock_store"),
               label = "STORE",
               accent = Color(0xFF00E5FF),
               onClick = onOpenStore,
             )
             OsDockChip(
-              modifier = Modifier.weight(1f).testTag("os_dock_achievements"),
+              modifier = Modifier.widthIn(min = 72.dp).testTag("os_dock_achievements"),
               label = if (claimableAchievements > 0) "ACH ($claimableAchievements)" else "ACHIEVE",
               accent = Color(0xFFFFD54F),
               onClick = onOpenAchievements,
             )
             OsDockChip(
-              modifier = Modifier.weight(1f).testTag("os_dock_missions"),
+              modifier = Modifier.widthIn(min = 72.dp).testTag("os_dock_missions"),
               label = "MISSIONS",
               accent = Color(0xFF00E676),
               onClick = onOpenMissions,
             )
             OsDockChip(
-              modifier = Modifier.weight(1f),
+              modifier = Modifier.widthIn(min = 72.dp),
               label = "BLENDER",
               accent = Color(0xFFFF8F00),
               onClick = onOpenForgeRig,
             )
             OsDockChip(
-              modifier = Modifier.weight(1f),
+              modifier = Modifier.widthIn(min = 72.dp),
               label = "VAULT",
               accent = Color(0xFFE040FB),
               onClick = onOpenMediaVault,
             )
             OsDockChip(
-              modifier = Modifier.weight(1f),
+              modifier = Modifier.widthIn(min = 72.dp),
               label = "EXPORT",
               accent = Color(0xFF00E676),
               onClick = onOpenExport,
@@ -1208,48 +1224,74 @@ fun OsDesktopScreen(
           val isSelected = mode.id == profile.activeMode
           Surface(
             shape = RoundedCornerShape(14.dp),
-            color = if (isSelected) Color(mode.accentHex).copy(alpha = 0.2f) else MaterialTheme.colorScheme.surface,
+            color = if (isSelected) Color(mode.accentHex).copy(alpha = 0.25f) else MaterialTheme.colorScheme.surface,
             modifier = Modifier
               .heightIn(min = 56.dp)
               .clip(RoundedCornerShape(14.dp))
               .combinedClickable(
-                onClick = { onSelectMode(mode.id) },
+                onClick = {
+                  haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                  onSelectMode(mode.id)
+                  onStatusMessage("Selected Mode: ${mode.label}")
+                },
                 onLongClick = {
                   haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                   onSelectMode(mode.id)
-                  onStatusMessage("Held & Selected Mode: ${mode.label}")
+                  onStatusMessage("Held & Locked Mode: ${mode.label}")
                 },
               )
               .border(
-                width = if (isSelected) 1.5.dp else 1.dp,
+                width = if (isSelected) 2.dp else 1.dp,
                 color = if (isSelected) Color(mode.accentHex) else MaterialTheme.colorScheme.outline,
                 shape = RoundedCornerShape(14.dp),
               )
               .testTag("mode_chip_${mode.id}"),
           ) {
-            Column(modifier = Modifier.width(184.dp).padding(12.dp)) {
+            Column(modifier = Modifier.width(196.dp).padding(12.dp)) {
               Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
               ) {
-                Icon(
-                  imageVector = AppIcons.Bolt,
-                  contentDescription = null,
-                  tint = Color(mode.accentHex),
-                  modifier = Modifier.size(16.dp),
-                )
-                Text(
-                  text = mode.label,
-                  style = MaterialTheme.typography.titleMedium,
-                  color = MaterialTheme.colorScheme.onSurface,
-                  maxLines = 1,
-                  overflow = TextOverflow.Ellipsis,
-                )
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(6.dp),
+                  modifier = Modifier.weight(1f),
+                ) {
+                  Icon(
+                    imageVector = AppIcons.Bolt,
+                    contentDescription = null,
+                    tint = Color(mode.accentHex),
+                    modifier = Modifier.size(16.dp),
+                  )
+                  Text(
+                    text = mode.label,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                  )
+                }
+                if (isSelected) {
+                  Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = Color(mode.accentHex),
+                  ) {
+                    Text(
+                      text = "ACTIVE",
+                      style = MaterialTheme.typography.labelSmall,
+                      fontWeight = FontWeight.Bold,
+                      color = Color.Black,
+                      modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                    )
+                  }
+                }
               }
               Spacer(Modifier.height(4.dp))
               Text(
-                text = mode.summary,
-                style = MaterialTheme.typography.bodyMedium,
+                text = "${mode.shortTag} • ${mode.summary}",
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -1485,6 +1527,18 @@ fun OsDesktopScreen(
       playerPrestige = progression.playerPrestige,
       onUpdateLobby = onUpdateLobby,
       onDismiss = { showLobbyRosterDialog = false },
+    )
+  }
+
+  if (showCodesDialog) {
+    TierBoostCodesDialog(
+      onDismiss = { showCodesDialog = false },
+      onApplyCode = onApplyProtocolCode,
+      onBoostAllTiers = onBoostAllTiers,
+      onMaxAllTiers = onMaxAllTiers,
+      onMaxAllStars = onMaxAllStars,
+      onGrantEssence = onGrantEssenceBonus,
+      onImportBo3Pack = onImportBo3Preset,
     )
   }
 }

@@ -615,6 +615,12 @@ fun UnknownOsShell(
                   onSelectCollectionDifficulty = viewModel::selectWorldCollectionDifficulty,
                   onSelectNgPlusTier = viewModel::selectNewGamePlusTier,
                   onCompleteNgPlusRun = viewModel::completeNewGamePlusRun,
+                  onApplyProtocolCode = viewModel::applyTierProtocolCode,
+                  onBoostAllTiers = viewModel::boostAllTiers,
+                  onMaxAllTiers = viewModel::maxAllTiers,
+                  onMaxAllStars = viewModel::maxAllStars,
+                  onGrantEssenceBonus = { viewModel.grantEssenceBonus(50_000L) },
+                  onImportBo3Preset = viewModel::importBo3ModToolsCuratedPack,
                   onSignOut = onLockSession,
                 )
 
@@ -738,6 +744,12 @@ fun UnknownOsShell(
                   onSelectNgPlusTier = viewModel::selectNewGamePlusTier,
                   onCompleteNgPlusRun = viewModel::completeNewGamePlusRun,
                   onSelectCollectionDifficulty = viewModel::selectWorldCollectionDifficulty,
+                  onApplyProtocolCode = viewModel::applyTierProtocolCode,
+                  onBoostAllTiers = viewModel::boostAllTiers,
+                  onMaxAllTiers = viewModel::maxAllTiers,
+                  onMaxAllStars = viewModel::maxAllStars,
+                  onGrantEssenceBonus = { viewModel.grantEssenceBonus(50_000L) },
+                  onImportBo3Preset = viewModel::importBo3ModToolsCuratedPack,
                 )
 
                 OsWorkspaceTab.MEDIA_VAULT -> MediaVaultScreen(

@@ -30,7 +30,9 @@ import androidx.compose.material.icons.filled.Delete
 import com.example.ui.theme.AppIcons
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
+import java.util.Locale
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -92,6 +94,7 @@ enum class ArmorySection(val label: String, val tag: String) {
   PASS_CHALLENGES("Pass & Challenges", "pass"),
   STORE("Store", "store"),
   ACHIEVEMENTS("Achievements", "achievements"),
+  WORKSHOP_BO3("BO3 & Workshop", "workshop_bo3"),
 }
 
 @Composable
@@ -172,14 +175,24 @@ fun ArmoryScreen(
   onSelectNgPlusTier: (Int) -> Unit = {},
   onCompleteNgPlusRun: () -> Unit = {},
   onSelectCollectionDifficulty: (String, CollectionDifficulty) -> Unit = { _, _ -> },
+  onApplyProtocolCode: (String) -> Unit = {},
+  onBoostAllTiers: (Int) -> Unit = {},
+  onMaxAllTiers: () -> Unit = {},
+  onMaxAllStars: () -> Unit = {},
+  onGrantEssenceBonus: () -> Unit = {},
+  onImportBo3Preset: () -> Unit = {},
 ) {
-  val categories = listOf("all", "perk", "power", "upgrade", "consumable")
+  val categories = listOf("all", "perk", "power", "upgrade", "consumable", "workshop_bo3")
   var selectedSection by remember { mutableStateOf(ArmorySection.MODS) }
   var selectedCategory by remember { mutableStateOf("all") }
   var showCreateDialog by remember { mutableStateOf(false) }
+  var showCodesDialog by remember { mutableStateOf(false) }
 
-  val filtered =
-    if (selectedCategory == "all") armory else armory.filter { it.category == selectedCategory }
+  val filtered = when (selectedCategory) {
+    "all" -> armory
+    "workshop_bo3" -> armory.filter { it.isCustom || it.universeTag.contains("BO3", ignoreCase = true) || it.universeTag.contains("Workshop", ignoreCase = true) }
+    else -> armory.filter { it.category == selectedCategory }
+  }
   val sections = ArmorySection.entries
   val curIdx = sections.indexOf(selectedSection).coerceAtLeast(0)
   val resonance = remember(
@@ -248,12 +261,15 @@ fun ArmoryScreen(
           ) {
             Text("< Prev", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
           }
-          Text(
-            text = "${curIdx + 1}/${sections.size}: ${selectedSection.label.uppercase()}",
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF00E5FF),
-          )
+          Button(
+            onClick = { showCodesDialog = true },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6200EE), contentColor = Color.White),
+            shape = RoundedCornerShape(10.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+            modifier = Modifier.height(48.dp).testTag("tier_codes_menu_btn"),
+          ) {
+            Text("⚡ Codes & Boost", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+          }
           OutlinedButton(
             onClick = { selectedSection = sections[(curIdx + 1) % sections.size] },
             shape = RoundedCornerShape(10.dp),
@@ -284,6 +300,7 @@ fun ArmoryScreen(
             ArmorySection.AREAS,
             ArmorySection.STORE,
             ArmorySection.ACHIEVEMENTS,
+            ArmorySection.WORKSHOP_BO3,
           )
         }
         Column(
@@ -335,6 +352,7 @@ fun ArmoryScreen(
                           "perk" -> "Perks"
                           "power" -> "Powers"
                           "upgrade" -> "Upgrades"
+                          "workshop_bo3" -> "BO3 / Workshop"
                           else -> "Consumables"
                         }
                       )
@@ -499,6 +517,92 @@ fun ArmoryScreen(
           achievements = achievements,
           onClaimAchievement = onClaimAchievement,
         )
+
+        ArmorySection.WORKSHOP_BO3 -> {
+          val workshopItems = remember(armory) {
+            armory.filter { it.isCustom || it.universeTag.contains("BO3", ignoreCase = true) || it.universeTag.contains("Workshop", ignoreCase = true) }
+          }
+          LazyColumn(
+            modifier = Modifier.fillMaxSize().testTag("workshop_bo3_section_list"),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 92.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+          ) {
+            item {
+              Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.fillMaxWidth().border(1.dp, Color(0xFF00E5FF).copy(alpha = 0.4f), RoundedCornerShape(14.dp)),
+              ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                  Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                      text = "BO3 MOD TOOLS & WORKSHOP PIPELINE",
+                      style = MaterialTheme.typography.titleMedium,
+                      fontWeight = FontWeight.Bold,
+                      color = Color(0xFF00E5FF),
+                    )
+                    Surface(shape = RoundedCornerShape(6.dp), color = Color(0xFF6200EE).copy(alpha = 0.25f)) {
+                      Text("TIER 25 READY", style = MaterialTheme.typography.labelSmall, color = Color(0xFFBB86FC), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                    }
+                  }
+                  Text(
+                    text = "Imports Treyarch Black Ops 3 Mod Tools assets (.gdt, .xmodel_export, .xanim_export, .gsc scripts) and Steam Workshop mods with 1:1 weapon models, audio cues, perks, and custom behavior up to Tier 25.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
+                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                      onClick = onImportBo3Preset,
+                      colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF), contentColor = Color.Black),
+                      shape = RoundedCornerShape(10.dp),
+                      modifier = Modifier.weight(1f).height(48.dp).testTag("import_bo3_curated_btn"),
+                    ) {
+                      Text("Import BO3 Pack", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                    }
+                    OutlinedButton(
+                      onClick = { showCodesDialog = true },
+                      shape = RoundedCornerShape(10.dp),
+                      modifier = Modifier.weight(1f).height(48.dp).testTag("bo3_section_boost_codes_btn"),
+                    ) {
+                      Text("⚡ Boost & Codes", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                    }
+                  }
+                }
+              }
+            }
+
+            if (workshopItems.isEmpty()) {
+              item {
+                Surface(
+                  shape = RoundedCornerShape(12.dp),
+                  color = MaterialTheme.colorScheme.surface,
+                  modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp).border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp)),
+                ) {
+                  Column(
+                    modifier = Modifier.padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                  ) {
+                    Text("No BO3 Mod Tools / Workshop Items Active", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Tap 'Import BO3 Pack' above to load Treyarch Juggernog, Speed Cola, Double Tap, Widow's Wine, Thundergun, and Wunderwaffe DG-2 with full Tier 25 scaling.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                  }
+                }
+              }
+            } else {
+              items(workshopItems, key = { it.id }) { item ->
+                ArmoryModuleCard(
+                  item = item,
+                  totalEssence = totalEssence,
+                  starLevel = progression.armoryItemStar(item.id),
+                  onToggleEquip = { onToggleEquip(item) },
+                  onUpgrade = { onUpgradeItem(item) },
+                  onUpgradeStar = { onUpgradeArmoryItemStar(item.id) },
+                  onDelete = if (item.isCustom) ({ onDeleteItem(item.id) }) else null,
+                )
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -510,6 +614,18 @@ fun ArmoryScreen(
         onCreateCustomItem(name, cat, tag, desc, cd, power, hex)
         showCreateDialog = false
       },
+    )
+  }
+
+  if (showCodesDialog) {
+    TierBoostCodesDialog(
+      onDismiss = { showCodesDialog = false },
+      onApplyCode = onApplyProtocolCode,
+      onBoostAllTiers = onBoostAllTiers,
+      onMaxAllTiers = onMaxAllTiers,
+      onMaxAllStars = onMaxAllStars,
+      onGrantEssence = onGrantEssenceBonus,
+      onImportBo3Pack = onImportBo3Preset,
     )
   }
 }
@@ -608,40 +724,77 @@ private fun ArmoryModuleCard(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
       )
 
-      Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Column(modifier = Modifier.weight(1f)) {
+      Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
           Text(
             text = "Tier ${item.tier}/$effectiveMaxTier (${tierMeta.label}) • Power ${item.powerValue}" +
               if (item.cooldownSec > 0) " • CD ${item.cooldownSec}s" else "",
             style = MaterialTheme.typography.labelSmall,
             color = Color(tierMeta.colorHex),
+            fontWeight = FontWeight.SemiBold,
           )
-          Spacer(Modifier.height(4.dp))
-          LinearProgressIndicator(
-            progress = { item.tier.toFloat() / effectiveMaxTier.toFloat().coerceAtLeast(1f) },
+          Text(
+            text = "${(item.tier.toFloat() / effectiveMaxTier.toFloat() * 100).toInt()}%",
+            style = MaterialTheme.typography.labelSmall,
             color = accent,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.fillMaxWidth().height(6.dp),
+            fontWeight = FontWeight.Bold,
+          )
+        }
+        LinearProgressIndicator(
+          progress = { item.tier.toFloat() / effectiveMaxTier.toFloat().coerceAtLeast(1f) },
+          color = accent,
+          trackColor = MaterialTheme.colorScheme.surfaceVariant,
+          modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+        )
+      }
+
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        OutlinedButton(
+          onClick = {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            onUpgrade()
+          },
+          enabled = canUpgrade,
+          shape = RoundedCornerShape(10.dp),
+          contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+          modifier = Modifier
+            .weight(1f)
+            .heightIn(min = 48.dp)
+            .testTag("upgrade_btn_${item.id}"),
+        ) {
+          Text(
+            text = if (item.tier >= effectiveMaxTier) "TIER MAX ($effectiveMaxTier)" else "Tier ${item.tier + 1} ($upgradeCost B)",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
           )
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-          OutlinedButton(
-            onClick = onUpgrade,
-            enabled = canUpgrade,
-            shape = RoundedCornerShape(10.dp),
-            modifier = Modifier.heightIn(min = 48.dp).testTag("upgrade_btn_${item.id}"),
-          ) {
-            Text(if (item.tier >= effectiveMaxTier) "MAX" else "$upgradeCost B")
-          }
-          OutlinedButton(
-            onClick = onUpgradeStar,
-            enabled = canUpgradeStar,
-            shape = RoundedCornerShape(10.dp),
-            modifier = Modifier.heightIn(min = 48.dp).testTag("upgrade_star_btn_${item.id}"),
-          ) {
-            Text(if (starLevel >= StarRankMeta.MAX_STARS) "10★" else "★+1 ($starCost B)")
-          }
+        OutlinedButton(
+          onClick = {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            onUpgradeStar()
+          },
+          enabled = canUpgradeStar,
+          shape = RoundedCornerShape(10.dp),
+          contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+          modifier = Modifier
+            .weight(1f)
+            .heightIn(min = 48.dp)
+            .testTag("upgrade_star_btn_${item.id}"),
+        ) {
+          Text(
+            text = if (starLevel >= StarRankMeta.MAX_STARS) "STAR MAX (10★)" else "Star ${starLevel + 1}★ ($starCost B)",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+          )
         }
       }
     }

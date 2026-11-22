@@ -911,7 +911,7 @@ if __name__ == "__main__":
         val name = obj.optString("name").trim().take(50)
         if (name.isEmpty()) continue
         val itemId = obj.optString("id").ifBlank { "import_armory_$i" }.replace(Regex("[^a-zA-Z0-9_\\-]"), "_")
-        val maxTier = obj.optLong("maxTier", 5L).coerceIn(1L, 5L)
+        val maxTier = maxOf(obj.optLong("maxTier", 25L), 25L).coerceIn(1L, 25L)
         val tier = obj.optLong("tier", 1L).coerceIn(1L, maxTier)
         armory.add(
           ArmoryItem(
@@ -924,7 +924,7 @@ if __name__ == "__main__":
             tier = tier,
             maxTier = maxTier,
             cooldownSec = obj.optLong("cooldownSec", 0L).coerceIn(0L, 120L),
-            powerValue = obj.optLong("powerValue", 100L).coerceIn(1L, 500L),
+            powerValue = obj.optLong("powerValue", 100L).coerceIn(1L, 1500L),
             accentColorHex = obj.optString("accentColorHex").ifBlank { "#00E5FF" }.take(10),
             equipped = obj.optBoolean("equipped", false),
             isCustom = obj.optBoolean("isCustom", true),

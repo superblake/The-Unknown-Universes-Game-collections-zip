@@ -446,6 +446,17 @@ object SteamWorkshopCodec {
     }
 
     val vdfResult = parseVdfManifest(trimmed)
+    if (vdfResult.isSuccess) {
+      return vdfResult.map { details ->
+        buildPreviewFromSteamDetails(details, targetUserId, "VDF_MANIFEST")
+      }
+    }
+
+    val bo3Result = Bo3ModToolsImporter.parseBo3PackageOrScript(trimmed, targetUserId)
+    if (bo3Result.isSuccess) {
+      return bo3Result
+    }
+
     return vdfResult.map { details ->
       buildPreviewFromSteamDetails(details, targetUserId, "VDF_MANIFEST")
     }
@@ -587,7 +598,7 @@ object SteamWorkshopCodec {
       universeTag = "Workshop #$idToken".take(40),
       description = cleanDesc,
       tier = 1L,
-      maxTier = 5L,
+      maxTier = 25L,
       cooldownSec = if (category == "perk") 0L else 6L,
       powerValue = 175L,
       accentColorHex = "#66C0F4",
@@ -645,6 +656,7 @@ object SteamWorkshopCodec {
         id = FirestoreSyncCodec.sanitizeId(newId, "ws_arm"),
         userId = targetUserId,
         isCustom = true,
+        maxTier = maxOf(item.maxTier, 25L),
         updatedAtMillis = now,
       )
     }
