@@ -1,9 +1,10 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -39,15 +41,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.model.CharacterCustomization
+import com.example.data.model.CollectionDifficulty
 import com.example.data.model.GearSlot
 import com.example.data.model.GearState
 import com.example.data.model.LevelCustomization
 import com.example.data.model.MultiverseArsenalCatalog
+import com.example.data.model.NewGamePlusVersion
 import com.example.data.model.OperatorProgressionState
 import com.example.data.model.ProgressionCatalog
 import com.example.data.model.RigAsset
@@ -56,6 +63,7 @@ import com.example.data.model.UniverseCatalog
 import com.example.data.model.UpgradeCosts
 import com.example.data.model.WeaponCustomization
 import com.example.data.model.WonderWeaponKind
+import com.example.data.model.WorldDifficultyTier
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
@@ -79,6 +87,7 @@ private val titleBadges: List<String> = listOf(
   "Hellbreaker Slayer",
 )
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun WeaponCustomizationTab(
   progression: OperatorProgressionState,
@@ -92,6 +101,7 @@ fun WeaponCustomizationTab(
   onToggleMultiWeaponEquip: (String) -> Unit = {},
   onToggleMultiWonderEquip: (String) -> Unit = {},
 ) {
+  val haptic = LocalHapticFeedback.current
   val wc = progression.weaponCustom
   val multiWeapons = progression.effectiveWeaponList()
   val multiWonders = progression.effectiveWonderList()
@@ -226,13 +236,20 @@ fun WeaponCustomizationTab(
           val inMulti = multiWeapons.contains(weapon.id)
           val lvl = progression.weaponLevel(weapon.id)
           Surface(
-            onClick = {
-              onUpdateWeaponCustom { it.copy(equippedWeaponId = weapon.id, tracerColorHex = weapon.defaultTracerHex) }
-            },
             shape = RoundedCornerShape(14.dp),
             color = if (selected) Color(weapon.defaultTracerHex).copy(alpha = 0.16f) else MaterialTheme.colorScheme.surface,
             modifier = Modifier
               .width(220.dp)
+              .clip(RoundedCornerShape(14.dp))
+              .combinedClickable(
+                onClick = {
+                  onUpdateWeaponCustom { it.copy(equippedWeaponId = weapon.id, tracerColorHex = weapon.defaultTracerHex) }
+                },
+                onLongClick = {
+                  haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                  onUpdateWeaponCustom { it.copy(equippedWeaponId = weapon.id, tracerColorHex = weapon.defaultTracerHex) }
+                },
+              )
               .border(
                 width = if (selected || inMulti) 1.5.dp else 1.dp,
                 color = if (selected) Color(weapon.defaultTracerHex) else if (inMulti) Color(0xFF00E676) else MaterialTheme.colorScheme.outline,
@@ -254,7 +271,7 @@ fun WeaponCustomizationTab(
               OutlinedButton(
                 onClick = { onToggleMultiWeaponEquip(weapon.id) },
                 shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.fillMaxWidth().height(36.dp).testTag("multi_equip_weapon_${weapon.id}"),
+                modifier = Modifier.fillMaxWidth().height(48.dp).testTag("multi_equip_weapon_${weapon.id}"),
               ) {
                 Text(
                   text = if (inMulti) "In Loadout (${multiWeapons.size}/3)" else "+ Add to Loadout",
@@ -368,6 +385,14 @@ fun WeaponCustomizationTab(
             color = if (inWonderLoadout) Color(kind.accentHex).copy(alpha = 0.10f) else MaterialTheme.colorScheme.surface,
             modifier = Modifier
               .width(240.dp)
+              .clip(RoundedCornerShape(14.dp))
+              .combinedClickable(
+                onClick = { onToggleMultiWonderEquip(kind.id) },
+                onLongClick = {
+                  haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                  onToggleMultiWonderEquip(kind.id)
+                },
+              )
               .border(
                 width = if (inWonderLoadout) 2.dp else 1.dp,
                 color = Color(kind.accentHex).copy(alpha = if (inWonderLoadout) 0.95f else 0.55f),
@@ -384,7 +409,7 @@ fun WeaponCustomizationTab(
               OutlinedButton(
                 onClick = { onToggleMultiWonderEquip(kind.id) },
                 shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.fillMaxWidth().height(38.dp).testTag("multi_equip_wonder_${kind.id}"),
+                modifier = Modifier.fillMaxWidth().height(48.dp).testTag("multi_equip_wonder_${kind.id}"),
               ) {
                 Text(
                   text = if (inWonderLoadout) "EQUIPPED (${multiWonders.size}/3)" else "+ Equip Wonder Slot",
@@ -398,7 +423,7 @@ fun WeaponCustomizationTab(
                   enabled = wt < 25 && totalBlueEssence >= wCost,
                   shape = RoundedCornerShape(8.dp),
                   contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-                  modifier = Modifier.weight(1f).height(40.dp).testTag("upgrade_wonder_${kind.id}"),
+                  modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_wonder_${kind.id}"),
                 ) {
                   Text(
                     text = if (wt >= 25) "MAX T25" else "T+1 (${wCost}B)",
@@ -411,7 +436,7 @@ fun WeaponCustomizationTab(
                   enabled = wStar < StarRankMeta.MAX_STARS && totalBlueEssence >= wStarCost,
                   shape = RoundedCornerShape(8.dp),
                   contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-                  modifier = Modifier.weight(1f).height(40.dp).testTag("upgrade_wonder_star_${kind.id}"),
+                  modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_wonder_star_${kind.id}"),
                 ) {
                   Text(
                     text = if (wStar >= StarRankMeta.MAX_STARS) "10★" else "★+1 (${wStarCost}B)",
@@ -440,11 +465,17 @@ fun WeaponCustomizationTab(
               Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(
                   modifier = Modifier
-                    .size(44.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
                     .background(Color(hex))
                     .border(if (selected) 3.dp else 1.dp, if (selected) Color.White else MaterialTheme.colorScheme.outline, CircleShape)
-                    .clickable { onUpdateWeaponCustom { it.copy(tracerColorHex = hex) } }
+                    .combinedClickable(
+                      onClick = { onUpdateWeaponCustom { it.copy(tracerColorHex = hex) } },
+                      onLongClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onUpdateWeaponCustom { it.copy(tracerColorHex = hex) }
+                      },
+                    )
                     .testTag("tracer_swatch_$label"),
                 )
                 Spacer(Modifier.height(4.dp))
@@ -458,6 +489,7 @@ fun WeaponCustomizationTab(
   }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CharacterCustomizationTab(
   progression: OperatorProgressionState,
@@ -469,6 +501,7 @@ fun CharacterCustomizationTab(
   onUpgradeCharacterStar: () -> Unit = {},
   onEquipOutfit: (String) -> Unit = {},
 ) {
+  val haptic = LocalHapticFeedback.current
   val cc = progression.characterCustom
   val activeSpec = progression.activeOutfitSpec()
   val (xpCur, xpNeed) = ProgressionCatalog.xpProgressInCurrentPlayerLevel(progression.playerXp)
@@ -614,7 +647,7 @@ fun CharacterCustomizationTab(
               onClick = onUpgradeCharacterTier,
               enabled = progression.characterTier < 25 && totalBlueEssence >= charTierCost,
               shape = RoundedCornerShape(8.dp),
-              modifier = Modifier.weight(1f).height(42.dp).testTag("upgrade_char_tier_btn"),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_char_tier_btn"),
             ) {
               Text(if (progression.characterTier >= 25) "MAX TIER" else "Tier +1 ($charTierCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             }
@@ -622,7 +655,7 @@ fun CharacterCustomizationTab(
               onClick = onUpgradeCharacterStar,
               enabled = progression.characterStarLevel < 10 && totalBlueEssence >= charStarCost,
               shape = RoundedCornerShape(8.dp),
-              modifier = Modifier.weight(1f).height(42.dp).testTag("upgrade_char_star_btn"),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_char_star_btn"),
             ) {
               Text(if (progression.characterStarLevel >= 10) "MAX ★" else "Star +1 ($charStarCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             }
@@ -632,7 +665,7 @@ fun CharacterCustomizationTab(
             Button(
               onClick = onPrestigePlayer,
               shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.fillMaxWidth().height(42.dp).testTag("prestige_player_btn"),
+              modifier = Modifier.fillMaxWidth().height(48.dp).testTag("prestige_player_btn"),
             ) {
               Text("Prestige Operator (+${(progression.playerPrestige + 1) * 2500L} Blue Essence)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             }
@@ -658,13 +691,13 @@ fun CharacterCustomizationTab(
               selected = !originalsOnlyFilter,
               onClick = { originalsOnlyFilter = false },
               label = { Text("All (${MultiverseArsenalCatalog.outfits.size})") },
-              modifier = Modifier.testTag("char_filter_all"),
+              modifier = Modifier.heightIn(min = 48.dp).testTag("char_filter_all"),
             )
             FilterChip(
               selected = originalsOnlyFilter,
               onClick = { originalsOnlyFilter = true },
               label = { Text("Originals +25%") },
-              modifier = Modifier.testTag("char_filter_originals"),
+              modifier = Modifier.heightIn(min = 48.dp).testTag("char_filter_originals"),
             )
           }
         }
@@ -676,11 +709,18 @@ fun CharacterCustomizationTab(
             val selected = progression.equippedOutfitId == spec.id
             val accent = Color(spec.secondaryHex)
             Surface(
-              onClick = { onEquipOutfit(spec.id) },
               shape = RoundedCornerShape(14.dp),
               color = if (selected) accent.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surface,
               modifier = Modifier
                 .width(210.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .combinedClickable(
+                  onClick = { onEquipOutfit(spec.id) },
+                  onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onEquipOutfit(spec.id)
+                  },
+                )
                 .border(
                   width = if (selected) 2.dp else 1.dp,
                   color = if (selected) accent else MaterialTheme.colorScheme.outline,
@@ -783,11 +823,17 @@ fun CharacterCustomizationTab(
               val selected = cc.visorStyleId == id
               Box(
                 modifier = Modifier
-                  .size(44.dp)
+                  .size(48.dp)
                   .clip(CircleShape)
                   .background(Color(hex))
                   .border(if (selected) 3.dp else 1.dp, if (selected) Color.White else MaterialTheme.colorScheme.outline, CircleShape)
-                  .clickable { onUpdateCharacterCustom { it.copy(visorStyleId = id) } }
+                  .combinedClickable(
+                    onClick = { onUpdateCharacterCustom { it.copy(visorStyleId = id) } },
+                    onLongClick = {
+                      haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                      onUpdateCharacterCustom { it.copy(visorStyleId = id) }
+                    },
+                  )
                   .testTag("visor_swatch_$id"),
               )
             }
@@ -835,6 +881,7 @@ fun CharacterCustomizationTab(
                 selected = cc.titleBadge == badge,
                 onClick = { onUpdateCharacterCustom { it.copy(titleBadge = badge) } },
                 label = { Text(badge) },
+                modifier = Modifier.heightIn(min = 48.dp),
               )
             }
           }
@@ -844,17 +891,171 @@ fun CharacterCustomizationTab(
   }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LevelCustomizationTab(
   progression: OperatorProgressionState,
   onUpdateLevelCustom: ((LevelCustomization) -> LevelCustomization) -> Unit,
+  activeWorldId: String = "sector_zero",
+  onSelectNgPlusTier: (Int) -> Unit = {},
+  onCompleteNgPlusRun: () -> Unit = {},
+  onSelectCollectionDifficulty: (String, CollectionDifficulty) -> Unit = { _, _ -> },
 ) {
+  val haptic = LocalHapticFeedback.current
   val lc = progression.levelCustom
+  val activeWorld = UniverseCatalog.worldById(activeWorldId)
+  val activeColDiff = progression.collectionDifficulty(activeWorldId)
+  val activeNg = progression.ngPlusSpec
+  val combinedRewardMult = progression.combinedGameplayRewardMultiplier(activeWorldId)
+
   LazyColumn(
     modifier = Modifier.fillMaxSize().testTag("level_customization_list"),
     contentPadding = PaddingValues(16.dp),
     verticalArrangement = Arrangement.spacedBy(12.dp),
   ) {
+    item {
+      Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth().border(1.5.dp, Color(activeColDiff.accentHex).copy(alpha = 0.7f), RoundedCornerShape(14.dp)),
+      ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          Text(
+            text = "COLLECTION DIFFICULTY (${activeWorld.title.substringBefore(":")})",
+            style = MaterialTheme.typography.titleSmall,
+            color = Color(activeColDiff.accentHex),
+            fontWeight = FontWeight.Bold,
+          )
+          Text(
+            text = "${activeColDiff.label} • ${activeColDiff.summary}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+          LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(CollectionDifficulty.entries, key = { it.id }) { diff ->
+              val selected = activeColDiff == diff
+              val accent = Color(diff.accentHex)
+              Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = if (selected) accent.copy(alpha = 0.22f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                modifier = Modifier
+                  .heightIn(min = 48.dp)
+                  .clip(RoundedCornerShape(12.dp))
+                  .combinedClickable(
+                    onClick = { onSelectCollectionDifficulty(activeWorldId, diff) },
+                    onLongClick = {
+                      haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                      onSelectCollectionDifficulty(activeWorldId, diff)
+                    },
+                  )
+                  .border(if (selected) 2.dp else 1.dp, if (selected) accent else MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
+                  .testTag("level_collection_diff_${diff.id}"),
+              ) {
+                Column(
+                  modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                  verticalArrangement = Arrangement.Center,
+                ) {
+                  Text(
+                    text = diff.label,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (selected) accent else MaterialTheme.colorScheme.onSurface,
+                  )
+                  Text(
+                    text = "HP x${String.format(Locale.US, "%.2f", diff.enemyHpScale)} • RWD x${String.format(Locale.US, "%.2f", diff.rewardMultiplier)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFFFFD54F),
+                  )
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    item {
+      Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth().border(1.5.dp, Color(activeNg.accentHex).copy(alpha = 0.72f), RoundedCornerShape(14.dp)),
+      ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(
+                text = "NEW GAME+ PROTOCOL (${activeNg.label.uppercase()})",
+                style = MaterialTheme.typography.titleSmall,
+                color = Color(activeNg.accentHex),
+                fontWeight = FontWeight.Bold,
+              )
+              Text(
+                text = "Completions: ${progression.ngPlusCompletions} • NG+ Mult x${String.format(Locale.US, "%.2f", progression.ngPlusRewardMultiplier)} • Combined x${String.format(Locale.US, "%.2f", combinedRewardMult)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFFFFD54F),
+              )
+            }
+            OutlinedButton(
+              onClick = onCompleteNgPlusRun,
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.heightIn(min = 48.dp).testTag("level_ng_plus_complete_btn"),
+            ) {
+              Text("Log Run", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            }
+          }
+          LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(NewGamePlusVersion.entries, key = { it.tier }) { ver ->
+              val unlocked = ver.tier <= progression.unlockedNgPlusTier
+              val selected = progression.activeNgPlusTier == ver.tier
+              val accent = Color(ver.accentHex)
+              Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = if (selected) accent.copy(alpha = 0.22f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                modifier = Modifier
+                  .heightIn(min = 48.dp)
+                  .clip(RoundedCornerShape(12.dp))
+                  .combinedClickable(
+                    enabled = unlocked,
+                    onClick = { onSelectNgPlusTier(ver.tier) },
+                    onLongClick = {
+                      haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                      onSelectNgPlusTier(ver.tier)
+                    },
+                  )
+                  .border(
+                    width = if (selected) 2.dp else 1.dp,
+                    color = if (selected) accent else if (unlocked) accent.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                    shape = RoundedCornerShape(12.dp),
+                  )
+                  .testTag("level_ng_plus_${ver.tier}"),
+              ) {
+                Column(
+                  modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                  verticalArrangement = Arrangement.Center,
+                ) {
+                  Text(
+                    text = if (unlocked) ver.shortTag else "LOCKED ${ver.shortTag}",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (unlocked) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
+                  Text(
+                    text = "RWD x${String.format(Locale.US, "%.2f", ver.rewardMultiplier)} • HP x${String.format(Locale.US, "%.2f", ver.enemyHpScale)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (unlocked) Color(0xFFFFD54F) else MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     item {
       Surface(
         shape = RoundedCornerShape(14.dp),
@@ -873,12 +1074,12 @@ fun LevelCustomizationTab(
             color = Color(0xFFFFD54F),
           )
           LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(com.example.data.model.WorldDifficultyTier.entries, key = { it.id }) { tier ->
+            items(WorldDifficultyTier.entries, key = { it.id }) { tier ->
               FilterChip(
                 selected = lc.worldDifficultyTier == tier,
                 onClick = { onUpdateLevelCustom { it.copy(worldDifficultyTier = tier) } },
                 label = { Text(tier.label) },
-                modifier = Modifier.testTag("difficulty_tier_${tier.id}"),
+                modifier = Modifier.heightIn(min = 48.dp).testTag("difficulty_tier_${tier.id}"),
               )
             }
           }
@@ -924,21 +1125,11 @@ fun LevelCustomizationTab(
             valueRange = 0.75f..2.5f,
             modifier = Modifier.testTag("level_density_slider"),
           )
-          Text("FLOOR GRID ACCENT COLOR", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-          Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            tracerSwatches.forEach { (label, hex) ->
-              val selected = lc.floorAccentHex == hex
-              Box(
-                modifier = Modifier
-                  .size(42.dp)
-                  .clip(CircleShape)
-                  .background(Color(hex))
-                  .border(if (selected) 3.dp else 1.dp, if (selected) Color.White else MaterialTheme.colorScheme.outline, CircleShape)
-                  .clickable { onUpdateLevelCustom { it.copy(floorAccentHex = hex) } }
-                  .testTag("floor_accent_$label"),
-              )
-            }
-          }
+          Text("FLOOR GRID ACCENT COLOR (TAP OR HOLD)", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+          FloorAccentRow(
+            selectedHex = lc.floorAccentHex,
+            onSelect = { hex -> onUpdateLevelCustom { it.copy(floorAccentHex = hex) } },
+          )
         }
       }
     }
@@ -992,6 +1183,36 @@ fun LevelCustomizationTab(
   }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FloorAccentRow(
+  selectedHex: Long,
+  onSelect: (Long) -> Unit,
+) {
+  val haptic = LocalHapticFeedback.current
+  Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    tracerSwatches.forEach { (label, hex) ->
+      val selected = selectedHex == hex
+      Box(
+        modifier = Modifier
+          .size(48.dp)
+          .clip(CircleShape)
+          .background(Color(hex))
+          .border(if (selected) 3.dp else 1.dp, if (selected) Color.White else MaterialTheme.colorScheme.outline, CircleShape)
+          .combinedClickable(
+            onClick = { onSelect(hex) },
+            onLongClick = {
+              haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+              onSelect(hex)
+            },
+          )
+          .testTag("floor_accent_$label"),
+      )
+    }
+  }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun EquipmentCustomizationTab(
   progression: OperatorProgressionState,
@@ -1003,6 +1224,7 @@ fun EquipmentCustomizationTab(
   onToggleMultiEquipmentEquip: (com.example.data.model.EquipmentSlotType, String) -> Unit = { _, _ -> },
   onUpgradeEquipmentStar: (String) -> Unit = {},
 ) {
+  val haptic = LocalHapticFeedback.current
   LazyColumn(
     modifier = Modifier.fillMaxSize(),
     contentPadding = PaddingValues(16.dp),
@@ -1010,7 +1232,7 @@ fun EquipmentCustomizationTab(
   ) {
     item {
       Text("MULTI-EQUIP LETHAL & TACTICAL LOADOUT (UP TO 2 PER SLOT)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-      Text("Equip multiple Lethals (up to 2) and Tacticals (up to 2) simultaneously, level to 60, ascend Tier 1–25, and Prestige to P30.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      Text("Tap or Hold any equipment card to equip/upgrade • Level to 60, Tier 1–25, Prestige P30.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 
     items(com.example.data.model.EquipmentSlotType.entries, key = { it.id }) { slotType ->
@@ -1073,18 +1295,18 @@ fun EquipmentCustomizationTab(
             items(itemsForSlot, key = { it.id }) { item ->
               val isPrimary = item.id == eqState.equippedItemId
               val inMulti = multiList.contains(item.id)
-              Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+              Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 FilterChip(
                   selected = isPrimary,
                   onClick = { onEquipEquipment(slotType.id, item.id) },
                   label = { Text(item.name) },
-                  modifier = Modifier.testTag("equip_item_${item.id}"),
+                  modifier = Modifier.heightIn(min = 48.dp).testTag("equip_item_${item.id}"),
                 )
                 OutlinedButton(
                   onClick = { onToggleMultiEquipmentEquip(slotType, item.id) },
                   shape = RoundedCornerShape(8.dp),
-                  contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                  modifier = Modifier.height(32.dp).testTag("multi_equip_${item.id}"),
+                  contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                  modifier = Modifier.height(48.dp).testTag("multi_equip_${item.id}"),
                 ) {
                   Text(
                     text = if (inMulti) "Loaded (${multiList.size}/2)" else "+ Dual-Load",
@@ -1098,25 +1320,36 @@ fun EquipmentCustomizationTab(
 
           Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Surface(
-              onClick = { onUpgradeEquipment(slotType.id) },
               shape = RoundedCornerShape(10.dp),
               color = MaterialTheme.colorScheme.primaryContainer,
-              modifier = Modifier.weight(1f).testTag("upgrade_eq_${slotType.id}"),
+              modifier = Modifier
+                .weight(1f)
+                .heightIn(min = 48.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .combinedClickable(
+                  onClick = { onUpgradeEquipment(slotType.id) },
+                  onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onUpgradeEquipment(slotType.id)
+                  },
+                )
+                .testTag("upgrade_eq_${slotType.id}"),
             ) {
-              Text(
-                text = "Level +1 (${eqState.level}/60)",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.padding(vertical = 10.dp),
-                textAlign = TextAlign.Center,
-              )
+              Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 6.dp, vertical = 10.dp)) {
+                Text(
+                  text = "Level +1 (${eqState.level}/60)",
+                  style = MaterialTheme.typography.labelMedium,
+                  fontWeight = FontWeight.Bold,
+                  color = MaterialTheme.colorScheme.onPrimaryContainer,
+                  textAlign = TextAlign.Center,
+                )
+              }
             }
             OutlinedButton(
               onClick = { onUpgradeEquipmentTier(slotType.id) },
               enabled = eqState.tier < 25 && totalBlueEssence >= eqTierCost,
               shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.weight(1f).height(44.dp).testTag("upgrade_eq_tier_${slotType.id}"),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_eq_tier_${slotType.id}"),
             ) {
               Text(
                 text = if (eqState.tier >= 25) "T25 MAX" else "Tier +1 ($eqTierCost B)",
@@ -1128,7 +1361,7 @@ fun EquipmentCustomizationTab(
               onClick = { onUpgradeEquipmentStar(slotType.id) },
               enabled = eqState.starLevel < 10 && totalBlueEssence >= eqStarCost,
               shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.weight(1f).height(44.dp).testTag("upgrade_eq_star_${slotType.id}"),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_eq_star_${slotType.id}"),
             ) {
               Text(
                 text = if (eqState.starLevel >= 10) "10★ MAX" else "Star +1 ($eqStarCost B)",
@@ -1138,19 +1371,30 @@ fun EquipmentCustomizationTab(
             }
             if (eqState.level >= 60 && eqState.prestige < 30) {
               Surface(
-                onClick = { onPrestigeEquipment(slotType.id) },
                 shape = RoundedCornerShape(10.dp),
                 color = MaterialTheme.colorScheme.tertiaryContainer,
-                modifier = Modifier.weight(1f).testTag("prestige_eq_${slotType.id}"),
+                modifier = Modifier
+                  .weight(1f)
+                  .heightIn(min = 48.dp)
+                  .clip(RoundedCornerShape(10.dp))
+                  .combinedClickable(
+                    onClick = { onPrestigeEquipment(slotType.id) },
+                    onLongClick = {
+                      haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                      onPrestigeEquipment(slotType.id)
+                    },
+                  )
+                  .testTag("prestige_eq_${slotType.id}"),
               ) {
-                Text(
-                  text = "Prestige (${eqState.prestige}/30)",
-                  style = MaterialTheme.typography.labelMedium,
-                  fontWeight = FontWeight.Bold,
-                  color = MaterialTheme.colorScheme.onTertiaryContainer,
-                  modifier = Modifier.padding(vertical = 10.dp),
-                  textAlign = TextAlign.Center,
-                )
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 6.dp, vertical = 10.dp)) {
+                  Text(
+                    text = "Prestige (${eqState.prestige}/30)",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    textAlign = TextAlign.Center,
+                  )
+                }
               }
             }
           }
@@ -1160,6 +1404,7 @@ fun EquipmentCustomizationTab(
   }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GearCustomizationTab(
   progression: OperatorProgressionState,
@@ -1169,6 +1414,7 @@ fun GearCustomizationTab(
   onUpgradeGearTier: (GearSlot) -> Unit = {},
   onUpgradeGearStar: (GearSlot) -> Unit = {},
 ) {
+  val haptic = LocalHapticFeedback.current
   LazyColumn(
     modifier = Modifier.fillMaxSize(),
     contentPadding = PaddingValues(16.dp),
@@ -1183,7 +1429,7 @@ fun GearCustomizationTab(
         Column(modifier = Modifier.weight(1f)) {
           Text("OPERATOR GEAR SUITE", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
           Text(
-            text = "Level 5 gear modules up to 50 via combat XP or upgrades, ascend Tiers 1–25, and Prestige to P30.",
+            text = "Tap or Hold to upgrade 5 gear modules up to Level 50, Tiers 1–25, and Prestige P30.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
@@ -1207,19 +1453,33 @@ fun GearCustomizationTab(
       item {
         val allMaxed = GearSlot.entries.all { (progression.gearMap[it.id]?.level ?: 1) >= 50 }
         Surface(
-          onClick = { if (allMaxed) onPrestigeGear() },
           shape = RoundedCornerShape(12.dp),
           color = if (allMaxed) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-          modifier = Modifier.fillMaxWidth().testTag("gear_prestige_action_btn"),
+          modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .combinedClickable(
+              enabled = allMaxed,
+              onClick = { if (allMaxed) onPrestigeGear() },
+              onLongClick = {
+                if (allMaxed) {
+                  haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                  onPrestigeGear()
+                }
+              },
+            )
+            .testTag("gear_prestige_action_btn"),
         ) {
-          Text(
-            text = if (allMaxed) "PRESTIGE ALL GEAR (Ascend to P${progression.gearPrestige + 1})" else "Reach Level 50 on all 5 Gear Slots to Prestige",
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
-            color = if (allMaxed) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(vertical = 12.dp),
-            textAlign = TextAlign.Center,
-          )
+          Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 12.dp, horizontal = 12.dp)) {
+            Text(
+              text = if (allMaxed) "PRESTIGE ALL GEAR (Ascend to P${progression.gearPrestige + 1})" else "Reach Level 50 on all 5 Gear Slots to Prestige",
+              style = MaterialTheme.typography.labelLarge,
+              fontWeight = FontWeight.Bold,
+              color = if (allMaxed) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+              textAlign = TextAlign.Center,
+            )
+          }
         }
       }
     }
@@ -1281,26 +1541,39 @@ fun GearCustomizationTab(
 
           Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Surface(
-              onClick = { if (gear.level < 50) onUpgradeGear(slot) },
-              enabled = gear.level < 50,
               shape = RoundedCornerShape(10.dp),
               color = if (gear.level < 50) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-              modifier = Modifier.weight(1f).testTag("upgrade_gear_${slot.id}"),
+              modifier = Modifier
+                .weight(1f)
+                .heightIn(min = 48.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .combinedClickable(
+                  enabled = gear.level < 50,
+                  onClick = { if (gear.level < 50) onUpgradeGear(slot) },
+                  onLongClick = {
+                    if (gear.level < 50) {
+                      haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                      onUpgradeGear(slot)
+                    }
+                  },
+                )
+                .testTag("upgrade_gear_${slot.id}"),
             ) {
-              Text(
-                text = if (gear.level < 50) "Level +1 (${gear.level}/50)" else "MAX LVL (50/50)",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = if (gear.level < 50) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(vertical = 10.dp),
-                textAlign = TextAlign.Center,
-              )
+              Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 6.dp, vertical = 10.dp)) {
+                Text(
+                  text = if (gear.level < 50) "Level +1 (${gear.level}/50)" else "MAX LVL (50/50)",
+                  style = MaterialTheme.typography.labelMedium,
+                  fontWeight = FontWeight.Bold,
+                  color = if (gear.level < 50) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                  textAlign = TextAlign.Center,
+                )
+              }
             }
             OutlinedButton(
               onClick = { onUpgradeGearTier(slot) },
               enabled = gear.tier < 25 && totalBlueEssence >= gearTierCost,
               shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.weight(1f).height(44.dp).testTag("upgrade_gear_tier_${slot.id}"),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_gear_tier_${slot.id}"),
             ) {
               Text(
                 text = if (gear.tier >= 25) "T25 MAX" else "Tier +1 ($gearTierCost B)",
@@ -1312,7 +1585,7 @@ fun GearCustomizationTab(
               onClick = { onUpgradeGearStar(slot) },
               enabled = gear.starLevel < 10 && totalBlueEssence >= gearStarCost,
               shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.weight(1f).height(44.dp).testTag("upgrade_gear_star_${slot.id}"),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_gear_star_${slot.id}"),
             ) {
               Text(
                 text = if (gear.starLevel >= 10) "10★ MAX" else "Star +1 ($gearStarCost B)",
@@ -1327,6 +1600,7 @@ fun GearCustomizationTab(
   }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SkillTreeTab(
   progression: OperatorProgressionState,
@@ -1334,6 +1608,7 @@ fun SkillTreeTab(
   onUnlockSkill: (String) -> Unit,
   onUpgradeSkillStar: (String) -> Unit = {},
 ) {
+  val haptic = LocalHapticFeedback.current
   var selectedCategory by remember { mutableStateOf("ALL") }
   val categories = listOf("ALL", "COMBAT", "SURVIVAL", "ENGINEERING", "WONDER")
   val nodes = progression.skillNodes.values.toList()
@@ -1354,7 +1629,7 @@ fun SkillTreeTab(
         Column(modifier = Modifier.weight(1f)) {
           Text("OPERATOR SKILL TREE (TIERS 1–25)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
           Text(
-            text = "Unlock permanent traits and ascend them from Tier 1 to Tier 25 Multiversal with Blue Essence.",
+            text = "Tap or Hold skill nodes to unlock and ascend from Tier 1 to Tier 25 Multiversal with Blue Essence.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
@@ -1381,7 +1656,7 @@ fun SkillTreeTab(
             selected = selectedCategory == cat,
             onClick = { selectedCategory = cat },
             label = { Text(cat) },
-            modifier = Modifier.testTag("skill_cat_$cat"),
+            modifier = Modifier.heightIn(min = 48.dp).testTag("skill_cat_$cat"),
           )
         }
       }
@@ -1437,24 +1712,37 @@ fun SkillTreeTab(
           if (!isMaxTier) {
             val canAfford = totalEssence >= nextCost
             Surface(
-              onClick = { onUnlockSkill(node.id) },
-              enabled = canAfford,
               shape = RoundedCornerShape(10.dp),
               color = if (canAfford) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-              modifier = Modifier.fillMaxWidth().testTag("unlock_skill_${node.id}"),
+              modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .combinedClickable(
+                  enabled = canAfford,
+                  onClick = { onUnlockSkill(node.id) },
+                  onLongClick = {
+                    if (canAfford) {
+                      haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                      onUnlockSkill(node.id)
+                    }
+                  },
+                )
+                .testTag("unlock_skill_${node.id}"),
             ) {
-              Text(
-                text = when {
-                  !node.unlocked && canAfford -> "Unlock Skill (${nextCost} Blue Essence)"
-                  node.unlocked && canAfford -> "Upgrade to Tier ${node.tier + 1} (${nextCost} Blue Essence)"
-                  else -> "Need ${nextCost - totalEssence} More Blue Essence"
-                },
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = if (canAfford) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier.padding(vertical = 10.dp),
-                textAlign = TextAlign.Center,
-              )
+              Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 10.dp, horizontal = 10.dp)) {
+                Text(
+                  text = when {
+                    !node.unlocked && canAfford -> "Unlock Skill (${nextCost} Blue Essence)"
+                    node.unlocked && canAfford -> "Upgrade to Tier ${node.tier + 1} (${nextCost} Blue Essence)"
+                    else -> "Need ${nextCost - totalEssence} More Blue Essence"
+                  },
+                  style = MaterialTheme.typography.labelMedium,
+                  fontWeight = FontWeight.Bold,
+                  color = if (canAfford) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                  textAlign = TextAlign.Center,
+                )
+              }
             }
           } else {
             Text(
@@ -1470,7 +1758,7 @@ fun SkillTreeTab(
               onClick = { onUpgradeSkillStar(node.id) },
               enabled = node.starLevel < 10 && totalEssence >= skillStarCost,
               shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.fillMaxWidth().height(38.dp).testTag("upgrade_skill_star_${node.id}"),
+              modifier = Modifier.fillMaxWidth().height(48.dp).testTag("upgrade_skill_star_${node.id}"),
             ) {
               Text(
                 text = if (node.starLevel >= 10) "10★ MAX" else "Skill Star +1 (${node.starLevel}★ -> ${node.starLevel + 1}★, $skillStarCost B)",
@@ -1485,6 +1773,7 @@ fun SkillTreeTab(
   }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun CustomizationChipGroup(
   title: String,
@@ -1493,21 +1782,52 @@ private fun CustomizationChipGroup(
   tagPrefix: String,
   onSelect: (String) -> Unit,
 ) {
+  val haptic = LocalHapticFeedback.current
   Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
     Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
       items(options, key = { it.first }) { (id, label) ->
-        FilterChip(
-          selected = selectedId == id,
-          onClick = { onSelect(id) },
-          label = { Text(label) },
-          modifier = Modifier.testTag("${tagPrefix}_$id"),
-        )
+        val selected = selectedId == id
+        Surface(
+          shape = RoundedCornerShape(10.dp),
+          color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+          modifier = Modifier
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .combinedClickable(
+              onClick = { onSelect(id) },
+              onLongClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onSelect(id)
+              },
+            )
+            .border(
+              width = if (selected) 1.5.dp else 1.dp,
+              color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+              shape = RoundedCornerShape(10.dp),
+            )
+            .testTag("${tagPrefix}_$id"),
+        ) {
+          Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+          ) {
+            Text(
+              text = label,
+              style = MaterialTheme.typography.labelMedium,
+              fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+              color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+            )
+          }
+        }
       }
     }
   }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MutatorToggleRow(
   title: String,
@@ -1516,8 +1836,20 @@ private fun MutatorToggleRow(
   tag: String,
   onCheckedChange: (Boolean) -> Unit,
 ) {
+  val haptic = LocalHapticFeedback.current
   Row(
-    modifier = Modifier.fillMaxWidth(),
+    modifier = Modifier
+      .fillMaxWidth()
+      .heightIn(min = 52.dp)
+      .clip(RoundedCornerShape(10.dp))
+      .combinedClickable(
+        onClick = { onCheckedChange(!checked) },
+        onLongClick = {
+          haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+          onCheckedChange(!checked)
+        },
+      )
+      .padding(horizontal = 4.dp, vertical = 4.dp),
     horizontalArrangement = Arrangement.SpaceBetween,
     verticalAlignment = Alignment.CenterVertically,
   ) {

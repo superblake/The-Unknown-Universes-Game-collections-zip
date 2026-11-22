@@ -562,4 +562,9 @@ object OriginalVaultCatalog {
 
   fun artworkByAssetPath(assetPath: String?): VaultArtwork? =
     if (assetPath.isNullOrBlank()) null else artworks.firstOrNull { it.assetPath == assetPath }
+
+  /**
+   * Embedded No-APK Play Guide bundled with the Original Vault art & continuation collection.
+   */
+  const val NO_APK_PLAY_GUIDE: String = UniverseCatalog.NO_APK_PLAY_GUIDE
 }

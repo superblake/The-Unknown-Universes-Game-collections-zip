@@ -1,7 +1,9 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -44,6 +47,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -156,7 +161,7 @@ fun MatchBrowserDialog(
                 )
               }
               Text(
-                text = "Search, join, or host customizable public & private lobbies across 6 worlds & 8 areas",
+                text = "Search, join, or host customizable lobbies across ${UniverseCatalog.worlds.size} worlds & ${MultiverseArsenalCatalog.customAreas.size} arenas",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
               )
@@ -200,8 +205,8 @@ fun MatchBrowserDialog(
               OutlinedButton(
                 onClick = onLeaveMatch,
                 shape = RoundedCornerShape(8.dp),
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                modifier = Modifier.height(34.dp).testTag("leave_joined_match_btn"),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                modifier = Modifier.height(48.dp).testTag("leave_joined_match_btn"),
               ) {
                 Text("Leave", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
               }
@@ -418,12 +423,14 @@ fun MatchBrowserDialog(
   }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MatchListingCard(
   match: MultiverseMatchListing,
   isJoined: Boolean,
   onJoinClicked: () -> Unit,
 ) {
+  val haptic = LocalHapticFeedback.current
   val privacyColor = when (match.privacy) {
     MatchPrivacy.PUBLIC -> Color(0xFF00E676)
     MatchPrivacy.PRIVATE_PASSWORD -> Color(0xFFFF9100)
@@ -437,6 +444,15 @@ private fun MatchListingCard(
     color = MaterialTheme.colorScheme.surface,
     modifier = Modifier
       .fillMaxWidth()
+      .clip(RoundedCornerShape(16.dp))
+      .combinedClickable(
+        enabled = !match.isFull || isJoined,
+        onClick = onJoinClicked,
+        onLongClick = {
+          haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+          onJoinClicked()
+        },
+      )
       .border(
         width = if (isJoined) 2.dp else 1.dp,
         color = if (isJoined) Color(0xFF00E676) else MaterialTheme.colorScheme.outline,
@@ -554,7 +570,7 @@ private fun MatchListingCard(
           colors = ButtonDefaults.buttonColors(
             containerColor = if (isJoined) Color(0xFF00E676) else MaterialTheme.colorScheme.primary,
           ),
-          modifier = Modifier.height(40.dp).testTag("join_match_${match.id}"),
+          modifier = Modifier.height(48.dp).testTag("join_match_${match.id}"),
         ) {
           Text(
             text = when {
@@ -651,9 +667,19 @@ private fun HostPrivateMatchTab(
         items(UniverseCatalog.worlds, key = { it.id }) { world ->
           FilterChip(
             selected = customRules.worldId == world.id,
-            onClick = { onRulesChanged(customRules.copy(worldId = world.id)) },
+            onClick = {
+              val matchingArea = MultiverseArsenalCatalog.customAreas.firstOrNull { it.linkedWorldId == world.id }
+              val keepArea = MultiverseArsenalCatalog.areaById(customRules.areaId).linkedWorldId == world.id
+              onRulesChanged(
+                customRules.copy(
+                  worldId = world.id,
+                  modeId = world.defaultModeId,
+                  areaId = if (keepArea) customRules.areaId else (matchingArea?.id ?: customRules.areaId),
+                )
+              )
+            },
             label = { Text(world.title) },
-            modifier = Modifier.testTag("world_chip_${world.id}"),
+            modifier = Modifier.heightIn(min = 48.dp).testTag("world_chip_${world.id}"),
           )
         }
       }
@@ -665,7 +691,7 @@ private fun HostPrivateMatchTab(
             selected = customRules.modeId == mode.id,
             onClick = { onRulesChanged(customRules.copy(modeId = mode.id)) },
             label = { Text("${mode.shortTag} • ${mode.label}") },
-            modifier = Modifier.testTag("mode_chip_${mode.id}"),
+            modifier = Modifier.heightIn(min = 48.dp).testTag("mode_chip_${mode.id}"),
           )
         }
       }
@@ -675,9 +701,23 @@ private fun HostPrivateMatchTab(
         items(MultiverseArsenalCatalog.customAreas, key = { it.id }) { area ->
           FilterChip(
             selected = customRules.areaId == area.id,
-            onClick = { onRulesChanged(customRules.copy(areaId = area.id)) },
+            onClick = {
+              val linkedWorld = UniverseCatalog.worldById(area.linkedWorldId)
+              val syncedMode = when (area.id) {
+                "area_zombies_der_riese" -> "zombies"
+                "area_campaign_nexus" -> "campaign"
+                else -> linkedWorld.defaultModeId
+              }
+              onRulesChanged(
+                customRules.copy(
+                  areaId = area.id,
+                  worldId = linkedWorld.id,
+                  modeId = syncedMode,
+                )
+              )
+            },
             label = { Text(area.name) },
-            modifier = Modifier.testTag("area_chip_${area.id}"),
+            modifier = Modifier.heightIn(min = 48.dp).testTag("area_chip_${area.id}"),
           )
         }
       }

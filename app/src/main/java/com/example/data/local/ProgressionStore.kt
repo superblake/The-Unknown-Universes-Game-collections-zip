@@ -10,6 +10,7 @@ import com.example.data.model.BotDifficulty
 import com.example.data.model.ChallengeState
 import com.example.data.model.CharacterCustomization
 import com.example.data.model.CharacterRarity
+import com.example.data.model.CollectionDifficulty
 import com.example.data.model.CustomAreaState
 import com.example.data.model.EquipmentSlotType
 import com.example.data.model.EquipmentState
@@ -25,6 +26,7 @@ import com.example.data.model.MissionStatKind
 import com.example.data.model.MissionState
 import com.example.data.model.MissionsCatalog
 import com.example.data.model.MultiverseArsenalCatalog
+import com.example.data.model.NewGamePlusVersion
 import com.example.data.model.OperatorProgressionState
 import com.example.data.model.OutfitProgressState
 import com.example.data.model.PowerTier
@@ -865,6 +867,45 @@ class ProgressionStore(
     return nextArea
   }
 
+  // NEW GAME+ (BASE NG+ & 4 POST-COMPLETION VERSIONS) + 5 COLLECTION DIFFICULTIES
+  fun selectNewGamePlusTier(tier: Int): Result<NewGamePlusVersion> {
+    val cur = current
+    val clamped = tier.coerceIn(0, NewGamePlusVersion.MAX_NG_PLUS_TIER)
+    if (clamped > cur.unlockedNgPlusTier) {
+      return Result.failure(
+        IllegalStateException("Complete NG+ Tier ${cur.unlockedNgPlusTier} to unlock NG+ Tier $clamped")
+      )
+    }
+    val version = NewGamePlusVersion.fromTier(clamped)
+    save(cur.copy(activeNgPlusTier = clamped))
+    return Result.success(version)
+  }
+
+  fun completeNewGamePlusRun(): NewGamePlusVersion {
+    val cur = current
+    val nextCompletions = cur.ngPlusCompletions + 1
+    val nextUnlocked = maxOf(
+      cur.unlockedNgPlusTier,
+      (cur.activeNgPlusTier + 1).coerceAtMost(NewGamePlusVersion.MAX_NG_PLUS_TIER),
+    )
+    save(
+      cur.copy(
+        ngPlusCompletions = nextCompletions,
+        unlockedNgPlusTier = nextUnlocked,
+      )
+    )
+    return NewGamePlusVersion.fromTier(nextUnlocked)
+  }
+
+  fun setWorldCollectionDifficulty(worldId: String, difficulty: CollectionDifficulty) {
+    val cur = current
+    save(
+      cur.copy(
+        worldCollectionDifficultyMap = cur.worldCollectionDifficultyMap + (worldId to difficulty.id)
+      )
+    )
+  }
+
   // BLAST SHARDS, PERK CANS/BOTTLES, COLORED BLAST CORES & VACUUM BOT
   fun spendBlastShardsUpgrade(shardCost: Long = 10L): Result<Unit> {
     val cur = current
@@ -1459,18 +1500,19 @@ class ProgressionStore(
 
     val boosterMult = if (cur.xpBoosterMatchesRemaining > 0) 2.0f else 1.0f
     val diffRewardMult = cur.levelCustom.worldDifficultyTier.rewardScale
+    val ngPlusAndCollectionMult = cur.combinedGameplayRewardMultiplier(report.worldId)
     val lobbyBonusMult = 1.0f + ((report.lobbySizePlayed.coerceAtLeast(1) - 1) * 0.025f).coerceAtMost(0.75f)
     val baseXp = (report.eliminations * 26L + report.bossEliminations * 140L + report.waveReached * 65L + if (report.extracted) 240L else 75L)
       .coerceAtLeast(60L)
-    val xpGained = (baseXp * boosterMult * lobbyBonusMult * diffRewardMult).toLong()
+    val xpGained = (baseXp * boosterMult * lobbyBonusMult * diffRewardMult * ngPlusAndCollectionMult).toLong()
 
     val baseWpnXp = (report.eliminations * 22L + report.bossEliminations * 95L + report.waveReached * 40L + report.wonderPickupsCollected * 35L)
       .coerceAtLeast(50L)
-    val wpnXpGained = (baseWpnXp * boosterMult).toLong()
+    val wpnXpGained = (baseWpnXp * boosterMult * ngPlusAndCollectionMult).toLong()
 
-    val equipXpGained = ((report.eliminations * 14L + report.bossEliminations * 60L + report.waveReached * 30L) * boosterMult)
+    val equipXpGained = ((report.eliminations * 14L + report.bossEliminations * 60L + report.waveReached * 30L) * boosterMult * ngPlusAndCollectionMult)
       .toLong().coerceAtLeast(45L)
-    val gearXpGained = ((report.eliminations * 12L + report.bossEliminations * 55L + report.waveReached * 28L) * boosterMult)
+    val gearXpGained = ((report.eliminations * 12L + report.bossEliminations * 55L + report.waveReached * 28L) * boosterMult * ngPlusAndCollectionMult)
       .toLong().coerceAtLeast(40L)
 
     val bpMult = if (cur.activePassVersion == BattlePassVersion.BLACKCELL_OVERDRIVE) 1.30f else 1.0f
@@ -1521,11 +1563,11 @@ class ProgressionStore(
       level = (curOutfit.level + 1).coerceAtMost(1000),
     )
 
-    val redGain = report.redEssenceEarned.coerceAtLeast(report.eliminations * 4L + 20L)
-    val yellowGain = report.yellowEssenceEarned.coerceAtLeast(report.waveReached * 18L + 20L)
-    val greenGain = report.greenEssenceEarned.coerceAtLeast(report.eliminations * 3L + 20L)
-    val combinedGain = report.combinedEssenceEarned + if (report.bossEliminations > 0) report.bossEliminations * 8L else 0L
-    val shardGain = report.blastShardsEarned + (report.buildingsExplored * 2L)
+    val redGain = (report.redEssenceEarned.coerceAtLeast(report.eliminations * 4L + 20L) * ngPlusAndCollectionMult).toLong()
+    val yellowGain = (report.yellowEssenceEarned.coerceAtLeast(report.waveReached * 18L + 20L) * ngPlusAndCollectionMult).toLong()
+    val greenGain = (report.greenEssenceEarned.coerceAtLeast(report.eliminations * 3L + 20L) * ngPlusAndCollectionMult).toLong()
+    val combinedGain = ((report.combinedEssenceEarned + if (report.bossEliminations > 0) report.bossEliminations * 8L else 0L) * ngPlusAndCollectionMult).toLong()
+    val shardGain = ((report.blastShardsEarned + (report.buildingsExplored * 2L)) * ngPlusAndCollectionMult).toLong()
     val nextMissions = applyMatchToMissions(cur.missionProgress, report, shardGain)
 
     val nextOutfitShards = cur.outfitShardMap.toMutableMap()
@@ -1542,6 +1584,16 @@ class ProgressionStore(
       nextOutfitShards[fallbackOriginal] = (nextOutfitShards[fallbackOriginal] ?: 0L) + remainingShards
     }
     val nextCatWorlds = if (report.catsFound > 0) cur.discoveredCatWorlds + report.areaId else cur.discoveredCatWorlds
+    val runCompletedForNgPlus = report.extracted || report.waveReached >= 5L
+    val nextNgPlusCompletions = if (runCompletedForNgPlus) cur.ngPlusCompletions + 1 else cur.ngPlusCompletions
+    val nextUnlockedNgPlusTier = if (runCompletedForNgPlus) {
+      maxOf(
+        cur.unlockedNgPlusTier,
+        (cur.activeNgPlusTier + 1).coerceAtMost(NewGamePlusVersion.MAX_NG_PLUS_TIER),
+      )
+    } else {
+      cur.unlockedNgPlusTier
+    }
 
     val nextState = cur.copy(
       playerXp = cur.playerXp + xpGained,
@@ -1570,6 +1622,8 @@ class ProgressionStore(
       outfitShardMap = nextOutfitShards,
       discoveredCatWorlds = nextCatWorlds,
       lootCratesOpenedTotal = cur.lootCratesOpenedTotal + report.lootCratesOpened.toLong(),
+      unlockedNgPlusTier = nextUnlockedNgPlusTier,
+      ngPlusCompletions = nextNgPlusCompletions,
     )
     save(nextState)
 
@@ -1676,7 +1730,28 @@ class ProgressionStore(
 
   private fun save(next: OperatorProgressionState) {
     _state.value = next
-    val root = JSONObject().apply {
+    val root = buildRootJson(next)
+    val jsonString = root.toString()
+    val integritySeal = AppSecurityManager.signPayload(jsonString)
+    lastLoadedIntegrityValid = true
+    prefs.edit {
+      putString(KEY_STATE_JSON, jsonString)
+      putString(KEY_STATE_JSON_LEGACY, jsonString)
+      putString(KEY_STATE_HASH, integritySeal)
+    }
+  }
+
+  fun exportJsonObject(): JSONObject = buildRootJson(current)
+
+  fun importJsonObject(root: JSONObject, mergePreferHigher: Boolean): OperatorProgressionState {
+    val parsed = parseProgressionJson(root, fallback = current)
+    val finalState = if (mergePreferHigher) mergeStatesPreferHigher(current, parsed) else parsed
+    save(finalState)
+    return finalState
+  }
+
+  private fun buildRootJson(next: OperatorProgressionState): JSONObject {
+    return JSONObject().apply {
       put("playerXp", next.playerXp)
       put("playerPrestige", next.playerPrestige)
       put("characterTier", next.characterTier)
@@ -1975,15 +2050,833 @@ class ProgressionStore(
           put("clanTag", jm.clanTag ?: "")
         })
       }
+      put("activeNgPlusTier", next.activeNgPlusTier)
+      put("unlockedNgPlusTier", next.unlockedNgPlusTier)
+      put("ngPlusCompletions", next.ngPlusCompletions)
+      put("worldCollectionDifficultyMap", JSONObject().apply {
+        next.worldCollectionDifficultyMap.forEach { (k, v) -> put(k, v) }
+      })
     }
-    val jsonString = root.toString()
-    val integritySeal = AppSecurityManager.signPayload(jsonString)
-    lastLoadedIntegrityValid = true
-    prefs.edit {
-      putString(KEY_STATE_JSON, jsonString)
-      putString(KEY_STATE_JSON_LEGACY, jsonString)
-      putString(KEY_STATE_HASH, integritySeal)
+  }
+
+  private inline fun <T> safeParse(defaultValue: T, block: () -> T): T =
+    runCatching(block).getOrElse { defaultValue }
+
+  private fun parseProgressionJson(
+    root: JSONObject,
+    fallback: OperatorProgressionState,
+  ): OperatorProgressionState {
+    val unlockedPasses = safeParse(fallback.unlockedPassVersions) {
+      val unlockedArr = root.optJSONArray("unlockedPasses")
+      val set = mutableSetOf(BattlePassVersion.STANDARD_SECTOR_OPS)
+      if (unlockedArr != null) {
+        for (i in 0 until unlockedArr.length()) {
+          val id = unlockedArr.optString(i)
+          BattlePassVersion.entries.firstOrNull { it.id == id }?.let { set.add(it) }
+        }
+      }
+      set
     }
+    val activePass = safeParse(fallback.activePassVersion) {
+      val activePassId = root.optString("activePassVersion", fallback.activePassVersion.id)
+      BattlePassVersion.entries.firstOrNull { it.id == activePassId } ?: fallback.activePassVersion
+    }
+
+    val claimedTiers = safeParse(fallback.claimedPassTiers) {
+      val set = mutableSetOf<String>()
+      root.optJSONArray("claimedTiers")?.let { arr ->
+        for (i in 0 until arr.length()) set.add(arr.optString(i))
+        set
+      } ?: fallback.claimedPassTiers
+    }
+    val claimedChallenges = safeParse(fallback.claimedChallenges) {
+      val set = mutableSetOf<String>()
+      root.optJSONArray("claimedChallenges")?.let { arr ->
+        for (i in 0 until arr.length()) set.add(arr.optString(i))
+        set
+      } ?: fallback.claimedChallenges
+    }
+    val claimedAchievements = safeParse(fallback.claimedAchievements) {
+      val set = mutableSetOf<String>()
+      root.optJSONArray("claimedAchievements")?.let { arr ->
+        for (i in 0 until arr.length()) set.add(arr.optString(i))
+        set
+      } ?: fallback.claimedAchievements
+    }
+    val claimedMissions = safeParse(fallback.claimedMissions) {
+      val set = mutableSetOf<String>()
+      root.optJSONArray("claimedMissions")?.let { arr ->
+        for (i in 0 until arr.length()) set.add(arr.optString(i))
+        set
+      } ?: fallback.claimedMissions
+    }
+    val missionProgress = safeParse(fallback.missionProgress) {
+      val map = mutableMapOf<String, Long>()
+      root.optJSONObject("missionProgress")?.let { obj ->
+        obj.keys().forEach { k -> map[k] = obj.optLong(k, 0L).coerceAtLeast(0L) }
+        map
+      } ?: fallback.missionProgress
+    }
+    val purchasedStoreItems = safeParse(fallback.purchasedStoreItems) {
+      val set = mutableSetOf<String>()
+      root.optJSONArray("purchasedStoreItems")?.let { arr ->
+        for (i in 0 until arr.length()) set.add(arr.optString(i))
+        set
+      } ?: fallback.purchasedStoreItems
+    }
+
+    val wpnXp = safeParse(fallback.weaponXpMap) {
+      val map = mutableMapOf<String, Long>()
+      root.optJSONObject("weaponXpMap")?.let { obj ->
+        obj.keys().forEach { k -> map[k] = obj.optLong(k, 0L) }
+        map
+      } ?: fallback.weaponXpMap
+    }
+    val wpnPrestige = safeParse(fallback.weaponPrestigeMap) {
+      val map = mutableMapOf<String, Int>()
+      root.optJSONObject("weaponPrestigeMap")?.let { obj ->
+        obj.keys().forEach { k -> map[k] = obj.optInt(k, 0) }
+        map
+      } ?: fallback.weaponPrestigeMap
+    }
+    val wpnTierMap = safeParse(fallback.weaponTierMap) {
+      val map = ProgressionCatalog.weapons.associate { it.id to 1 }.toMutableMap()
+      root.optJSONObject("weaponTierMap")?.let { obj ->
+        obj.keys().forEach { k -> map[k] = obj.optInt(k, 1).coerceIn(1, 25) }
+      }
+      map
+    }
+    val wpnStarMap = safeParse(fallback.weaponStarMap) {
+      val map = ProgressionCatalog.weapons.associate { it.id to 1 }.toMutableMap()
+      root.optJSONObject("weaponStarMap")?.let { obj ->
+        obj.keys().forEach { k -> map[k] = obj.optInt(k, 1).coerceIn(1, StarRankMeta.MAX_STARS) }
+      }
+      map
+    }
+    val wonderTierMap = safeParse(fallback.wonderTierMap) {
+      val map = WonderWeaponKind.entries.associate { it.id to 1 }.toMutableMap()
+      root.optJSONObject("wonderTierMap")?.let { obj ->
+        obj.keys().forEach { k -> map[k] = obj.optInt(k, 1).coerceIn(1, 25) }
+      }
+      map
+    }
+    val wonderStarMap = safeParse(fallback.wonderStarMap) {
+      val map = WonderWeaponKind.entries.associate { it.id to 1 }.toMutableMap()
+      root.optJSONObject("wonderStarMap")?.let { obj ->
+        obj.keys().forEach { k -> map[k] = obj.optInt(k, 1).coerceIn(1, StarRankMeta.MAX_STARS) }
+      }
+      map
+    }
+    val armoryStarMap = safeParse(fallback.armoryItemStarMap) {
+      val map = mutableMapOf<String, Int>()
+      root.optJSONObject("armoryItemStarMap")?.let { obj ->
+        obj.keys().forEach { k -> map[k] = obj.optInt(k, 1).coerceIn(1, StarRankMeta.MAX_STARS) }
+        map
+      } ?: fallback.armoryItemStarMap
+    }
+    val chProg = safeParse(fallback.challengeProgress) {
+      val map = mutableMapOf<String, Long>()
+      root.optJSONObject("challengeProgress")?.let { obj ->
+        obj.keys().forEach { k -> map[k] = obj.optLong(k, 0L) }
+        map
+      } ?: fallback.challengeProgress
+    }
+
+    val gearMap = safeParse(fallback.gearMap) {
+      val map = GearSlot.entries.associate { it.id to GearState(it) }.toMutableMap()
+      root.optJSONObject("gearMap")?.let { obj ->
+        obj.keys().forEach { k ->
+          val gObj = obj.optJSONObject(k)
+          if (gObj != null) {
+            val slot = GearSlot.entries.firstOrNull { it.id == k } ?: GearSlot.HELMET
+            val lvl = gObj.optInt("level", 1).coerceIn(1, 50)
+            val xp = gObj.optLong("xp", ProgressionCatalog.totalXpForGearLevel(lvl))
+            map[k] = GearState(
+              slot = slot,
+              level = maxOf(lvl, ProgressionCatalog.gearLevelForXp(xp)),
+              prestige = gObj.optInt("prestige", 0),
+              xp = xp,
+              tier = gObj.optInt("tier", 1).coerceIn(1, 25),
+              colorHex = gObj.optLong("colorHex", 0xFF00E5FF),
+              starLevel = gObj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
+            )
+          }
+        }
+      }
+      map
+    }
+
+    val equipmentMap = safeParse(fallback.equipmentMap) {
+      val map = mapOf(
+        "lethal" to EquipmentState("lethal", "lethal_frag", 1, 0, 0L, "standard", 1, 1),
+        "tactical" to EquipmentState("tactical", "tactical_stim", 1, 0, 0L, "standard", 1, 1),
+      ).toMutableMap()
+      root.optJSONObject("equipmentMap")?.let { obj ->
+        obj.keys().forEach { k ->
+          val eObj = obj.optJSONObject(k)
+          if (eObj != null) {
+            val lvl = eObj.optInt("level", 1).coerceIn(1, 60)
+            val xp = eObj.optLong("xp", ProgressionCatalog.totalXpForEquipmentLevel(lvl))
+            map[k] = EquipmentState(
+              slotId = k,
+              equippedItemId = eObj.optString("equippedItemId", if (k == "lethal") "lethal_frag" else "tactical_stim"),
+              level = maxOf(lvl, ProgressionCatalog.equipmentLevelForXp(xp)),
+              prestige = eObj.optInt("prestige", 0),
+              xp = xp,
+              variantId = eObj.optString("variantId", "standard"),
+              tier = eObj.optInt("tier", 1).coerceIn(1, 25),
+              starLevel = eObj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
+            )
+          }
+        }
+      }
+      map
+    }
+
+    val skillNodes = safeParse(fallback.skillNodes) {
+      val map = ProgressionCatalog.defaultSkillNodes().toMutableMap()
+      root.optJSONObject("skillNodes")?.let { obj ->
+        obj.keys().forEach { k ->
+          val sObj = obj.optJSONObject(k)
+          if (sObj != null && map.containsKey(k)) {
+            val existing = map[k]!!
+            map[k] = existing.copy(
+              unlocked = sObj.optBoolean("unlocked", false),
+              tier = sObj.optInt("tier", 1).coerceIn(1, existing.maxTier),
+              starLevel = sObj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
+            )
+          }
+        }
+      }
+      map
+    }
+
+    val lobbyCfg = safeParse(fallback.lobbyConfig) {
+      val lobbyObj = root.optJSONObject("lobbyConfig")
+      if (lobbyObj != null) {
+        val modeId = lobbyObj.optString("partyMode", LobbyPartyMode.SQUADS.id)
+        val pMode = LobbyPartyMode.entries.firstOrNull { it.id == modeId } ?: LobbyPartyMode.SQUADS
+        val diffId = lobbyObj.optString("botDifficulty", BotDifficulty.OPERATIVE.id)
+        val diff = BotDifficulty.entries.firstOrNull { it.id == diffId } ?: BotDifficulty.OPERATIVE
+        LobbyConfig(
+          partyMode = pMode,
+          targetPlayers = lobbyObj.optInt("targetPlayers", 12).coerceIn(1, 32),
+          autoFillBots = lobbyObj.optBoolean("autoFillBots", true),
+          botDifficulty = diff,
+          humanPlayersOnline = lobbyObj.optInt("humanPlayersOnline", 1).coerceIn(1, 32),
+        )
+      } else fallback.lobbyConfig
+    }
+
+    val wc = safeParse(fallback.weaponCustom) {
+      val wcObj = root.optJSONObject("weaponCustom")
+      if (wcObj != null) {
+        val mainId = wcObj.optString("equippedWeaponId", "wpn_pulse_carbine")
+        val eqList = mutableListOf<String>()
+        wcObj.optJSONArray("equippedWeaponIds")?.let { arr ->
+          for (i in 0 until arr.length()) {
+            val s = arr.optString(i)
+            if (s.isNotBlank()) eqList.add(s)
+          }
+        }
+        if (eqList.isEmpty()) eqList.add(mainId)
+        WeaponCustomization(
+          equippedWeaponId = mainId,
+          equippedWeaponIds = eqList.distinct(),
+          camoId = wcObj.optString("camoId", "cyber_matte"),
+          opticId = wcObj.optString("opticId", "holo_cyan"),
+          barrelId = wcObj.optString("barrelId", "standard_barrel"),
+          muzzleId = wcObj.optString("muzzleId", "standard_muzzle"),
+          underbarrelId = wcObj.optString("underbarrelId", "none_underbarrel"),
+          magazineId = wcObj.optString("magazineId", "extended_mag_1"),
+          stockId = wcObj.optString("stockId", "tactical_stock"),
+          rearGripId = wcObj.optString("rearGripId", "stippled_grip"),
+          laserId = wcObj.optString("laserId", "none_laser"),
+          ammoModId = wcObj.optString("ammoModId", "standard_core"),
+          tracerColorHex = wcObj.optLong("tracerColorHex", 0xFF00E5FF),
+        )
+      } else fallback.weaponCustom
+    }
+
+    val cc = safeParse(fallback.characterCustom) {
+      val ccObj = root.optJSONObject("characterCustom")
+      if (ccObj != null) {
+        CharacterCustomization(
+          suitThemeId = ccObj.optString("suitThemeId", "vanguard_cyber"),
+          visorStyleId = ccObj.optString("visorStyleId", "cyan_visor"),
+          auraTrailId = ccObj.optString("auraTrailId", "none"),
+          animationSpeedMultiplier = ccObj.optDouble("animationSpeedMultiplier", 1.0).toFloat().coerceIn(0.5f, 2.5f),
+          cloakEnabled = ccObj.optBoolean("cloakEnabled", true),
+          titleBadge = ccObj.optString("titleBadge", "Multiverse Operative"),
+          primaryArmorHex = ccObj.optLong("primaryArmorHex", 0xFF00E5FF),
+          accentArmorHex = ccObj.optLong("accentArmorHex", 0xFFFFAB40),
+        )
+      } else fallback.characterCustom
+    }
+
+    val lc = safeParse(fallback.levelCustom) {
+      val lcObj = root.optJSONObject("levelCustom")
+      if (lcObj != null) {
+        LevelCustomization(
+          skyThemeId = lcObj.optString("skyThemeId", "default_sector"),
+          gridStyleId = lcObj.optString("gridStyleId", "tactical_square"),
+          enemyDensityMultiplier = lcObj.optDouble("enemyDensityMultiplier", 1.0).toFloat().coerceIn(0.75f, 2.5f),
+          worldDifficultyTier = WorldDifficultyTier.fromId(lcObj.optString("worldDifficultyTier", WorldDifficultyTier.NORMAL.id)),
+          wonderDropBoost = lcObj.optBoolean("wonderDropBoost", false),
+          critSurgeMutator = lcObj.optBoolean("critSurgeMutator", false),
+          instagibMutator = lcObj.optBoolean("instagibMutator", false),
+          lowGravityDash = lcObj.optBoolean("lowGravityDash", false),
+          bossRushMutator = lcObj.optBoolean("bossRushMutator", false),
+          floorAccentHex = lcObj.optLong("floorAccentHex", 0xFF00E5FF),
+        )
+      } else fallback.levelCustom
+    }
+
+    val outfitRarityMap = safeParse(fallback.outfitRarityMap) {
+      val map = mutableMapOf<String, Int>()
+      root.optJSONObject("outfitRarityMap")?.let { obj ->
+        obj.keys().forEach { k -> map[k] = obj.optInt(k, 1).coerceIn(1, CharacterRarity.entries.size) }
+        map
+      } ?: fallback.outfitRarityMap
+    }
+    val outfitShardMap = safeParse(fallback.outfitShardMap) {
+      val map = mutableMapOf<String, Long>()
+      root.optJSONObject("outfitShardMap")?.let { obj ->
+        obj.keys().forEach { k -> map[k] = obj.optLong(k, 0L).coerceAtLeast(0L) }
+        map
+      } ?: fallback.outfitShardMap
+    }
+    val discoveredCatWorlds = safeParse(fallback.discoveredCatWorlds) {
+      val set = mutableSetOf<String>()
+      root.optJSONArray("discoveredCatWorlds")?.let { arr ->
+        for (i in 0 until arr.length()) set.add(arr.optString(i))
+        set
+      } ?: fallback.discoveredCatWorlds
+    }
+
+    val wonderList = safeParse(fallback.equippedWonderIds) {
+      val list = mutableListOf<String>()
+      root.optJSONArray("equippedWonderIds")?.let { arr ->
+        for (i in 0 until arr.length()) {
+          val s = arr.optString(i)
+          if (s.isNotBlank()) list.add(s)
+        }
+      }
+      if (list.isEmpty()) list.add(WonderWeaponKind.RAY_NOVA_MK3.id)
+      list.distinct()
+    }
+
+    val lethalList = safeParse(fallback.equippedLethalIds) {
+      val list = mutableListOf<String>()
+      root.optJSONArray("equippedLethalIds")?.let { arr ->
+        for (i in 0 until arr.length()) {
+          val s = arr.optString(i)
+          if (s.isNotBlank()) list.add(s)
+        }
+      }
+      if (list.isEmpty()) list.add(equipmentMap["lethal"]?.equippedItemId ?: "lethal_frag")
+      list.distinct()
+    }
+
+    val tacticalList = safeParse(fallback.equippedTacticalIds) {
+      val list = mutableListOf<String>()
+      root.optJSONArray("equippedTacticalIds")?.let { arr ->
+        for (i in 0 until arr.length()) {
+          val s = arr.optString(i)
+          if (s.isNotBlank()) list.add(s)
+        }
+      }
+      if (list.isEmpty()) list.add(equipmentMap["tactical"]?.equippedItemId ?: "tactical_stim")
+      list.distinct()
+    }
+
+    val perkRanks = safeParse(fallback.perkRanks) {
+      val map = mutableMapOf<String, Int>()
+      root.optJSONObject("perkRanks")?.let { obj ->
+        obj.keys().forEach { k -> map[k] = obj.optInt(k, 0).coerceIn(0, 25) }
+        map
+      } ?: fallback.perkRanks
+    }
+
+    val coreInv = safeParse(fallback.blastCoreInventory) {
+      val map = BlastCoreColor.entries.associate { it.id to 2L }.toMutableMap()
+      root.optJSONObject("blastCoreInventory")?.let { obj ->
+        obj.keys().forEach { k -> map[k] = obj.optLong(k, 2L).coerceAtLeast(0L) }
+      }
+      map
+    }
+
+    val coreLvls = safeParse(fallback.blastCoreLevels) {
+      val map = BlastCoreColor.entries.associate { it.id to 1 }.toMutableMap()
+      root.optJSONObject("blastCoreLevels")?.let { obj ->
+        obj.keys().forEach { k -> map[k] = obj.optInt(k, 1).coerceIn(1, 20) }
+      }
+      map
+    }
+
+    val outfitStates = safeParse(fallback.outfitStates) {
+      val map = MultiverseArsenalCatalog.outfits.associate {
+        it.id to OutfitProgressState(it.id)
+      }.toMutableMap()
+      root.optJSONObject("outfitStates")?.let { obj ->
+        obj.keys().forEach { k ->
+          val oObj = obj.optJSONObject(k)
+          if (oObj != null) {
+            map[k] = OutfitProgressState(
+              outfitId = k,
+              level = oObj.optInt("level", 1).coerceIn(1, 1000),
+              tier = oObj.optInt("tier", 1).coerceIn(1, 25),
+              skillRank = oObj.optInt("skillRank", 1).coerceIn(1, 20),
+              gearRank = oObj.optInt("gearRank", 1).coerceIn(1, 20),
+              equipmentRank = oObj.optInt("equipmentRank", 1).coerceIn(1, 20),
+              starLevel = oObj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
+            )
+          }
+        }
+      }
+      map
+    }
+
+    val areaStates = safeParse(fallback.areaStates) {
+      val map = MultiverseArsenalCatalog.customAreas.associate {
+        it.id to CustomAreaState(it.id)
+      }.toMutableMap()
+      root.optJSONObject("areaStates")?.let { obj ->
+        obj.keys().forEach { k ->
+          val aObj = obj.optJSONObject(k)
+          if (aObj != null) {
+            map[k] = CustomAreaState(
+              areaId = k,
+              ageYears = aObj.optInt("ageYears", 12).coerceIn(0, 99),
+              rebirthCycles = aObj.optInt("rebirthCycles", 0).coerceAtLeast(0),
+              powerGridTier = aObj.optInt("powerGridTier", 1).coerceIn(1, 25),
+              defenseTurretTier = aObj.optInt("defenseTurretTier", 1).coerceIn(1, 25),
+              trapDensityTier = aObj.optInt("trapDensityTier", 1).coerceIn(1, 25),
+              lootRichnessTier = aObj.optInt("lootRichnessTier", 1).coerceIn(1, 25),
+              starLevel = aObj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
+            )
+          }
+        }
+      }
+      map
+    }
+
+    val vacBot = safeParse(fallback.vacuumBot) {
+      val vacObj = root.optJSONObject("vacuumBot")
+      if (vacObj != null) {
+        VacuumBotState(
+          level = vacObj.optInt("level", 1).coerceIn(1, 50),
+          tier = vacObj.optInt("tier", 1).coerceIn(1, 25),
+          autoUpgradeEnabled = vacObj.optBoolean("autoUpgradeEnabled", true),
+          autoCollectEnabled = vacObj.optBoolean("autoCollectEnabled", true),
+          starLevel = vacObj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
+        )
+      } else fallback.vacuumBot
+    }
+
+    val pmRules = safeParse(fallback.privateMatchRules) {
+      val pmObj = root.optJSONObject("privateMatchRules")
+      if (pmObj != null) {
+        val privId = pmObj.optString("privacy", MatchPrivacy.PRIVATE_PASSWORD.id)
+        val priv = MatchPrivacy.entries.firstOrNull { it.id == privId } ?: MatchPrivacy.PRIVATE_PASSWORD
+        val diffId = pmObj.optString("botDifficulty", BotDifficulty.OPERATIVE.id)
+        val diff = BotDifficulty.entries.firstOrNull { it.id == diffId } ?: BotDifficulty.OPERATIVE
+        PrivateMatchRules(
+          isPrivate = pmObj.optBoolean("isPrivate", true),
+          privacy = priv,
+          roomName = pmObj.optString("roomName", "Omega Convergence Strike"),
+          roomCode = pmObj.optString("roomCode", "GENESIS-774"),
+          passcode = pmObj.optString("passcode", "7744"),
+          startingWave = pmObj.optInt("startingWave", 1),
+          maxPlayers = pmObj.optInt("maxPlayers", 8),
+          botFillEnabled = pmObj.optBoolean("botFillEnabled", true),
+          botDifficulty = diff,
+          worldId = pmObj.optString("worldId", "campaign_origins"),
+          areaId = pmObj.optString("areaId", "area_mended_convergence"),
+          modeId = pmObj.optString("modeId", "campaign"),
+          infiniteAmmo = pmObj.optBoolean("infiniteAmmo", false),
+          headshotsOnly = pmObj.optBoolean("headshotsOnly", false),
+          bossRush = pmObj.optBoolean("bossRush", false),
+          wonderSpawnBoost = pmObj.optBoolean("wonderSpawnBoost", false),
+          lowGravity = pmObj.optBoolean("lowGravity", false),
+          doubleSpeed = pmObj.optBoolean("doubleSpeed", false),
+          vampiricSiphon = pmObj.optBoolean("vampiricSiphon", false),
+          doubleBlueEssence = pmObj.optBoolean("doubleBlueEssence", false),
+          friendlyFire = pmObj.optBoolean("friendlyFire", false),
+          customWaveGoal = pmObj.optInt("customWaveGoal", 0),
+        )
+      } else fallback.privateMatchRules
+    }
+
+    val clanData = safeParse(fallback.clan) {
+      val clanObj = root.optJSONObject("clan")
+      if (clanObj != null) {
+        val membersArr = clanObj.optJSONArray("members")
+        val loadedMembers = if (membersArr != null) {
+          val mList = ArrayList<ClanMember>(membersArr.length())
+          for (i in 0 until membersArr.length()) {
+            val mObj = membersArr.optJSONObject(i) ?: continue
+            val rId = mObj.optString("rank", ClanRank.RECRUIT.id)
+            val rank = ClanRank.entries.firstOrNull { it.id == rId } ?: ClanRank.RECRUIT
+            mList.add(
+              ClanMember(
+                id = mObj.optString("id", "cm_$i"),
+                callsign = mObj.optString("callsign", "Operative"),
+                rank = rank,
+                level = mObj.optInt("level", 1),
+                stars = mObj.optInt("stars", 1),
+                donatedEssence = mObj.optLong("donatedEssence", 0L),
+                online = mObj.optBoolean("online", true),
+              )
+            )
+          }
+          mList.ifEmpty { SocialCatalog.defaultClan.members }
+        } else SocialCatalog.defaultClan.members
+        SocialCatalog.defaultClan.copy(
+          id = clanObj.optString("id", SocialCatalog.defaultClan.id),
+          name = clanObj.optString("name", SocialCatalog.defaultClan.name),
+          tag = clanObj.optString("tag", SocialCatalog.defaultClan.tag),
+          motto = clanObj.optString("motto", SocialCatalog.defaultClan.motto),
+          level = clanObj.optInt("level", 4).coerceIn(1, 25),
+          tier = clanObj.optInt("tier", 4).coerceIn(1, 25),
+          starLevel = clanObj.optInt("starLevel", 3).coerceIn(1, 10),
+          totalEssenceDonated = clanObj.optLong("totalEssenceDonated", 18500L),
+          leaderCallsign = clanObj.optString("leaderCallsign", SocialCatalog.defaultClan.leaderCallsign),
+          colorHex = clanObj.optLong("colorHex", SocialCatalog.defaultClan.colorHex),
+          members = loadedMembers,
+        )
+      } else fallback.clan
+    }
+
+    val friendsList = safeParse(fallback.friends) {
+      val friendsArray = root.optJSONArray("friends")
+      if (friendsArray != null) {
+        val list = ArrayList<FriendEntry>(friendsArray.length())
+        for (i in 0 until friendsArray.length()) {
+          val fObj = friendsArray.optJSONObject(i) ?: continue
+          val statusId = fObj.optString("status", FriendOnlineStatus.ONLINE_LOBBY.id)
+          val status = FriendOnlineStatus.entries.firstOrNull { it.id == statusId } ?: FriendOnlineStatus.ONLINE_LOBBY
+          val tag = fObj.optString("clanTag", "").ifEmpty { null }
+          val matchId = fObj.optString("currentMatchId", "").ifEmpty { null }
+          list.add(
+            FriendEntry(
+              id = fObj.optString("id", "f_$i"),
+              callsign = fObj.optString("callsign", "Operator_$i"),
+              level = fObj.optInt("level", 25),
+              stars = fObj.optInt("stars", 5),
+              tier = fObj.optInt("tier", 4),
+              avatarThemeId = fObj.optString("avatarThemeId", "vanguard_cyber"),
+              status = status,
+              statusDetail = fObj.optString("statusDetail", "In Lobby"),
+              currentMatchId = matchId,
+              clanTag = tag,
+              isFavorite = fObj.optBoolean("isFavorite", false),
+            )
+          )
+        }
+        list
+      } else fallback.friends
+    }
+
+    val loadedChats = safeParse(fallback.chatMessages) {
+      val chatArray = root.optJSONArray("chatMessages")
+      if (chatArray != null) {
+        val list = ArrayList<ChatMessage>(chatArray.length())
+        for (i in 0 until chatArray.length()) {
+          val mObj = chatArray.optJSONObject(i) ?: continue
+          val chId = mObj.optString("channel", ChatChannel.GENERAL.id)
+          val ch = ChatChannel.entries.firstOrNull { it.id == chId } ?: ChatChannel.GENERAL
+          list.add(
+            ChatMessage(
+              id = mObj.optString("id", "msg_$i"),
+              channel = ch,
+              senderCallsign = mObj.optString("senderCallsign", "Operator"),
+              senderClanTag = mObj.optString("senderClanTag", "").ifEmpty { null },
+              senderStars = mObj.optInt("senderStars", 1),
+              targetFriendId = mObj.optString("targetFriendId", "").ifEmpty { null },
+              content = mObj.optString("content", ""),
+              timestampMillis = mObj.optLong("timestampMillis", System.currentTimeMillis()),
+              isTacticalQuickChat = mObj.optBoolean("isTacticalQuickChat", false),
+              isSystemMessage = mObj.optBoolean("isSystemMessage", false),
+            )
+          )
+        }
+        list
+      } else fallback.chatMessages
+    }
+
+    val loadedJoinedMatch = safeParse(fallback.joinedMatch) {
+      val jmObj = root.optJSONObject("joinedMatch")
+      if (jmObj != null) {
+        val privId = jmObj.optString("privacy", MatchPrivacy.PUBLIC.id)
+        val priv = MatchPrivacy.entries.firstOrNull { it.id == privId } ?: MatchPrivacy.PUBLIC
+        val muts = mutableListOf<String>()
+        jmObj.optJSONArray("activeMutators")?.let { arr ->
+          for (i in 0 until arr.length()) muts.add(arr.optString(i))
+        }
+        MultiverseMatchListing(
+          id = jmObj.optString("id", ""),
+          roomName = jmObj.optString("roomName", "Match"),
+          hostCallsign = jmObj.optString("hostCallsign", "Host"),
+          hostLevel = jmObj.optInt("hostLevel", 1),
+          hostStars = jmObj.optInt("hostStars", 1),
+          worldId = jmObj.optString("worldId", "campaign_origins"),
+          worldTitle = jmObj.optString("worldTitle", "Genesis Fracture"),
+          modeId = jmObj.optString("modeId", "campaign"),
+          modeLabel = jmObj.optString("modeLabel", "Story Campaign"),
+          areaId = jmObj.optString("areaId", "area_mended_convergence"),
+          areaName = jmObj.optString("areaName", "The Mended Convergence"),
+          currentPlayers = jmObj.optInt("currentPlayers", 1),
+          maxPlayers = jmObj.optInt("maxPlayers", 8),
+          privacy = priv,
+          roomCode = jmObj.optString("roomCode", "CONV-101"),
+          passcode = jmObj.optString("passcode", "").ifEmpty { null },
+          pingMs = jmObj.optInt("pingMs", 20),
+          currentWave = jmObj.optInt("currentWave", 1),
+          activeMutators = muts,
+          clanTag = jmObj.optString("clanTag", "").ifEmpty { null },
+        )
+      } else null
+    }
+
+    val worldColDiffMap = safeParse(fallback.worldCollectionDifficultyMap) {
+      val map = mutableMapOf<String, String>()
+      root.optJSONObject("worldCollectionDifficultyMap")?.let { obj ->
+        obj.keys().forEach { k ->
+          map[k] = CollectionDifficulty.fromId(obj.optString(k, CollectionDifficulty.OPERATIVE.id)).id
+        }
+        map
+      } ?: fallback.worldCollectionDifficultyMap
+    }
+
+    return OperatorProgressionState(
+      playerXp = root.optLong("playerXp", fallback.playerXp).coerceAtLeast(0L),
+      playerPrestige = root.optInt("playerPrestige", fallback.playerPrestige).coerceAtLeast(0),
+      characterTier = root.optInt("characterTier", fallback.characterTier).coerceIn(1, PowerTier.MAX_TIER),
+      characterStarLevel = root.optInt("characterStarLevel", fallback.characterStarLevel).coerceIn(1, StarRankMeta.MAX_STARS),
+      weaponXpMap = wpnXp.ifEmpty { mapOf("wpn_pulse_carbine" to 0L) },
+      weaponPrestigeMap = wpnPrestige,
+      weaponTierMap = wpnTierMap,
+      weaponStarMap = wpnStarMap,
+      wonderTierMap = wonderTierMap,
+      wonderStarMap = wonderStarMap,
+      armoryItemStarMap = armoryStarMap,
+      gearMap = gearMap,
+      gearPrestige = root.optInt("gearPrestige", fallback.gearPrestige).coerceAtLeast(0),
+      equipmentMap = equipmentMap,
+      equippedWonderIds = wonderList,
+      equippedLethalIds = lethalList,
+      equippedTacticalIds = tacticalList,
+      redEssence = root.optLong("redEssence", fallback.redEssence).coerceAtLeast(0L),
+      yellowEssence = root.optLong("yellowEssence", fallback.yellowEssence).coerceAtLeast(0L),
+      greenEssence = root.optLong("greenEssence", fallback.greenEssence).coerceAtLeast(0L),
+      combinedEssence = root.optLong("combinedEssence", fallback.combinedEssence).coerceAtLeast(0L),
+      blastShards = root.optLong("blastShards", fallback.blastShards).coerceAtLeast(0L),
+      perkRanks = perkRanks,
+      blastCoreInventory = coreInv,
+      blastCoreLevels = coreLvls,
+      equippedOutfitId = root.optString("equippedOutfitId", fallback.equippedOutfitId),
+      outfitStates = outfitStates,
+      activeAreaId = root.optString("activeAreaId", fallback.activeAreaId),
+      areaStates = areaStates,
+      vacuumBot = vacBot,
+      weaponCustom = wc,
+      characterCustom = cc,
+      levelCustom = lc,
+      lobbyConfig = lobbyCfg,
+      activePassVersion = activePass,
+      unlockedPassVersions = unlockedPasses,
+      battlePassXp = root.optLong("battlePassXp", fallback.battlePassXp).coerceAtLeast(0L),
+      battlePassPrestige = root.optInt("battlePassPrestige", fallback.battlePassPrestige).coerceAtLeast(0),
+      bpCycleCount = root.optInt("bpCycleCount", fallback.bpCycleCount).coerceAtLeast(0),
+      claimedPassTiers = claimedTiers,
+      challengeProgress = chProg,
+      claimedChallenges = claimedChallenges,
+      challengePrestige = root.optInt("challengePrestige", fallback.challengePrestige).coerceAtLeast(0),
+      skillNodes = skillNodes,
+      wonderWeaponsPickedTotal = root.optLong("wonderPicked", fallback.wonderWeaponsPickedTotal).coerceAtLeast(0L),
+      claimedAchievements = claimedAchievements,
+      missionProgress = missionProgress,
+      claimedMissions = claimedMissions,
+      totalElimsLifetime = root.optLong("totalElimsLifetime", fallback.totalElimsLifetime).coerceAtLeast(0L),
+      totalBossesLifetime = root.optLong("totalBossesLifetime", fallback.totalBossesLifetime).coerceAtLeast(0L),
+      totalMatchesPlayed = root.optLong("totalMatchesPlayed", fallback.totalMatchesPlayed).coerceAtLeast(0L),
+      totalBlueEssenceSpent = root.optLong("totalBlueEssenceSpent", fallback.totalBlueEssenceSpent).coerceAtLeast(0L),
+      highestPackTierReached = root.optInt("highestPackTierReached", fallback.highestPackTierReached).coerceIn(1, 25),
+      largestLobbyPlayed = root.optInt("largestLobbyPlayed", fallback.largestLobbyPlayed).coerceIn(1, 32),
+      storePurchasesCount = root.optInt("storePurchasesCount", fallback.storePurchasesCount).coerceAtLeast(0),
+      purchasedStoreItems = purchasedStoreItems,
+      xpBoosterMatchesRemaining = root.optInt("xpBoosterMatchesRemaining", fallback.xpBoosterMatchesRemaining).coerceAtLeast(0),
+      botDamageBoostPct = root.optInt("botDamageBoostPct", fallback.botDamageBoostPct).coerceAtLeast(0),
+      privateMatchRules = pmRules,
+      friends = friendsList,
+      chatMessages = loadedChats,
+      clan = clanData,
+      joinedMatch = loadedJoinedMatch,
+      outfitRarityMap = outfitRarityMap,
+      outfitShardMap = outfitShardMap,
+      discoveredCatWorlds = discoveredCatWorlds,
+      lootCratesOpenedTotal = root.optLong("lootCratesOpenedTotal", fallback.lootCratesOpenedTotal).coerceAtLeast(0L),
+      activeNgPlusTier = root.optInt("activeNgPlusTier", fallback.activeNgPlusTier).coerceIn(0, NewGamePlusVersion.MAX_NG_PLUS_TIER),
+      unlockedNgPlusTier = root.optInt("unlockedNgPlusTier", fallback.unlockedNgPlusTier).coerceIn(0, NewGamePlusVersion.MAX_NG_PLUS_TIER),
+      ngPlusCompletions = root.optInt("ngPlusCompletions", fallback.ngPlusCompletions).coerceAtLeast(0),
+      worldCollectionDifficultyMap = worldColDiffMap,
+    )
+  }
+
+  private fun mergeStatesPreferHigher(
+    base: OperatorProgressionState,
+    incoming: OperatorProgressionState,
+  ): OperatorProgressionState {
+    fun mergeLongMap(a: Map<String, Long>, b: Map<String, Long>): Map<String, Long> =
+      (a.keys + b.keys).associateWith { k -> maxOf(a[k] ?: 0L, b[k] ?: 0L) }
+
+    fun mergeIntMap(a: Map<String, Int>, b: Map<String, Int>, floor: Int = 1): Map<String, Int> =
+      (a.keys + b.keys).associateWith { k -> maxOf(a[k] ?: floor, b[k] ?: floor) }
+
+    val mergedGear = (base.gearMap.keys + incoming.gearMap.keys).associateWith { k ->
+      val a = base.gearMap[k]
+      val b = incoming.gearMap[k]
+      when {
+        a == null -> b!!
+        b == null -> a
+        else -> a.copy(
+          level = maxOf(a.level, b.level),
+          prestige = maxOf(a.prestige, b.prestige),
+          xp = maxOf(a.xp, b.xp),
+          tier = maxOf(a.tier, b.tier),
+          starLevel = maxOf(a.starLevel, b.starLevel),
+        )
+      }
+    }
+
+    val mergedEquip = (base.equipmentMap.keys + incoming.equipmentMap.keys).associateWith { k ->
+      val a = base.equipmentMap[k]
+      val b = incoming.equipmentMap[k]
+      when {
+        a == null -> b!!
+        b == null -> a
+        else -> a.copy(
+          level = maxOf(a.level, b.level),
+          prestige = maxOf(a.prestige, b.prestige),
+          xp = maxOf(a.xp, b.xp),
+          tier = maxOf(a.tier, b.tier),
+          starLevel = maxOf(a.starLevel, b.starLevel),
+        )
+      }
+    }
+
+    val mergedSkills = (base.skillNodes.keys + incoming.skillNodes.keys).associateWith { k ->
+      val a = base.skillNodes[k]
+      val b = incoming.skillNodes[k]
+      when {
+        a == null -> b!!
+        b == null -> a
+        else -> a.copy(
+          unlocked = a.unlocked || b.unlocked,
+          tier = maxOf(a.tier, b.tier),
+          starLevel = maxOf(a.starLevel, b.starLevel),
+        )
+      }
+    }
+
+    val mergedOutfits = (base.outfitStates.keys + incoming.outfitStates.keys).associateWith { k ->
+      val a = base.outfitStates[k]
+      val b = incoming.outfitStates[k]
+      when {
+        a == null -> b!!
+        b == null -> a
+        else -> a.copy(
+          level = maxOf(a.level, b.level),
+          tier = maxOf(a.tier, b.tier),
+          skillRank = maxOf(a.skillRank, b.skillRank),
+          gearRank = maxOf(a.gearRank, b.gearRank),
+          equipmentRank = maxOf(a.equipmentRank, b.equipmentRank),
+          starLevel = maxOf(a.starLevel, b.starLevel),
+        )
+      }
+    }
+
+    val mergedAreas = (base.areaStates.keys + incoming.areaStates.keys).associateWith { k ->
+      val a = base.areaStates[k]
+      val b = incoming.areaStates[k]
+      when {
+        a == null -> b!!
+        b == null -> a
+        else -> a.copy(
+          ageYears = maxOf(a.ageYears, b.ageYears),
+          rebirthCycles = maxOf(a.rebirthCycles, b.rebirthCycles),
+          powerGridTier = maxOf(a.powerGridTier, b.powerGridTier),
+          defenseTurretTier = maxOf(a.defenseTurretTier, b.defenseTurretTier),
+          trapDensityTier = maxOf(a.trapDensityTier, b.trapDensityTier),
+          lootRichnessTier = maxOf(a.lootRichnessTier, b.lootRichnessTier),
+          starLevel = maxOf(a.starLevel, b.starLevel),
+        )
+      }
+    }
+
+    return base.copy(
+      playerXp = maxOf(base.playerXp, incoming.playerXp),
+      playerPrestige = maxOf(base.playerPrestige, incoming.playerPrestige),
+      characterTier = maxOf(base.characterTier, incoming.characterTier),
+      characterStarLevel = maxOf(base.characterStarLevel, incoming.characterStarLevel),
+      weaponXpMap = mergeLongMap(base.weaponXpMap, incoming.weaponXpMap),
+      weaponPrestigeMap = mergeIntMap(base.weaponPrestigeMap, incoming.weaponPrestigeMap, 0),
+      weaponTierMap = mergeIntMap(base.weaponTierMap, incoming.weaponTierMap, 1),
+      weaponStarMap = mergeIntMap(base.weaponStarMap, incoming.weaponStarMap, 1),
+      wonderTierMap = mergeIntMap(base.wonderTierMap, incoming.wonderTierMap, 1),
+      wonderStarMap = mergeIntMap(base.wonderStarMap, incoming.wonderStarMap, 1),
+      armoryItemStarMap = mergeIntMap(base.armoryItemStarMap, incoming.armoryItemStarMap, 1),
+      gearMap = mergedGear,
+      gearPrestige = maxOf(base.gearPrestige, incoming.gearPrestige),
+      equipmentMap = mergedEquip,
+      redEssence = maxOf(base.redEssence, incoming.redEssence),
+      yellowEssence = maxOf(base.yellowEssence, incoming.yellowEssence),
+      greenEssence = maxOf(base.greenEssence, incoming.greenEssence),
+      combinedEssence = maxOf(base.combinedEssence, incoming.combinedEssence),
+      blastShards = maxOf(base.blastShards, incoming.blastShards),
+      perkRanks = mergeIntMap(base.perkRanks, incoming.perkRanks, 0),
+      blastCoreInventory = mergeLongMap(base.blastCoreInventory, incoming.blastCoreInventory),
+      blastCoreLevels = mergeIntMap(base.blastCoreLevels, incoming.blastCoreLevels, 1),
+      outfitStates = mergedOutfits,
+      areaStates = mergedAreas,
+      vacuumBot = base.vacuumBot.copy(
+        level = maxOf(base.vacuumBot.level, incoming.vacuumBot.level),
+        tier = maxOf(base.vacuumBot.tier, incoming.vacuumBot.tier),
+        starLevel = maxOf(base.vacuumBot.starLevel, incoming.vacuumBot.starLevel),
+      ),
+      unlockedPassVersions = base.unlockedPassVersions + incoming.unlockedPassVersions,
+      battlePassXp = maxOf(base.battlePassXp, incoming.battlePassXp),
+      battlePassPrestige = maxOf(base.battlePassPrestige, incoming.battlePassPrestige),
+      bpCycleCount = maxOf(base.bpCycleCount, incoming.bpCycleCount),
+      claimedPassTiers = base.claimedPassTiers + incoming.claimedPassTiers,
+      challengeProgress = mergeLongMap(base.challengeProgress, incoming.challengeProgress),
+      claimedChallenges = base.claimedChallenges + incoming.claimedChallenges,
+      challengePrestige = maxOf(base.challengePrestige, incoming.challengePrestige),
+      skillNodes = mergedSkills,
+      wonderWeaponsPickedTotal = maxOf(base.wonderWeaponsPickedTotal, incoming.wonderWeaponsPickedTotal),
+      claimedAchievements = base.claimedAchievements + incoming.claimedAchievements,
+      missionProgress = mergeLongMap(base.missionProgress, incoming.missionProgress),
+      claimedMissions = base.claimedMissions + incoming.claimedMissions,
+      totalElimsLifetime = maxOf(base.totalElimsLifetime, incoming.totalElimsLifetime),
+      totalBossesLifetime = maxOf(base.totalBossesLifetime, incoming.totalBossesLifetime),
+      totalMatchesPlayed = maxOf(base.totalMatchesPlayed, incoming.totalMatchesPlayed),
+      totalBlueEssenceSpent = maxOf(base.totalBlueEssenceSpent, incoming.totalBlueEssenceSpent),
+      highestPackTierReached = maxOf(base.highestPackTierReached, incoming.highestPackTierReached),
+      largestLobbyPlayed = maxOf(base.largestLobbyPlayed, incoming.largestLobbyPlayed),
+      storePurchasesCount = maxOf(base.storePurchasesCount, incoming.storePurchasesCount),
+      purchasedStoreItems = base.purchasedStoreItems + incoming.purchasedStoreItems,
+      xpBoosterMatchesRemaining = maxOf(base.xpBoosterMatchesRemaining, incoming.xpBoosterMatchesRemaining),
+      botDamageBoostPct = maxOf(base.botDamageBoostPct, incoming.botDamageBoostPct),
+      outfitRarityMap = mergeIntMap(base.outfitRarityMap, incoming.outfitRarityMap, 1),
+      outfitShardMap = mergeLongMap(base.outfitShardMap, incoming.outfitShardMap),
+      discoveredCatWorlds = base.discoveredCatWorlds + incoming.discoveredCatWorlds,
+      lootCratesOpenedTotal = maxOf(base.lootCratesOpenedTotal, incoming.lootCratesOpenedTotal),
+      unlockedNgPlusTier = maxOf(base.unlockedNgPlusTier, incoming.unlockedNgPlusTier),
+      activeNgPlusTier = maxOf(base.activeNgPlusTier, incoming.activeNgPlusTier).coerceAtMost(maxOf(base.unlockedNgPlusTier, incoming.unlockedNgPlusTier)),
+      ngPlusCompletions = maxOf(base.ngPlusCompletions, incoming.ngPlusCompletions),
+      worldCollectionDifficultyMap = base.worldCollectionDifficultyMap + incoming.worldCollectionDifficultyMap,
+    )
   }
 
   private fun load(): OperatorProgressionState {
@@ -2020,540 +2913,7 @@ class ProgressionStore(
     val storedSeal = prefs.getString(KEY_STATE_HASH, null)
     lastLoadedIntegrityValid = storedSeal == null || AppSecurityManager.verifyPayload(raw, storedSeal)
     return runCatching {
-      val root = JSONObject(raw)
-      val unlockedArr = root.optJSONArray("unlockedPasses")
-      val unlockedPasses = mutableSetOf(BattlePassVersion.STANDARD_SECTOR_OPS)
-      if (unlockedArr != null) {
-        for (i in 0 until unlockedArr.length()) {
-          val id = unlockedArr.optString(i)
-          BattlePassVersion.entries.firstOrNull { it.id == id }?.let { unlockedPasses.add(it) }
-        }
-      }
-      val activePassId = root.optString("activePassVersion", BattlePassVersion.STANDARD_SECTOR_OPS.id)
-      val activePass = BattlePassVersion.entries.firstOrNull { it.id == activePassId } ?: BattlePassVersion.STANDARD_SECTOR_OPS
-
-      val claimedTiers = mutableSetOf<String>()
-      root.optJSONArray("claimedTiers")?.let { arr ->
-        for (i in 0 until arr.length()) claimedTiers.add(arr.optString(i))
-      }
-      val claimedChallenges = mutableSetOf<String>()
-      root.optJSONArray("claimedChallenges")?.let { arr ->
-        for (i in 0 until arr.length()) claimedChallenges.add(arr.optString(i))
-      }
-      val claimedAchievements = mutableSetOf<String>()
-      root.optJSONArray("claimedAchievements")?.let { arr ->
-        for (i in 0 until arr.length()) claimedAchievements.add(arr.optString(i))
-      }
-      val claimedMissions = mutableSetOf<String>()
-      root.optJSONArray("claimedMissions")?.let { arr ->
-        for (i in 0 until arr.length()) claimedMissions.add(arr.optString(i))
-      }
-      val missionProgress = mutableMapOf<String, Long>()
-      root.optJSONObject("missionProgress")?.let { obj ->
-        obj.keys().forEach { k -> missionProgress[k] = obj.optLong(k, 0L).coerceAtLeast(0L) }
-      }
-      val purchasedStoreItems = mutableSetOf<String>()
-      root.optJSONArray("purchasedStoreItems")?.let { arr ->
-        for (i in 0 until arr.length()) purchasedStoreItems.add(arr.optString(i))
-      }
-
-      val wpnXp = mutableMapOf<String, Long>()
-      root.optJSONObject("weaponXpMap")?.let { obj ->
-        obj.keys().forEach { k -> wpnXp[k] = obj.optLong(k, 0L) }
-      }
-      val wpnPrestige = mutableMapOf<String, Int>()
-      root.optJSONObject("weaponPrestigeMap")?.let { obj ->
-        obj.keys().forEach { k -> wpnPrestige[k] = obj.optInt(k, 0) }
-      }
-      val wpnTierMap = ProgressionCatalog.weapons.associate { it.id to 1 }.toMutableMap()
-      root.optJSONObject("weaponTierMap")?.let { obj ->
-        obj.keys().forEach { k -> wpnTierMap[k] = obj.optInt(k, 1).coerceIn(1, 25) }
-      }
-      val wpnStarMap = ProgressionCatalog.weapons.associate { it.id to 1 }.toMutableMap()
-      root.optJSONObject("weaponStarMap")?.let { obj ->
-        obj.keys().forEach { k -> wpnStarMap[k] = obj.optInt(k, 1).coerceIn(1, StarRankMeta.MAX_STARS) }
-      }
-      val wonderTierMap = WonderWeaponKind.entries.associate { it.id to 1 }.toMutableMap()
-      root.optJSONObject("wonderTierMap")?.let { obj ->
-        obj.keys().forEach { k -> wonderTierMap[k] = obj.optInt(k, 1).coerceIn(1, 25) }
-      }
-      val wonderStarMap = WonderWeaponKind.entries.associate { it.id to 1 }.toMutableMap()
-      root.optJSONObject("wonderStarMap")?.let { obj ->
-        obj.keys().forEach { k -> wonderStarMap[k] = obj.optInt(k, 1).coerceIn(1, StarRankMeta.MAX_STARS) }
-      }
-      val armoryStarMap = mutableMapOf<String, Int>()
-      root.optJSONObject("armoryItemStarMap")?.let { obj ->
-        obj.keys().forEach { k -> armoryStarMap[k] = obj.optInt(k, 1).coerceIn(1, StarRankMeta.MAX_STARS) }
-      }
-      val chProg = mutableMapOf<String, Long>()
-      root.optJSONObject("challengeProgress")?.let { obj ->
-        obj.keys().forEach { k -> chProg[k] = obj.optLong(k, 0L) }
-      }
-
-      val gearMap = GearSlot.entries.associate { it.id to GearState(it) }.toMutableMap()
-      root.optJSONObject("gearMap")?.let { obj ->
-        obj.keys().forEach { k ->
-          val gObj = obj.optJSONObject(k)
-          if (gObj != null) {
-            val slot = GearSlot.entries.firstOrNull { it.id == k } ?: GearSlot.HELMET
-            val lvl = gObj.optInt("level", 1).coerceIn(1, 50)
-            val xp = gObj.optLong("xp", ProgressionCatalog.totalXpForGearLevel(lvl))
-            gearMap[k] = GearState(
-              slot = slot,
-              level = maxOf(lvl, ProgressionCatalog.gearLevelForXp(xp)),
-              prestige = gObj.optInt("prestige", 0),
-              xp = xp,
-              tier = gObj.optInt("tier", 1).coerceIn(1, 25),
-              colorHex = gObj.optLong("colorHex", 0xFF00E5FF),
-              starLevel = gObj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
-            )
-          }
-        }
-      }
-
-      val equipmentMap = mapOf(
-        "lethal" to EquipmentState("lethal", "lethal_frag", 1, 0, 0L, "standard", 1, 1),
-        "tactical" to EquipmentState("tactical", "tactical_stim", 1, 0, 0L, "standard", 1, 1),
-      ).toMutableMap()
-      root.optJSONObject("equipmentMap")?.let { obj ->
-        obj.keys().forEach { k ->
-          val eObj = obj.optJSONObject(k)
-          if (eObj != null) {
-            val lvl = eObj.optInt("level", 1).coerceIn(1, 60)
-            val xp = eObj.optLong("xp", ProgressionCatalog.totalXpForEquipmentLevel(lvl))
-            equipmentMap[k] = EquipmentState(
-              slotId = k,
-              equippedItemId = eObj.optString("equippedItemId", if (k == "lethal") "lethal_frag" else "tactical_stim"),
-              level = maxOf(lvl, ProgressionCatalog.equipmentLevelForXp(xp)),
-              prestige = eObj.optInt("prestige", 0),
-              xp = xp,
-              variantId = eObj.optString("variantId", "standard"),
-              tier = eObj.optInt("tier", 1).coerceIn(1, 25),
-              starLevel = eObj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
-            )
-          }
-        }
-      }
-
-      val skillNodes = ProgressionCatalog.defaultSkillNodes().toMutableMap()
-      root.optJSONObject("skillNodes")?.let { obj ->
-        obj.keys().forEach { k ->
-          val sObj = obj.optJSONObject(k)
-          if (sObj != null && skillNodes.containsKey(k)) {
-            val existing = skillNodes[k]!!
-            skillNodes[k] = existing.copy(
-              unlocked = sObj.optBoolean("unlocked", false),
-              tier = sObj.optInt("tier", 1).coerceIn(1, existing.maxTier),
-              starLevel = sObj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
-            )
-          }
-        }
-      }
-
-      val lobbyObj = root.optJSONObject("lobbyConfig")
-      val lobbyCfg = if (lobbyObj != null) {
-        val modeId = lobbyObj.optString("partyMode", LobbyPartyMode.SQUADS.id)
-        val pMode = LobbyPartyMode.entries.firstOrNull { it.id == modeId } ?: LobbyPartyMode.SQUADS
-        val diffId = lobbyObj.optString("botDifficulty", BotDifficulty.OPERATIVE.id)
-        val diff = BotDifficulty.entries.firstOrNull { it.id == diffId } ?: BotDifficulty.OPERATIVE
-        LobbyConfig(
-          partyMode = pMode,
-          targetPlayers = lobbyObj.optInt("targetPlayers", 12).coerceIn(1, 32),
-          autoFillBots = lobbyObj.optBoolean("autoFillBots", true),
-          botDifficulty = diff,
-          humanPlayersOnline = lobbyObj.optInt("humanPlayersOnline", 1).coerceIn(1, 32),
-        )
-      } else LobbyConfig()
-
-      val wcObj = root.optJSONObject("weaponCustom")
-      val wc = if (wcObj != null) {
-        val mainId = wcObj.optString("equippedWeaponId", "wpn_pulse_carbine")
-        val eqList = mutableListOf<String>()
-        wcObj.optJSONArray("equippedWeaponIds")?.let { arr ->
-          for (i in 0 until arr.length()) {
-            val s = arr.optString(i)
-            if (s.isNotBlank()) eqList.add(s)
-          }
-        }
-        if (eqList.isEmpty()) eqList.add(mainId)
-        WeaponCustomization(
-          equippedWeaponId = mainId,
-          equippedWeaponIds = eqList.distinct(),
-          camoId = wcObj.optString("camoId", "cyber_matte"),
-          opticId = wcObj.optString("opticId", "holo_cyan"),
-          barrelId = wcObj.optString("barrelId", "standard_barrel"),
-          muzzleId = wcObj.optString("muzzleId", "standard_muzzle"),
-          underbarrelId = wcObj.optString("underbarrelId", "none_underbarrel"),
-          magazineId = wcObj.optString("magazineId", "extended_mag_1"),
-          stockId = wcObj.optString("stockId", "tactical_stock"),
-          rearGripId = wcObj.optString("rearGripId", "stippled_grip"),
-          laserId = wcObj.optString("laserId", "none_laser"),
-          ammoModId = wcObj.optString("ammoModId", "standard_core"),
-          tracerColorHex = wcObj.optLong("tracerColorHex", 0xFF00E5FF),
-        )
-      } else WeaponCustomization()
-
-      val ccObj = root.optJSONObject("characterCustom")
-      val cc = if (ccObj != null) {
-        CharacterCustomization(
-          suitThemeId = ccObj.optString("suitThemeId", "vanguard_cyber"),
-          visorStyleId = ccObj.optString("visorStyleId", "cyan_visor"),
-          auraTrailId = ccObj.optString("auraTrailId", "none"),
-          animationSpeedMultiplier = ccObj.optDouble("animationSpeedMultiplier", 1.0).toFloat().coerceIn(0.5f, 2.5f),
-          cloakEnabled = ccObj.optBoolean("cloakEnabled", true),
-          titleBadge = ccObj.optString("titleBadge", "Multiverse Operative"),
-          primaryArmorHex = ccObj.optLong("primaryArmorHex", 0xFF00E5FF),
-          accentArmorHex = ccObj.optLong("accentArmorHex", 0xFFFFAB40),
-        )
-      } else CharacterCustomization()
-
-      val lcObj = root.optJSONObject("levelCustom")
-      val lc = if (lcObj != null) {
-        LevelCustomization(
-          skyThemeId = lcObj.optString("skyThemeId", "default_sector"),
-          gridStyleId = lcObj.optString("gridStyleId", "tactical_square"),
-          enemyDensityMultiplier = lcObj.optDouble("enemyDensityMultiplier", 1.0).toFloat().coerceIn(0.75f, 2.5f),
-          worldDifficultyTier = WorldDifficultyTier.fromId(lcObj.optString("worldDifficultyTier", WorldDifficultyTier.NORMAL.id)),
-          wonderDropBoost = lcObj.optBoolean("wonderDropBoost", false),
-          critSurgeMutator = lcObj.optBoolean("critSurgeMutator", false),
-          instagibMutator = lcObj.optBoolean("instagibMutator", false),
-          lowGravityDash = lcObj.optBoolean("lowGravityDash", false),
-          bossRushMutator = lcObj.optBoolean("bossRushMutator", false),
-          floorAccentHex = lcObj.optLong("floorAccentHex", 0xFF00E5FF),
-        )
-      } else LevelCustomization()
-
-      val outfitRarityMap = mutableMapOf<String, Int>()
-      root.optJSONObject("outfitRarityMap")?.let { obj ->
-        obj.keys().forEach { k -> outfitRarityMap[k] = obj.optInt(k, 1).coerceIn(1, CharacterRarity.entries.size) }
-      }
-      val outfitShardMap = mutableMapOf<String, Long>()
-      root.optJSONObject("outfitShardMap")?.let { obj ->
-        obj.keys().forEach { k -> outfitShardMap[k] = obj.optLong(k, 0L).coerceAtLeast(0L) }
-      }
-      val discoveredCatWorlds = mutableSetOf<String>()
-      root.optJSONArray("discoveredCatWorlds")?.let { arr ->
-        for (i in 0 until arr.length()) discoveredCatWorlds.add(arr.optString(i))
-      }
-
-      val wonderList = mutableListOf<String>()
-      root.optJSONArray("equippedWonderIds")?.let { arr ->
-        for (i in 0 until arr.length()) {
-          val s = arr.optString(i)
-          if (s.isNotBlank()) wonderList.add(s)
-        }
-      }
-      if (wonderList.isEmpty()) wonderList.add(WonderWeaponKind.RAY_NOVA_MK3.id)
-
-      val lethalList = mutableListOf<String>()
-      root.optJSONArray("equippedLethalIds")?.let { arr ->
-        for (i in 0 until arr.length()) {
-          val s = arr.optString(i)
-          if (s.isNotBlank()) lethalList.add(s)
-        }
-      }
-      if (lethalList.isEmpty()) lethalList.add(equipmentMap["lethal"]?.equippedItemId ?: "lethal_frag")
-
-      val tacticalList = mutableListOf<String>()
-      root.optJSONArray("equippedTacticalIds")?.let { arr ->
-        for (i in 0 until arr.length()) {
-          val s = arr.optString(i)
-          if (s.isNotBlank()) tacticalList.add(s)
-        }
-      }
-      if (tacticalList.isEmpty()) tacticalList.add(equipmentMap["tactical"]?.equippedItemId ?: "tactical_stim")
-
-      val perkRanks = mutableMapOf<String, Int>()
-      root.optJSONObject("perkRanks")?.let { obj ->
-        obj.keys().forEach { k -> perkRanks[k] = obj.optInt(k, 0).coerceIn(0, 25) }
-      }
-
-      val coreInv = BlastCoreColor.entries.associate { it.id to 2L }.toMutableMap()
-      root.optJSONObject("blastCoreInventory")?.let { obj ->
-        obj.keys().forEach { k -> coreInv[k] = obj.optLong(k, 2L).coerceAtLeast(0L) }
-      }
-
-      val coreLvls = BlastCoreColor.entries.associate { it.id to 1 }.toMutableMap()
-      root.optJSONObject("blastCoreLevels")?.let { obj ->
-        obj.keys().forEach { k -> coreLvls[k] = obj.optInt(k, 1).coerceIn(1, 20) }
-      }
-
-      val outfitStates = MultiverseArsenalCatalog.outfits.associate {
-        it.id to OutfitProgressState(it.id)
-      }.toMutableMap()
-      root.optJSONObject("outfitStates")?.let { obj ->
-        obj.keys().forEach { k ->
-          val oObj = obj.optJSONObject(k)
-          if (oObj != null) {
-            outfitStates[k] = OutfitProgressState(
-              outfitId = k,
-              level = oObj.optInt("level", 1).coerceIn(1, 1000),
-              tier = oObj.optInt("tier", 1).coerceIn(1, 25),
-              skillRank = oObj.optInt("skillRank", 1).coerceIn(1, 20),
-              gearRank = oObj.optInt("gearRank", 1).coerceIn(1, 20),
-              equipmentRank = oObj.optInt("equipmentRank", 1).coerceIn(1, 20),
-              starLevel = oObj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
-            )
-          }
-        }
-      }
-
-      val areaStates = MultiverseArsenalCatalog.customAreas.associate {
-        it.id to CustomAreaState(it.id)
-      }.toMutableMap()
-      root.optJSONObject("areaStates")?.let { obj ->
-        obj.keys().forEach { k ->
-          val aObj = obj.optJSONObject(k)
-          if (aObj != null) {
-            areaStates[k] = CustomAreaState(
-              areaId = k,
-              ageYears = aObj.optInt("ageYears", 12).coerceIn(0, 99),
-              rebirthCycles = aObj.optInt("rebirthCycles", 0).coerceAtLeast(0),
-              powerGridTier = aObj.optInt("powerGridTier", 1).coerceIn(1, 25),
-              defenseTurretTier = aObj.optInt("defenseTurretTier", 1).coerceIn(1, 25),
-              trapDensityTier = aObj.optInt("trapDensityTier", 1).coerceIn(1, 25),
-              lootRichnessTier = aObj.optInt("lootRichnessTier", 1).coerceIn(1, 25),
-              starLevel = aObj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
-            )
-          }
-        }
-      }
-
-      val vacObj = root.optJSONObject("vacuumBot")
-      val vacBot = if (vacObj != null) {
-        VacuumBotState(
-          level = vacObj.optInt("level", 1).coerceIn(1, 50),
-          tier = vacObj.optInt("tier", 1).coerceIn(1, 25),
-          autoUpgradeEnabled = vacObj.optBoolean("autoUpgradeEnabled", true),
-          autoCollectEnabled = vacObj.optBoolean("autoCollectEnabled", true),
-          starLevel = vacObj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
-        )
-      } else VacuumBotState()
-
-      val pmObj = root.optJSONObject("privateMatchRules")
-      val pmRules = if (pmObj != null) {
-        val privId = pmObj.optString("privacy", MatchPrivacy.PRIVATE_PASSWORD.id)
-        val priv = MatchPrivacy.entries.firstOrNull { it.id == privId } ?: MatchPrivacy.PRIVATE_PASSWORD
-        val diffId = pmObj.optString("botDifficulty", BotDifficulty.OPERATIVE.id)
-        val diff = BotDifficulty.entries.firstOrNull { it.id == diffId } ?: BotDifficulty.OPERATIVE
-        PrivateMatchRules(
-          isPrivate = pmObj.optBoolean("isPrivate", true),
-          privacy = priv,
-          roomName = pmObj.optString("roomName", "Omega Convergence Strike"),
-          roomCode = pmObj.optString("roomCode", "GENESIS-774"),
-          passcode = pmObj.optString("passcode", "7744"),
-          startingWave = pmObj.optInt("startingWave", 1),
-          maxPlayers = pmObj.optInt("maxPlayers", 8),
-          botFillEnabled = pmObj.optBoolean("botFillEnabled", true),
-          botDifficulty = diff,
-          worldId = pmObj.optString("worldId", "campaign_origins"),
-          areaId = pmObj.optString("areaId", "area_mended_convergence"),
-          modeId = pmObj.optString("modeId", "campaign"),
-          infiniteAmmo = pmObj.optBoolean("infiniteAmmo", false),
-          headshotsOnly = pmObj.optBoolean("headshotsOnly", false),
-          bossRush = pmObj.optBoolean("bossRush", false),
-          wonderSpawnBoost = pmObj.optBoolean("wonderSpawnBoost", false),
-          lowGravity = pmObj.optBoolean("lowGravity", false),
-          doubleSpeed = pmObj.optBoolean("doubleSpeed", false),
-          vampiricSiphon = pmObj.optBoolean("vampiricSiphon", false),
-          doubleBlueEssence = pmObj.optBoolean("doubleBlueEssence", false),
-          friendlyFire = pmObj.optBoolean("friendlyFire", false),
-          customWaveGoal = pmObj.optInt("customWaveGoal", 0),
-        )
-      } else PrivateMatchRules()
-
-      val clanObj = root.optJSONObject("clan")
-      val clanData = if (clanObj != null) {
-        val membersArr = clanObj.optJSONArray("members")
-        val loadedMembers = if (membersArr != null) {
-          val mList = ArrayList<ClanMember>(membersArr.length())
-          for (i in 0 until membersArr.length()) {
-            val mObj = membersArr.optJSONObject(i) ?: continue
-            val rId = mObj.optString("rank", ClanRank.RECRUIT.id)
-            val rank = ClanRank.entries.firstOrNull { it.id == rId } ?: ClanRank.RECRUIT
-            mList.add(
-              ClanMember(
-                id = mObj.optString("id", "cm_$i"),
-                callsign = mObj.optString("callsign", "Operative"),
-                rank = rank,
-                level = mObj.optInt("level", 1),
-                stars = mObj.optInt("stars", 1),
-                donatedEssence = mObj.optLong("donatedEssence", 0L),
-                online = mObj.optBoolean("online", true),
-              )
-            )
-          }
-          mList.ifEmpty { SocialCatalog.defaultClan.members }
-        } else SocialCatalog.defaultClan.members
-        SocialCatalog.defaultClan.copy(
-          id = clanObj.optString("id", SocialCatalog.defaultClan.id),
-          name = clanObj.optString("name", SocialCatalog.defaultClan.name),
-          tag = clanObj.optString("tag", SocialCatalog.defaultClan.tag),
-          motto = clanObj.optString("motto", SocialCatalog.defaultClan.motto),
-          level = clanObj.optInt("level", 4).coerceIn(1, 25),
-          tier = clanObj.optInt("tier", 4).coerceIn(1, 25),
-          starLevel = clanObj.optInt("starLevel", 3).coerceIn(1, 10),
-          totalEssenceDonated = clanObj.optLong("totalEssenceDonated", 18500L),
-          leaderCallsign = clanObj.optString("leaderCallsign", SocialCatalog.defaultClan.leaderCallsign),
-          colorHex = clanObj.optLong("colorHex", SocialCatalog.defaultClan.colorHex),
-          members = loadedMembers,
-        )
-      } else SocialCatalog.defaultClan
-
-      val friendsArray = root.optJSONArray("friends")
-      val friendsList = if (friendsArray != null) {
-        val list = ArrayList<FriendEntry>(friendsArray.length())
-        for (i in 0 until friendsArray.length()) {
-          val fObj = friendsArray.optJSONObject(i) ?: continue
-          val statusId = fObj.optString("status", FriendOnlineStatus.ONLINE_LOBBY.id)
-          val status = FriendOnlineStatus.entries.firstOrNull { it.id == statusId } ?: FriendOnlineStatus.ONLINE_LOBBY
-          val tag = fObj.optString("clanTag", "").ifEmpty { null }
-          val matchId = fObj.optString("currentMatchId", "").ifEmpty { null }
-          list.add(
-            FriendEntry(
-              id = fObj.optString("id", "f_$i"),
-              callsign = fObj.optString("callsign", "Operator_$i"),
-              level = fObj.optInt("level", 25),
-              stars = fObj.optInt("stars", 5),
-              tier = fObj.optInt("tier", 4),
-              avatarThemeId = fObj.optString("avatarThemeId", "vanguard_cyber"),
-              status = status,
-              statusDetail = fObj.optString("statusDetail", "In Lobby"),
-              currentMatchId = matchId,
-              clanTag = tag,
-              isFavorite = fObj.optBoolean("isFavorite", false),
-            )
-          )
-        }
-        list
-      } else SocialCatalog.defaultFriends
-
-      val chatArray = root.optJSONArray("chatMessages")
-      val loadedChats = if (chatArray != null) {
-        val list = ArrayList<ChatMessage>(chatArray.length())
-        for (i in 0 until chatArray.length()) {
-          val mObj = chatArray.optJSONObject(i) ?: continue
-          val chId = mObj.optString("channel", ChatChannel.GENERAL.id)
-          val ch = ChatChannel.entries.firstOrNull { it.id == chId } ?: ChatChannel.GENERAL
-          list.add(
-            ChatMessage(
-              id = mObj.optString("id", "msg_$i"),
-              channel = ch,
-              senderCallsign = mObj.optString("senderCallsign", "Operator"),
-              senderClanTag = mObj.optString("senderClanTag", "").ifEmpty { null },
-              senderStars = mObj.optInt("senderStars", 1),
-              targetFriendId = mObj.optString("targetFriendId", "").ifEmpty { null },
-              content = mObj.optString("content", ""),
-              timestampMillis = mObj.optLong("timestampMillis", System.currentTimeMillis()),
-              isTacticalQuickChat = mObj.optBoolean("isTacticalQuickChat", false),
-              isSystemMessage = mObj.optBoolean("isSystemMessage", false),
-            )
-          )
-        }
-        list
-      } else SocialCatalog.defaultChatMessages
-
-      val jmObj = root.optJSONObject("joinedMatch")
-      val loadedJoinedMatch = if (jmObj != null) {
-        val privId = jmObj.optString("privacy", MatchPrivacy.PUBLIC.id)
-        val priv = MatchPrivacy.entries.firstOrNull { it.id == privId } ?: MatchPrivacy.PUBLIC
-        val muts = mutableListOf<String>()
-        jmObj.optJSONArray("activeMutators")?.let { arr ->
-          for (i in 0 until arr.length()) muts.add(arr.optString(i))
-        }
-        MultiverseMatchListing(
-          id = jmObj.optString("id", ""),
-          roomName = jmObj.optString("roomName", "Match"),
-          hostCallsign = jmObj.optString("hostCallsign", "Host"),
-          hostLevel = jmObj.optInt("hostLevel", 1),
-          hostStars = jmObj.optInt("hostStars", 1),
-          worldId = jmObj.optString("worldId", "campaign_origins"),
-          worldTitle = jmObj.optString("worldTitle", "Genesis Fracture"),
-          modeId = jmObj.optString("modeId", "campaign"),
-          modeLabel = jmObj.optString("modeLabel", "Story Campaign"),
-          areaId = jmObj.optString("areaId", "area_mended_convergence"),
-          areaName = jmObj.optString("areaName", "The Mended Convergence"),
-          currentPlayers = jmObj.optInt("currentPlayers", 1),
-          maxPlayers = jmObj.optInt("maxPlayers", 8),
-          privacy = priv,
-          roomCode = jmObj.optString("roomCode", "CONV-101"),
-          passcode = jmObj.optString("passcode", "").ifEmpty { null },
-          pingMs = jmObj.optInt("pingMs", 20),
-          currentWave = jmObj.optInt("currentWave", 1),
-          activeMutators = muts,
-          clanTag = jmObj.optString("clanTag", "").ifEmpty { null },
-        )
-      } else null
-
-      OperatorProgressionState(
-        playerXp = root.optLong("playerXp", 0L),
-        playerPrestige = root.optInt("playerPrestige", 0),
-        characterTier = root.optInt("characterTier", 1).coerceIn(1, PowerTier.MAX_TIER),
-        characterStarLevel = root.optInt("characterStarLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
-        weaponXpMap = wpnXp.ifEmpty { mapOf("wpn_pulse_carbine" to 0L) },
-        weaponPrestigeMap = wpnPrestige,
-        weaponTierMap = wpnTierMap,
-        weaponStarMap = wpnStarMap,
-        wonderTierMap = wonderTierMap,
-        wonderStarMap = wonderStarMap,
-        armoryItemStarMap = armoryStarMap,
-        gearMap = gearMap,
-        gearPrestige = root.optInt("gearPrestige", 0),
-        equipmentMap = equipmentMap,
-        equippedWonderIds = wonderList.distinct(),
-        equippedLethalIds = lethalList.distinct(),
-        equippedTacticalIds = tacticalList.distinct(),
-        redEssence = root.optLong("redEssence", 300L),
-        yellowEssence = root.optLong("yellowEssence", 300L),
-        greenEssence = root.optLong("greenEssence", 300L),
-        combinedEssence = root.optLong("combinedEssence", 50L),
-        blastShards = root.optLong("blastShards", 20L),
-        perkRanks = perkRanks,
-        blastCoreInventory = coreInv,
-        blastCoreLevels = coreLvls,
-        equippedOutfitId = root.optString("equippedOutfitId", "mrcrossover_v1"),
-        outfitStates = outfitStates,
-        activeAreaId = root.optString("activeAreaId", "area_empire_city"),
-        areaStates = areaStates,
-        vacuumBot = vacBot,
-        weaponCustom = wc,
-        characterCustom = cc,
-        levelCustom = lc,
-        lobbyConfig = lobbyCfg,
-        activePassVersion = activePass,
-        unlockedPassVersions = unlockedPasses,
-        battlePassXp = root.optLong("battlePassXp", 0L),
-        battlePassPrestige = root.optInt("battlePassPrestige", 0),
-        bpCycleCount = root.optInt("bpCycleCount", 0),
-        claimedPassTiers = claimedTiers,
-        challengeProgress = chProg,
-        claimedChallenges = claimedChallenges,
-        challengePrestige = root.optInt("challengePrestige", 0),
-        skillNodes = skillNodes,
-        wonderWeaponsPickedTotal = root.optLong("wonderPicked", 0L),
-        claimedAchievements = claimedAchievements,
-        missionProgress = missionProgress,
-        claimedMissions = claimedMissions,
-        totalElimsLifetime = root.optLong("totalElimsLifetime", 0L),
-        totalBossesLifetime = root.optLong("totalBossesLifetime", 0L),
-        totalMatchesPlayed = root.optLong("totalMatchesPlayed", 0L),
-        totalBlueEssenceSpent = root.optLong("totalBlueEssenceSpent", 0L),
-        highestPackTierReached = root.optInt("highestPackTierReached", 1),
-        largestLobbyPlayed = root.optInt("largestLobbyPlayed", 1),
-        storePurchasesCount = root.optInt("storePurchasesCount", 0),
-        purchasedStoreItems = purchasedStoreItems,
-        xpBoosterMatchesRemaining = root.optInt("xpBoosterMatchesRemaining", 0),
-        botDamageBoostPct = root.optInt("botDamageBoostPct", 0),
-        privateMatchRules = pmRules,
-        friends = friendsList,
-        chatMessages = loadedChats,
-        clan = clanData,
-        joinedMatch = loadedJoinedMatch,
-        outfitRarityMap = outfitRarityMap,
-        outfitShardMap = outfitShardMap,
-        discoveredCatWorlds = discoveredCatWorlds,
-        lootCratesOpenedTotal = root.optLong("lootCratesOpenedTotal", 0L),
-      )
+      parseProgressionJson(JSONObject(raw), OperatorProgressionState())
     }.getOrDefault(OperatorProgressionState())
   }
 

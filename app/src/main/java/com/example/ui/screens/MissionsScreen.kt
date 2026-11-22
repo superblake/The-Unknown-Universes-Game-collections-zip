@@ -1,7 +1,9 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -33,14 +36,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.data.model.MissionScope
 import com.example.data.model.MissionState
+import com.example.data.model.MissionsCatalog
 import com.example.data.model.MultiverseArsenalCatalog
 import com.example.data.model.UniverseCatalog
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MissionsTab(
   missions: List<MissionState>,
@@ -49,9 +56,10 @@ fun MissionsTab(
   onClaimMission: (String) -> Unit,
   onDeployTarget: (MissionScope, String) -> Unit,
 ) {
+  val haptic = LocalHapticFeedback.current
   var selectedScope by remember { mutableStateOf(MissionScope.WORLD) }
-  var selectedWorldTarget by remember { mutableStateOf(activeWorldId) }
-  var selectedAreaTarget by remember { mutableStateOf(activeAreaId) }
+  var selectedWorldTarget by remember(activeWorldId) { mutableStateOf(activeWorldId) }
+  var selectedAreaTarget by remember(activeAreaId) { mutableStateOf(activeAreaId) }
 
   val targetList = if (selectedScope == MissionScope.WORLD) {
     UniverseCatalog.worlds.map { it.id to it.title }
@@ -78,13 +86,13 @@ fun MissionsTab(
       ) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
           Text(
-            text = "630 MULTIVERSE & CAMPAIGN MISSIONS (45 / WORLD & ARENA)",
+            text = "${MissionsCatalog.allMissions.size} MULTIVERSE & CAMPAIGN MISSIONS (45 / WORLD & ARENA)",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Bold,
           )
           Text(
-            text = "Complete objectives across all worlds, arenas, campaign, and the Mended Convergence to earn Blue Essence, Operator XP, and Blast Shards!",
+            text = "Complete objectives across all ${UniverseCatalog.worlds.size} worlds, ${MultiverseArsenalCatalog.customAreas.size} arenas, campaign, and the Mended Convergence!",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
@@ -92,14 +100,14 @@ fun MissionsTab(
             FilterChip(
               selected = selectedScope == MissionScope.WORLD,
               onClick = { selectedScope = MissionScope.WORLD },
-              label = { Text("World Missions (270)") },
-              modifier = Modifier.testTag("missions_scope_world"),
+              label = { Text("World Missions (${MissionsCatalog.worldMissions.size})") },
+              modifier = Modifier.heightIn(min = 48.dp).testTag("missions_scope_world"),
             )
             FilterChip(
               selected = selectedScope == MissionScope.ARENA,
               onClick = { selectedScope = MissionScope.ARENA },
-              label = { Text("Arena / Area Missions (360)") },
-              modifier = Modifier.testTag("missions_scope_arena"),
+              label = { Text("Arena / Area Missions (${MissionsCatalog.arenaMissions.size})") },
+              modifier = Modifier.heightIn(min = 48.dp).testTag("missions_scope_arena"),
             )
           }
         }
@@ -117,7 +125,7 @@ fun MissionsTab(
               else selectedAreaTarget = id
             },
             label = { Text(title) },
-            modifier = Modifier.testTag("missions_target_$id"),
+            modifier = Modifier.heightIn(min = 48.dp).testTag("missions_target_$id"),
           )
         }
       }
@@ -130,12 +138,12 @@ fun MissionsTab(
         modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp)),
       ) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Target Status: $completedCount / $totalCount Completed", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("Target Status: $completedCount / $totalCount Completed", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             Button(
               onClick = { onDeployTarget(selectedScope, activeTargetId) },
               shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.height(38.dp).testTag("missions_deploy_target_btn"),
+              modifier = Modifier.height(48.dp).testTag("missions_deploy_target_btn"),
             ) {
               Text("Deploy to Target", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             }
@@ -155,7 +163,18 @@ fun MissionsTab(
       Surface(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.fillMaxWidth().border(if (ms.completed) 1.5.dp else 1.dp, if (ms.completed) Color(0xFF00E676) else accent.copy(alpha = 0.6f), RoundedCornerShape(16.dp)),
+        modifier = Modifier
+          .fillMaxWidth()
+          .clip(RoundedCornerShape(16.dp))
+          .combinedClickable(
+            enabled = ms.completed && !ms.claimed,
+            onClick = { onClaimMission(ms.spec.id) },
+            onLongClick = {
+              haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+              onClaimMission(ms.spec.id)
+            },
+          )
+          .border(if (ms.completed) 1.5.dp else 1.dp, if (ms.completed) Color(0xFF00E676) else accent.copy(alpha = 0.6f), RoundedCornerShape(16.dp)),
       ) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
           Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -196,7 +215,7 @@ fun MissionsTab(
               Button(
                 onClick = { onClaimMission(ms.spec.id) },
                 shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.height(36.dp).testTag("claim_mission_${ms.spec.id}"),
+                modifier = Modifier.height(48.dp).testTag("claim_mission_${ms.spec.id}"),
               ) {
                 Text("Claim", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
               }
@@ -232,7 +251,7 @@ fun MissionsDialog(
       }
     },
     confirmButton = {
-      TextButton(onClick = onDismiss, modifier = Modifier.testTag("close_missions_dialog_btn")) {
+      TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp).testTag("close_missions_dialog_btn")) {
         Text("Close")
       }
     },

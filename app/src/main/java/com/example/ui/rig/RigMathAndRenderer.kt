@@ -550,6 +550,9 @@ fun DrawScope.drawArenaHostile(
   dynamicGlow: Boolean = true,
   overrideColor: Color? = null,
   scale: Float = 1.0f,
+  armor: Int = 0,
+  maxArmor: Int = 0,
+  immuneColors: List<Color> = emptyList(),
 ) {
   val effScale = scale.coerceIn(0.45f, 1.55f)
   val baseRadius = when {
@@ -608,12 +611,13 @@ fun DrawScope.drawArenaHostile(
   if (dynamicGlow) {
     drawCircle(primary.copy(alpha = if (isBoss) 0.30f else 0.20f), radius = baseRadius * 1.45f, center = center)
   }
-  if (isBoss || highContrast) {
+  if (isBoss || highContrast || armor > 0) {
     drawCircle(
-      color = (if (highContrast) Color.White else primary).copy(alpha = if (highContrast) 0.85f else 0.65f),
+      color = (if (highContrast) Color.White else if (armor > 0 && !isBoss) Color(0xFF90CAF9) else primary)
+        .copy(alpha = if (highContrast) 0.85f else if (armor > 0) 0.55f else 0.65f),
       radius = baseRadius * 1.25f,
       center = center,
-      style = Stroke(width = if (highContrast) 3f else 2.5f),
+      style = Stroke(width = if (highContrast) 3f else if (armor > 0) 2.2f else 2.5f),
     )
   }
 
@@ -726,12 +730,26 @@ fun DrawScope.drawArenaHostile(
   drawCircle(eyeColor, radius = (if (isBoss) 3.5f else 2.5f) * effScale, center = Offset(headCenter.x - 4f * effScale, headCenter.y - 1f * effScale))
   drawCircle(eyeColor, radius = (if (isBoss) 3.5f else 2.5f) * effScale, center = Offset(headCenter.x + 4f * effScale, headCenter.y - 1f * effScale))
 
-  // Boss / Elite / Damaged HP pip bar
-  if (isBoss || isElite || hp < maxHp) {
-    val barW = baseRadius * 2f
+  // Boss / Elite / Armored / Damaged HP & Armor pip bars
+  val barW = baseRadius * 2f
+  val barY = center.y - baseRadius - 8f * effScale
+  if (isBoss || isElite || hp < maxHp || armor > 0) {
     val ratio = (hp.toFloat() / maxHp.coerceAtLeast(1)).coerceIn(0f, 1f)
-    val barY = center.y - baseRadius - 8f * effScale
     drawLine(Color(0xAA000000), Offset(center.x - barW * 0.5f, barY), Offset(center.x + barW * 0.5f, barY), strokeWidth = 5f * effScale, cap = StrokeCap.Round)
     drawLine(primary, Offset(center.x - barW * 0.5f, barY), Offset(center.x - barW * 0.5f + barW * ratio, barY), strokeWidth = 3.5f * effScale, cap = StrokeCap.Round)
+  }
+  if (maxArmor > 0 && armor > 0) {
+    val armRatio = (armor.toFloat() / maxArmor.coerceAtLeast(1)).coerceIn(0f, 1f)
+    val armY = barY - 5.5f * effScale
+    drawLine(Color(0xBB0A192F), Offset(center.x - barW * 0.5f, armY), Offset(center.x + barW * 0.5f, armY), strokeWidth = 4.2f * effScale, cap = StrokeCap.Round)
+    drawLine(Color(0xFFB0BEC5), Offset(center.x - barW * 0.5f, armY), Offset(center.x - barW * 0.5f + barW * armRatio, armY), strokeWidth = 3f * effScale, cap = StrokeCap.Round)
+  }
+  if (immuneColors.isNotEmpty()) {
+    val pipY = barY - (if (maxArmor > 0 && armor > 0) 11.5f else 6.5f) * effScale
+    immuneColors.take(2).forEachIndexed { idx, immCol ->
+      val pipX = center.x + ((idx - (immuneColors.size.coerceAtMost(2) - 1) / 2f) * 9f * effScale)
+      drawCircle(Color.Black, radius = 3.8f * effScale, center = Offset(pipX, pipY))
+      drawCircle(immCol, radius = 2.6f * effScale, center = Offset(pipX, pipY))
+    }
   }
 }

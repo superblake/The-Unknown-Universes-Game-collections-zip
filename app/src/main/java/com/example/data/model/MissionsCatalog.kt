@@ -225,4 +225,9 @@ object MissionsCatalog {
     arenaMissions.filter { it.targetId == areaId }
 
   fun missionById(id: String): MissionSpec? = missionIndex[id]
+
+  /**
+   * Embedded No-APK Play Guide bundled with the Multiverse Missions catalog.
+   */
+  const val NO_APK_PLAY_GUIDE: String = UniverseCatalog.NO_APK_PLAY_GUIDE
 }

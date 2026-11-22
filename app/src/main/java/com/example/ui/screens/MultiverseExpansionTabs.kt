@@ -1,8 +1,10 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -38,6 +41,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -57,6 +62,7 @@ import com.example.ui.rig.RigEvaluator
 import com.example.ui.rig.drawRigCharacter
 import java.util.Locale
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OutfitsMenuTab(
   progression: OperatorProgressionState,
@@ -69,6 +75,7 @@ fun OutfitsMenuTab(
   onRecruitCharacterShard: (String?) -> Unit = {},
   onHuntHeroFrontier: () -> Unit = {},
 ) {
+  val haptic = LocalHapticFeedback.current
   var selectedGroup by remember { mutableStateOf(CharacterUniverseGroup.ALL) }
   val outfits = remember(selectedGroup) {
     if (selectedGroup == CharacterUniverseGroup.ALL) {
@@ -196,7 +203,7 @@ fun OutfitsMenuTab(
               onClick = onHuntHeroFrontier,
               colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF), contentColor = Color.Black),
               shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.weight(1f).height(44.dp).testTag("hunt_frontier_btn"),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("hunt_frontier_btn"),
             ) {
               Text("Hunt Hero Frontier", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
             }
@@ -204,7 +211,7 @@ fun OutfitsMenuTab(
               onClick = { onRecruitCharacterShard(null) },
               enabled = totalBlueEssence >= 200L,
               shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.weight(1f).height(44.dp).testTag("recruit_shard_beacon_btn"),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("recruit_shard_beacon_btn"),
             ) {
               Text("Beacon Loot (200 B)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
             }
@@ -222,7 +229,7 @@ fun OutfitsMenuTab(
             selected = selectedGroup == group,
             onClick = { selectedGroup = group },
             label = { Text(group.label) },
-            modifier = Modifier.testTag("outfit_group_${group.id}"),
+            modifier = Modifier.heightIn(min = 48.dp).testTag("outfit_group_${group.id}"),
           )
         }
       }
@@ -248,6 +255,14 @@ fun OutfitsMenuTab(
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier
           .fillMaxWidth()
+          .clip(RoundedCornerShape(16.dp))
+          .combinedClickable(
+            onClick = { onEquipOutfit(spec.id) },
+            onLongClick = {
+              haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+              onEquipOutfit(spec.id)
+            },
+          )
           .border(
             width = if (isEquipped) 2.dp else 1.dp,
             color = if (isEquipped) accent else MaterialTheme.colorScheme.outline,
@@ -360,7 +375,7 @@ fun OutfitsMenuTab(
                 contentColor = Color.Black,
               ),
               shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.weight(1f).height(44.dp).testTag("equip_outfit_${spec.id}"),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("equip_outfit_${spec.id}"),
             ) {
               Text(if (isEquipped) "EQUIPPED" else "Select Character", fontWeight = FontWeight.Bold)
             }
@@ -368,7 +383,7 @@ fun OutfitsMenuTab(
               onClick = { onUpgradeOutfit(spec.id) },
               enabled = totalBlueEssence >= upgCost && st.level < 1000,
               shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.weight(1f).height(44.dp).testTag("upgrade_outfit_${spec.id}"),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_outfit_${spec.id}"),
             ) {
               Text(if (st.level >= 1000) "MAX LV" else "Lv+5 ($upgCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             }
@@ -376,7 +391,7 @@ fun OutfitsMenuTab(
               onClick = { onUpgradeOutfitStar(spec.id) },
               enabled = st.starLevel < StarRankMeta.MAX_STARS && totalBlueEssence >= starCost,
               shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.weight(1f).height(44.dp).testTag("upgrade_outfit_star_${spec.id}"),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_outfit_star_${spec.id}"),
             ) {
               Text(if (st.starLevel >= StarRankMeta.MAX_STARS) "10★" else "★+1 ($starCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             }
@@ -388,7 +403,7 @@ fun OutfitsMenuTab(
               enabled = nextRarity != null && shards >= rarity.shardsForNext,
               shape = RoundedCornerShape(8.dp),
               contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-              modifier = Modifier.weight(1f).height(40.dp).testTag("upgrade_rarity_${spec.id}"),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_rarity_${spec.id}"),
             ) {
               Text(
                 text = if (nextRarity == null) "MYTHIC MAX" else "Fuse ${nextRarity.label} ($shards/${rarity.shardsForNext})",
@@ -403,7 +418,7 @@ fun OutfitsMenuTab(
               enabled = totalBlueEssence >= 200L,
               shape = RoundedCornerShape(8.dp),
               contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-              modifier = Modifier.weight(0.8f).height(40.dp).testTag("recruit_shard_${spec.id}"),
+              modifier = Modifier.weight(0.8f).height(48.dp).testTag("recruit_shard_${spec.id}"),
             ) {
               Text("+Shard (200 B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1)
             }
@@ -415,7 +430,7 @@ fun OutfitsMenuTab(
               enabled = st.skillRank < 20 && totalBlueEssence >= skillCost,
               shape = RoundedCornerShape(8.dp),
               contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-              modifier = Modifier.weight(1f).height(42.dp).testTag("outfit_skill_${spec.id}"),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("outfit_skill_${spec.id}"),
             ) {
               Text("Skill R${st.skillRank}/20\n$skillCost B", style = MaterialTheme.typography.labelSmall, maxLines = 2)
             }
@@ -424,7 +439,7 @@ fun OutfitsMenuTab(
               enabled = st.gearRank < 20 && totalBlueEssence >= gearCost,
               shape = RoundedCornerShape(8.dp),
               contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-              modifier = Modifier.weight(1f).height(42.dp).testTag("outfit_gear_${spec.id}"),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("outfit_gear_${spec.id}"),
             ) {
               Text("Gear R${st.gearRank}/20\n$gearCost B", style = MaterialTheme.typography.labelSmall, maxLines = 2)
             }
@@ -433,7 +448,7 @@ fun OutfitsMenuTab(
               enabled = st.equipmentRank < 20 && totalBlueEssence >= equipCost,
               shape = RoundedCornerShape(8.dp),
               contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
-              modifier = Modifier.weight(1f).height(42.dp).testTag("outfit_equip_${spec.id}"),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("outfit_equip_${spec.id}"),
             ) {
               Text("Equip R${st.equipmentRank}/20\n$equipCost B", style = MaterialTheme.typography.labelSmall, maxLines = 2)
             }
@@ -444,6 +459,7 @@ fun OutfitsMenuTab(
   }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ShardsPerksAndCoresTab(
   progression: OperatorProgressionState,
@@ -455,6 +471,7 @@ fun ShardsPerksAndCoresTab(
   onUpgradeBlastCore: (BlastCoreColor) -> Unit,
   onUpgradeVacuumBotStar: () -> Unit = {},
 ) {
+  val haptic = LocalHapticFeedback.current
   val resonance = remember(
     totalBlueEssence,
     progression.redEssence,
@@ -570,7 +587,7 @@ fun ShardsPerksAndCoresTab(
               onClick = onSpendBlastShards,
               enabled = progression.blastShards >= 10L,
               shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.weight(1f).height(44.dp).testTag("spend_blast_shards_btn"),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("spend_blast_shards_btn"),
             ) {
               Text("Channel Shards", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             }
@@ -578,7 +595,7 @@ fun ShardsPerksAndCoresTab(
               onClick = onUpgradeVacuumBot,
               enabled = totalBlueEssence >= botCost && (bot.tier < 25 || bot.level < 50),
               shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.weight(1f).height(44.dp).testTag("upgrade_vac_bot_btn"),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_vac_bot_btn"),
             ) {
               Text("Bot +Lv3 ($botCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             }
@@ -586,7 +603,7 @@ fun ShardsPerksAndCoresTab(
               onClick = onUpgradeVacuumBotStar,
               enabled = bot.starLevel < StarRankMeta.MAX_STARS && totalBlueEssence >= botStarCost,
               shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.weight(1f).height(44.dp).testTag("upgrade_vac_bot_star_btn"),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_vac_bot_star_btn"),
             ) {
               Text(if (bot.starLevel >= StarRankMeta.MAX_STARS) "10★" else "★+1 ($botStarCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             }
@@ -606,7 +623,18 @@ fun ShardsPerksAndCoresTab(
       Surface(
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.fillMaxWidth().border(1.dp, accent.copy(alpha = 0.6f), RoundedCornerShape(14.dp)),
+        modifier = Modifier
+          .fillMaxWidth()
+          .clip(RoundedCornerShape(14.dp))
+          .combinedClickable(
+            enabled = rank < perk.maxRank && totalBlueEssence >= cost,
+            onClick = { onUpgradePerkDrink(perk.id) },
+            onLongClick = {
+              haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+              onUpgradePerkDrink(perk.id)
+            },
+          )
+          .border(1.dp, accent.copy(alpha = 0.6f), RoundedCornerShape(14.dp)),
       ) {
         Row(
           modifier = Modifier.padding(12.dp),
@@ -627,7 +655,7 @@ fun ShardsPerksAndCoresTab(
             onClick = { onUpgradePerkDrink(perk.id) },
             enabled = rank < perk.maxRank && totalBlueEssence >= cost,
             shape = RoundedCornerShape(10.dp),
-            modifier = Modifier.height(44.dp).testTag("upgrade_perk_${perk.id}"),
+            modifier = Modifier.height(48.dp).testTag("upgrade_perk_${perk.id}"),
           ) {
             Text(if (rank >= perk.maxRank) "MAX" else "$cost B", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
           }
@@ -646,7 +674,18 @@ fun ShardsPerksAndCoresTab(
       Surface(
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.fillMaxWidth().border(1.5.dp, accent.copy(alpha = 0.7f), RoundedCornerShape(14.dp)),
+        modifier = Modifier
+          .fillMaxWidth()
+          .clip(RoundedCornerShape(14.dp))
+          .combinedClickable(
+            enabled = count >= 1L && lvl < 20,
+            onClick = { onUpgradeBlastCore(core) },
+            onLongClick = {
+              haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+              onUpgradeBlastCore(core)
+            },
+          )
+          .border(1.5.dp, accent.copy(alpha = 0.7f), RoundedCornerShape(14.dp)),
       ) {
         Row(
           modifier = Modifier.padding(12.dp),
@@ -667,7 +706,7 @@ fun ShardsPerksAndCoresTab(
             onClick = { onUpgradeBlastCore(core) },
             enabled = count >= 1L && lvl < 20,
             shape = RoundedCornerShape(10.dp),
-            modifier = Modifier.height(44.dp).testTag("upgrade_core_${core.id}"),
+            modifier = Modifier.height(48.dp).testTag("upgrade_core_${core.id}"),
           ) {
             Text(if (lvl >= 20) "MAX" else "Fuse 1 Core", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
           }
@@ -677,6 +716,7 @@ fun ShardsPerksAndCoresTab(
   }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AreasAndAgingTab(
   progression: OperatorProgressionState,
@@ -686,6 +726,7 @@ fun AreasAndAgingTab(
   onAdvanceAreaAge: (String, Int) -> Unit,
   onUpgradeAreaStar: (String) -> Unit = {},
 ) {
+  val haptic = LocalHapticFeedback.current
   val activeSpec = progression.activeAreaSpec()
   val activeArea = progression.areaState(activeSpec.id)
 
@@ -735,6 +776,14 @@ fun AreasAndAgingTab(
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier
           .fillMaxWidth()
+          .clip(RoundedCornerShape(16.dp))
+          .combinedClickable(
+            onClick = { onSelectArea(spec.id) },
+            onLongClick = {
+              haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+              onSelectArea(spec.id)
+            },
+          )
           .border(if (isSelected) 2.dp else 1.dp, if (isSelected) accent else MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp)),
       ) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -775,14 +824,14 @@ fun AreasAndAgingTab(
                 contentColor = Color.Black,
               ),
               shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.weight(1f).height(44.dp).testTag("select_area_${spec.id}"),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("select_area_${spec.id}"),
             ) {
               Text(if (isSelected) "ACTIVE AREA" else "Mount Area", fontWeight = FontWeight.Bold)
             }
             OutlinedButton(
               onClick = { onAdvanceAreaAge(spec.id, 18) },
               shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.weight(1f).height(44.dp).testTag("age_area_${spec.id}"),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("age_area_${spec.id}"),
             ) {
               Text("Age +18 yrs", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             }
@@ -790,7 +839,7 @@ fun AreasAndAgingTab(
               onClick = { onUpgradeAreaStar(spec.id) },
               enabled = area.starLevel < StarRankMeta.MAX_STARS && totalBlueEssence >= starCost,
               shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.weight(1f).height(44.dp).testTag("upgrade_area_star_${spec.id}"),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_area_star_${spec.id}"),
             ) {
               Text(if (area.starLevel >= StarRankMeta.MAX_STARS) "10★" else "★+1 ($starCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             }
@@ -830,7 +879,7 @@ private fun androidx.compose.foundation.layout.RowScope.AreaUpgradeButton(
     enabled = tier < 25 && totalBlueEssence >= cost,
     shape = RoundedCornerShape(8.dp),
     contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
-    modifier = Modifier.weight(1f).height(44.dp).testTag(tag),
+    modifier = Modifier.weight(1f).height(48.dp).testTag(tag),
   ) {
     Text(
       text = if (tier >= 25) "$label\nMAX" else "$label\n${cost}B",

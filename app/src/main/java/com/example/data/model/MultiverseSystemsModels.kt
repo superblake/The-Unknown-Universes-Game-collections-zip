@@ -1179,11 +1179,55 @@ object MultiverseArsenalCatalog {
     CustomAreaSpec(
       id = "area_zombies_der_riese",
       name = "Der Riese & Dark Aether Outpost",
-      linkedWorldId = "hellbreaker_citadel",
+      linkedWorldId = "sector_zero",
       description = "Teleporter Mainframe, Pack-a-Punch Catwalk, Mystery Box Alley & Element 115 Reactors.",
       accentHex = 0xFF00E676,
       secondaryHex = 0xFFFF3D71,
       buildingNames = listOf("Mainframe Teleporter", "Pack-a-Punch Forge", "Animal Testing Lab", "Perk-a-Cola Courtyard", "Power Switch Hall", "Aether Reactor"),
+    ),
+    CustomAreaSpec(
+      id = "area_blacklight_hive",
+      name = "Blacklight Water Hive & Gentek Lab",
+      linkedWorldId = "blacklight_conduit",
+      description = "Red-Zone Gentek Containment Lab, Water Hive Bio-Pylons, DUP Viaduct & Blackwatch Helipad.",
+      accentHex = 0xFF7C4DFF,
+      secondaryHex = 0xFFFF3D71,
+      buildingNames = listOf("Gentek Core Lab", "Water Hive Bio-Vat", "DUP Conduit Pylon", "Liberty Metro Rail", "Blackwatch Armory", "Red-Zone Extraction Roof"),
+      storyEraNote = "Prototype Water Hive & DUP Conduit Quarantine",
+      uniqueTraits = "Bio-Tendril Siphon Wells • Arc Pylon Overloads & Blackwatch Drops",
+    ),
+    CustomAreaSpec(
+      id = "area_hellbreaker_crucible",
+      name = "Hellbreaker Molten Crucible Core",
+      linkedWorldId = "hellbreaker_citadel",
+      description = "Mythic Crucible Forge, Water Hydra Rift, Adamantium Claw Vault & Cyber-Fiend Mech Arena.",
+      accentHex = 0xFFFF5252,
+      secondaryHex = 0xFFFFAB40,
+      buildingNames = listOf("Crucible Blade Forge", "Water Hydra Shrine", "Adamantium Vault", "Cyber-Mech Pit", "Glory Siphon Altar", "Infernal Gatehouse"),
+      storyEraNote = "God of War & Doom Crucible Arena",
+      uniqueTraits = "Zero-Cooldown Glory Siphon • Mythic Blade Overdrive Pedestals",
+    ),
+    CustomAreaSpec(
+      id = "area_chrono_gate",
+      name = "Space & Time 7-Chevron Gate Annex",
+      linkedWorldId = "chrono_vault",
+      description = "Stargate SGC Chevron Ring, TARDIS Harmonic Library Vault & 8-Sector Radial Continuation Hub.",
+      accentHex = 0xFFFFD54F,
+      secondaryHex = 0xFF448AFF,
+      buildingNames = listOf("7-Chevron Gate Room", "Library Artifact Archive", "TARDIS Console Core", "Radial Sector Loom", "Time-Freeze Pylon", "Continuation Vault"),
+      storyEraNote = "Space & Time • Stargate SG • The Librarians",
+      uniqueTraits = "7-Chevron Dialer • Time-Freeze Stasis & Radial Artifact Caches",
+    ),
+    CustomAreaSpec(
+      id = "area_aegis_orbital",
+      name = "Aegis Star-Destroyer Kamino Spire",
+      linkedWorldId = "aegis_starblade",
+      description = "Orbital Star-Destroyer Flight Hull, Kamino Cloning Spire, Twin Kyber Sanctum & Force Repulse Deck.",
+      accentHex = 0xFF00E5FF,
+      secondaryHex = 0xFFE040FB,
+      buildingNames = listOf("Star-Destroyer Bridge", "Kamino Clone Lab", "Kyber Crystal Forge", "Force Repulse Deck", "Orbital Hyperdrive Bay", "Starkiller Hangar"),
+      storyEraNote = "Starkiller Force Unleashed & Orbital Citadel",
+      uniqueTraits = "Force Repulse Shockwaves • Twin Kyber Saber Overcharge",
     ),
     CustomAreaSpec(
       id = "area_sector_zero",
@@ -1362,4 +1406,9 @@ object MultiverseArsenalCatalog {
       outputAmount = 2L,
     ),
   )
+
+  /**
+   * Embedded No-APK Play Guide stored directly inside the Multiverse Arsenal & Area collection catalog.
+   */
+  const val NO_APK_PLAY_GUIDE: String = UniverseCatalog.NO_APK_PLAY_GUIDE
 }

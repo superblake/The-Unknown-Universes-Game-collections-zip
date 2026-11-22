@@ -14,6 +14,7 @@ import com.example.data.model.BattlePassVersion
 import com.example.data.model.BlastCoreColor
 import com.example.data.model.ChallengeState
 import com.example.data.model.CharacterCustomization
+import com.example.data.model.CollectionDifficulty
 import com.example.data.model.EquipmentSlotType
 import com.example.data.model.GearSlot
 import com.example.data.model.LevelCustomization
@@ -30,6 +31,7 @@ import com.example.data.model.MissionState
 import com.example.data.model.MissionsCatalog
 import com.example.data.model.MultiverseArsenalCatalog
 import com.example.data.model.MultiverseMatchListing
+import com.example.data.model.NewGamePlusVersion
 import com.example.data.model.OperatorProfile
 import com.example.data.model.OperatorProgressionState
 import com.example.data.model.PrivateMatchRules
@@ -258,7 +260,10 @@ class UniverseViewModel(
 
   fun exportSaveJson(onReady: (String) -> Unit) {
     viewModelScope.launch {
-      val res = repository.exportSaveDataJson(currentUserId)
+      val res = repository.exportSaveDataJson(
+        userId = currentUserId,
+        progressionJson = progressionStore?.exportJsonObject(),
+      )
       if (res.isSuccess) {
         onReady(res.getOrThrow())
       } else {
@@ -277,6 +282,11 @@ class UniverseViewModel(
         bundle = preview.bundle,
         replaceExisting = replaceExisting,
       )
+      if (res.isSuccess) {
+        preview.bundle.progressionJson?.let { progJson ->
+          progressionStore?.importJsonObject(progJson, mergePreferHigher = !replaceExisting)
+        }
+      }
       _statusBanner.value = if (res.isSuccess) {
         res.getOrThrow()
       } else {
@@ -308,12 +318,20 @@ class UniverseViewModel(
   fun selectUniverse(universeId: String) {
     viewModelScope.launch {
       val world = UniverseCatalog.worldById(universeId)
+      val curArea = MultiverseArsenalCatalog.areaById(progressionState.value.activeAreaId)
+      if (curArea.linkedWorldId != world.id) {
+        MultiverseArsenalCatalog.customAreas.firstOrNull { it.linkedWorldId == world.id }?.let { matchingArea ->
+          progressionStore?.selectArea(matchingArea.id)
+        }
+      }
+      val currentMode = (uiState.value as? UniverseUiState.Ready)?.profile?.activeMode
+      val resolvedMode = if (currentMode != null && currentMode in world.supportedModes) currentMode else world.defaultModeId
       repository.updateProfileSelection(
         userId = currentUserId,
         activeUniverseId = world.id,
-        activeMode = world.defaultModeId,
+        activeMode = resolvedMode,
       )
-      _statusBanner.value = "Mounted ${world.title}"
+      _statusBanner.value = "Mounted ${world.title} (${UniverseCatalog.modeById(resolvedMode).shortTag})"
     }
   }
 
@@ -321,6 +339,12 @@ class UniverseViewModel(
     viewModelScope.launch {
       val world = UniverseCatalog.worldById(universeId)
       val mode = UniverseCatalog.modeById(modeId)
+      val curArea = MultiverseArsenalCatalog.areaById(progressionState.value.activeAreaId)
+      if (curArea.linkedWorldId != world.id) {
+        MultiverseArsenalCatalog.customAreas.firstOrNull { it.linkedWorldId == world.id }?.let { matchingArea ->
+          progressionStore?.selectArea(matchingArea.id)
+        }
+      }
       repository.updateProfileSelection(
         userId = currentUserId,
         activeUniverseId = world.id,
@@ -332,8 +356,10 @@ class UniverseViewModel(
   }
 
   fun selectMode(modeId: String) {
+    val mode = UniverseCatalog.modeById(modeId)
     viewModelScope.launch {
-      repository.updateProfileSelection(userId = currentUserId, activeMode = modeId)
+      repository.updateProfileSelection(userId = currentUserId, activeMode = mode.id)
+      _statusBanner.value = "Mode active: ${mode.label} [${mode.shortTag}]"
     }
   }
 
@@ -481,6 +507,7 @@ class UniverseViewModel(
   fun hostPrivateMatch(rules: PrivateMatchRules, hostCallsign: String): MultiverseMatchListing? {
     val store = progressionStore ?: return null
     val match = store.hostPrivateMatch(rules, hostCallsign)
+    if (match.areaId.isNotBlank()) store.selectArea(match.areaId)
     viewModelScope.launch {
       repository.updateProfileSelection(
         userId = currentUserId,
@@ -496,6 +523,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return false
     val res = store.joinMatch(match, enteredPasscode)
     return if (res.isSuccess) {
+      if (match.areaId.isNotBlank()) store.selectArea(match.areaId)
       viewModelScope.launch {
         repository.updateProfileSelection(
           userId = currentUserId,
@@ -838,17 +866,49 @@ class UniverseViewModel(
     }
   }
 
+  fun selectNewGamePlusTier(tier: Int) {
+    val store = progressionStore ?: return
+    val res = store.selectNewGamePlusTier(tier)
+    _statusBanner.value = if (res.isSuccess) {
+      val ver = res.getOrThrow()
+      "${ver.label} Active! (Reward Boost x${String.format(java.util.Locale.US, "%.2f", store.current.ngPlusRewardMultiplier)})"
+    } else {
+      res.exceptionOrNull()?.message ?: "New Game+ tier locked"
+    }
+  }
+
+  fun completeNewGamePlusRun() {
+    val store = progressionStore ?: return
+    val nextUnlocked = store.completeNewGamePlusRun()
+    _statusBanner.value = "Timeline Completed (${store.current.ngPlusCompletions}x)! Unlocked ${nextUnlocked.label} • Rewards x${String.format(java.util.Locale.US, "%.2f", store.current.ngPlusRewardMultiplier)}"
+  }
+
+  fun selectWorldCollectionDifficulty(worldId: String, difficulty: CollectionDifficulty) {
+    val store = progressionStore ?: return
+    store.setWorldCollectionDifficulty(worldId, difficulty)
+    val world = UniverseCatalog.worldById(worldId)
+    _statusBanner.value = "${world.title.substringBefore(":")} Difficulty: ${difficulty.label} (x${String.format(java.util.Locale.US, "%.2f", difficulty.rewardMultiplier)} Rewards)"
+  }
+
   fun deployMissionTarget(scope: MissionScope, targetId: String) {
+    val currentMode = (uiState.value as? UniverseUiState.Ready)?.profile?.activeMode
     when (scope) {
       MissionScope.WORLD -> {
         val world = UniverseCatalog.worldById(targetId)
+        val curArea = MultiverseArsenalCatalog.areaById(progressionState.value.activeAreaId)
+        if (curArea.linkedWorldId != world.id) {
+          MultiverseArsenalCatalog.customAreas.firstOrNull { it.linkedWorldId == world.id }?.let { matchingArea ->
+            progressionStore?.selectArea(matchingArea.id)
+          }
+        }
+        val resolvedMode = if (currentMode != null && currentMode in world.supportedModes) currentMode else world.defaultModeId
         viewModelScope.launch {
           repository.updateProfileSelection(
             userId = currentUserId,
             activeUniverseId = world.id,
-            activeMode = world.defaultModeId,
+            activeMode = resolvedMode,
           )
-          _statusBanner.value = "Deploying to ${world.title} (${world.defaultModeId.uppercase()}) for World Missions"
+          _statusBanner.value = "Deploying to ${world.title} (${resolvedMode.uppercase()}) for World Missions"
           _activeTab.value = OsWorkspaceTab.ARENA_PLAY
         }
       }
@@ -856,15 +916,19 @@ class UniverseViewModel(
         val store = progressionStore
         store?.selectArea(targetId)
         val area = MultiverseArsenalCatalog.areaById(targetId)
+        val linkedWorld = UniverseCatalog.worldById(area.linkedWorldId)
+        val targetMode = when {
+          currentMode != null && currentMode in linkedWorld.supportedModes -> currentMode
+          targetId == "area_campaign_nexus" || targetId == "area_mended_convergence" -> "campaign"
+          else -> linkedWorld.defaultModeId
+        }
         viewModelScope.launch {
-          if (targetId == "area_campaign_nexus" || targetId == "area_mended_convergence") {
-            repository.updateProfileSelection(
-              userId = currentUserId,
-              activeUniverseId = "campaign_origins",
-              activeMode = "campaign",
-            )
-          }
-          _statusBanner.value = "Deploying to ${area.name} for Arena Missions"
+          repository.updateProfileSelection(
+            userId = currentUserId,
+            activeUniverseId = linkedWorld.id,
+            activeMode = targetMode,
+          )
+          _statusBanner.value = "Deploying to ${area.name} (${linkedWorld.title}) for Arena Missions"
           _activeTab.value = OsWorkspaceTab.ARENA_PLAY
         }
       }
@@ -971,8 +1035,19 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     store.selectArea(areaId)
     val spec = MultiverseArsenalCatalog.areaById(areaId)
+    val linkedWorld = UniverseCatalog.worldById(spec.linkedWorldId)
+    val currentProfile = (uiState.value as? UniverseUiState.Ready)?.profile
+    val currentMode = currentProfile?.activeMode ?: linkedWorld.defaultModeId
+    val resolvedMode = if (currentMode in linkedWorld.supportedModes) currentMode else linkedWorld.defaultModeId
+    viewModelScope.launch {
+      repository.updateProfileSelection(
+        userId = currentUserId,
+        activeUniverseId = linkedWorld.id,
+        activeMode = resolvedMode,
+      )
+    }
     val st = progressionState.value.areaState(areaId)
-    _statusBanner.value = "Area Selected: ${spec.name} (${st.ageYears} yrs • ${st.currentEra.label})"
+    _statusBanner.value = "Area Selected: ${spec.name} • ${linkedWorld.title} (${st.ageYears} yrs • ${st.currentEra.label})"
   }
 
   fun upgradeAreaFeature(areaId: String, feature: String, currentBlueEssence: Long) {
@@ -1065,10 +1140,11 @@ class UniverseViewModel(
     val prog = progressionState.value
     val passMult = prog.activePassVersion.essenceMultiplier
     val clanMult = prog.clan.essencePerkMultiplier
+    val ngAndColMult = prog.combinedGameplayRewardMultiplier(universeId)
     val rules = prog.effectiveMatchRules()
     val mutatorEssenceMult = (if (rules.doubleBlueEssence) 2.0f else 1.0f) * (if (rules.friendlyFire) 1.25f else 1.0f)
     val baseEssence = (score / 10L).coerceAtLeast(150L) + if (extracted) 350L else 0L
-    val essenceEarned = (baseEssence * passMult * clanMult * mutatorEssenceMult).toLong()
+    val essenceEarned = (baseEssence * passMult * clanMult * mutatorEssenceMult * ngAndColMult).toLong()
     viewModelScope.launch {
       val res =
         repository.recordMatchResult(

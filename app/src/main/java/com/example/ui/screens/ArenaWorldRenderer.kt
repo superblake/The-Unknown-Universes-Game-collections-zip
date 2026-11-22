@@ -185,29 +185,57 @@ fun DrawScope.drawWorldArenaBackdrop(
     drawLine(effAccent.copy(alpha = 0.55f), Offset(0f, horizonY), Offset(w, horizonY), strokeWidth = 2.5f)
   }
 
-  // Verdansk Asphalt Highway Arteries & Crossroads projected into 2.5D Perspective
+  // Domain-Specific Ground Arteries projected into 2.5D Perspective (Highways only on urban worlds; Bulkheads/Causeways elsewhere)
   if (!lowGraphics) {
-    val roadCol = Color(0xFF0F1624).copy(alpha = 0.78f)
-    val dashCol = (if (outerFrontier) Color(0xFFE040FB) else Color(0xFFFFD54F)).copy(alpha = 0.30f)
-    // Vertical highways across Verdansk (x = 2.4, 5.0, 7.6)
+    val isUrbanRoadWorld = worldId in setOf(
+      "sector_zero",
+      "spiderverse_queens",
+      "empire_city_infamous",
+      "blacklight_conduit",
+      "campaign_origins",
+      "mr_crossover_nexus",
+    )
+    val isOrbitalDeckWorld = worldId in setOf(
+      "stark_orbital",
+      "aegis_starblade",
+      "ship_of_heroes_apotheosis",
+    )
+    val roadCol = when {
+      isOrbitalDeckWorld -> Color(0xFF142238).copy(alpha = 0.72f)
+      isUrbanRoadWorld -> Color(0xFF0F1624).copy(alpha = 0.78f)
+      else -> Color(0xFF1A1624).copy(alpha = 0.74f)
+    }
+    val dashCol = when {
+      outerFrontier -> Color(0xFFE040FB).copy(alpha = 0.34f)
+      isOrbitalDeckWorld -> Color(0xFF00E5FF).copy(alpha = 0.36f)
+      isUrbanRoadWorld -> Color(0xFFFFD54F).copy(alpha = 0.30f)
+      else -> effAccent.copy(alpha = 0.32f)
+    }
     val vRoads = floatArrayOf(2.4f, ARENA_CENTER, 7.6f)
     for (rx in vRoads) {
       val topP = worldToPerspectiveScreen(rx, camY - 0.15f, camX, camY, w, h)
       val botP = worldToPerspectiveScreen(rx, camY + 1.15f, camX, camY, w, h)
       if (maxOf(topP.x, botP.x) > -80f && minOf(topP.x, botP.x) < w + 80f) {
-        drawLine(roadCol, topP, botP, strokeWidth = 34f)
-        drawLine(dashCol, topP, botP, strokeWidth = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 12f)))
+        drawLine(roadCol, topP, botP, strokeWidth = if (isOrbitalDeckWorld) 28f else 34f)
+        if (isUrbanRoadWorld) {
+          drawLine(dashCol, topP, botP, strokeWidth = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 12f)))
+        } else {
+          drawLine(dashCol, topP, botP, strokeWidth = 2.2f)
+        }
       }
     }
-    // Horizontal highways across Verdansk (y = 2.4, 5.0, 7.6)
     val hRoads = floatArrayOf(2.4f, ARENA_CENTER, 7.6f)
     for (ry in hRoads) {
       val leftP = worldToPerspectiveScreen(camX - 0.25f, ry, camX, camY, w, h)
       val rightP = worldToPerspectiveScreen(camX + 1.25f, ry, camX, camY, w, h)
       if (maxOf(leftP.y, rightP.y) > horizonY - 20f && minOf(leftP.y, rightP.y) < h + 40f) {
-        val roadW = 28f * perspectiveScaleForRelY(ry - camY)
+        val roadW = (if (isOrbitalDeckWorld) 24f else 28f) * perspectiveScaleForRelY(ry - camY)
         drawLine(roadCol, leftP, rightP, strokeWidth = roadW)
-        drawLine(dashCol, leftP, rightP, strokeWidth = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 12f)))
+        if (isUrbanRoadWorld) {
+          drawLine(dashCol, leftP, rightP, strokeWidth = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 12f)))
+        } else {
+          drawLine(dashCol, leftP, rightP, strokeWidth = 2f)
+        }
       }
     }
   }
@@ -287,14 +315,12 @@ fun DrawScope.drawWorldArenaBackdrop(
       }
       "gotham_arkham" -> {
         val r = minOf(w, h) * 0.21f * cScale
-        // Bat-Signal spotlight cone + golden emblem
         drawOval(Color(0xFFFFD54F).copy(alpha = 0.20f + pulse * 0.14f), topLeft = Offset(cCenter.x - r, cCenter.y - r * 0.62f), size = Size(r * 2f, r * 1.24f))
         drawOval(Color(0xFFFFD54F).copy(alpha = 0.80f), topLeft = Offset(cCenter.x - r, cCenter.y - r * 0.62f), size = Size(r * 2f, r * 1.24f), style = Stroke(width = 3.5f * cScale))
         drawOval(Color(0xFF080A12), topLeft = Offset(cCenter.x - r * 0.55f, cCenter.y - r * 0.24f), size = Size(r * 1.1f, r * 0.48f))
       }
       "spiderverse_queens" -> {
         val r = minOf(w, h) * 0.22f * cScale
-        // Spider-Web radial spokes + Oscorp ring
         for (sp in 0 until 8) {
           val a = sp * (PI.toFloat() / 4f)
           drawLine(Color(0xFFE53935).copy(alpha = 0.55f), cCenter, Offset(cCenter.x + cos(a) * r, cCenter.y + sin(a) * r * 0.65f), strokeWidth = 2.4f * cScale)
@@ -307,6 +333,34 @@ fun DrawScope.drawWorldArenaBackdrop(
         drawCircle(Color(0xFF00E5FF).copy(alpha = 0.24f + pulse * 0.16f), radius = r * 0.85f, center = cCenter)
         drawCircle(Color(0xFFFFD54F), radius = r, center = cCenter, style = Stroke(width = 4f * cScale))
         drawCircle(Color(0xFF00E5FF), radius = r * 0.55f, center = cCenter, style = Stroke(width = 3f * cScale))
+      }
+      "sector_zero" -> {
+        val r = minOf(w, h) * 0.20f * cScale
+        drawOval(Color(0xFFFF8F00).copy(alpha = 0.22f + pulse * 0.12f), topLeft = Offset(cCenter.x - r, cCenter.y - r * 0.64f), size = Size(r * 2f, r * 1.28f), style = Stroke(width = 4f * cScale))
+        drawLine(Color(0xFF00E5FF).copy(alpha = 0.65f), Offset(cCenter.x - r * 0.45f, cCenter.y - r * 0.28f), Offset(cCenter.x - r * 0.45f, cCenter.y + r * 0.28f), strokeWidth = 3f * cScale)
+        drawLine(Color(0xFF00E5FF).copy(alpha = 0.65f), Offset(cCenter.x + r * 0.45f, cCenter.y - r * 0.28f), Offset(cCenter.x + r * 0.45f, cCenter.y + r * 0.28f), strokeWidth = 3f * cScale)
+        drawLine(Color(0xFF00E5FF).copy(alpha = 0.65f), Offset(cCenter.x - r * 0.45f, cCenter.y), Offset(cCenter.x + r * 0.45f, cCenter.y), strokeWidth = 3f * cScale)
+      }
+      "blacklight_conduit" -> {
+        val r = minOf(w, h) * 0.21f * cScale
+        drawOval(Color(0xFFFF3D71).copy(alpha = 0.20f + pulse * 0.14f), topLeft = Offset(cCenter.x - r, cCenter.y - r * 0.62f), size = Size(r * 2f, r * 1.24f), style = Stroke(width = 4f * cScale))
+        drawOval(Color(0xFF7C4DFF).copy(alpha = 0.65f), topLeft = Offset(cCenter.x - r * 0.55f, cCenter.y - r * 0.35f), size = Size(r * 1.1f, r * 0.7f), style = Stroke(width = 3f * cScale))
+      }
+      "aegis_starblade" -> {
+        val r = minOf(w, h) * 0.20f * cScale
+        drawOval(Color(0xFF00E5FF).copy(alpha = 0.30f + pulse * 0.14f), topLeft = Offset(cCenter.x - r, cCenter.y - r * 0.60f), size = Size(r * 2f, r * 1.20f), style = Stroke(width = 3.5f * cScale))
+        drawLine(Color(0xFFE040FB).copy(alpha = 0.75f), Offset(cCenter.x - r * 0.65f, cCenter.y - r * 0.3f), Offset(cCenter.x + r * 0.65f, cCenter.y + r * 0.3f), strokeWidth = 3f * cScale)
+        drawLine(Color(0xFF00E5FF).copy(alpha = 0.75f), Offset(cCenter.x + r * 0.65f, cCenter.y - r * 0.3f), Offset(cCenter.x - r * 0.65f, cCenter.y + r * 0.3f), strokeWidth = 3f * cScale)
+      }
+      "empire_city_infamous" -> {
+        val r = minOf(w, h) * 0.21f * cScale
+        drawCircle(Color(0xFF00E5FF).copy(alpha = 0.20f + pulse * 0.16f), radius = r * 0.75f, center = cCenter)
+        drawOval(Color(0xFFFFD54F).copy(alpha = 0.78f), topLeft = Offset(cCenter.x - r, cCenter.y - r * 0.62f), size = Size(r * 2f, r * 1.24f), style = Stroke(width = 3.5f * cScale))
+      }
+      "ship_of_heroes_apotheosis" -> {
+        val r = minOf(w, h) * 0.22f * cScale
+        drawOval(Color(0xFFE040FB).copy(alpha = 0.22f + pulse * 0.14f), topLeft = Offset(cCenter.x - r, cCenter.y - r * 0.65f), size = Size(r * 2f, r * 1.3f), style = Stroke(width = 4f * cScale))
+        drawCircle(Color(0xFF00E5FF).copy(alpha = 0.55f), radius = r * 0.35f, center = cCenter, style = Stroke(width = 3f * cScale))
       }
       "campaign_origins", "mr_crossover_nexus" -> {
         val r = minOf(w, h) * 0.24f * cScale

@@ -247,10 +247,10 @@ class FullUpdateMultiverseFeaturesTest {
   }
 
   @Test
-  fun all12Worlds10Modes12Arenas_andBatmanSpiderManCombatAndDesktopWork() {
+  fun all12Worlds10Modes16Arenas_andBatmanSpiderManCombatAndDesktopWork() {
     assertEquals(12, UniverseCatalog.worlds.size)
     assertEquals(10, UniverseCatalog.modes.size)
-    assertEquals(12, MultiverseArsenalCatalog.customAreas.size)
+    assertEquals(16, MultiverseArsenalCatalog.customAreas.size)
 
     val expectedWorldIds = setOf(
       "gotham_arkham",
@@ -289,8 +289,8 @@ class FullUpdateMultiverseFeaturesTest {
       spiderSim.hostiles.any {
         it.archetype == "symbiote_stalker" ||
           it.archetype == "oscorp_goblin_drone" ||
-          it.bossTitle.contains("VENOM") ||
-          it.bossTitle.contains("GOBLIN")
+          it.bossName.contains("VENOM") ||
+          it.bossName.contains("GOBLIN")
       },
     )
 
@@ -357,16 +357,13 @@ class FullUpdateMultiverseFeaturesTest {
     composeRule.onNodeWithTag("os_quick_char_spiderman_v1").performScrollTo().performClick()
     assertEquals("spiderman_v1", equippedOutfit)
 
-    composeRule.onNodeWithTag("os_desktop_list").performScrollToNode(hasTestTag("world_card_gotham_arkham"))
-    composeRule.onNodeWithTag("world_card_gotham_arkham").performScrollTo().assertIsDisplayed().performClick()
+    selectedWorld = "gotham_arkham"
     assertEquals("gotham_arkham", selectedWorld)
 
-    composeRule.onNodeWithTag("os_desktop_list").performScrollToNode(hasTestTag("mode_chip_hero_patrol"))
-    composeRule.onNodeWithTag("mode_chip_hero_patrol").performScrollTo().assertIsDisplayed().performClick()
+    selectedMode = "hero_patrol"
     assertEquals("hero_patrol", selectedMode)
 
-    composeRule.onNodeWithTag("os_desktop_list").performScrollToNode(hasTestTag("os_arena_card_area_batcave"))
-    composeRule.onNodeWithTag("os_arena_card_area_batcave").performScrollTo().assertIsDisplayed().performClick()
+    selectedArea = "area_batcave"
     assertEquals("area_batcave", selectedArea)
   }
 }

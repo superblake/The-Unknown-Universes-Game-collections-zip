@@ -1,7 +1,9 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -45,7 +48,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -58,6 +64,7 @@ import com.example.data.model.BattlePassVersion
 import com.example.data.model.BlastCoreColor
 import com.example.data.model.ChallengeState
 import com.example.data.model.CharacterCustomization
+import com.example.data.model.CollectionDifficulty
 import com.example.data.model.EquipmentSlotType
 import com.example.data.model.GearSlot
 import com.example.data.model.LevelCustomization
@@ -162,6 +169,9 @@ fun ArmoryScreen(
   onUpgradeOutfitRarity: (String) -> Unit = {},
   onRecruitCharacterShard: (String?) -> Unit = {},
   onHuntHeroFrontier: () -> Unit = {},
+  onSelectNgPlusTier: (Int) -> Unit = {},
+  onCompleteNgPlusRun: () -> Unit = {},
+  onSelectCollectionDifficulty: (String, CollectionDifficulty) -> Unit = { _, _ -> },
 ) {
   val categories = listOf("all", "perk", "power", "upgrade", "consumable")
   var selectedSection by remember { mutableStateOf(ArmorySection.MODS) }
@@ -234,7 +244,7 @@ fun ArmoryScreen(
             onClick = { selectedSection = sections[(curIdx - 1 + sections.size) % sections.size] },
             shape = RoundedCornerShape(10.dp),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-            modifier = Modifier.height(40.dp).testTag("armory_prev_section_btn"),
+            modifier = Modifier.height(48.dp).testTag("armory_prev_section_btn"),
           ) {
             Text("< Prev", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
           }
@@ -248,7 +258,7 @@ fun ArmoryScreen(
             onClick = { selectedSection = sections[(curIdx + 1) % sections.size] },
             shape = RoundedCornerShape(10.dp),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-            modifier = Modifier.height(40.dp).testTag("armory_next_section_btn"),
+            modifier = Modifier.height(48.dp).testTag("armory_next_section_btn"),
           ) {
             Text("Next >", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
           }
@@ -286,7 +296,7 @@ fun ArmoryScreen(
                 selected = selectedSection == sec,
                 onClick = { selectedSection = sec },
                 label = { Text(sec.label, fontWeight = if (selectedSection == sec) FontWeight.Bold else FontWeight.Medium) },
-                modifier = Modifier.height(40.dp).testTag("armory_tab_${sec.tag}"),
+                modifier = Modifier.height(48.dp).testTag("armory_tab_${sec.tag}"),
               )
             }
           }
@@ -296,7 +306,7 @@ fun ArmoryScreen(
                 selected = selectedSection == sec,
                 onClick = { selectedSection = sec },
                 label = { Text(sec.label, fontWeight = if (selectedSection == sec) FontWeight.Bold else FontWeight.Medium) },
-                modifier = Modifier.height(40.dp).testTag("armory_tab_${sec.tag}"),
+                modifier = Modifier.height(48.dp).testTag("armory_tab_${sec.tag}"),
               )
             }
           }
@@ -329,7 +339,7 @@ fun ArmoryScreen(
                         }
                       )
                     },
-                    modifier = Modifier.testTag("armory_filter_$cat"),
+                    modifier = Modifier.heightIn(min = 48.dp).testTag("armory_filter_$cat"),
                   )
                 }
               }
@@ -427,6 +437,10 @@ fun ArmoryScreen(
         ArmorySection.LEVELS -> LevelCustomizationTab(
           progression = progression,
           onUpdateLevelCustom = onUpdateLevelCustom,
+          activeWorldId = activeWorldId,
+          onSelectNgPlusTier = onSelectNgPlusTier,
+          onCompleteNgPlusRun = onCompleteNgPlusRun,
+          onSelectCollectionDifficulty = onSelectCollectionDifficulty,
         )
 
         ArmorySection.MISSIONS -> MissionsTab(
@@ -500,6 +514,7 @@ fun ArmoryScreen(
   }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ArmoryModuleCard(
   item: ArmoryItem,
@@ -510,6 +525,7 @@ private fun ArmoryModuleCard(
   onUpgradeStar: () -> Unit,
   onDelete: (() -> Unit)?,
 ) {
+  val haptic = LocalHapticFeedback.current
   val accent = parseHexSafe(item.accentColorHex, MaterialTheme.colorScheme.primary)
   val effectiveMaxTier = maxOf(item.maxTier, 25L)
   val upgradeCost = UpgradeCosts.armoryModTier(item.tier.toInt())
@@ -523,6 +539,14 @@ private fun ArmoryModuleCard(
     shape = RoundedCornerShape(16.dp),
     color = MaterialTheme.colorScheme.surface,
     modifier = Modifier.fillMaxWidth()
+      .clip(RoundedCornerShape(16.dp))
+      .combinedClickable(
+        onClick = onToggleEquip,
+        onLongClick = {
+          haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+          onToggleEquip()
+        },
+      )
       .border(
         width = if (item.equipped) 1.5.dp else 1.dp,
         color = if (item.equipped) accent else MaterialTheme.colorScheme.outline,
@@ -561,13 +585,13 @@ private fun ArmoryModuleCard(
 
         Row(verticalAlignment = Alignment.CenterVertically) {
           if (onDelete != null) {
-            IconButton(onClick = onDelete) {
+            IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
               Icon(Icons.Filled.Delete, contentDescription = "Delete custom module", tint = MaterialTheme.colorScheme.error)
             }
           }
           IconButton(
             onClick = onToggleEquip,
-            modifier = Modifier.testTag("equip_btn_${item.id}"),
+            modifier = Modifier.size(48.dp).testTag("equip_btn_${item.id}"),
           ) {
             Icon(
               imageVector = if (item.equipped) Icons.Filled.CheckCircle else AppIcons.RadioButtonUnchecked,
@@ -606,7 +630,7 @@ private fun ArmoryModuleCard(
             onClick = onUpgrade,
             enabled = canUpgrade,
             shape = RoundedCornerShape(10.dp),
-            modifier = Modifier.testTag("upgrade_btn_${item.id}"),
+            modifier = Modifier.heightIn(min = 48.dp).testTag("upgrade_btn_${item.id}"),
           ) {
             Text(if (item.tier >= effectiveMaxTier) "MAX" else "$upgradeCost B")
           }
@@ -614,7 +638,7 @@ private fun ArmoryModuleCard(
             onClick = onUpgradeStar,
             enabled = canUpgradeStar,
             shape = RoundedCornerShape(10.dp),
-            modifier = Modifier.testTag("upgrade_star_btn_${item.id}"),
+            modifier = Modifier.heightIn(min = 48.dp).testTag("upgrade_star_btn_${item.id}"),
           ) {
             Text(if (starLevel >= StarRankMeta.MAX_STARS) "10★" else "★+1 ($starCost B)")
           }

@@ -137,6 +137,158 @@ enum class WorldDifficultyTier(
   }
 }
 
+enum class CollectionDifficulty(
+  val id: String,
+  val rank: Int,
+  val label: String,
+  val shortTag: String,
+  val summary: String,
+  val enemyHpScale: Float,
+  val enemySpeedScale: Float,
+  val rewardMultiplier: Float,
+  val accentHex: Long,
+) {
+  STORY(
+    id = "col_story",
+    rank = 1,
+    label = "I: Story Explorer",
+    shortTag = "I",
+    summary = "Story Collection Balance • 0.85x Enemy HP • 0.95x Baseline Rewards",
+    enemyHpScale = 0.85f,
+    enemySpeedScale = 0.92f,
+    rewardMultiplier = 0.95f,
+    accentHex = 0xFF40C4FF,
+  ),
+  OPERATIVE(
+    id = "col_operative",
+    rank = 2,
+    label = "II: Tactical Operative",
+    shortTag = "II",
+    summary = "Standard Collection Balance • 1.00x Enemy HP • 1.00x Rewards",
+    enemyHpScale = 1.00f,
+    enemySpeedScale = 1.00f,
+    rewardMultiplier = 1.00f,
+    accentHex = 0xFF00E676,
+  ),
+  VANGUARD(
+    id = "col_vanguard",
+    rank = 3,
+    label = "III: Vanguard Hunter",
+    shortTag = "III",
+    summary = "Aggressive Collection Foes • 1.45x HP • 1.50x Rewards",
+    enemyHpScale = 1.45f,
+    enemySpeedScale = 1.12f,
+    rewardMultiplier = 1.50f,
+    accentHex = 0xFFFFD54F,
+  ),
+  LEGEND(
+    id = "col_legend",
+    rank = 4,
+    label = "IV: Multiverse Legend",
+    shortTag = "IV",
+    summary = "Elite Collection Assault • 2.15x HP • 2.25x Rewards",
+    enemyHpScale = 2.15f,
+    enemySpeedScale = 1.24f,
+    rewardMultiplier = 2.25f,
+    accentHex = 0xFFFF9100,
+  ),
+  APOTHEOSIS(
+    id = "col_apotheosis",
+    rank = 5,
+    label = "V: Apotheosis Sovereign",
+    shortTag = "V",
+    summary = "Peak Collection Crucible • 3.10x HP • 3.25x Rewards",
+    enemyHpScale = 3.10f,
+    enemySpeedScale = 1.38f,
+    rewardMultiplier = 3.25f,
+    accentHex = 0xFFFF3D71,
+  );
+
+  companion object {
+    fun fromId(id: String): CollectionDifficulty =
+      entries.firstOrNull { it.id == id } ?: OPERATIVE
+  }
+}
+
+enum class NewGamePlusVersion(
+  val tier: Int,
+  val label: String,
+  val shortTag: String,
+  val subtitle: String,
+  val rewardMultiplier: Float,
+  val enemyHpScale: Float,
+  val enemySpeedScale: Float,
+  val accentHex: Long,
+) {
+  STANDARD(
+    tier = 0,
+    label = "Standard Run",
+    shortTag = "STD",
+    subtitle = "Initial timeline run • Complete a run to unlock New Game+",
+    rewardMultiplier = 1.00f,
+    enemyHpScale = 1.00f,
+    enemySpeedScale = 1.00f,
+    accentHex = 0xFF00E5FF,
+  ),
+  NG_PLUS_1(
+    tier = 1,
+    label = "NG+ I: Shattered Echo",
+    shortTag = "NG+1",
+    subtitle = "New Game+ Base • +75% base rewards & higher Essence drops",
+    rewardMultiplier = 1.75f,
+    enemyHpScale = 1.40f,
+    enemySpeedScale = 1.08f,
+    accentHex = 0xFF00E676,
+  ),
+  NG_PLUS_2(
+    tier = 2,
+    label = "NG+ II: Ascendant Surge",
+    shortTag = "NG+2",
+    subtitle = "Post-Completion Version #1 • 2.60x rewards & elite surges",
+    rewardMultiplier = 2.60f,
+    enemyHpScale = 1.90f,
+    enemySpeedScale = 1.16f,
+    accentHex = 0xFF7C4DFF,
+  ),
+  NG_PLUS_3(
+    tier = 3,
+    label = "NG+ III: Paradox Rift",
+    shortTag = "NG+3",
+    subtitle = "Post-Completion Version #2 • 3.60x rewards & dense bosses",
+    rewardMultiplier = 3.60f,
+    enemyHpScale = 2.50f,
+    enemySpeedScale = 1.24f,
+    accentHex = 0xFFFFAB40,
+  ),
+  NG_PLUS_4(
+    tier = 4,
+    label = "NG+ IV: Omega Protocol",
+    shortTag = "NG+4",
+    subtitle = "Post-Completion Version #3 • 4.85x rewards & apex hunters",
+    rewardMultiplier = 4.85f,
+    enemyHpScale = 3.25f,
+    enemySpeedScale = 1.32f,
+    accentHex = 0xFFFF3D71,
+  ),
+  NG_PLUS_5(
+    tier = 5,
+    label = "NG+ V: Eternal Sovereign",
+    shortTag = "NG+5",
+    subtitle = "Post-Completion Version #4 • 6.50x rewards & mythic mayhem",
+    rewardMultiplier = 6.50f,
+    enemyHpScale = 4.15f,
+    enemySpeedScale = 1.40f,
+    accentHex = 0xFFFFD54F,
+  );
+
+  companion object {
+    const val MAX_NG_PLUS_TIER: Int = 5
+
+    fun fromTier(tier: Int): NewGamePlusVersion =
+      entries.firstOrNull { it.tier == tier.coerceIn(0, MAX_NG_PLUS_TIER) } ?: STANDARD
+  }
+}
+
 @Immutable
 data class PowerLightSummary(
   val powerLevel: Int,
@@ -655,12 +807,29 @@ data class OperatorProgressionState(
   val outfitShardMap: Map<String, Long> = emptyMap(),
   val discoveredCatWorlds: Set<String> = emptySet(),
   val lootCratesOpenedTotal: Long = 0L,
+  val activeNgPlusTier: Int = 0,
+  val unlockedNgPlusTier: Int = 0,
+  val ngPlusCompletions: Int = 0,
+  val worldCollectionDifficultyMap: Map<String, String> = emptyMap(),
 ) {
   val playerLevel: Int
     get() = ProgressionCatalog.levelForXp(playerXp)
 
   val playerRankTitle: String
     get() = ProgressionCatalog.rankTitleForLevel(playerLevel, playerPrestige)
+
+  val ngPlusSpec: NewGamePlusVersion
+    get() = NewGamePlusVersion.fromTier(activeNgPlusTier)
+
+  val ngPlusRewardMultiplier: Float
+    get() = if (activeNgPlusTier <= 0 && ngPlusCompletions <= 0) 1.0f
+    else ngPlusSpec.rewardMultiplier * (1f + ngPlusCompletions * 0.25f)
+
+  fun collectionDifficulty(worldId: String): CollectionDifficulty =
+    CollectionDifficulty.fromId(worldCollectionDifficultyMap[worldId] ?: CollectionDifficulty.OPERATIVE.id)
+
+  fun combinedGameplayRewardMultiplier(worldId: String): Float =
+    ngPlusRewardMultiplier * collectionDifficulty(worldId).rewardMultiplier
 
   fun weaponXp(weaponId: String): Long = weaponXpMap[weaponId] ?: 0L
 
@@ -1523,6 +1692,11 @@ object UpgradeCosts {
   fun perkDrink(rank: Int): Long = 250L + (rank * 200L)
   fun vacuumBot(tier: Int): Long = 220L + (tier * 160L)
   fun vacuumBotStar(stars: Int): Long = stars * 400L
+
+  /**
+   * Embedded No-APK Play Guide for running exported collections without an Android APK.
+   */
+  const val NO_APK_PLAY_GUIDE: String = UniverseCatalog.NO_APK_PLAY_GUIDE
 }
 
 

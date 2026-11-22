@@ -20,6 +20,7 @@ data class SaveDataBundle(
   val armoryItems: List<ArmoryItem>,
   val customRigs: List<RigAsset>,
   val matchLogs: List<MatchRecord>,
+  val progressionJson: JSONObject? = null,
 )
 
 data class SaveBundlePreview(
@@ -47,6 +48,7 @@ object SaveDataSerializer {
     rigs: List<RigAsset>,
     matchLogs: List<MatchRecord>,
     nowMillis: Long = System.currentTimeMillis(),
+    progressionJson: JSONObject? = null,
   ): String {
     val root = JSONObject()
     root.put("format", FORMAT_MARKER)
@@ -132,6 +134,9 @@ object SaveDataSerializer {
       )
     }
     root.put("matchLogs", logsArr)
+    if (progressionJson != null) {
+      root.put("progression", progressionJson)
+    }
     root.put(
       "integritySha256",
       AppSecurityManager.computeSaveBundleSeal(
@@ -326,6 +331,8 @@ object SaveDataSerializer {
       val hasRecognizedStructure = profileObj != null || root.has("format") || armoryItems.isNotEmpty() || rigs.isNotEmpty()
       require(hasRecognizedStructure) { "JSON does not contain Unknown Universes save fields." }
 
+      val progressionJson = root.optJSONObject("progression")
+
       val bundle = SaveDataBundle(
         schemaVersion = root.optInt("schemaVersion", SCHEMA_VERSION),
         exportedAtMillis = exportedAt,
@@ -334,6 +341,7 @@ object SaveDataSerializer {
         armoryItems = armoryItems,
         customRigs = rigs,
         matchLogs = matchLogs,
+        progressionJson = progressionJson,
       )
       val integrityStatus = AppSecurityManager.verifySaveBundleSeal(
         seal = root.optString("integritySha256").takeIf { it.isNotBlank() },

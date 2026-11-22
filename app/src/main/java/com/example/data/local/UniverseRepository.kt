@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.onEach
+import org.json.JSONObject
 import java.util.UUID
 
 sealed interface CloudSyncState {
@@ -441,14 +442,17 @@ class UniverseRepository(
     }
   }
 
-  suspend fun exportSaveDataJson(userId: String): Result<String> {
+  suspend fun exportSaveDataJson(
+    userId: String,
+    progressionJson: JSONObject? = null,
+  ): Result<String> {
     return try {
       val profile = dao.getProfileOnce(userId)
         ?: return Result.failure(IllegalStateException("No save profile loaded yet"))
       val armory = dao.getArmoryItemsOnce(userId)
       val rigs = dao.getRigsOnce(userId)
       val logs = dao.getMatchLogsOnce(userId)
-      Result.success(SaveDataSerializer.exportSaveJson(profile, armory, rigs, logs))
+      Result.success(SaveDataSerializer.exportSaveJson(profile, armory, rigs, logs, progressionJson = progressionJson))
     } catch (e: CancellationException) {
       throw e
     } catch (e: Exception) {

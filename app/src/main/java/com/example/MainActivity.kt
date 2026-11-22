@@ -612,6 +612,9 @@ fun UnknownOsShell(
                     viewModel.selectCustomArea("area_hero_frontier")
                     viewModel.selectTab(OsWorkspaceTab.ARENA_PLAY)
                   },
+                  onSelectCollectionDifficulty = viewModel::selectWorldCollectionDifficulty,
+                  onSelectNgPlusTier = viewModel::selectNewGamePlusTier,
+                  onCompleteNgPlusRun = viewModel::completeNewGamePlusRun,
                   onSignOut = onLockSession,
                 )
 
@@ -732,6 +735,9 @@ fun UnknownOsShell(
                     viewModel.selectCustomArea("area_hero_frontier")
                     viewModel.selectTab(OsWorkspaceTab.ARENA_PLAY)
                   },
+                  onSelectNgPlusTier = viewModel::selectNewGamePlusTier,
+                  onCompleteNgPlusRun = viewModel::completeNewGamePlusRun,
+                  onSelectCollectionDifficulty = viewModel::selectWorldCollectionDifficulty,
                 )
 
                 OsWorkspaceTab.MEDIA_VAULT -> MediaVaultScreen(

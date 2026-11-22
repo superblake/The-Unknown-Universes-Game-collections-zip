@@ -167,6 +167,7 @@ object PortablePackageGenerator {
   <button class="nav-btn" onclick="switchSection('chars',this)">Characters &amp; Rarity (${com.example.data.model.MultiverseArsenalCatalog.outfits.size})</button>
   <button class="nav-btn" onclick="switchSection('weapons',this)">Weapons &amp; Wonder (${com.example.data.model.ProgressionCatalog.weapons.size + com.example.data.model.WonderWeaponKind.entries.size})</button>
   <button class="nav-btn" onclick="switchSection('rigs',this)">Armory &amp; Rig</button>
+  <button class="nav-btn" onclick="switchSection('guide',this)" style="color:#00e676; border-color:#00e676;">No-APK Play Guide</button>
 </nav>
 <main>
   <div id="sec-arena" class="section active">
@@ -194,6 +195,39 @@ object PortablePackageGenerator {
   <div id="sec-chars" class="section"><div id="charsGrid" class="grid"></div></div>
   <div id="sec-weapons" class="section"><div id="weaponsGrid" class="grid"></div></div>
   <div id="sec-rigs" class="section"><div id="rigsGrid" class="grid"></div></div>
+  <div id="sec-guide" class="section">
+    <div style="padding: 24px; max-width: 800px; margin: 0 auto; line-height: 1.6;">
+      <h2 style="color: var(--accent);">How to Play Game Collections Without an APK (No-APK Play Guide)</h2>
+      <p>This self-contained HTML5 game collection package is designed to run instantly across any device or platform without requiring an Android APK or installation.</p>
+      
+      <h3 style="color: #ffd54f; margin-top: 18px;">1. Instant Browser Play (PC, Mac, Linux, iOS, Android)</h3>
+      <ul>
+        <li>Save or export this game collection file as <strong>index.html</strong>.</li>
+        <li>Double-click the file or drag and drop it into any modern web browser (Google Chrome, Apple Safari, Microsoft Edge, Mozilla Firefox).</li>
+        <li>The game runs fully offline with zero server dependencies, supporting canvas rendering, touch controls, and audio.</li>
+      </ul>
+
+      <h3 style="color: #ffd54f; margin-top: 18px;">2. Hosting on GitHub Pages or Vercel (Free Cloud Link)</h3>
+      <ul>
+        <li>Create a new public repository on GitHub (e.g., <code>my-game-collections</code>).</li>
+        <li>Upload <code>index.html</code> to the root of the repository.</li>
+        <li>Go to repository <strong>Settings > Pages</strong>, select <code>main/root</code>, and save.</li>
+        <li>Share your live URL with friends so they can play instantly in their browser without downloading anything!</li>
+      </ul>
+
+      <h3 style="color: #ffd54f; margin-top: 18px;">3. Standalone PC App (.hta) or PWA</h3>
+      <ul>
+        <li><strong>Windows HTA:</strong> Rename <code>index.html</code> to <code>game.hta</code> to run it as a standalone native Windows desktop application.</li>
+        <li><strong>Progressive Web App:</strong> Open the HTML page in Chrome/Edge, click the menu (⋮), and select <strong>"Install The Unknown Universes"</strong> to add it to your desktop or home screen like a native app.</li>
+      </ul>
+
+      <h3 style="color: #ffd54f; margin-top: 18px;">4. Controller Support</h3>
+      <ul>
+        <li>Connect any Bluetooth or USB gamepad (Xbox Series X, PlayStation DualSense, Nintendo Switch Pro).</li>
+        <li>The W3C Gamepad API automatically detects buttons and joysticks for authentic console-grade control.</li>
+      </ul>
+    </div>
+  </div>
 </main>
 <script>
 const WORLDS = $worldsJson;

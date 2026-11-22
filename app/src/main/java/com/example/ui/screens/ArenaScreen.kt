@@ -2,8 +2,10 @@ package com.example.ui.screens
 
 import android.view.KeyEvent
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -18,6 +20,7 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -37,6 +40,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -54,9 +58,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -136,12 +138,8 @@ fun ArenaScreen(
   val sim = remember(
     world.id,
     mode.id,
-    loadout,
-    hasConsumable,
     progression.activeAreaId,
-    progression.privateMatchRules,
     progression.joinedMatch?.id,
-    progression.lobbyConfig,
   ) {
     ArenaSimState(
       world = world,
@@ -153,6 +151,32 @@ fun ArenaScreen(
       armoryItems = armory,
       initialBlueEssence = profile.totalEssence,
     )
+  }
+
+  LaunchedEffect(loadout) {
+    val curWeaponId = sim.equippedWeaponIds.getOrElse(sim.activeWeaponIndex) { loadout.weaponSpec.id }
+    sim.loadout = if (curWeaponId == loadout.weaponSpec.id) {
+      loadout
+    } else {
+      ArenaLoadoutStats.fromArmory(armory, Color(world.accentHex), progression, profile.totalEssence, curWeaponId)
+    }
+    sim.hudActiveWeaponName = sim.loadout.weaponSpec.name
+  }
+
+  LaunchedEffect(sim, sim.hudRunEnded) {
+    if (sim.hudRunEnded && sim.markProgressionReported()) {
+      onRecordProgression(sim.buildProgressionReport())
+    }
+  }
+
+  DisposableEffect(sim) {
+    onDispose {
+      if ((sim.hudElims > 0 || sim.hudScore > 0 || sim.buildingsExploredCount > 0 || sim.elapsedTicks > 180L) &&
+        sim.markProgressionReported()
+      ) {
+        onRecordProgression(sim.buildProgressionReport())
+      }
+    }
   }
 
   LaunchedEffect(settings) {
@@ -332,6 +356,7 @@ fun ArenaScreen(
       modifier = Modifier.fillMaxWidth().border(1.dp, palette.playerAccent.copy(alpha = 0.6f)),
     ) {
       Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        var showPlacesBar by remember { mutableStateOf(false) }
         Row(
           modifier = Modifier.fillMaxWidth(),
           horizontalArrangement = Arrangement.SpaceBetween,
@@ -359,19 +384,19 @@ fun ArenaScreen(
               val elimTarget = if (mode.id == "multiplayer") "${sim.hudElims}/25" else "${sim.hudElims}"
               val densStr = String.format(Locale.US, "%.2fx", progression.levelCustom.enemyDensityMultiplier)
               Text(
-                text = "${activeAreaSpec.name.substringBefore(" (")} • ${mode.shortTag} • PACK ${formatRoundRoman(sim.hudPackTier.toLong())} • ${sim.loadout.difficultyTier.label.uppercase()} $densStr",
+                text = "${activeAreaSpec.name.substringBefore(" (")} • ${mode.shortTag} • PACK ${formatRoundRoman(sim.hudPackTier.toLong())} • COL-${sim.collectionDifficulty.shortTag} • ${sim.ngPlusSpec.shortTag} $densStr",
                 style = MaterialTheme.typography.titleSmall,
                 color = palette.playerAccent,
                 maxLines = 1,
               )
               Text(
-                text = "PWR ${sim.loadout.powerLevel} • LT ${sim.loadout.lightLevel} • SCORE ${sim.hudScore} • ELIMS $elimTarget • SHD ${sim.hudShield}/${sim.loadout.maxShield}",
+                text = "PLACE: ${sim.hudCurrentPlaceName} • SCORE ${sim.hudScore} • ELIMS $elimTarget • SHD ${sim.hudShield}/${sim.loadout.maxShield}",
                 style = MaterialTheme.typography.labelSmall,
                 color = Color.White,
                 maxLines = 1,
               )
               Text(
-                text = "${activeOutfit.nameWithVersion} (${sim.loadout.characterRarity.label}) • LV ${sim.loadout.playerLevel} (x${String.format(Locale.US, "%.2f", sim.loadout.levelMilestoneMult)}) • ${sim.loadout.activePassVersion.title.substringBefore(":")} • ${sim.hudActiveWeaponName}",
+                text = "${activeOutfit.nameWithVersion} (${sim.loadout.characterRarity.label}) • ${sim.loadout.activePassVersion.title.substringBefore(":")} • LV ${sim.loadout.playerLevel} (RWD x${String.format(Locale.US, "%.2f", sim.gameplayRewardMultiplier)}) • ${sim.hudActiveWeaponName}",
                 style = MaterialTheme.typography.labelSmall,
                 color = Color(sim.loadout.activePassVersion.accentHex),
                 modifier = Modifier.testTag("arena_level_weapon_hud"),
@@ -414,6 +439,14 @@ fun ArenaScreen(
                 )
               }
             }
+            OutlinedButton(
+              onClick = { showPlacesBar = !showPlacesBar },
+              shape = RoundedCornerShape(10.dp),
+              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+              modifier = Modifier.height(48.dp).testTag("arena_places_toggle_btn"),
+            ) {
+              Text(if (showPlacesBar) "Hide Places" else "Places", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            }
             IconButton(
               onClick = { showTacticalLiveChatDialog = true },
               modifier = Modifier.size(48.dp).testTag("live_chat_arena_btn"),
@@ -452,6 +485,46 @@ fun ArenaScreen(
               Icon(AppIcons.Logout, contentDescription = "Exfil", modifier = Modifier.size(16.dp))
               Spacer(Modifier.width(4.dp))
               Text("Exfil")
+            }
+          }
+        }
+
+        if (showPlacesBar) {
+          val places = remember(world.id, mode.id, sim.buildings.size, sim.restCamps.size) { sim.placeDestinations() }
+          @OptIn(ExperimentalFoundationApi::class)
+          LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth().testTag("arena_places_strip"),
+          ) {
+            items(places, key = { it.id }) { dest ->
+              val isHere = sim.hudCurrentPlaceName == dest.label
+              Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = if (isHere) dest.accent.copy(alpha = 0.25f) else Color(0xFF10192D),
+                modifier = Modifier
+                  .heightIn(min = 48.dp)
+                  .clip(RoundedCornerShape(10.dp))
+                  .combinedClickable(
+                    onClick = { triggerHaptic(); sim.travelToPlace(dest.id) },
+                    onLongClick = { triggerHaptic(); sim.travelToPlace(dest.id) },
+                  )
+                  .border(
+                    width = if (isHere) 1.5.dp else 1.dp,
+                    color = if (isHere) dest.accent else dest.accent.copy(alpha = 0.45f),
+                    shape = RoundedCornerShape(10.dp),
+                  )
+                  .testTag("arena_place_${dest.id}"),
+              ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                  Text(
+                    text = "${dest.kind}: ${dest.label}",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isHere) dest.accent else Color.White,
+                    maxLines = 1,
+                  )
+                }
+              }
             }
           }
         }
@@ -779,6 +852,9 @@ fun ArenaScreen(
             dynamicGlow = glowOn,
             overrideColor = if (e.isBoss && overrideEnemyCol != null) palette.boss else overrideEnemyCol,
             scale = eScale,
+            armor = e.armor,
+            maxArmor = e.maxArmor,
+            immuneColors = e.immuneTypes.map { it.color },
           )
         }
 
@@ -959,10 +1035,30 @@ fun ArenaScreen(
           Surface(
             shape = RoundedCornerShape(10.dp),
             color = Color(0xE81A0812),
-            modifier = Modifier.border(1.5.dp, palette.hostile, RoundedCornerShape(10.dp)),
+            modifier = Modifier.border(1.5.dp, palette.hostile, RoundedCornerShape(10.dp)).testTag("arena_boss_banner"),
           ) {
             Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-              Text(bossName, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = palette.hostile)
+              Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(bossName, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = palette.hostile)
+                sim.hudBossImmuneSummary?.let { imm ->
+                  Text(
+                    text = "IMMUNE:$imm",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFFFD54F),
+                    modifier = Modifier.testTag("arena_boss_immune_badge"),
+                  )
+                }
+              }
+              if (sim.hudBossArmorRatio > 0f) {
+                Spacer(Modifier.height(3.dp))
+                LinearProgressIndicator(
+                  progress = { sim.hudBossArmorRatio },
+                  color = Color(0xFFB0BEC5),
+                  trackColor = Color(0xFF1A2538),
+                  modifier = Modifier.width(190.dp).height(4.dp).clip(RoundedCornerShape(2.dp)),
+                )
+              }
               Spacer(Modifier.height(3.dp))
               LinearProgressIndicator(
                 progress = { sim.hudBossHpRatio },
@@ -1007,7 +1103,7 @@ fun ArenaScreen(
             Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
               OutlinedButton(
                 onClick = { sim.spawnBossForWorld(sim.hudWave + 1L) },
-                modifier = Modifier.height(36.dp),
+                modifier = Modifier.height(48.dp),
                 shape = RoundedCornerShape(8.dp),
               ) { Text("+Boss", style = MaterialTheme.typography.labelSmall) }
               OutlinedButton(
@@ -1016,12 +1112,12 @@ fun ArenaScreen(
                   sim.maxPackTierReached = 25
                   sim.postCallout("SANDBOX PACK-A-TIER XXV (MULTIVERSAL) MAXED!")
                 },
-                modifier = Modifier.height(36.dp),
+                modifier = Modifier.height(48.dp),
                 shape = RoundedCornerShape(8.dp),
               ) { Text("Tier XXV", style = MaterialTheme.typography.labelSmall) }
               OutlinedButton(
                 onClick = { sim.spawnRandomWonderWeapon() },
-                modifier = Modifier.height(36.dp).testTag("sandbox_spawn_wonder_btn"),
+                modifier = Modifier.height(48.dp).testTag("sandbox_spawn_wonder_btn"),
                 shape = RoundedCornerShape(8.dp),
               ) { Text("+Wonder", style = MaterialTheme.typography.labelSmall) }
               OutlinedButton(
@@ -1034,7 +1130,7 @@ fun ArenaScreen(
                   sim.overdriveTicks = 300f
                   sim.postCallout("ALL COOLDOWNS RESET!")
                 },
-                modifier = Modifier.height(36.dp),
+                modifier = Modifier.height(48.dp),
                 shape = RoundedCornerShape(8.dp),
               ) { Text("Reset CD", style = MaterialTheme.typography.labelSmall) }
             }
@@ -1066,7 +1162,9 @@ fun ArenaScreen(
             Spacer(Modifier.height(18.dp))
             Button(
               onClick = {
-                onRecordProgression(sim.buildProgressionReport())
+                if (sim.markProgressionReported()) {
+                  onRecordProgression(sim.buildProgressionReport())
+                }
                 onSaveMatchAndExit(
                   sim.hudScore,
                   sim.hudWave,
@@ -1092,7 +1190,7 @@ fun ArenaScreen(
     ) {
       val stickDiameter = (92f * settings.joystickScale).dp
       val puckDiameter = (34f * settings.joystickScale).dp
-      val btnHeight = (44f * settings.buttonScale).dp
+      val btnHeight = (48f * settings.buttonScale).coerceAtLeast(48f).dp
 
       val stickWidget: @Composable () -> Unit = {
         Box(
@@ -1157,6 +1255,22 @@ fun ArenaScreen(
                 color = if (sim.hudOverdriveActive) palette.dropBuff else MaterialTheme.colorScheme.onSurfaceVariant,
               )
             }
+            OutlinedButton(
+              onClick = {
+                triggerHaptic()
+                sim.cycleElementalPrism()
+              },
+              shape = RoundedCornerShape(10.dp),
+              contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+              modifier = Modifier.heightIn(min = 48.dp).testTag("arena_prism_cycle_btn"),
+            ) {
+              Text(
+                text = if (sim.selectedElementOverride == null) "DMG:${sim.hudActiveDamageType.shortTag}" else "PRISM:${sim.hudActiveDamageType.shortTag}",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = sim.hudActiveDamageType.color,
+              )
+            }
             FilterChip(
               selected = sim.hudAutoFire,
               onClick = {
@@ -1164,7 +1278,7 @@ fun ArenaScreen(
                 sim.hudAutoFire = !sim.hudAutoFire
               },
               label = { Text("AUTO", style = MaterialTheme.typography.labelSmall) },
-              modifier = Modifier.height(32.dp).testTag("arena_autofire_chip"),
+              modifier = Modifier.heightIn(min = 48.dp).testTag("arena_autofire_chip"),
             )
           }
           Spacer(Modifier.height(5.dp))
@@ -1311,8 +1425,8 @@ fun ArenaScreen(
                       onSendChatMessage(ChatChannel.LIVE_MATCH, callout, null, true)
                     },
                     shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                    modifier = Modifier.height(34.dp).testTag("arena_callout_${callout.take(8).trim()}"),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    modifier = Modifier.heightIn(min = 48.dp).testTag("arena_callout_${callout.take(8).trim()}"),
                   ) {
                     Text(callout, style = MaterialTheme.typography.labelSmall)
                   }

@@ -49,6 +49,11 @@ data class RigBoneSpec(
 
 object UniverseCatalog {
 
+  private val allModeIds: List<String> = listOf(
+    "zombies", "dmz", "br", "multiplayer", "sandbox", "campaign",
+    "hero_patrol", "boss_rush", "onslaught", "conduit_ctf",
+  )
+
   val worlds: List<UniverseWorld> = listOf(
     UniverseWorld(
       id = "sector_zero",
@@ -61,7 +66,7 @@ object UniverseCatalog {
       accentHex = 0xFFFF8F00,
       secondaryHex = 0xFF00E5FF,
       bannerRes = R.drawable.img_sector_zero_banner_1794591189085,
-      supportedModes = listOf("zombies", "dmz", "br", "multiplayer"),
+      supportedModes = allModeIds,
       mapSectors = listOf("Quarantine Yard", "Sub-Zero Bunker", "Helipad Exfil", "ISAC Relay"),
       interactActionLabel = "PACK-A-TIER",
       platformBadges = "PS5/PS4/PS3 • XBOX 360/X|S • PC",
@@ -77,7 +82,7 @@ object UniverseCatalog {
       accentHex = 0xFF7C4DFF,
       secondaryHex = 0xFFFF3D71,
       bannerRes = R.drawable.img_conduit_citadel_banner_1794591189064,
-      supportedModes = listOf("sandbox", "br", "dmz", "multiplayer"),
+      supportedModes = allModeIds,
       mapSectors = listOf("Gentek Red-Zone", "Water Hive Lab", "DUP Conduit Spire", "Liberty Viaduct"),
       interactActionLabel = "ARC PYLON",
       platformBadges = "PS3/PS4/PS5 • XBOX • SWITCH • PC",
@@ -93,7 +98,7 @@ object UniverseCatalog {
       accentHex = 0xFFFF5252,
       secondaryHex = 0xFFFFAB40,
       bannerRes = R.drawable.img_hellbreaker_banner_1794596418917,
-      supportedModes = listOf("zombies", "multiplayer", "br"),
+      supportedModes = allModeIds,
       mapSectors = listOf("Crucible Core", "Water Hydra Rift", "Molten Forge", "Mech Arena"),
       interactActionLabel = "BERSERK",
       platformBadges = "PS5/PS4 • XBOX X|S • SWITCH • PC",
@@ -109,7 +114,7 @@ object UniverseCatalog {
       accentHex = 0xFFFFD54F,
       secondaryHex = 0xFF448AFF,
       bannerRes = R.drawable.img_chrono_aegis_banner_1794591190129,
-      supportedModes = listOf("dmz", "sandbox", "zombies"),
+      supportedModes = allModeIds,
       mapSectors = listOf("Annex Prime", "Chevron Vault", "Space-Time Nexus", "Origins Ring"),
       interactActionLabel = "DIAL GATE",
       platformBadges = "PS5/4/3 • XBOX • NINTENDO • PC • iOS",
@@ -125,7 +130,7 @@ object UniverseCatalog {
       accentHex = 0xFF00E5FF,
       secondaryHex = 0xFFE040FB,
       bannerRes = R.drawable.img_aegis_starblade_banner_1794596418262,
-      supportedModes = listOf("multiplayer", "br", "sandbox", "zombies", "boss_rush"),
+      supportedModes = allModeIds,
       mapSectors = listOf("Star Destroyer Hull", "Kamino Clone Spire", "Kyber Sanctum", "Orbital Citadel"),
       interactActionLabel = "REPULSE",
       platformBadges = "PS5/PS4/PS3 • XBOX • SWITCH • PC",
@@ -141,7 +146,7 @@ object UniverseCatalog {
       accentHex = 0xFFFFD54F,
       secondaryHex = 0xFF448AFF,
       bannerRes = R.drawable.img_aegis_starblade_banner_1794596418262,
-      supportedModes = listOf("hero_patrol", "multiplayer", "boss_rush", "zombies", "campaign"),
+      supportedModes = allModeIds,
       mapSectors = listOf("Batcave Nexus", "Black Gate Yard", "Ace Chemicals", "GCPD Bat-Signal Roof"),
       interactActionLabel = "BAT-SIGNAL",
       platformBadges = "PS5/PS4/PS3 • XBOX • SWITCH • PC • iOS",
@@ -157,7 +162,7 @@ object UniverseCatalog {
       accentHex = 0xFFE53935,
       secondaryHex = 0xFF2979FF,
       bannerRes = R.drawable.img_conduit_citadel_banner_1794591189064,
-      supportedModes = listOf("hero_patrol", "br", "onslaught", "boss_rush", "sandbox"),
+      supportedModes = allModeIds,
       mapSectors = listOf("Queens Skyline", "Oscorp Bio-Spire", "Daily Bugle Plaza", "Symbiote Subway"),
       interactActionLabel = "WEB-ZIP",
       platformBadges = "PS5/PS4/PS3 • XBOX • SWITCH • PC • iOS",
@@ -173,7 +178,7 @@ object UniverseCatalog {
       accentHex = 0xFFFF3D71,
       secondaryHex = 0xFFFFD54F,
       bannerRes = R.drawable.img_hellbreaker_banner_1794596418917,
-      supportedModes = listOf("multiplayer", "boss_rush", "dmz", "onslaught", "conduit_ctf"),
+      supportedModes = allModeIds,
       mapSectors = listOf("Arc Reactor Core", "Hall of Armor", "Jarvis Flight Deck", "Hulkbuster Drop Pad"),
       interactActionLabel = "UNIBEAM",
       platformBadges = "PS5/4 • XBOX X|S • SWITCH • PC • iOS",
@@ -189,7 +194,7 @@ object UniverseCatalog {
       accentHex = 0xFF00E5FF,
       secondaryHex = 0xFFFFD54F,
       bannerRes = R.drawable.img_conduit_citadel_banner_1794591189064,
-      supportedModes = listOf("sandbox", "hero_patrol", "conduit_ctf", "br", "dmz"),
+      supportedModes = allModeIds,
       mapSectors = listOf("Neon Substation", "Warren Power Grid", "Alden's Spire", "Historic Blast Plaza"),
       interactActionLabel = "ARC DRAIN",
       platformBadges = "PS3/PS4/PS5 • XBOX • SWITCH • PC",
@@ -205,7 +210,7 @@ object UniverseCatalog {
       accentHex = 0xFFE040FB,
       secondaryHex = 0xFF00E5FF,
       bannerRes = R.drawable.img_aegis_starblade_banner_1794596418262,
-      supportedModes = listOf("multiplayer", "br", "onslaught", "campaign", "conduit_ctf"),
+      supportedModes = allModeIds,
       mapSectors = listOf("Justice Bridge", "Nebula Hangar Bay", "Photon Core", "Starport Promenade"),
       interactActionLabel = "NOVA STRIKE",
       platformBadges = "PS5/4/3 • XBOX • SWITCH • PC • iOS",
@@ -221,7 +226,7 @@ object UniverseCatalog {
       accentHex = 0xFF00E676,
       secondaryHex = 0xFFE040FB,
       bannerRes = R.drawable.img_chrono_aegis_banner_1794591190129,
-      supportedModes = listOf("onslaught", "sandbox", "boss_rush", "hero_patrol", "campaign", "zombies"),
+      supportedModes = allModeIds,
       mapSectors = listOf("Convergence Ring", "Crossover Bastion", "All-Hero Plaza", "Outer Rift Horizon"),
       interactActionLabel = "PRISM NOVA",
       platformBadges = "ALL PLATFORMS • HTML5 • CONSOLES • PC",
@@ -237,7 +242,7 @@ object UniverseCatalog {
       accentHex = 0xFF40C4FF,
       secondaryHex = 0xFFFFD54F,
       bannerRes = R.drawable.img_chrono_aegis_banner_1794591190129,
-      supportedModes = listOf("campaign", "zombies", "dmz", "br", "multiplayer", "sandbox", "hero_patrol"),
+      supportedModes = allModeIds,
       mapSectors = listOf("Prologue Drop Deck", "Coalition Frontline", "Shattered Nexus Bridge", "Reality Mend Spire"),
       interactActionLabel = "ANCHOR",
       platformBadges = "PS5/4/3 • XBOX • SWITCH • PC • MOBILE",
@@ -403,4 +408,27 @@ object UniverseCatalog {
 
   fun consoleById(id: String): ConsoleCompatTarget =
     consoleTargets.firstOrNull { it.id == id } ?: consoleTargets.first()
+
+  /**
+   * Embedded No-APK Play Guide bundled directly inside the Game Collection Catalog.
+   * Explains how to launch exported collections in browsers, GitHub Pages, .hta, PWA, and console controllers.
+   */
+  const val NO_APK_PLAY_GUIDE: String = """
+# The Unknown Universes — Game Collections No-APK Play Guide
+
+This guide explains how to easily run, share, and play **The Unknown Universes** game collections on any device (PC, Mac, Linux, iOS, Android, and consoles) **without needing an Android APK**.
+
+1. Instant Browser Play (No Installation Required):
+   - Export a portable game package from the Export & Compat menu and save as index.html.
+   - Double-click index.html or drop it into Chrome, Safari, Edge, or Firefox for full offline canvas rendering, touch controls, audio, and gamepad support.
+
+2. Free Cloud Hosting (GitHub Pages / Vercel):
+   - Upload your exported index.html to a public GitHub repo root, enable Settings -> Pages on main/root, and share the live link.
+
+3. Windows Desktop App (.hta) or PWA:
+   - Rename index.html to game.hta to run in a standalone desktop window on Windows, or install via Chrome/Edge as a Progressive Web App.
+
+4. Console & Controller Support:
+   - Connect any Xbox, PlayStation DualSense, or Switch Pro controller; the W3C Gamepad API automatically maps axes and face buttons.
+"""
 }

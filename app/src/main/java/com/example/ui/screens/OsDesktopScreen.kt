@@ -1,9 +1,10 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -21,6 +23,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
@@ -60,11 +64,13 @@ import com.example.data.local.CloudSyncState
 import com.example.data.local.SaveBundlePreview
 import com.example.data.model.AchievementState
 import com.example.data.model.ArmoryItem
+import com.example.data.model.CollectionDifficulty
 import com.example.data.model.FriendOnlineStatus
 import com.example.data.model.LinkedAccount
 import com.example.data.model.LobbyConfig
 import com.example.data.model.MatchRecord
 import com.example.data.model.MultiverseArsenalCatalog
+import com.example.data.model.NewGamePlusVersion
 import com.example.data.model.OperatorProfile
 import com.example.data.model.OperatorProgressionState
 import com.example.data.model.OriginalVaultCatalog
@@ -73,7 +79,9 @@ import com.example.data.model.RigAsset
 import com.example.data.model.UniverseCatalog
 import com.example.data.model.UniverseWorld
 import com.example.ui.auth.CrossPlatformAccountsCard
+import java.util.Locale
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OsDesktopScreen(
   profile: OperatorProfile,
@@ -115,6 +123,9 @@ fun OsDesktopScreen(
   onEquipOutfit: (String) -> Unit = {},
   onSelectArea: (String) -> Unit = {},
   onHuntHeroFrontier: () -> Unit = {},
+  onSelectCollectionDifficulty: (String, CollectionDifficulty) -> Unit = { _, _ -> },
+  onSelectNgPlusTier: (Int) -> Unit = {},
+  onCompleteNgPlusRun: () -> Unit = {},
   onSignOut: () -> Unit,
 ) {
   val activeWorld = UniverseCatalog.worldById(profile.activeUniverseId)
@@ -127,6 +138,7 @@ fun OsDesktopScreen(
   var showLobbyRosterDialog by remember { mutableStateOf(false) }
   var callsignDraft by remember(profile.callsign) { mutableStateOf(profile.callsign) }
   val claimableAchievements = achievements.count { it.unlocked && !it.claimed }
+  val haptic = LocalHapticFeedback.current
 
   val wallpaperBitmap = rememberAssetImageBitmap(activeWallpaperPath, maxDim = 960)
   val wallpaperGradient = when (profile.osWallpaperIndex.toInt() % 4) {
@@ -195,13 +207,13 @@ fun OsDesktopScreen(
                 )
                 IconButton(
                   onClick = { showCallsignDialog = true },
-                  modifier = Modifier.size(28.dp).testTag("edit_callsign_btn"),
+                  modifier = Modifier.size(48.dp).testTag("edit_callsign_btn"),
                 ) {
                   Icon(
                     imageVector = Icons.Filled.Edit,
                     contentDescription = "Edit callsign",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(16.dp),
+                    modifier = Modifier.size(18.dp),
                   )
                 }
               }
@@ -330,12 +342,21 @@ fun OsDesktopScreen(
     }
 
     item {
+      @OptIn(ExperimentalFoundationApi::class)
       Surface(
-        onClick = onOpenMissions,
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier
           .fillMaxWidth()
+          .heightIn(min = 48.dp)
+          .clip(RoundedCornerShape(16.dp))
+          .combinedClickable(
+            onClick = onOpenMissions,
+            onLongClick = {
+              haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+              onOpenMissions()
+            },
+          )
           .border(1.5.dp, Color(0xFF00E676).copy(alpha = 0.65f), RoundedCornerShape(16.dp))
           .testTag("os_missions_card"),
       ) {
@@ -484,6 +505,7 @@ fun OsDesktopScreen(
 
     // Quick OS Telemetry Tiles
     item {
+      @OptIn(ExperimentalFoundationApi::class)
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -496,14 +518,32 @@ fun OsDesktopScreen(
           accent = MaterialTheme.colorScheme.primary,
         )
         OsStatTile(
-          modifier = Modifier.weight(1f).clickable { onOpenForgeRig() },
+          modifier = Modifier
+            .weight(1f)
+            .clip(RoundedCornerShape(14.dp))
+            .combinedClickable(
+              onClick = onOpenForgeRig,
+              onLongClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onOpenForgeRig()
+              },
+            ),
           icon = AppIcons.Animation,
           label = "Blender Rig",
           value = activeRig?.archetype?.uppercase() ?: "OPERATOR",
           accent = Color(0xFFFF8F00),
         )
         OsStatTile(
-          modifier = Modifier.weight(1f).clickable { onOpenExport() },
+          modifier = Modifier
+            .weight(1f)
+            .clip(RoundedCornerShape(14.dp))
+            .combinedClickable(
+              onClick = onOpenExport,
+              onLongClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onOpenExport()
+              },
+            ),
           icon = AppIcons.Gamepad,
           label = "Compat Build",
           value = activeConsole.id.substringBefore("_").uppercase(),
@@ -559,22 +599,25 @@ fun OsDesktopScreen(
               OutlinedButton(
                 onClick = onHuntHeroFrontier,
                 shape = RoundedCornerShape(8.dp),
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                modifier = Modifier.height(34.dp).testTag("os_hero_frontier_btn"),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                modifier = Modifier.height(48.dp).testTag("os_hero_frontier_btn"),
               ) {
                 Text("Hero Frontier", style = MaterialTheme.typography.labelSmall, color = Color(0xFF00E5FF))
               }
               OutlinedButton(
                 onClick = { originalsOnlyFilter = !originalsOnlyFilter },
                 shape = RoundedCornerShape(8.dp),
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                modifier = Modifier.height(34.dp).testTag("os_toggle_all_characters_btn"),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                modifier = Modifier.height(48.dp).testTag("os_toggle_all_characters_btn"),
               ) {
                 Text(if (originalsOnlyFilter) "All ${MultiverseArsenalCatalog.outfits.size}" else "Originals", style = MaterialTheme.typography.labelSmall)
               }
             }
           }
-          LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+          LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.testTag("os_char_filter_row"),
+          ) {
             items(com.example.data.model.CharacterUniverseGroup.entries, key = { it.id }) { grp ->
               val chipSelected = !originalsOnlyFilter && selectedDesktopGroup == grp
               androidx.compose.material3.FilterChip(
@@ -584,21 +627,37 @@ fun OsDesktopScreen(
                   selectedDesktopGroup = grp
                 },
                 label = { Text(grp.label, style = MaterialTheme.typography.labelSmall) },
-                modifier = Modifier.testTag("os_char_filter_${grp.id}"),
+                modifier = Modifier.heightIn(min = 48.dp).testTag("os_char_filter_${grp.id}"),
               )
             }
           }
-          LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          @OptIn(ExperimentalFoundationApi::class)
+          LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.testTag("os_chars_row"),
+          ) {
             items(heroList, key = { it.id }) { spec ->
               val isSelected = progression.equippedOutfitId == spec.id
               val rarity = progression.outfitRarity(spec.id)
               val accent = Color(spec.secondaryHex)
               Surface(
-                onClick = { onEquipOutfit(spec.id) },
                 shape = RoundedCornerShape(12.dp),
                 color = if (isSelected) accent.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                 modifier = Modifier
                   .width(178.dp)
+                  .heightIn(min = 68.dp)
+                  .clip(RoundedCornerShape(12.dp))
+                  .combinedClickable(
+                    onClick = {
+                      onEquipOutfit(spec.id)
+                      onStatusMessage("Selected Hero: ${spec.nameWithVersion}")
+                    },
+                    onLongClick = {
+                      haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                      onEquipOutfit(spec.id)
+                      onStatusMessage("Held & Equipped: ${spec.nameWithVersion}")
+                    },
+                  )
                   .border(
                     width = if (isSelected) 2.dp else 1.dp,
                     color = if (isSelected) accent else MaterialTheme.colorScheme.outline,
@@ -727,7 +786,7 @@ fun OsDesktopScreen(
             Button(
               onClick = { onOpenSocialHub(0) },
               shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.weight(1f).height(40.dp).testTag("os_open_friends_btn"),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("os_open_friends_btn"),
             ) {
               Icon(AppIcons.PersonAdd, contentDescription = null, modifier = Modifier.size(16.dp))
               Spacer(Modifier.width(4.dp))
@@ -736,7 +795,7 @@ fun OsDesktopScreen(
             OutlinedButton(
               onClick = { onOpenSocialHub(1) },
               shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.weight(1f).height(40.dp).testTag("os_open_chat_btn"),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("os_open_chat_btn"),
             ) {
               Icon(AppIcons.Chat, contentDescription = null, modifier = Modifier.size(16.dp))
               Spacer(Modifier.width(4.dp))
@@ -745,7 +804,7 @@ fun OsDesktopScreen(
             OutlinedButton(
               onClick = { onOpenSocialHub(4) },
               shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.weight(1f).height(40.dp).testTag("os_open_clan_btn"),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("os_open_clan_btn"),
             ) {
               Icon(AppIcons.Shield, contentDescription = null, modifier = Modifier.size(16.dp))
               Spacer(Modifier.width(4.dp))
@@ -758,16 +817,24 @@ fun OsDesktopScreen(
 
     // Blue Essence Store & Achievements Menu Quick Row
     item {
+      @OptIn(ExperimentalFoundationApi::class)
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
       ) {
         Surface(
-          onClick = onOpenStore,
           shape = RoundedCornerShape(16.dp),
           color = MaterialTheme.colorScheme.surface,
           modifier = Modifier
             .weight(1f)
+            .clip(RoundedCornerShape(16.dp))
+            .combinedClickable(
+              onClick = onOpenStore,
+              onLongClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onOpenStore()
+              },
+            )
             .border(1.5.dp, Color(0xFF00E5FF).copy(alpha = 0.65f), RoundedCornerShape(16.dp))
             .testTag("os_store_card"),
         ) {
@@ -783,11 +850,18 @@ fun OsDesktopScreen(
           }
         }
         Surface(
-          onClick = onOpenAchievements,
           shape = RoundedCornerShape(16.dp),
           color = MaterialTheme.colorScheme.surface,
           modifier = Modifier
             .weight(1f)
+            .clip(RoundedCornerShape(16.dp))
+            .combinedClickable(
+              onClick = onOpenAchievements,
+              onLongClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onOpenAchievements()
+              },
+            )
             .border(1.5.dp, Color(0xFFFFD54F).copy(alpha = 0.65f), RoundedCornerShape(16.dp))
             .testTag("os_achievements_card"),
         ) {
@@ -808,12 +882,20 @@ fun OsDesktopScreen(
 
     // Settings, Performance, Controls & Accessibility Support Card
     item {
+      @OptIn(ExperimentalFoundationApi::class)
       Surface(
-        onClick = onOpenSettings,
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier
           .fillMaxWidth()
+          .clip(RoundedCornerShape(18.dp))
+          .combinedClickable(
+            onClick = onOpenSettings,
+            onLongClick = {
+              haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+              onOpenSettings()
+            },
+          )
           .border(1.5.dp, Color(0xFF00E676).copy(alpha = 0.55f), RoundedCornerShape(18.dp))
           .testTag("settings_accessibility_card"),
       ) {
@@ -852,12 +934,20 @@ fun OsDesktopScreen(
 
     // Original Media Vault Showcase Card
     item {
+      @OptIn(ExperimentalFoundationApi::class)
       Surface(
-        onClick = onOpenMediaVault,
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier
           .fillMaxWidth()
+          .clip(RoundedCornerShape(18.dp))
+          .combinedClickable(
+            onClick = onOpenMediaVault,
+            onLongClick = {
+              haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+              onOpenMediaVault()
+            },
+          )
           .border(1.5.dp, Color(0xFF00E5FF).copy(alpha = 0.55f), RoundedCornerShape(18.dp))
           .testTag("open_media_vault_card"),
       ) {
@@ -927,13 +1017,174 @@ fun OsDesktopScreen(
     item {
       LazyRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.testTag("os_worlds_row"),
       ) {
         items(UniverseCatalog.worlds, key = { it.id }) { world ->
           UniverseCollectionCard(
             world = world,
             selected = world.id == profile.activeUniverseId,
             onClick = { onSelectUniverse(world.id) },
+            onLongClick = {
+              onSelectUniverse(world.id)
+              onStatusMessage("Held & Mounted World: ${world.title}")
+            },
           )
+        }
+      }
+    }
+
+    // 5 Difficulties for Game Collections + New Game+ & 4 Post-Completion Versions
+    item {
+      @OptIn(ExperimentalFoundationApi::class)
+      val activeColDiff = progression.collectionDifficulty(activeWorld.id)
+      val activeNg = progression.ngPlusSpec
+      val combinedMult = progression.combinedGameplayRewardMultiplier(activeWorld.id)
+      Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier
+          .fillMaxWidth()
+          .border(1.5.dp, Color(activeColDiff.accentHex).copy(alpha = 0.65f), RoundedCornerShape(18.dp))
+          .testTag("os_collection_difficulty_ngplus_card"),
+      ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          Text(
+            text = "COLLECTION DIFFICULTY (${activeWorld.title.substringBefore(":").uppercase()}) — ${activeColDiff.label}",
+            style = MaterialTheme.typography.titleSmall,
+            color = Color(activeColDiff.accentHex),
+            fontWeight = FontWeight.Bold,
+          )
+          Text(
+            text = "${activeColDiff.summary} • Tap or Hold any difficulty or NG+ tier",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+          LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.testTag("os_collection_difficulty_row"),
+          ) {
+            items(CollectionDifficulty.entries, key = { it.id }) { diff ->
+              val selected = activeColDiff == diff
+              val accent = Color(diff.accentHex)
+              Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = if (selected) accent.copy(alpha = 0.22f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                modifier = Modifier
+                  .heightIn(min = 48.dp)
+                  .clip(RoundedCornerShape(12.dp))
+                  .combinedClickable(
+                    onClick = {
+                      onSelectCollectionDifficulty(activeWorld.id, diff)
+                      onStatusMessage("${activeWorld.title.substringBefore(":")}: ${diff.label} (RWD x${String.format(Locale.US, "%.2f", diff.rewardMultiplier)})")
+                    },
+                    onLongClick = {
+                      haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                      onSelectCollectionDifficulty(activeWorld.id, diff)
+                      onStatusMessage("Held & Selected Difficulty: ${diff.label}")
+                    },
+                  )
+                  .border(
+                    width = if (selected) 2.dp else 1.dp,
+                    color = if (selected) accent else MaterialTheme.colorScheme.outline,
+                    shape = RoundedCornerShape(12.dp),
+                  )
+                  .testTag("collection_diff_${diff.id}"),
+              ) {
+                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                  Text(
+                    text = diff.label,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (selected) accent else MaterialTheme.colorScheme.onSurface,
+                  )
+                  Text(
+                    text = "HP x${String.format(Locale.US, "%.2f", diff.enemyHpScale)} • RWD x${String.format(Locale.US, "%.2f", diff.rewardMultiplier)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFFFFD54F),
+                  )
+                }
+              }
+            }
+          }
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(
+                text = "NEW GAME+ PROTOCOL (${activeNg.label.uppercase()})",
+                style = MaterialTheme.typography.titleSmall,
+                color = Color(activeNg.accentHex),
+                fontWeight = FontWeight.Bold,
+              )
+              Text(
+                text = "Completions: ${progression.ngPlusCompletions} • NG+ Mult x${String.format(Locale.US, "%.2f", progression.ngPlusRewardMultiplier)} • Combined x${String.format(Locale.US, "%.2f", combinedMult)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFFFFD54F),
+              )
+            }
+            OutlinedButton(
+              onClick = {
+                onCompleteNgPlusRun()
+                onStatusMessage("Run completed! NG+ completions & rewards scaled higher.")
+              },
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.heightIn(min = 48.dp).testTag("os_ng_plus_complete_btn"),
+            ) {
+              Text("Log Run", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            }
+          }
+          LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.testTag("os_ng_plus_row"),
+          ) {
+            items(NewGamePlusVersion.entries, key = { it.tier }) { ver ->
+              val unlocked = ver.tier <= progression.unlockedNgPlusTier
+              val selected = progression.activeNgPlusTier == ver.tier
+              val accent = Color(ver.accentHex)
+              Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = if (selected) accent.copy(alpha = 0.22f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                modifier = Modifier
+                  .heightIn(min = 48.dp)
+                  .clip(RoundedCornerShape(12.dp))
+                  .combinedClickable(
+                    enabled = unlocked,
+                    onClick = {
+                      onSelectNgPlusTier(ver.tier)
+                      onStatusMessage("Activated ${ver.label}")
+                    },
+                    onLongClick = {
+                      haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                      onSelectNgPlusTier(ver.tier)
+                      onStatusMessage("Held & Activated ${ver.label}")
+                    },
+                  )
+                  .border(
+                    width = if (selected) 2.dp else 1.dp,
+                    color = if (selected) accent else if (unlocked) accent.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                    shape = RoundedCornerShape(12.dp),
+                  )
+                  .testTag("os_ng_plus_tier_${ver.tier}"),
+              ) {
+                Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                  Text(
+                    text = if (unlocked) ver.shortTag else "LOCKED ${ver.shortTag}",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (unlocked) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
+                  Text(
+                    text = "RWD x${String.format(Locale.US, "%.2f", ver.rewardMultiplier)} • HP x${String.format(Locale.US, "%.2f", ver.enemyHpScale)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (unlocked) Color(0xFFFFD54F) else MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -948,14 +1199,27 @@ fun OsDesktopScreen(
     }
 
     item {
-      LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+      @OptIn(ExperimentalFoundationApi::class)
+      LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.testTag("os_modes_row"),
+      ) {
         items(UniverseCatalog.modes, key = { it.id }) { mode ->
           val isSelected = mode.id == profile.activeMode
           Surface(
-            onClick = { onSelectMode(mode.id) },
             shape = RoundedCornerShape(14.dp),
             color = if (isSelected) Color(mode.accentHex).copy(alpha = 0.2f) else MaterialTheme.colorScheme.surface,
             modifier = Modifier
+              .heightIn(min = 56.dp)
+              .clip(RoundedCornerShape(14.dp))
+              .combinedClickable(
+                onClick = { onSelectMode(mode.id) },
+                onLongClick = {
+                  haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                  onSelectMode(mode.id)
+                  onStatusMessage("Held & Selected Mode: ${mode.label}")
+                },
+              )
               .border(
                 width = if (isSelected) 1.5.dp else 1.dp,
                 color = if (isSelected) Color(mode.accentHex) else MaterialTheme.colorScheme.outline,
@@ -1006,18 +1270,31 @@ fun OsDesktopScreen(
     }
 
     item {
-      LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+      @OptIn(ExperimentalFoundationApi::class)
+      LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.testTag("os_arenas_row"),
+      ) {
         items(MultiverseArsenalCatalog.customAreas, key = { it.id }) { area ->
           val isSelected = area.id == progression.activeAreaId
           val areaSt = progression.areaState(area.id)
           val accent = Color(area.accentHex)
           val linkedWorld = UniverseCatalog.worldById(area.linkedWorldId)
           Surface(
-            onClick = { onSelectArea(area.id) },
             shape = RoundedCornerShape(16.dp),
             color = if (isSelected) accent.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surface,
             modifier = Modifier
               .width(232.dp)
+              .heightIn(min = 64.dp)
+              .clip(RoundedCornerShape(16.dp))
+              .combinedClickable(
+                onClick = { onSelectArea(area.id) },
+                onLongClick = {
+                  haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                  onSelectArea(area.id)
+                  onStatusMessage("Held & Deployed Area: ${area.name}")
+                },
+              )
               .border(
                 width = if (isSelected) 2.dp else 1.dp,
                 color = if (isSelected) accent else MaterialTheme.colorScheme.outline,
@@ -1212,6 +1489,7 @@ fun OsDesktopScreen(
   }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun OsDockChip(
   modifier: Modifier,
@@ -1219,14 +1497,24 @@ private fun OsDockChip(
   accent: Color,
   onClick: () -> Unit,
 ) {
+  val haptic = LocalHapticFeedback.current
   Surface(
-    onClick = onClick,
     shape = RoundedCornerShape(10.dp),
     color = accent.copy(alpha = 0.14f),
-    modifier = modifier.border(1.dp, accent.copy(alpha = 0.45f), RoundedCornerShape(10.dp)),
+    modifier = modifier
+      .heightIn(min = 48.dp)
+      .clip(RoundedCornerShape(10.dp))
+      .combinedClickable(
+        onClick = onClick,
+        onLongClick = {
+          haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+          onClick()
+        },
+      )
+      .border(1.dp, accent.copy(alpha = 0.45f), RoundedCornerShape(10.dp)),
   ) {
     Box(
-      modifier = Modifier.padding(horizontal = 8.dp, vertical = 7.dp),
+      modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
       contentAlignment = Alignment.Center,
     ) {
       Text(
@@ -1251,7 +1539,7 @@ private fun OsStatTile(
   Surface(
     shape = RoundedCornerShape(14.dp),
     color = MaterialTheme.colorScheme.surface,
-    modifier = modifier.border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp)),
+    modifier = modifier.heightIn(min = 56.dp).border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp)),
   ) {
     Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
       Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
@@ -1261,18 +1549,28 @@ private fun OsStatTile(
   }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun UniverseCollectionCard(
   world: UniverseWorld,
   selected: Boolean,
   onClick: () -> Unit,
+  onLongClick: () -> Unit = onClick,
 ) {
+  val haptic = LocalHapticFeedback.current
   Surface(
-    onClick = onClick,
     shape = RoundedCornerShape(18.dp),
     color = MaterialTheme.colorScheme.surface,
     modifier = Modifier
       .width(248.dp)
+      .clip(RoundedCornerShape(18.dp))
+      .combinedClickable(
+        onClick = onClick,
+        onLongClick = {
+          haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+          onLongClick()
+        },
+      )
       .border(
         width = if (selected) 2.dp else 1.dp,
         color = if (selected) Color(world.accentHex) else MaterialTheme.colorScheme.outline,
