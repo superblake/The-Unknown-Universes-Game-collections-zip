@@ -812,6 +812,7 @@ data class OperatorProgressionState(
   val ngPlusCompletions: Int = 0,
   val worldCollectionDifficultyMap: Map<String, String> = emptyMap(),
   val collectionCustomMode: CollectionCustomModeConfig = CollectionCustomModeConfig(),
+  val customGameMaps: List<UserCustomGameMapSpec> = emptyList(),
 ) {
   val playerLevel: Int
     get() = ProgressionCatalog.levelForXp(playerXp)
@@ -861,7 +862,34 @@ data class OperatorProgressionState(
     areaStates[id] ?: CustomAreaState(id)
 
   fun activeAreaSpec(): CustomAreaSpec =
-    MultiverseArsenalCatalog.areaById(activeAreaId)
+    resolveAreaSpec(activeAreaId)
+
+  fun resolveAreaSpec(areaId: String): CustomAreaSpec =
+    CuratedCustomMapsCatalog.resolveAreaSpec(areaId, customGameMaps)
+
+  fun allPlayableAreas(): List<CustomAreaSpec> =
+    CuratedCustomMapsCatalog.allPlayableAreas(customGameMaps)
+
+  fun defaultModeForArea(areaId: String, currentMode: String? = null): String {
+    val customSpec = CuratedCustomMapsCatalog.findById(areaId, customGameMaps)
+    if (customSpec != null) {
+      val world = UniverseCatalog.worldById(customSpec.gameCategory.linkedWorldId)
+      return when {
+        customSpec.gameCategory == CustomMapGameCategory.BO3 ->
+          if (currentMode != null && currentMode in world.supportedModes && currentMode != world.defaultModeId) currentMode else "zombies"
+        currentMode != null && currentMode in world.supportedModes -> currentMode
+        else -> customSpec.gameCategory.defaultModeId
+      }
+    }
+    val spec = MultiverseArsenalCatalog.areaById(areaId)
+    val world = UniverseCatalog.worldById(spec.linkedWorldId)
+    return when {
+      areaId.startsWith("area_bo3_") -> "zombies"
+      areaId == "area_campaign_nexus" || areaId == "area_mended_convergence" -> "campaign"
+      currentMode != null && currentMode in world.supportedModes -> currentMode
+      else -> world.defaultModeId
+    }
+  }
 
   fun outfitRarity(id: String = equippedOutfitId): CharacterRarity {
     val defaultRank = if (MultiverseArsenalCatalog.outfitById(id).isOriginalCharacter) CharacterRarity.RARE.rank else CharacterRarity.COMMON.rank
@@ -1790,48 +1818,85 @@ data class CollectionCustomModeConfig(
       "Safeguard Relaxed: Stronger negative penalties active in scoped runs (saved Collection items & Bank still remain safe)."
     }
 
-  fun isAreaInScope(areaId: String): Boolean =
-    scopedAreas(scope).any { it.id == areaId }
+  fun isAreaInScope(
+    areaId: String,
+    userCustomMaps: List<UserCustomGameMapSpec> = emptyList(),
+  ): Boolean =
+    scopedAreas(scope, userCustomMaps).any { it.id == areaId }
 
-  fun isActiveForArea(areaId: String): Boolean =
-    enabled && isAreaInScope(areaId)
+  fun isActiveForArea(
+    areaId: String,
+    userCustomMaps: List<UserCustomGameMapSpec> = emptyList(),
+  ): Boolean =
+    enabled && isAreaInScope(areaId, userCustomMaps)
 
-  fun effectiveHostileHpMultFor(areaId: String): Float =
-    if (!isActiveForArea(areaId)) 1.0f else 1.0f + (effectiveCappedHpPercent / 100f)
+  fun effectiveHostileHpMultFor(
+    areaId: String,
+    userCustomMaps: List<UserCustomGameMapSpec> = emptyList(),
+  ): Float =
+    if (!isActiveForArea(areaId, userCustomMaps)) 1.0f else 1.0f + (effectiveCappedHpPercent / 100f)
 
-  fun effectiveDamageMultFor(areaId: String): Float =
-    if (!isActiveForArea(areaId) || !powerAndCooldownSuppression) 1.0f
+  fun effectiveDamageMultFor(
+    areaId: String,
+    userCustomMaps: List<UserCustomGameMapSpec> = emptyList(),
+  ): Float =
+    if (!isActiveForArea(areaId, userCustomMaps) || !powerAndCooldownSuppression) 1.0f
     else if (safeCollectionGuard) 0.75f else 0.65f
 
-  fun effectiveCooldownMultFor(areaId: String): Float =
-    if (!isActiveForArea(areaId) || !powerAndCooldownSuppression) 1.0f
+  fun effectiveCooldownMultFor(
+    areaId: String,
+    userCustomMaps: List<UserCustomGameMapSpec> = emptyList(),
+  ): Float =
+    if (!isActiveForArea(areaId, userCustomMaps) || !powerAndCooldownSuppression) 1.0f
     else if (safeCollectionGuard) 1.35f else 1.55f
 
-  fun effectiveEssenceMultFor(areaId: String): Float =
-    if (!isActiveForArea(areaId) || !essenceAndShardDrain) 1.0f
+  fun effectiveEssenceMultFor(
+    areaId: String,
+    userCustomMaps: List<UserCustomGameMapSpec> = emptyList(),
+  ): Float =
+    if (!isActiveForArea(areaId, userCustomMaps) || !essenceAndShardDrain) 1.0f
     else if (safeCollectionGuard) 0.65f else 0.55f
 
-  fun effectiveIncomingDamageMultFor(areaId: String): Float =
-    if (!isActiveForArea(areaId) || !shieldAttritionLeak) 1.0f
+  fun effectiveIncomingDamageMultFor(
+    areaId: String,
+    userCustomMaps: List<UserCustomGameMapSpec> = emptyList(),
+  ): Float =
+    if (!isActiveForArea(areaId, userCustomMaps) || !shieldAttritionLeak) 1.0f
     else if (safeCollectionGuard) 1.25f else 1.40f
 
-  fun effectiveRegenMultFor(areaId: String): Float =
-    if (!isActiveForArea(areaId) || !shieldAttritionLeak) 1.0f
+  fun effectiveRegenMultFor(
+    areaId: String,
+    userCustomMaps: List<UserCustomGameMapSpec> = emptyList(),
+  ): Float =
+    if (!isActiveForArea(areaId, userCustomMaps) || !shieldAttritionLeak) 1.0f
     else if (safeCollectionGuard) 0.55f else 0.35f
 
-  fun effectiveSpawnCountMultFor(areaId: String): Float =
-    if (!isActiveForArea(areaId) || !collectionAmbushSurge) 1.0f
+  fun effectiveSpawnCountMultFor(
+    areaId: String,
+    userCustomMaps: List<UserCustomGameMapSpec> = emptyList(),
+  ): Float =
+    if (!isActiveForArea(areaId, userCustomMaps) || !collectionAmbushSurge) 1.0f
     else if (safeCollectionGuard) 1.25f else 1.35f
 
-  fun effectiveEnemySpeedMultFor(areaId: String): Float =
-    if (!isActiveForArea(areaId) || !collectionAmbushSurge) 1.0f
+  fun effectiveEnemySpeedMultFor(
+    areaId: String,
+    userCustomMaps: List<UserCustomGameMapSpec> = emptyList(),
+  ): Float =
+    if (!isActiveForArea(areaId, userCustomMaps) || !collectionAmbushSurge) 1.0f
     else if (safeCollectionGuard) 1.25f else 1.40f
 
-  fun shouldSuppressCrateWonderDrops(areaId: String): Boolean =
-    isActiveForArea(areaId) && disableWonderDrops
+  fun shouldSuppressCrateWonderDrops(
+    areaId: String,
+    userCustomMaps: List<UserCustomGameMapSpec> = emptyList(),
+  ): Boolean =
+    isActiveForArea(areaId, userCustomMaps) && disableWonderDrops
 
-  fun shouldReinforceArmor(areaId: String, isElite: Boolean): Boolean {
-    if (!isActiveForArea(areaId) || !enemyArmorFlood) return false
+  fun shouldReinforceArmor(
+    areaId: String,
+    isElite: Boolean,
+    userCustomMaps: List<UserCustomGameMapSpec> = emptyList(),
+  ): Boolean {
+    if (!isActiveForArea(areaId, userCustomMaps) || !enemyArmorFlood) return false
     return if (safeCollectionGuard) isElite else true
   }
 
@@ -1895,19 +1960,31 @@ data class CollectionCustomModeConfig(
       "area_hero_frontier",
     )
 
-    fun scopedAreas(scope: CollectionCustomScope): List<CustomAreaSpec> =
-      when (scope) {
+    fun scopedAreas(
+      scope: CollectionCustomScope,
+      userCustomMaps: List<UserCustomGameMapSpec> = emptyList(),
+    ): List<CustomAreaSpec> {
+      val customBo3Specs = (CuratedCustomMapsCatalog.curatedBo3CustomMaps + userCustomMaps.filter { it.gameCategory == CustomMapGameCategory.BO3 })
+        .distinctBy { it.id }
+        .map { it.toCustomAreaSpec() }
+      val customCollectionSpecs = (CuratedCustomMapsCatalog.curatedCollectionCustomMaps + userCustomMaps.filter { it.gameCategory != CustomMapGameCategory.BO3 })
+        .distinctBy { it.id }
+        .map { it.toCustomAreaSpec() }
+
+      val combined = when (scope) {
         CollectionCustomScope.BO3_ONLY ->
-          MultiverseArsenalCatalog.customAreas.filter { it.id in bo3AreaIds }
+          MultiverseArsenalCatalog.customAreas.filter { it.id in bo3AreaIds } + customBo3Specs
         CollectionCustomScope.STEAM_ONLY ->
-          MultiverseArsenalCatalog.customAreas.filter { it.id in steamLinkedAreaIds }
+          MultiverseArsenalCatalog.customAreas.filter { it.id in steamLinkedAreaIds } + customBo3Specs + customCollectionSpecs
         CollectionCustomScope.COLLECTIONS_ONLY ->
-          MultiverseArsenalCatalog.customAreas.filter { it.id in collectionAreaIds }
+          MultiverseArsenalCatalog.customAreas.filter { it.id in collectionAreaIds } + customCollectionSpecs
         CollectionCustomScope.ALL_CURATED ->
           MultiverseArsenalCatalog.customAreas.filter {
             it.id in bo3AreaIds || it.id in steamLinkedAreaIds || it.id in collectionAreaIds
-          }
+          } + customBo3Specs + customCollectionSpecs
       }
+      return combined.distinctBy { it.id }
+    }
 
     fun isArmoryItemEligible(item: ArmoryItem, scope: CollectionCustomScope): Boolean {
       val tag = item.universeTag.lowercase()
@@ -1986,6 +2063,387 @@ data class CollectionCustomModeConfig(
     )
   }
 }
+
+enum class CustomMapGameCategory(
+  val id: String,
+  val label: String,
+  val linkedWorldId: String,
+  val defaultModeId: String,
+  val accentColorHex: String,
+  val defaultAccentHex: Long,
+  val defaultWonderWeapon: String,
+  val defaultZones: List<String>,
+) {
+  BO3(
+    id = "bo3",
+    label = "BO3 Mod Tools",
+    linkedWorldId = "sector_zero",
+    defaultModeId = "zombies",
+    accentColorHex = "#00E676",
+    defaultAccentHex = 0xFF00E676,
+    defaultWonderWeapon = "Ray Gun Mk.III",
+    defaultZones = listOf("Spawn Courtyard", "Mystery Box Room", "Power Generator", "Pack-a-Punch Vault", "Juggernog Alcove", "Escape Teleporter"),
+  ),
+  PROTOTYPE(
+    id = "prototype",
+    label = "Prototype / Blacklight",
+    linkedWorldId = "blacklight_conduit",
+    defaultModeId = "zombies",
+    accentColorHex = "#FF3D71",
+    defaultAccentHex = 0xFFFF3D71,
+    defaultWonderWeapon = "Blacklight Tendril Whip",
+    defaultZones = listOf("Gentek Containment Plaza", "Red-Zone Tower Roof", "Blackwatch Fuel Depot", "Bio-Hive Chamber", "Strike Helipad", "Viral Vault"),
+  ),
+  INFAMOUS(
+    id = "infamous",
+    label = "inFAMOUS Conduit",
+    linkedWorldId = "empire_city_infamous",
+    defaultModeId = "hero_patrol",
+    accentColorHex = "#00E5FF",
+    defaultAccentHex = 0xFF00E5FF,
+    defaultWonderWeapon = "Ray-Sphere Conduit Core",
+    defaultZones = listOf("Stasis Pier Substation", "Neon Skylink Bridge", "Zeke's Roof Deck", "Conduit Relay Core", "Blast Shard Yard", "Warren Railhead"),
+  ),
+  ARKHAM(
+    id = "arkham",
+    label = "Batman Arkham",
+    linkedWorldId = "gotham_arkham",
+    defaultModeId = "dmz",
+    accentColorHex = "#FFD54F",
+    defaultAccentHex = 0xFFFFD54F,
+    defaultWonderWeapon = "Shock-Gloves Detective Core",
+    defaultZones = listOf("Iceberg Lounge Ring", "Gotham Canal Docks", "GCPD Roof Beacon", "Black Gate Annex", "Wayne Forensic Pod", "Clocktower Perch"),
+  ),
+  SPIDERMAN(
+    id = "spiderman",
+    label = "Spider-Man",
+    linkedWorldId = "spiderverse_queens",
+    defaultModeId = "hero_patrol",
+    accentColorHex = "#E53935",
+    defaultAccentHex = 0xFFE53935,
+    defaultWonderWeapon = "Iron-Spider Web Conduit",
+    defaultZones = listOf("Oscorp Helipad", "Queens Bridge Tower", "Horizon Collider Deck", "Bugle Skybridge", "F.E.A.S.T. Rooftop", "Midtown Pylon"),
+  ),
+  GODOFWAR(
+    id = "godofwar",
+    label = "God of War Crucible",
+    linkedWorldId = "hellbreaker_citadel",
+    defaultModeId = "boss_rush",
+    accentColorHex = "#FF5252",
+    defaultAccentHex = 0xFFFF5252,
+    defaultWonderWeapon = "Crucible BFG-9000",
+    defaultZones = listOf("Tartarus Abyss Gate", "Leviathan Forge Anvil", "Valkyrie Trial Ring", "Blade Siphon Altar", "Hydra Maw Overlook", "Odin's Vault"),
+  ),
+  DIVISION(
+    id = "division",
+    label = "The Division SHD",
+    linkedWorldId = "sector_zero",
+    defaultModeId = "dmz",
+    accentColorHex = "#FFAB40",
+    defaultAccentHex = 0xFFFFAB40,
+    defaultWonderWeapon = "Liberty Wunder-Arc",
+    defaultZones = listOf("DZ-09 Mall Atrium", "SHD Safe House", "Extraction Helipad", "ISAC Relay Tower", "Contaminated Metro", "Cleaners Foundry"),
+  );
+
+  companion object {
+    fun fromId(id: String): CustomMapGameCategory =
+      entries.firstOrNull { it.id.equals(id, ignoreCase = true) } ?: BO3
+  }
+}
+
+@Immutable
+data class UserCustomGameMapSpec(
+  val id: String,
+  val mapCode: String,
+  val title: String,
+  val gameCategory: CustomMapGameCategory = CustomMapGameCategory.BO3,
+  val description: String,
+  val buildingNames: List<String>,
+  val wonderWeapon: String = gameCategory.defaultWonderWeapon,
+  val accentHex: Long = gameCategory.defaultAccentHex,
+  val secondaryHex: Long = 0xFF00E5FF,
+  val isUserCreated: Boolean = true,
+  val createdAtMillis: Long = 0L,
+) {
+  fun toCustomAreaSpec(): CustomAreaSpec {
+    val zones = buildingNames.map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty {
+      gameCategory.defaultZones
+    }
+    return CustomAreaSpec(
+      id = id,
+      name = title,
+      linkedWorldId = gameCategory.linkedWorldId,
+      description = description.ifBlank { "${gameCategory.label} custom playable map ($mapCode)." },
+      accentHex = accentHex,
+      secondaryHex = secondaryHex,
+      buildingNames = zones,
+      storyEraNote = "${gameCategory.label} • Custom Map ($mapCode)",
+      uniqueTraits = "WW: $wonderWeapon • ${zones.size} Custom Zones • Safe Collection Custom Mode Ready",
+    )
+  }
+}
+
+object CuratedCustomMapsCatalog {
+  val curatedBo3CustomMaps: List<UserCustomGameMapSpec> = listOf(
+    UserCustomGameMapSpec(
+      id = "area_bo3_custom_leviathan",
+      mapCode = "zm_leviathan",
+      title = "BO3 Custom: Leviathan",
+      gameCategory = CustomMapGameCategory.BO3,
+      description = "Iconic BO3 Mod Tools underwater submarine base with Moon-style PES airlocks, Pack-a-Punch Dock & Wave Gun.",
+      buildingNames = listOf(
+        "Submarine Wet Dock",
+        "PES Airlock Atrium",
+        "Reactor Dome Beta",
+        "Pack-a-Punch Torpedo Bay",
+        "Flooded Biodome",
+        "Emergency Dive Escape",
+      ),
+      wonderWeapon = "Wave Gun / Zap Gun",
+      accentHex = 0xFF00E5FF,
+      secondaryHex = 0xFF00E676,
+      isUserCreated = false,
+    ),
+    UserCustomGameMapSpec(
+      id = "area_bo3_custom_kowloon",
+      mapCode = "zm_kowloon",
+      title = "BO3 Custom: Kowloon",
+      gameCategory = CustomMapGameCategory.BO3,
+      description = "Custom BO3 Mod Tools rain-soaked Kowloon Walled City rooftops, neon ziplines, Dr. Monty Factory & Wunderfizz alleys.",
+      buildingNames = listOf(
+        "Neon Zipline Roof",
+        "Kowloon Market Alley",
+        "Walled City Courtyard",
+        "Power Switch Substation",
+        "Wunderfizz Noodle Hall",
+        "Dragon Extraction Helipad",
+      ),
+      wonderWeapon = "Thundergun + Ray Gun Mk.III",
+      accentHex = 0xFFFFAB40,
+      secondaryHex = 0xFFFF3D71,
+      isUserCreated = false,
+    ),
+    UserCustomGameMapSpec(
+      id = "area_bo3_custom_town",
+      mapCode = "zm_town_reimagined",
+      title = "BO3 Custom: Town Reimagined",
+      gameCategory = CustomMapGameCategory.BO3,
+      description = "BO3 Mod Tools lava-fissured Green Run Town remaster with Stamin-Up Bar, Bank Vault Pack & Tombstone Alley.",
+      buildingNames = listOf(
+        "Lava Courtyard",
+        "Town Bank Vault",
+        "Jugger-Nog Bar",
+        "Speed Cola Diner",
+        "Double Tap Garage",
+        "Pack-a-Punch Crack",
+      ),
+      wonderWeapon = "Ray Gun Mk.II",
+      accentHex = 0xFFFF5252,
+      secondaryHex = 0xFFFFD54F,
+      isUserCreated = false,
+    ),
+    UserCustomGameMapSpec(
+      id = "area_bo3_custom_herrenhaus",
+      mapCode = "zm_herrenhaus",
+      title = "BO3 Custom: Das Herrenhaus",
+      gameCategory = CustomMapGameCategory.BO3,
+      description = "Gothic BO3 Mod Tools haunted manor with Crypt Teleporters, Library Mystery Box & Element 115 Observatory.",
+      buildingNames = listOf(
+        "Manor Foyer Stairs",
+        "Aether Conservatory",
+        "Clockwork Library",
+        "Catacomb Crypts",
+        "Observatory Pack Tower",
+        "Courtyard Fountain",
+      ),
+      wonderWeapon = "Wunderwaffe DG-2",
+      accentHex = 0xFF00E676,
+      secondaryHex = 0xFFE040FB,
+      isUserCreated = false,
+    ),
+    UserCustomGameMapSpec(
+      id = "area_bo3_custom_cotd",
+      mapCode = "zm_cotd_custom",
+      title = "BO3 Custom: Call of the Dead",
+      gameCategory = CustomMapGameCategory.BO3,
+      description = "BO3 Mod Tools Siberian lighthouse & frozen tanker with Scavenger explosive sniper & V-R11 zipline routes.",
+      buildingNames = listOf(
+        "Frozen Coastline Spawn",
+        "Lighthouse Spiral",
+        "Aether Freighter Stern",
+        "George Gorge Bridge",
+        "Power Switch Cabin",
+        "Scavenger Ice Cave",
+      ),
+      wonderWeapon = "Scavenger + V-R11",
+      accentHex = 0xFF40C4FF,
+      secondaryHex = 0xFFFFFFFF,
+      isUserCreated = false,
+    ),
+    UserCustomGameMapSpec(
+      id = "area_bo3_custom_mob",
+      mapCode = "zm_alcatraz_bo3",
+      title = "BO3 Custom: Mob Remastered",
+      gameCategory = CustomMapGameCategory.BO3,
+      description = "BO3 Mod Tools Alcatraz Cellblock custom remaster with Blundergat Acidgat bench, Afterlife boxes & Golden Gate Pack.",
+      buildingNames = listOf(
+        "D-Block Cellblock",
+        "Michigan Avenue",
+        "Wardens Office Armory",
+        "Infirmary Roof Dock",
+        "Gondola Tower",
+        "Golden Gate Pack Bridge",
+      ),
+      wonderWeapon = "Acidgat Blundergat",
+      accentHex = 0xFFFF3D71,
+      secondaryHex = 0xFFFFAB40,
+      isUserCreated = false,
+    ),
+  )
+
+  val curatedCollectionCustomMaps: List<UserCustomGameMapSpec> = listOf(
+    UserCustomGameMapSpec(
+      id = "area_col_custom_blacklight_rooftops",
+      mapCode = "prot_redzone_rooftops",
+      title = "Custom Prototype: Red-Zone Roofs",
+      gameCategory = CustomMapGameCategory.PROTOTYPE,
+      description = "Custom Blacklight Collection map across viral Times Square skyscrapers, Blackwatch drop pads & biomass hive vents.",
+      buildingNames = listOf(
+        "Red-Zone Antenna",
+        "Gentek Skybridge",
+        "Blackwatch Munitions",
+        "Tendril Biomass Vat",
+        "Mercer Extraction Pad",
+        "Viral Containment Dome",
+      ),
+      wonderWeapon = "Mercer Bio-Claw Devastator",
+      accentHex = 0xFFFF3D71,
+      secondaryHex = 0xFF7C4DFF,
+      isUserCreated = false,
+    ),
+    UserCustomGameMapSpec(
+      id = "area_col_custom_infamous_pier",
+      mapCode = "inf_stasis_pier",
+      title = "Custom inFAMOUS: Stasis Pier",
+      gameCategory = CustomMapGameCategory.INFAMOUS,
+      description = "Custom Empire City conduit shipping yard with high-voltage crane pylons, Ray Sphere docks & Blast Shard barges.",
+      buildingNames = listOf(
+        "Conduit Crane Pylon",
+        "Stasis Freighter Pier",
+        "Neon Relay Warehouse",
+        "Zeke's Dockside Rig",
+        "First Sons Vault",
+        "Ray-Sphere Lighthouse",
+      ),
+      wonderWeapon = "Ray-Sphere Conduit Core",
+      accentHex = 0xFF00E5FF,
+      secondaryHex = 0xFFFFD54F,
+      isUserCreated = false,
+    ),
+    UserCustomGameMapSpec(
+      id = "area_col_custom_arkham_lounge",
+      mapCode = "arkham_iceberg_lounge",
+      title = "Custom Arkham: Iceberg Lounge",
+      gameCategory = CustomMapGameCategory.ARKHAM,
+      description = "Custom Batman Arkham combat & stealth arena in Penguin's Iceberg Lounge, Bat-Grapple rafters & sewer vaults.",
+      buildingNames = listOf(
+        "Iceberg VIP Floor",
+        "Glacial Shark Pit",
+        "Gargoyle Roof Rafters",
+        "Cobblepot Armory",
+        "GCPD Sewer Breach",
+        "Wayne Recon Pod",
+      ),
+      wonderWeapon = "Shock-Gloves Detective Core",
+      accentHex = 0xFFFFD54F,
+      secondaryHex = 0xFF448AFF,
+      isUserCreated = false,
+    ),
+    UserCustomGameMapSpec(
+      id = "area_col_custom_spider_helipad",
+      mapCode = "spidey_oscorp_helipad",
+      title = "Custom Spider-Man: Oscorp Spire",
+      gameCategory = CustomMapGameCategory.SPIDERMAN,
+      description = "Custom Spider-Verse skyline map spanning Oscorp's upper research helipad, web-zip cranes & Symbiote containment wings.",
+      buildingNames = listOf(
+        "Oscorp Upper Helipad",
+        "Symbiote Containment",
+        "Queens Sky-Zip Crane",
+        "Horizon Collider Core",
+        "Daily Bugle Relay",
+        "Otto Lab Catwalk",
+      ),
+      wonderWeapon = "Iron-Spider Web Conduit",
+      accentHex = 0xFFE53935,
+      secondaryHex = 0xFFE040FB,
+      isUserCreated = false,
+    ),
+    UserCustomGameMapSpec(
+      id = "area_col_custom_gow_tartarus",
+      mapCode = "gow_tartarus_forge",
+      title = "Custom GoW: Tartarus Forge",
+      gameCategory = CustomMapGameCategory.GODOFWAR,
+      description = "Custom Crucible God of War map in the molten depths of Tartarus with chain-anchored trial islands & Hydra rifts.",
+      buildingNames = listOf(
+        "Tartarus Gatehouse",
+        "Hephaestus Lava Anvil",
+        "Chaos Chain Bridge",
+        "Valkyrie Crucible",
+        "Water Hydra Rift",
+        "Spartan Glory Shrine",
+      ),
+      wonderWeapon = "Crucible BFG-9000",
+      accentHex = 0xFFFF5252,
+      secondaryHex = 0xFFFFAB40,
+      isUserCreated = false,
+    ),
+    UserCustomGameMapSpec(
+      id = "area_col_custom_division_mall",
+      mapCode = "div_dz09_mall",
+      title = "Custom Division: DZ-09 Mall",
+      gameCategory = CustomMapGameCategory.DIVISION,
+      description = "Custom SHD Dark Zone snowbound atrium & contaminated mall extraction zone with SHD supply boxes & Hunter turrets.",
+      buildingNames = listOf(
+        "DZ-09 Mall Atrium",
+        "SHD Safe Cache",
+        "Cleaners Incinerator",
+        "Roof Helipad Extract",
+        "ISAC Comms Balcony",
+        "Subway Escalator Lock",
+      ),
+      wonderWeapon = "Liberty Wunder-Arc",
+      accentHex = 0xFFFFAB40,
+      secondaryHex = 0xFF00E5FF,
+      isUserCreated = false,
+    ),
+  )
+
+  val allCuratedCustomMaps: List<UserCustomGameMapSpec> =
+    curatedBo3CustomMaps + curatedCollectionCustomMaps
+
+  fun findById(
+    areaId: String,
+    userCustomMaps: List<UserCustomGameMapSpec> = emptyList(),
+  ): UserCustomGameMapSpec? =
+    userCustomMaps.firstOrNull { it.id == areaId }
+      ?: allCuratedCustomMaps.firstOrNull { it.id == areaId }
+
+  fun resolveAreaSpec(
+    areaId: String,
+    userCustomMaps: List<UserCustomGameMapSpec> = emptyList(),
+  ): CustomAreaSpec {
+    findById(areaId, userCustomMaps)?.let { return it.toCustomAreaSpec() }
+    return MultiverseArsenalCatalog.areaById(areaId)
+  }
+
+  fun allPlayableAreas(userCustomMaps: List<UserCustomGameMapSpec> = emptyList()): List<CustomAreaSpec> {
+    val customSpecs = (userCustomMaps + allCuratedCustomMaps)
+      .distinctBy { it.id }
+      .map { it.toCustomAreaSpec() }
+    return (MultiverseArsenalCatalog.customAreas + customSpecs).distinctBy { it.id }
+  }
+}
+
 
 
 

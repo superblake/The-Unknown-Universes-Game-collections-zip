@@ -1,8 +1,11 @@
 package com.example.export
 
 import com.example.data.model.ArmoryItem
+import com.example.data.model.CuratedCustomMapsCatalog
+import com.example.data.model.CustomMapGameCategory
 import com.example.data.model.RigAsset
 import com.example.data.model.UniverseCatalog
+import com.example.data.model.UserCustomGameMapSpec
 import com.example.data.remote.FirestoreSyncCodec
 import org.json.JSONArray
 import org.json.JSONObject
@@ -16,6 +19,7 @@ data class Bo3CustomMapSpec(
   val description: String,
   val wonderWeapon: String,
   val defaultModeId: String = "zombies",
+  val isCommunityCustom: Boolean = false,
 )
 
 object Bo3ModToolsImporter {
@@ -58,11 +62,27 @@ object Bo3ModToolsImporter {
       description = "Original Element 115 Teleporter Reactor & Pack-a-Punch Catwalk.",
       wonderWeapon = "Thundergun",
     ),
-  )
+  ) + CuratedCustomMapsCatalog.curatedBo3CustomMaps.map { custom ->
+    Bo3CustomMapSpec(
+      areaId = custom.id,
+      mapCode = custom.mapCode,
+      title = custom.title,
+      description = custom.description,
+      wonderWeapon = custom.wonderWeapon,
+      defaultModeId = "zombies",
+      isCommunityCustom = true,
+    )
+  }
 
   fun resolveBo3AreaId(rawText: String): String? {
     val lower = rawText.lowercase(Locale.US)
     return when {
+      lower.contains("zm_leviathan") || lower.contains("leviathan") -> "area_bo3_custom_leviathan"
+      lower.contains("zm_kowloon") || lower.contains("kowloon") -> "area_bo3_custom_kowloon"
+      lower.contains("zm_town_reimagined") || lower.contains("town reimagined") -> "area_bo3_custom_town"
+      lower.contains("zm_herrenhaus") || lower.contains("herrenhaus") -> "area_bo3_custom_herrenhaus"
+      lower.contains("zm_cotd") || lower.contains("call of the dead") -> "area_bo3_custom_cotd"
+      lower.contains("zm_alcatraz") || lower.contains("mob of the dead") || lower.contains("mob remastered") -> "area_bo3_custom_mob"
       lower.contains("zm_prototype") || lower.contains("nacht") -> "area_bo3_nacht"
       lower.contains("zm_factory") || lower.contains("the giant") || lower.contains("area_bo3_the_giant") -> "area_bo3_the_giant"
       lower.contains("zm_stalingrad") || lower.contains("gorod") -> "area_bo3_gorod"
@@ -340,7 +360,31 @@ object Bo3ModToolsImporter {
       )
     }
 
-    val resolvedAreaId = resolveBo3AreaId("${root.optString("map")} $title $desc") ?: "area_bo3_the_giant"
+    val mapToken = root.optString("map", root.optString("mapCode", "")).trim()
+    val zonesList = mutableListOf<String>()
+    (root.optJSONArray("zones") ?: root.optJSONArray("buildingNames") ?: root.optJSONArray("zoneNames"))?.let { zArr ->
+      for (i in 0 until zArr.length().coerceAtMost(8)) {
+        val z = zArr.optString(i).trim()
+        if (z.isNotEmpty()) zonesList.add(z)
+      }
+    }
+    val matchedCuratedId = resolveBo3AreaId("$mapToken $title $desc")
+    val forgedCustomMap = if (matchedCuratedId == null && (mapToken.isNotEmpty() || zonesList.isNotEmpty() || title.lowercase(Locale.US).contains("map"))) {
+      val safeCode = mapToken.ifEmpty { "zm_custom_${title.lowercase(Locale.US).replace(Regex("[^a-z0-9]+"), "_").trim('_').take(20)}" }
+      val safeId = FirestoreSyncCodec.sanitizeId("area_bo3_custom_${safeCode.removePrefix("zm_")}", "area_bo3_custom")
+      UserCustomGameMapSpec(
+        id = safeId,
+        mapCode = safeCode,
+        title = title,
+        gameCategory = CustomMapGameCategory.BO3,
+        description = desc,
+        buildingNames = zonesList.ifEmpty { CustomMapGameCategory.BO3.defaultZones },
+        wonderWeapon = root.optString("wonderWeapon", "Ray Gun Mk.III"),
+        isUserCreated = true,
+        createdAtMillis = now,
+      )
+    } else null
+    val resolvedAreaId = forgedCustomMap?.id ?: matchedCuratedId ?: "area_bo3_the_giant"
 
     return Result.success(
       SteamWorkshopImportPreview(
@@ -358,9 +402,14 @@ object Bo3ModToolsImporter {
         blenderRigScript = null,
         generatedModule = null,
         generatedRig = null,
-        sourceNote = "Imported ${armoryList.size} BO3 Mod Tools item(s) up to Tier 25 + linked BO3 map.",
+        sourceNote = if (forgedCustomMap != null) {
+          "Parsed custom BO3 Zombies map '${forgedCustomMap.title}' (${forgedCustomMap.mapCode}) + ${armoryList.size} module(s)."
+        } else {
+          "Imported ${armoryList.size} BO3 Mod Tools item(s) up to Tier 25 + linked BO3 map."
+        },
         linkedWorldId = "sector_zero",
         linkedAreaId = resolvedAreaId,
+        customMap = forgedCustomMap,
       )
     )
   }
@@ -515,7 +564,24 @@ object Bo3ModToolsImporter {
       updatedAtMillis = now,
     )
 
-    val resolvedAreaId = resolveBo3AreaId(rawText) ?: "area_bo3_nacht"
+    val matchedCuratedId = resolveBo3AreaId(rawText)
+    val customMapFromScript = if (matchedCuratedId == null && (lower.contains("zm_") || lower.contains("map") || lower.contains("zone"))) {
+      val mapCodeMatch = Regex("""zm_[a-z0-9_]{2,28}""", RegexOption.IGNORE_CASE).find(rawText)?.value
+        ?: "zm_custom_${cleanName.lowercase(Locale.US).replace(Regex("[^a-z0-9]+"), "_").trim('_').take(16)}"
+      val safeId = FirestoreSyncCodec.sanitizeId("area_bo3_custom_${mapCodeMatch.removePrefix("zm_")}", "area_bo3_custom")
+      UserCustomGameMapSpec(
+        id = safeId,
+        mapCode = mapCodeMatch,
+        title = cleanName,
+        gameCategory = CustomMapGameCategory.BO3,
+        description = rawText.take(240),
+        buildingNames = CustomMapGameCategory.BO3.defaultZones,
+        wonderWeapon = "Ray Gun Mk.III",
+        isUserCreated = true,
+        createdAtMillis = now,
+      )
+    } else null
+    val resolvedAreaId = customMapFromScript?.id ?: matchedCuratedId ?: "area_bo3_nacht"
 
     return Result.success(
       SteamWorkshopImportPreview(
@@ -533,9 +599,14 @@ object Bo3ModToolsImporter {
         blenderRigScript = null,
         generatedModule = null,
         generatedRig = null,
-        sourceNote = "Imported 1 custom BO3 Mod Tools item ready for Tier 1-25 progression.",
+        sourceNote = if (customMapFromScript != null) {
+          "Parsed Custom BO3 Map '${customMapFromScript.title}' (${customMapFromScript.mapCode}) ready to deploy!"
+        } else {
+          "Imported 1 custom BO3 Mod Tools item ready for Tier 1-25 progression."
+        },
         linkedWorldId = "sector_zero",
         linkedAreaId = resolvedAreaId,
+        customMap = customMapFromScript,
       )
     )
   }

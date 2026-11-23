@@ -1373,7 +1373,9 @@ object MultiverseArsenalCatalog {
   )
 
   fun areaById(id: String): CustomAreaSpec =
-    customAreas.firstOrNull { it.id == id } ?: customAreas.first()
+    customAreas.firstOrNull { it.id == id }
+      ?: CuratedCustomMapsCatalog.findById(id)?.toCustomAreaSpec()
+      ?: customAreas.first()
 
   val tradeOffers: List<TradeOfferSpec> = listOf(
     TradeOfferSpec(

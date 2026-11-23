@@ -15,6 +15,7 @@ import com.example.data.model.CollectionCustomModeConfig
 import com.example.data.model.CollectionCustomScope
 import com.example.data.model.CollectionDifficulty
 import com.example.data.model.CustomAreaState
+import com.example.data.model.CustomMapGameCategory
 import com.example.data.model.EquipmentSlotType
 import com.example.data.model.EquipmentState
 import com.example.data.model.GearSlot
@@ -51,6 +52,7 @@ import com.example.data.model.PrivateMatchRules
 import com.example.data.model.SocialCatalog
 import com.example.data.model.UniverseCatalog
 import com.example.data.model.UpgradeCosts
+import com.example.data.model.UserCustomGameMapSpec
 import com.example.data.model.WonderWeaponKind
 import com.example.data.model.WorldDifficultyTier
 import com.example.security.AppSecurityManager
@@ -205,7 +207,7 @@ class ProgressionStore(
 
   fun updateCollectionCustomMode(transform: (CollectionCustomModeConfig) -> CollectionCustomModeConfig) {
     val updated = transform(current.collectionCustomMode)
-    val allowedIds = CollectionCustomModeConfig.scopedAreas(updated.scope).map { it.id }.toSet()
+    val allowedIds = CollectionCustomModeConfig.scopedAreas(updated.scope, current.customGameMaps).map { it.id }.toSet()
     val safeAreaId = if (updated.targetAreaId in allowedIds) {
       updated.targetAreaId
     } else {
@@ -221,10 +223,49 @@ class ProgressionStore(
     )
   }
 
+  fun addOrUpdateCustomGameMap(mapSpec: UserCustomGameMapSpec): UserCustomGameMapSpec {
+    val cur = current
+    val sanitizedZones = mapSpec.buildingNames.map { it.trim() }.filter { it.isNotEmpty() }
+      .ifEmpty { mapSpec.gameCategory.defaultZones }
+    val normalized = mapSpec.copy(
+      buildingNames = sanitizedZones.take(8),
+      title = mapSpec.title.trim().take(54).ifBlank { "Custom ${mapSpec.gameCategory.label} Map" },
+      mapCode = mapSpec.mapCode.trim().take(40).ifBlank { "custom_map" },
+      description = mapSpec.description.trim().take(240),
+      wonderWeapon = mapSpec.wonderWeapon.trim().take(48).ifBlank { mapSpec.gameCategory.defaultWonderWeapon },
+    )
+    val nextMaps = (cur.customGameMaps.filterNot { it.id == normalized.id } + normalized).take(40)
+    val nextAreas = if (cur.areaStates.containsKey(normalized.id)) {
+      cur.areaStates
+    } else {
+      cur.areaStates + (normalized.id to CustomAreaState(normalized.id))
+    }
+    save(cur.copy(customGameMaps = nextMaps, areaStates = nextAreas))
+    return normalized
+  }
+
+  fun deleteCustomGameMap(mapId: String) {
+    val cur = current
+    val nextMaps = cur.customGameMaps.filterNot { it.id == mapId }
+    val nextActive = if (cur.activeAreaId == mapId) "area_bo3_the_giant" else cur.activeAreaId
+    val nextCustomModeArea = if (cur.collectionCustomMode.targetAreaId == mapId) {
+      "area_bo3_the_giant"
+    } else {
+      cur.collectionCustomMode.targetAreaId
+    }
+    save(
+      cur.copy(
+        customGameMaps = nextMaps,
+        activeAreaId = nextActive,
+        collectionCustomMode = cur.collectionCustomMode.copy(targetAreaId = nextCustomModeArea),
+      ),
+    )
+  }
+
   fun hostPrivateMatch(rules: PrivateMatchRules, hostCallsign: String): MultiverseMatchListing {
     val activeWorld = UniverseCatalog.worldById(rules.worldId)
     val activeMode = UniverseCatalog.modeById(rules.modeId)
-    val activeArea = MultiverseArsenalCatalog.areaById(rules.areaId)
+    val activeArea = current.resolveAreaSpec(rules.areaId)
     val listing = MultiverseMatchListing(
       id = "match_${rules.roomCode.lowercase()}_${System.currentTimeMillis() % 10000}",
       roomName = rules.roomName,
@@ -814,7 +855,7 @@ class ProgressionStore(
   // AREAS & TEMPORAL AGING SYSTEM
   fun selectArea(areaId: String) {
     val cur = current
-    val spec = MultiverseArsenalCatalog.areaById(areaId)
+    val spec = cur.resolveAreaSpec(areaId)
     save(
       cur.copy(
         activeAreaId = spec.id,
@@ -2204,6 +2245,23 @@ class ProgressionStore(
         put("collectionAmbushSurge", cm.collectionAmbushSurge)
         put("disableWonderDrops", cm.disableWonderDrops)
       })
+      put("customGameMaps", JSONArray().apply {
+        next.customGameMaps.forEach { m ->
+          put(JSONObject().apply {
+            put("id", m.id)
+            put("mapCode", m.mapCode)
+            put("title", m.title)
+            put("gameCategory", m.gameCategory.id)
+            put("description", m.description)
+            put("buildingNames", JSONArray(m.buildingNames))
+            put("wonderWeapon", m.wonderWeapon)
+            put("accentHex", m.accentHex)
+            put("secondaryHex", m.secondaryHex)
+            put("isUserCreated", m.isUserCreated)
+            put("createdAtMillis", m.createdAtMillis)
+          })
+        }
+      })
     }
   }
 
@@ -2797,11 +2855,45 @@ class ProgressionStore(
       } ?: fallback.worldCollectionDifficultyMap
     }
 
+    val customMapsList = safeParse(fallback.customGameMaps) {
+      val arr = root.optJSONArray("customGameMaps")
+      if (arr != null) {
+        val list = ArrayList<UserCustomGameMapSpec>(arr.length())
+        for (i in 0 until arr.length()) {
+          val obj = arr.optJSONObject(i) ?: continue
+          val cat = CustomMapGameCategory.fromId(obj.optString("gameCategory", CustomMapGameCategory.BO3.id))
+          val zones = mutableListOf<String>()
+          obj.optJSONArray("buildingNames")?.let { zArr ->
+            for (z in 0 until zArr.length()) {
+              val s = zArr.optString(z).trim()
+              if (s.isNotEmpty()) zones.add(s)
+            }
+          }
+          list.add(
+            UserCustomGameMapSpec(
+              id = obj.optString("id", "area_bo3_custom_$i").ifBlank { "area_bo3_custom_$i" },
+              mapCode = obj.optString("mapCode", "zm_custom_$i"),
+              title = obj.optString("title", "Custom Map $i"),
+              gameCategory = cat,
+              description = obj.optString("description", "${cat.label} custom map."),
+              buildingNames = zones.ifEmpty { cat.defaultZones },
+              wonderWeapon = obj.optString("wonderWeapon", cat.defaultWonderWeapon),
+              accentHex = obj.optLong("accentHex", cat.defaultAccentHex),
+              secondaryHex = obj.optLong("secondaryHex", 0xFF00E5FF),
+              isUserCreated = obj.optBoolean("isUserCreated", true),
+              createdAtMillis = obj.optLong("createdAtMillis", 0L),
+            )
+          )
+        }
+        list
+      } else fallback.customGameMaps
+    }
+
     val customModeCfg = safeParse(fallback.collectionCustomMode) {
       root.optJSONObject("collectionCustomMode")?.let { obj ->
         val parsedScope = CollectionCustomScope.fromId(obj.optString("scope", fallback.collectionCustomMode.scope.id))
         val rawAreaId = obj.optString("targetAreaId", fallback.collectionCustomMode.targetAreaId)
-        val allowedAreaIds = CollectionCustomModeConfig.scopedAreas(parsedScope).map { it.id }.toSet()
+        val allowedAreaIds = CollectionCustomModeConfig.scopedAreas(parsedScope, customMapsList).map { it.id }.toSet()
         val safeAreaId = if (rawAreaId in allowedAreaIds) rawAreaId else (allowedAreaIds.firstOrNull() ?: "area_bo3_the_giant")
         CollectionCustomModeConfig(
           enabled = obj.optBoolean("enabled", fallback.collectionCustomMode.enabled),
@@ -2892,6 +2984,7 @@ class ProgressionStore(
       ngPlusCompletions = root.optInt("ngPlusCompletions", fallback.ngPlusCompletions).coerceAtLeast(0),
       worldCollectionDifficultyMap = worldColDiffMap,
       collectionCustomMode = customModeCfg,
+      customGameMaps = customMapsList,
     )
   }
 
@@ -3047,6 +3140,7 @@ class ProgressionStore(
       activeNgPlusTier = maxOf(base.activeNgPlusTier, incoming.activeNgPlusTier).coerceAtMost(maxOf(base.unlockedNgPlusTier, incoming.unlockedNgPlusTier)),
       ngPlusCompletions = maxOf(base.ngPlusCompletions, incoming.ngPlusCompletions),
       worldCollectionDifficultyMap = base.worldCollectionDifficultyMap + incoming.worldCollectionDifficultyMap,
+      customGameMaps = (base.customGameMaps + incoming.customGameMaps).distinctBy { it.id },
     )
   }
 

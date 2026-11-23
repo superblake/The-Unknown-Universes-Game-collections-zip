@@ -3,9 +3,12 @@ package com.example.export
 import com.example.BuildConfig
 import com.example.data.local.SaveDataSerializer
 import com.example.data.model.ArmoryItem
+import com.example.data.model.CuratedCustomMapsCatalog
+import com.example.data.model.CustomMapGameCategory
 import com.example.data.model.OperatorProfile
 import com.example.data.model.RigAsset
 import com.example.data.model.UniverseCatalog
+import com.example.data.model.UserCustomGameMapSpec
 import com.example.data.remote.FirestoreSyncCodec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -78,6 +81,7 @@ data class SteamWorkshopImportPreview(
   val sourceNote: String = "",
   val linkedWorldId: String? = null,
   val linkedAreaId: String? = null,
+  val customMap: UserCustomGameMapSpec? = null,
 )
 
 data class GameCollectionWorkshopPreset(
@@ -358,6 +362,70 @@ object SteamWorkshopCodec {
       sourceNote = "${items.size} ${preset.universeTag} modules, 1 ForgeRig & linked map ready to deploy.",
       linkedWorldId = preset.linkedWorldId,
       linkedAreaId = preset.linkedAreaId,
+    )
+  }
+
+  val collectionCustomMapsCatalog: List<UserCustomGameMapSpec>
+    get() = CuratedCustomMapsCatalog.allCuratedCustomMaps
+
+  fun resolveCollectionCustomMapId(rawMeta: String): String? {
+    val lower = rawMeta.lowercase()
+    return when {
+      lower.contains("red-zone") || lower.contains("redzone") || lower.contains("prot_redzone") -> "area_col_custom_blacklight_rooftops"
+      lower.contains("stasis pier") || lower.contains("inf_stasis_pier") -> "area_col_custom_infamous_pier"
+      lower.contains("iceberg lounge") || lower.contains("arkham_iceberg_lounge") -> "area_col_custom_arkham_lounge"
+      lower.contains("oscorp") && lower.contains("helipad") || lower.contains("spidey_oscorp") -> "area_col_custom_spider_helipad"
+      lower.contains("tartarus") || lower.contains("gow_tartarus") -> "area_col_custom_gow_tartarus"
+      lower.contains("dz-09 mall") || lower.contains("dz09_mall") -> "area_col_custom_division_mall"
+      else -> Bo3ModToolsImporter.resolveBo3AreaId(lower)
+    }
+  }
+
+  fun getCollectionCustomMapPack(
+    mapId: String,
+    targetUserId: String,
+  ): SteamWorkshopImportPreview {
+    val spec = CuratedCustomMapsCatalog.findById(mapId)
+      ?: CuratedCustomMapsCatalog.curatedBo3CustomMaps.first()
+    val now = System.currentTimeMillis()
+    val isBo3 = spec.gameCategory == CustomMapGameCategory.BO3
+    val matchedPreset = findCollectionPreset(spec.gameCategory.id)
+    val modItem = ArmoryItem(
+      id = FirestoreSyncCodec.sanitizeId("ws_map_mod_${spec.mapCode}", "ws_map"),
+      userId = targetUserId,
+      name = "${spec.title.substringAfter(": ").trim()} Core",
+      category = "power",
+      universeTag = if (isBo3) "BO3 Mod Tools" else (matchedPreset?.universeTag ?: spec.gameCategory.label),
+      description = "Workshop custom map addon for ${spec.title} (${spec.wonderWeapon}).",
+      tier = 1L,
+      maxTier = 25L,
+      cooldownSec = 5L,
+      powerValue = 320L,
+      accentColorHex = spec.gameCategory.accentColorHex,
+      equipped = true,
+      isCustom = true,
+      createdAtMillis = now,
+      updatedAtMillis = now,
+    )
+    return SteamWorkshopImportPreview(
+      sourceKind = if (isBo3) "BO3_CUSTOM_WORKSHOP_MAP" else "COLLECTION_WORKSHOP_CUSTOM_MAP",
+      title = spec.title,
+      description = spec.description,
+      publishedFileId = matchedPreset?.sampleWorkshopId ?: "311210999",
+      appId = matchedPreset?.appId ?: "311210",
+      creatorSteamId = "SteamWorkshop_Curated",
+      tags = listOf(spec.gameCategory.label, "CustomMap", spec.mapCode),
+      subscriptions = 9400L,
+      views = 32000L,
+      armoryItems = listOf(modItem),
+      customRigs = emptyList(),
+      blenderRigScript = null,
+      generatedModule = null,
+      generatedRig = null,
+      sourceNote = "Workshop Custom Map '${spec.title}' (${spec.buildingNames.size} zones, WW: ${spec.wonderWeapon}) ready to play!",
+      linkedWorldId = spec.gameCategory.linkedWorldId,
+      linkedAreaId = spec.id,
+      customMap = spec.copy(isUserCreated = true, createdAtMillis = now),
     )
   }
 
@@ -867,8 +935,45 @@ object SteamWorkshopCodec {
     val cleanDesc = details.description
       .ifBlank { "Imported from Steam Workshop #${details.publishedFileId} ($tagSummary)" }
       .take(240)
-    val resolvedAreaId = Bo3ModToolsImporter.resolveBo3AreaId(lowerMeta) ?: matchedPreset?.linkedAreaId
-    val resolvedWorldId = if (resolvedAreaId?.startsWith("area_bo3_") == true) "sector_zero" else matchedPreset?.linkedWorldId
+    val resolvedCustomMapId = resolveCollectionCustomMapId(lowerMeta)
+    val explicitBo3Map = Bo3ModToolsImporter.resolveBo3AreaId(lowerMeta)
+    val isCustomMapItem = lowerMeta.contains("map") || details.tags.any { it.equals("Map", ignoreCase = true) || it.equals("CustomMap", ignoreCase = true) || it.equals("Zombies", ignoreCase = true) }
+    val synthesizedCustomMap = if (resolvedCustomMapId == null && isCustomMapItem && (matchedPreset != null || lowerMeta.contains("zm_"))) {
+      val cat = when (matchedPreset?.key) {
+        "prototype" -> CustomMapGameCategory.PROTOTYPE
+        "arkham" -> CustomMapGameCategory.ARKHAM
+        "spiderman" -> CustomMapGameCategory.SPIDERMAN
+        "godofwar" -> CustomMapGameCategory.GODOFWAR
+        "division" -> CustomMapGameCategory.DIVISION
+        "bo3" -> CustomMapGameCategory.BO3
+        "generic" -> CustomMapGameCategory.INFAMOUS
+        else -> if (lowerMeta.contains("zm_") || lowerMeta.contains("bo3")) CustomMapGameCategory.BO3 else CustomMapGameCategory.INFAMOUS
+      }
+      val mapCodeMatch = Regex("""zm_[a-z0-9_]{2,28}""", RegexOption.IGNORE_CASE).find(lowerMeta)?.value
+        ?: "${cat.id}_ws_${idToken.take(10)}"
+      val areaPrefix = if (cat == CustomMapGameCategory.BO3) "area_bo3_custom_" else "area_col_custom_"
+      val mapId = FirestoreSyncCodec.sanitizeId("${areaPrefix}${mapCodeMatch.removePrefix("zm_")}", areaPrefix.trimEnd('_'))
+      UserCustomGameMapSpec(
+        id = mapId,
+        mapCode = mapCodeMatch,
+        title = details.title.trim().take(48).ifEmpty { "Workshop Custom Map" },
+        gameCategory = cat,
+        description = cleanDesc,
+        buildingNames = cat.defaultZones,
+        wonderWeapon = cat.defaultWonderWeapon,
+        accentHex = cat.defaultAccentHex,
+        isUserCreated = true,
+        createdAtMillis = now,
+      )
+    } else null
+
+    val resolvedAreaId = synthesizedCustomMap?.id ?: resolvedCustomMapId ?: explicitBo3Map ?: matchedPreset?.linkedAreaId
+    val resolvedWorldId = when {
+      synthesizedCustomMap != null -> synthesizedCustomMap.gameCategory.linkedWorldId
+      resolvedAreaId?.startsWith("area_bo3_") == true -> "sector_zero"
+      resolvedAreaId != null -> CuratedCustomMapsCatalog.findById(resolvedAreaId)?.gameCategory?.linkedWorldId ?: matchedPreset?.linkedWorldId
+      else -> matchedPreset?.linkedWorldId
+    }
 
     val addonModule = ArmoryItem(
       id = FirestoreSyncCodec.sanitizeId("ws_mod_$idToken", "ws_mod"),
@@ -924,9 +1029,13 @@ object SteamWorkshopCodec {
         if (matchedPreset != null) {
           append(" Matched collection: ${matchedPreset.gameTitle}.")
         }
+        if (synthesizedCustomMap != null) {
+          append(" Created custom playable map: ${synthesizedCustomMap.title}.")
+        }
       },
       linkedWorldId = resolvedWorldId,
       linkedAreaId = resolvedAreaId,
+      customMap = synthesizedCustomMap,
     )
   }
 
