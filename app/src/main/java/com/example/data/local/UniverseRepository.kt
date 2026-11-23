@@ -126,7 +126,10 @@ class UniverseRepository(
         dao.upsertArmoryItems(starterArmoryItems(userId, now))
         dao.upsertRigs(starterRigs(userId, now))
       } else {
-        if (!displayName.isNullOrBlank() && displayName.trim().length >= 2 && existing.callsign != displayName.trim().take(30)) {
+        if (!displayName.isNullOrBlank() && displayName.trim().length >= 2 &&
+          (existing.callsign.isBlank() || existing.callsign == "VanguardPrime") &&
+          existing.callsign != displayName.trim().take(30)
+        ) {
           val updated = existing.copy(
             callsign = displayName.trim().take(30),
             updatedAtMillis = System.currentTimeMillis(),

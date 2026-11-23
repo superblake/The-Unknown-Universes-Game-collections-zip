@@ -76,6 +76,23 @@ data class SteamWorkshopImportPreview(
   val generatedModule: ArmoryItem? = null,
   val generatedRig: RigAsset? = null,
   val sourceNote: String = "",
+  val linkedWorldId: String? = null,
+  val linkedAreaId: String? = null,
+)
+
+data class GameCollectionWorkshopPreset(
+  val key: String,
+  val appId: String,
+  val label: String,
+  val gameTitle: String,
+  val universeTag: String,
+  val linkedWorldId: String,
+  val linkedAreaId: String,
+  val archetype: String,
+  val accentHex: String,
+  val sampleWorkshopId: String,
+  val modNames: List<Pair<String, String>>,
+  val description: String,
 )
 
 object SteamWorkshopCodec {
@@ -85,6 +102,264 @@ object SteamWorkshopCodec {
   private const val STEAM_PUBLISHED_FILE_API =
     "https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/"
   private const val MAX_REMOTE_PAYLOAD_BYTES = 1_500_000
+
+  val collectionGamePresets: List<GameCollectionWorkshopPreset> = listOf(
+    GameCollectionWorkshopPreset(
+      key = "bo3",
+      appId = "311210",
+      label = "BO3 Mod Tools (311210)",
+      gameTitle = "Call of Duty: Black Ops III Mod Tools",
+      universeTag = "BO3 Mod Tools",
+      linkedWorldId = "sector_zero",
+      linkedAreaId = "area_bo3_the_giant",
+      archetype = "operator",
+      accentHex = "#00E5FF",
+      sampleWorkshopId = "311210001",
+      modNames = listOf(
+        "BO3 Pack-a-Punch Mk.III" to "upgrade",
+        "BO3 Wunderfizz Overload" to "perk",
+      ),
+      description = "BO3 Mod Tools .XMODEL/.XANIM/.GDT perks, Wonder Weapons & custom Zombies maps (Nacht, The Giant, Gorod Krovi, Shadows).",
+    ),
+    GameCollectionWorkshopPreset(
+      key = "prototype",
+      appId = "115320",
+      label = "Prototype (115320)",
+      gameTitle = "Prototype / Blacklight Bio-Hive",
+      universeTag = "TUU Prototype",
+      linkedWorldId = "blacklight_conduit",
+      linkedAreaId = "area_blacklight_hive",
+      archetype = "biomorph",
+      accentHex = "#FF3D71",
+      sampleWorkshopId = "115320001",
+      modNames = listOf(
+        "Blacklight Tendril Cleaver" to "power",
+        "Mercer Devastator Mass" to "perk",
+      ),
+      description = "Alex Mercer bio-blade tendrils, Water Hive armor plating, and Gentek viral surge modules.",
+    ),
+    GameCollectionWorkshopPreset(
+      key = "arkham",
+      appId = "209000",
+      label = "Batman Arkham (209000)",
+      gameTitle = "Batman: Arkham Origins & Black Gate",
+      universeTag = "TUU Arkham",
+      linkedWorldId = "gotham_arkham",
+      linkedAreaId = "area_gotham_blackgate",
+      archetype = "operator",
+      accentHex = "#FFD54F",
+      sampleWorkshopId = "209000001",
+      modNames = listOf(
+        "Shock-Gloves Detective Pulse" to "power",
+        "Hellbat Kevlar Weave" to "perk",
+      ),
+      description = "Black Gate detective recon, Shock Gloves kinetic bursts, and Batcave WayneTech rigs.",
+    ),
+    GameCollectionWorkshopPreset(
+      key = "spiderman",
+      appId = "1817070",
+      label = "Spider-Man (1817070)",
+      gameTitle = "Spider-Verse: Queens & Oscorp",
+      universeTag = "Spider-Verse",
+      linkedWorldId = "spiderverse_queens",
+      linkedAreaId = "area_spiderman_queens",
+      archetype = "biomorph",
+      accentHex = "#E53935",
+      sampleWorkshopId = "181707001",
+      modNames = listOf(
+        "Iron-Spider Waldoes Volley" to "power",
+        "Symbiote Reflex Surge" to "perk",
+      ),
+      description = "Queens rooftop web-zip accelerators, Symbiote tendril combos, and Oscorp suit modules.",
+    ),
+    GameCollectionWorkshopPreset(
+      key = "godofwar",
+      appId = "1593500",
+      label = "God of War (1593500)",
+      gameTitle = "TUU God of War: Mythic Crucible",
+      universeTag = "TUU God of War",
+      linkedWorldId = "hellbreaker_citadel",
+      linkedAreaId = "area_hellbreaker_crucible",
+      archetype = "infernal",
+      accentHex = "#FF5252",
+      sampleWorkshopId = "159350001",
+      modNames = listOf(
+        "Crucible Chaos Chain Slam" to "power",
+        "Spartan Rage Siphon" to "perk",
+      ),
+      description = "Leviathan frost cleaves, Chaos blade shockwaves, and Crucible zero-cooldown fury.",
+    ),
+    GameCollectionWorkshopPreset(
+      key = "division",
+      appId = "365590",
+      label = "The Division (365590)",
+      gameTitle = "Sector Zero: SHD Dark Zone",
+      universeTag = "Sector Zero SHD",
+      linkedWorldId = "sector_zero",
+      linkedAreaId = "area_sector_zero",
+      archetype = "operator",
+      accentHex = "#FFAB40",
+      sampleWorkshopId = "365590001",
+      modNames = listOf(
+        "ISAC Seeker Cluster Mine" to "power",
+        "SHD Striker Battlegear" to "perk",
+      ),
+      description = "SHD ISAC tactical pulses, Dark Zone extraction turrets, and Striker armor calibration.",
+    ),
+    GameCollectionWorkshopPreset(
+      key = "force_unleashed",
+      appId = "32430",
+      label = "Force Unleashed (32430)",
+      gameTitle = "Aegis & Starblade: Force Unleashed",
+      universeTag = "Aegis Starblade",
+      linkedWorldId = "aegis_starblade",
+      linkedAreaId = "area_aegis_orbital",
+      archetype = "starblade",
+      accentHex = "#00E5FF",
+      sampleWorkshopId = "32430001",
+      modNames = listOf(
+        "Starkiller Force Repulse" to "power",
+        "Twin Kyber Saber Crystal" to "upgrade",
+      ),
+      description = "Starkiller orbital Force shockwaves, twin Kyber saber throws, and Kamino clone bay rigs.",
+    ),
+    GameCollectionWorkshopPreset(
+      key = "ironman",
+      appId = "997070",
+      label = "Iron Man / Stark (997070)",
+      gameTitle = "Stark Tower: Hall of Armor",
+      universeTag = "Stark Orbital",
+      linkedWorldId = "stark_orbital",
+      linkedAreaId = "area_ironman_stark",
+      archetype = "chrono",
+      accentHex = "#FF3D71",
+      sampleWorkshopId = "997070001",
+      modNames = listOf(
+        "Bleeding Edge Unibeam Core" to "power",
+        "Veronica Arc Shield Matrix" to "perk",
+      ),
+      description = "Palladium Arc Reactor repulsor salvos, J.A.R.V.I.S. flight stabilization, and Hulkbuster plating.",
+    ),
+    GameCollectionWorkshopPreset(
+      key = "ship_of_heroes",
+      appId = "1884640",
+      label = "Ship of Heroes (1884640)",
+      gameTitle = "Ship of Heroes: Apotheosis Fleet",
+      universeTag = "Ship of Heroes",
+      linkedWorldId = "ship_of_heroes_apotheosis",
+      linkedAreaId = "area_ship_of_heroes_deck",
+      archetype = "chrono",
+      accentHex = "#E040FB",
+      sampleWorkshopId = "188464001",
+      modNames = listOf(
+        "Apotheosis Photon Nova" to "power",
+        "Starship Admiral Aura" to "perk",
+      ),
+      description = "FHS Apotheosis orbital hero powers, squad shield bubbles, and crossover gateway rigs.",
+    ),
+    GameCollectionWorkshopPreset(
+      key = "generic",
+      appId = "480",
+      label = "Generic / Empire City (480)",
+      gameTitle = "inFAMOUS Empire City & Universal Workshop",
+      universeTag = "TUU Infamous",
+      linkedWorldId = "empire_city_infamous",
+      linkedAreaId = "area_empire_city",
+      archetype = "operator",
+      accentHex = "#66C0F4",
+      sampleWorkshopId = "48000001",
+      modNames = listOf(
+        "Ray-Sphere Arc Storm" to "power",
+        "Blast Shard Conduit Core" to "perk",
+      ),
+      description = "Universal SteamCMD Workshop App 480 pack pre-tuned for Empire City Conduit lightning & crossover loadouts.",
+    ),
+  )
+
+  fun findCollectionPreset(appIdOrKeyOrMeta: String?): GameCollectionWorkshopPreset? {
+    val token = appIdOrKeyOrMeta?.trim()?.lowercase().orEmpty()
+    if (token.isEmpty()) return null
+    return collectionGamePresets.firstOrNull {
+      it.key == token || it.appId == token
+    } ?: collectionGamePresets.firstOrNull { preset ->
+      when (preset.key) {
+        "bo3" -> token.contains("bo3") || token.contains("black ops") || token.contains("zombies") || token.contains("treyarch")
+        "prototype" -> token.contains("prototype") || token.contains("mercer") || token.contains("blacklight")
+        "arkham" -> token.contains("batman") || token.contains("arkham") || token.contains("gotham") || token.contains("blackgate")
+        "spiderman" -> token.contains("spider") || token.contains("symbiote") || token.contains("oscorp")
+        "godofwar" -> token.contains("god of war") || token.contains("kratos") || token.contains("crucible")
+        "division" -> token.contains("division") || token.contains("shd") || token.contains("isac") || token.contains("sector zero")
+        "force_unleashed" -> token.contains("starkiller") || token.contains("force unleashed") || token.contains("kyber") || token.contains("star wars")
+        "ironman" -> token.contains("iron man") || token.contains("stark") || token.contains("hulkbuster") || token.contains("arc reactor")
+        "ship_of_heroes" -> token.contains("ship of heroes") || token.contains("apotheosis") || token.contains("crossover")
+        else -> token.contains("infamous") || token.contains("conduit") || token.contains("empire city")
+      }
+    }
+  }
+
+  fun getGameCollectionWorkshopPack(
+    appIdOrKey: String,
+    targetUserId: String,
+  ): SteamWorkshopImportPreview {
+    if (appIdOrKey.equals("bo3", ignoreCase = true) || appIdOrKey == "311210") {
+      return Bo3ModToolsImporter.getCuratedBo3ModPack(targetUserId)
+    }
+    val preset = findCollectionPreset(appIdOrKey) ?: collectionGamePresets.last()
+    val now = System.currentTimeMillis()
+    val items = preset.modNames.mapIndexed { idx, (modName, cat) ->
+      ArmoryItem(
+        id = FirestoreSyncCodec.sanitizeId("ws_${preset.key}_$idx", "ws_col"),
+        userId = targetUserId,
+        name = modName,
+        category = cat,
+        universeTag = preset.universeTag,
+        description = "${preset.gameTitle} curated Workshop module (Tier 1-25 scaling).",
+        tier = 1L,
+        maxTier = 25L,
+        cooldownSec = if (cat == "perk") 0L else 6L,
+        powerValue = 260L + idx * 70L,
+        accentColorHex = preset.accentHex,
+        equipped = true,
+        isCustom = true,
+        createdAtMillis = now + idx,
+        updatedAtMillis = now + idx,
+      )
+    }
+    val rig = RigAsset(
+      id = FirestoreSyncCodec.sanitizeId("ws_${preset.key}_rig", "ws_col_rig"),
+      userId = targetUserId,
+      name = "${preset.gameTitle.substringBefore(':')} Workshop Rig",
+      archetype = preset.archetype,
+      activeClip = "idle",
+      ikEnabled = true,
+      rigScale = 1.0,
+      playbackSpeed = 1.0,
+      poseAngles = UniverseCatalog.defaultPoseMap(),
+      keyframeFrames = listOf(0L, 15L, 30L, 45L, 60L),
+      isCompleted = true,
+      createdAtMillis = now,
+      updatedAtMillis = now,
+    )
+    return SteamWorkshopImportPreview(
+      sourceKind = "COLLECTION_WORKSHOP_PACK",
+      title = "${preset.gameTitle} Workshop Pack",
+      description = preset.description,
+      publishedFileId = preset.sampleWorkshopId,
+      appId = preset.appId,
+      creatorSteamId = "UnknownOS_Collection",
+      tags = listOf(preset.universeTag, "Workshop", "Tier25"),
+      subscriptions = 4200L,
+      views = 15800L,
+      armoryItems = items,
+      customRigs = listOf(rig),
+      blenderRigScript = null,
+      generatedModule = null,
+      generatedRig = null,
+      sourceNote = "${items.size} ${preset.universeTag} modules, 1 ForgeRig & linked map ready to deploy.",
+      linkedWorldId = preset.linkedWorldId,
+      linkedAreaId = preset.linkedAreaId,
+    )
+  }
 
   fun sanitizeNumericId(raw: String, fallback: String): String {
     val digits = raw.trim().filter(Char::isDigit).take(20)
@@ -578,30 +853,35 @@ object SteamWorkshopCodec {
       if (details.consumerAppId.isNotBlank()) "Steam App ${details.consumerAppId}" else "Steam Workshop"
     }
     val lowerMeta = "${details.title} ${details.description} ${details.tags.joinToString(" ")}".lowercase()
+    val matchedPreset = findCollectionPreset(details.consumerAppId.takeIf { it != "480" })
+      ?: findCollectionPreset(lowerMeta)
     val archetype = when {
       lowerMeta.contains("star") || lowerMeta.contains("saber") || lowerMeta.contains("jedi") -> "starblade"
       lowerMeta.contains("bio") || lowerMeta.contains("zombie") || lowerMeta.contains("infected") -> "biomorph"
       lowerMeta.contains("fire") || lowerMeta.contains("hell") || lowerMeta.contains("infernal") -> "infernal"
       lowerMeta.contains("time") || lowerMeta.contains("chrono") || lowerMeta.contains("cyber") -> "chrono"
+      matchedPreset != null -> matchedPreset.archetype
       else -> "operator"
     }
     val category = if (lowerMeta.contains("perk") || lowerMeta.contains("passive") || lowerMeta.contains("armor")) "perk" else "power"
     val cleanDesc = details.description
       .ifBlank { "Imported from Steam Workshop #${details.publishedFileId} ($tagSummary)" }
       .take(240)
+    val resolvedAreaId = Bo3ModToolsImporter.resolveBo3AreaId(lowerMeta) ?: matchedPreset?.linkedAreaId
+    val resolvedWorldId = if (resolvedAreaId?.startsWith("area_bo3_") == true) "sector_zero" else matchedPreset?.linkedWorldId
 
     val addonModule = ArmoryItem(
       id = FirestoreSyncCodec.sanitizeId("ws_mod_$idToken", "ws_mod"),
       userId = targetUserId,
       name = details.title.trim().take(50).ifEmpty { "Workshop Module" },
       category = category,
-      universeTag = "Workshop #$idToken".take(40),
+      universeTag = matchedPreset?.universeTag ?: "Workshop #$idToken".take(40),
       description = cleanDesc,
       tier = 1L,
       maxTier = 25L,
       cooldownSec = if (category == "perk") 0L else 6L,
-      powerValue = 175L,
-      accentColorHex = "#66C0F4",
+      powerValue = if (matchedPreset != null) 220L else 175L,
+      accentColorHex = matchedPreset?.accentHex ?: "#66C0F4",
       equipped = true,
       isCustom = true,
       createdAtMillis = now,
@@ -629,7 +909,7 @@ object SteamWorkshopCodec {
       title = details.title,
       description = details.description,
       publishedFileId = details.publishedFileId.takeIf { it.isNotBlank() && it != "0" },
-      appId = details.consumerAppId.takeIf { it.isNotBlank() },
+      appId = details.consumerAppId.takeIf { it.isNotBlank() } ?: matchedPreset?.appId,
       creatorSteamId = details.creatorSteamId.takeIf { it.isNotBlank() },
       tags = details.tags,
       subscriptions = details.subscriptions,
@@ -639,7 +919,14 @@ object SteamWorkshopCodec {
       blenderRigScript = null,
       generatedModule = addonModule,
       generatedRig = addonRig,
-      sourceNote = "Workshop metadata resolved. Import converts it into an equipped Armory Module and matching ForgeRig preset.",
+      sourceNote = buildString {
+        append("Workshop metadata resolved. Converts into an equipped Armory Module & ForgeRig preset.")
+        if (matchedPreset != null) {
+          append(" Matched collection: ${matchedPreset.gameTitle}.")
+        }
+      },
+      linkedWorldId = resolvedWorldId,
+      linkedAreaId = resolvedAreaId,
     )
   }
 

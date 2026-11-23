@@ -213,4 +213,22 @@ class UniverseRepositoryLocalTest {
     val itemUpdate = com.example.data.remote.FirestoreSyncCodec.run { item.toFirestoreUpdateMap() }
     assertTrue("userId" !in itemUpdate && "isCustom" !in itemUpdate && "createdAt" !in itemUpdate && "id" !in itemUpdate)
   }
+
+  @Test
+  fun ensureStarterData_preservesCustomCallsignAndSelection() = runBlocking {
+    val uid = "op_persist_check"
+    repo.ensureStarterData(uid, "InitialName").getOrThrow()
+    repo.updateProfileSelection(
+      userId = uid,
+      callsign = "CustomCommander",
+      activeUniverseId = "gotham_arkham",
+      activeMode = "hero_patrol",
+    ).getOrThrow()
+
+    repo.ensureStarterData(uid, "InitialName").getOrThrow()
+    val reloaded = repo.observeProfile(uid).first { it != null }!!
+    assertEquals("CustomCommander", reloaded.callsign)
+    assertEquals("gotham_arkham", reloaded.activeUniverseId)
+    assertEquals("hero_patrol", reloaded.activeMode)
+  }
 }

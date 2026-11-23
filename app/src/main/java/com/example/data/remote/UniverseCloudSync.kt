@@ -317,15 +317,22 @@ class UniverseCloudSync(
         val remote = snap.toOperatorProfileOrNull()
         if (remote != null) {
           val local = dao.getProfileOnce(userId)
-          if (local == null || remote.updatedAtMillis >= local.updatedAtMillis ||
-            remote.highScore > local.highScore || remote.highestWave > local.highestWave
-          ) {
-            dao.upsertProfile(
-              remote.copy(
-                highScore = maxOf(remote.highScore, local?.highScore ?: 0L),
-                highestWave = maxOf(remote.highestWave, local?.highestWave ?: 0L),
-              ),
-            )
+          if (local == null) {
+            dao.upsertProfile(remote)
+          } else {
+            val remoteStrictlyNewer = remote.updatedAtMillis > local.updatedAtMillis + 3000L
+            val hasHigherScore = remote.highScore > local.highScore || remote.highestWave > local.highestWave
+            if (remoteStrictlyNewer || hasHigherScore) {
+              val base = if (remoteStrictlyNewer) remote else local
+              dao.upsertProfile(
+                base.copy(
+                  highScore = maxOf(remote.highScore, local.highScore),
+                  highestWave = maxOf(remote.highestWave, local.highestWave),
+                  totalEssence = if (remoteStrictlyNewer) remote.totalEssence else local.totalEssence,
+                  updatedAtMillis = maxOf(remote.updatedAtMillis, local.updatedAtMillis),
+                ),
+              )
+            }
           }
         }
       }

@@ -385,6 +385,8 @@ fun UnknownOsShell(
   var matchBrowserInitialTab by remember { mutableIntStateOf(0) }
   var showSocialDialog by remember { mutableStateOf(false) }
   var socialDialogInitialTab by remember { mutableIntStateOf(0) }
+  var cachedArenaSimKey by remember { mutableStateOf<String?>(null) }
+  var cachedArenaSim by remember { mutableStateOf<com.example.ui.screens.ArenaSimState?>(null) }
 
   LaunchedEffect(viewModel) {
     onRegisterIntegrityCheck(
@@ -609,8 +611,7 @@ fun UnknownOsShell(
                   onEquipOutfit = viewModel::equipOutfit,
                   onSelectArea = viewModel::selectCustomArea,
                   onHuntHeroFrontier = {
-                    viewModel.selectCustomArea("area_hero_frontier")
-                    viewModel.selectTab(OsWorkspaceTab.ARENA_PLAY)
+                    viewModel.deployToAreaAndPlay("area_hero_frontier")
                   },
                   onSelectCollectionDifficulty = viewModel::selectWorldCollectionDifficulty,
                   onSelectNgPlusTier = viewModel::selectNewGamePlusTier,
@@ -621,6 +622,9 @@ fun UnknownOsShell(
                   onMaxAllStars = viewModel::maxAllStars,
                   onGrantEssenceBonus = { viewModel.grantEssenceBonus(50_000L) },
                   onImportBo3Preset = viewModel::importBo3ModToolsCuratedPack,
+                  onDeployArea = viewModel::deployToAreaAndPlay,
+                  onUpdateCollectionCustomMode = viewModel::updateCollectionCustomMode,
+                  onDeployCollectionCustomMode = viewModel::deployCollectionCustomMode,
                   onSignOut = onLockSession,
                 )
 
@@ -643,7 +647,24 @@ fun UnknownOsShell(
                       safetyFilterEnabled = appSettings.chatSafetyFilter,
                     )
                   },
+                  onSelectArea = viewModel::selectCustomArea,
+                  onSelectMode = viewModel::selectMode,
+                  onUpdateCollectionCustomMode = viewModel::updateCollectionCustomMode,
+                  onDeployCollectionCustomMode = viewModel::deployCollectionCustomMode,
+                  externalSimProvider = { simKey, factory ->
+                    val existing = cachedArenaSim
+                    if (existing != null && cachedArenaSimKey == simKey && !existing.hudRunEnded) {
+                      existing
+                    } else {
+                      val created = factory()
+                      cachedArenaSimKey = simKey
+                      cachedArenaSim = created
+                      created
+                    }
+                  },
                   onSaveMatchAndExit = { score, wave, elims, extracted, durationSec ->
+                    cachedArenaSimKey = null
+                    cachedArenaSim = null
                     viewModel.submitMatchResult(
                       profile = state.profile,
                       universeId = state.profile.activeUniverseId,
@@ -750,6 +771,9 @@ fun UnknownOsShell(
                   onMaxAllStars = viewModel::maxAllStars,
                   onGrantEssenceBonus = { viewModel.grantEssenceBonus(50_000L) },
                   onImportBo3Preset = viewModel::importBo3ModToolsCuratedPack,
+                  onDeployArea = viewModel::deployToAreaAndPlay,
+                  onUpdateCollectionCustomMode = viewModel::updateCollectionCustomMode,
+                  onDeployCollectionCustomMode = viewModel::deployCollectionCustomMode,
                 )
 
                 OsWorkspaceTab.MEDIA_VAULT -> MediaVaultScreen(

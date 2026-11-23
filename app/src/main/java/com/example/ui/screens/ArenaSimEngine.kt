@@ -485,10 +485,13 @@ data class ArenaLoadoutStats(
         else -> packItem.tier.toInt().coerceIn(1, 25)
       }
 
+      val cm = progression.collectionCustomMode
+      val customModeCdMult = cm.effectiveCooldownMultFor(progression.activeAreaId)
+      val customModeDmgMult = cm.effectiveDamageMultFor(progression.activeAreaId)
       val clawItem = upgrades.firstOrNull { it.id == "upgrade_claws" || it.name.contains("Claw", ignoreCase = true) || it.name.contains("Melee", ignoreCase = true) }
       val primaryPower = powers.firstOrNull()
       val skillCdMult = ((1f - skCd * 0.06f) * (1f - resonance.cooldownReductionRatio * 0.45f)).coerceIn(0.22f, 1.0f)
-      val powerCdSec = ((primaryPower?.cooldownSec?.toFloat() ?: 6f) * pass.cooldownMultiplier * skillCdMult).coerceIn(0.9f, 30f)
+      val powerCdSec = ((primaryPower?.cooldownSec?.toFloat() ?: 6f) * pass.cooldownMultiplier * skillCdMult * customModeCdMult).coerceIn(0.9f, 32f)
       val customBonusDmg = ((primaryPower?.powerValue ?: 180L) / 70L).toInt().coerceIn(2, 24)
       val powerTierBonus = ((primaryPower?.tier ?: 1L) - 1L).toInt()
       val powerStarBonus = primaryPower?.let { (progression.armoryItemStar(it.id) - 1) * 2 } ?: 0
@@ -497,7 +500,7 @@ data class ArenaLoadoutStats(
       val primaryConsumable = consumables.firstOrNull()
       val consumableStarBonus = primaryConsumable?.let { (progression.armoryItemStar(it.id) - 1) * 12 } ?: 0
       val cHeal = (45 + ((primaryConsumable?.tier ?: 1L) * 18L) + ((primaryConsumable?.powerValue ?: 100L) / 15L) + consumableStarBonus).toInt().coerceAtMost(550)
-      val cCdSec = ((primaryConsumable?.cooldownSec?.toFloat() ?: 12f) * pass.cooldownMultiplier * skillCdMult).coerceIn(2.0f, 35f)
+      val cCdSec = ((primaryConsumable?.cooldownSec?.toFloat() ?: 12f) * pass.cooldownMultiplier * skillCdMult * customModeCdMult).coerceIn(2.0f, 35f)
 
       val barrelBonusDmg = if (wc.barrelId == "heavy_bore") 2 else 0
       val muzzleBonusDmg = if (wc.muzzleId == "heavy_compensator" || wc.muzzleId == "monolithic_suppressor") 1 else 0
@@ -507,7 +510,7 @@ data class ArenaLoadoutStats(
       val levelDmgBonus = ((wpnLevel - 1) / 3) + (wpnPrestige * 2)
       val skillDmgBonus = skDmg1 * 2 + skDmg2 * 3 + outfitDmgBonus + charTierDmg + (doubleTapRank * 2) + (redCoreAbove * 2)
       val rawTotalWpnDmg = ((weapon.baseDamage - 1).coerceAtLeast(0) + barrelBonusDmg + muzzleBonusDmg +
-        levelDmgBonus + skillDmgBonus) * originPowerMult * wpnTierMult * wpnStarMult * charStarMult * resonance.damageMult * era.damageMod * areaCycleMult * areaStarMult * storyAreaDmgMult * levelMilestoneMult
+        levelDmgBonus + skillDmgBonus) * originPowerMult * wpnTierMult * wpnStarMult * charStarMult * resonance.damageMult * era.damageMod * areaCycleMult * areaStarMult * storyAreaDmgMult * levelMilestoneMult * customModeDmgMult
 
       val glovesRateBonus = ((gloves?.level ?: 1) - 1) * 0.04f + ((gloves?.tier ?: 1) - 1) * 0.25f + (glovesStarAbove * 0.25f)
       val levelCadenceReduction = (((wpnLevel - 1) * 0.08f) + glovesRateBonus).coerceAtMost(4.5f)
@@ -553,7 +556,7 @@ data class ArenaLoadoutStats(
         activePowerName = primaryPower?.name?.uppercase() ?: "MULTIVERSE SURGE",
         activePowerColor = powerColor,
         activePowerRadius = (0.28f + powerTierBonus * 0.03f).coerceAtMost(0.55f),
-        activePowerDamage = ((customBonusDmg + powerTierBonus + powerStarBonus + outfitDmgBonus + charTierDmg) * charStarMult * resonance.damageMult * levelMilestoneMult).roundToInt(),
+        activePowerDamage = ((customBonusDmg + powerTierBonus + powerStarBonus + outfitDmgBonus + charTierDmg) * charStarMult * resonance.damageMult * levelMilestoneMult * customModeDmgMult).roundToInt().coerceAtLeast(2),
         hasTendrilPower = powers.any { it.id == "power_tendril" || it.name.contains("Tendril", ignoreCase = true) || it.name.contains("Bio", ignoreCase = true) },
         hasRepulsePower = powers.any { it.id == "power_repulse" || it.name.contains("Repulse", ignoreCase = true) || it.name.contains("Force", ignoreCase = true) },
         hasChevronPower = powers.any { it.id == "power_chevron" || it.name.contains("Chevron", ignoreCase = true) || it.name.contains("Chrono", ignoreCase = true) || it.name.contains("Stasis", ignoreCase = true) },
@@ -821,10 +824,10 @@ class ArenaSimState(
 
   fun damageImmunityChanceForWave(wave: Long): Float {
     val w = wave.coerceAtLeast(1L).toInt()
-    val base = if (w <= 1) 0.06f else (0.14f + (w - 1) * 0.11f)
-    val diffBonus = (collectionDifficulty.rank - 2).coerceAtLeast(0) * 0.08f
-    val ngBonus = ngPlusSpec.tier * 0.07f
-    return (base + diffBonus + ngBonus).coerceIn(0f, 0.88f)
+    val base = if (w <= 2) 0.02f else (0.05f + (w - 2) * 0.04f)
+    val diffBonus = (collectionDifficulty.rank - 2).coerceAtLeast(0) * 0.03f
+    val ngBonus = ngPlusSpec.tier * 0.03f
+    return (base + diffBonus + ngBonus).coerceIn(0f, 0.35f)
   }
 
   fun rollImmunitiesForWave(wave: Long, isElite: Boolean, isBoss: Boolean, indexSeed: Int = 0): Set<ArenaDamageType> {
@@ -1214,7 +1217,7 @@ class ArenaSimState(
         color = Color(crate.rarity.colorHex),
       )
     )
-    if (crate.fromHazard || crate.rarity.rank >= 4) {
+    if ((crate.fromHazard || crate.rarity.rank >= 4) && !progression.collectionCustomMode.shouldSuppressCrateWonderDrops(progression.activeAreaId)) {
       spawnRandomWonderWeapon(crate.x, crate.y)
     }
     pulseRingRadius = 0.05f
@@ -1394,7 +1397,9 @@ class ArenaSimState(
     yellowEssenceEarned = yellowEssenceEarned,
     greenEssenceEarned = greenEssenceEarned,
     combinedEssenceEarned = combinedEssenceEarned,
-    blastShardsEarned = blastShardsEarned,
+    blastShardsEarned = if (blastShardsEarned > 0L) {
+      (blastShardsEarned * progression.collectionCustomMode.effectiveEssenceMultFor(progression.activeAreaId)).toLong().coerceAtLeast(1L)
+    } else 0L,
     perkDrinksCollected = perkDrinksCollected,
     blastCoresEarned = blastCoresEarned.toMap(),
     buildingsExplored = buildingsExploredCount,
@@ -1426,14 +1431,19 @@ class ArenaSimState(
       "hero_patrol" -> (12 + w * 3).toInt().coerceAtMost(48)
       else -> (10 + w * 3).toInt().coerceAtMost(44)
     }
+    val cm = progression.collectionCustomMode
+    val activeArea = progression.activeAreaId
     val ngPlusSpawnBoost = 1f + ngPlusSpec.tier * 0.12f
-    val count = (rawCount * lc.enemyDensityMultiplier.coerceIn(0.75f, 2.5f) * ngPlusSpawnBoost).roundToInt().coerceIn(8, 72)
-    val roundHpMult = 1.0f + (w - 1L).coerceAtLeast(0L) * 0.65f + (w * w * 0.08f)
-    val roundArmorMult = 1.0f + (w - 1L).coerceAtLeast(0L) * 0.45f
-    val totalHpScale = diffTier.enemyHpScale * collectionDifficulty.enemyHpScale * ngPlusSpec.enemyHpScale
-    val totalSpeedScale = diffTier.enemySpeedScale * collectionDifficulty.enemySpeedScale * ngPlusSpec.enemySpeedScale
+    val customSpawnBoost = cm.effectiveSpawnCountMultFor(activeArea)
+    val count = (rawCount * lc.enemyDensityMultiplier.coerceIn(0.75f, 2.5f) * ngPlusSpawnBoost * customSpawnBoost).roundToInt().coerceIn(8, 72)
+    val roundHpMult = 1.0f + (w - 1L).coerceAtLeast(0L) * 0.22f + (w * w * 0.02f)
+    val roundArmorMult = 1.0f + (w - 1L).coerceAtLeast(0L) * 0.10f
+    val customHpScale = cm.effectiveHostileHpMultFor(activeArea)
+    val customSpeedScale = cm.effectiveEnemySpeedMultFor(activeArea)
+    val totalHpScale = diffTier.enemyHpScale * collectionDifficulty.enemyHpScale * ngPlusSpec.enemyHpScale * customHpScale
+    val totalSpeedScale = diffTier.enemySpeedScale * collectionDifficulty.enemySpeedScale * ngPlusSpec.enemySpeedScale * customSpeedScale
     val playerBonusScale = loadout.playerBonusHealthScale.coerceAtLeast(1.0f)
-    val armorBonusScale = 1f + (playerBonusScale - 1f) * 0.70f
+    val armorBonusScale = 1f + (playerBonusScale - 1f) * 0.35f
 
     for (i in 0 until count) {
       val angle = Random.nextFloat() * 2f * PI.toFloat()
@@ -1441,18 +1451,23 @@ class ArenaSimState(
       val isElite = (i == 0 && w >= 2) || (i % 7 == 0 && w >= 3) || (modeId == "onslaught" && i % 5 == 0)
       val archetype = chooseArchetype(world.id, w, i)
       val archHpBonus = when (archetype) {
-        "mech", "dup_conduit", "ultron_sentry" -> 3
-        "blackwatch", "necromorph", "symbiote_stalker", "blackgate_enforcer" -> 2
-        else -> 1
+        "mech", "dup_conduit", "ultron_sentry" -> 2
+        "blackwatch", "necromorph", "symbiote_stalker", "blackgate_enforcer" -> 1
+        else -> 0
       }
-      val rawHp = ((6 + w.toInt() * 3 + archHpBonus * 2 + if (isElite) 10 else 0) * roundHpMult * totalHpScale * playerBonusScale)
+      val rawHp = ((4 + w.toInt() * 2 + archHpBonus * 2 + if (isElite) 6 else 0) * roundHpMult * totalHpScale * playerBonusScale)
         .roundToInt()
-        .coerceAtLeast(6)
+        .coerceAtLeast(4)
       val baseHp = if (lc.instagibMutator) 1 else rawHp
-      val rawArmor = if (lc.instagibMutator) 0 else {
-        ((4 + w.toInt() * 2 + archHpBonus * 2 + if (isElite) 8 else 0) * roundArmorMult * totalHpScale * armorBonusScale)
+      val hasArmorUnit = isElite ||
+        archetype in setOf("mech", "dup_conduit", "ultron_sentry", "blackgate_enforcer") ||
+        (w >= 3L && i % 4 == 0) ||
+        cm.shouldReinforceArmor(activeArea, isElite = isElite)
+      val rawArmor = if (lc.instagibMutator || !hasArmorUnit) 0 else {
+        val armorCustomBump = if (cm.shouldReinforceArmor(activeArea, isElite = isElite)) 2 else 0
+        (((1 + w.toInt() / 2 + if (isElite) 4 else 0) + armorCustomBump) * roundArmorMult * totalHpScale * armorBonusScale)
           .roundToInt()
-          .coerceAtLeast(4)
+          .coerceAtLeast(1)
       }
       val baseSpd = when (archetype) {
         "rusher", "water_hive_swarm", "rift_phantom", "symbiote_stalker", "oscorp_goblin_drone" -> (0.0017f + w * 0.00016f).coerceAtMost(0.0038f)
@@ -1478,7 +1493,10 @@ class ArenaSimState(
       )
     }
 
-    if (lc.bossRushMutator || matchRules.bossRush || modeId == "boss_rush" || w % 3L == 0L || (modeId == "br" && w == 4L)) {
+    val scheduledBoss = lc.bossRushMutator || matchRules.bossRush || modeId == "boss_rush" || w % 3L == 0L || (modeId == "br" && w == 4L)
+    if (scheduledBoss) {
+      spawnBossForWorld(w)
+    } else if (cm.isActiveForArea(activeArea) && cm.collectionAmbushSurge && w >= 2L && w % 2L == 0L) {
       spawnBossForWorld(w)
     }
 
@@ -1539,18 +1557,20 @@ class ArenaSimState(
       }
     }
     val lc = progression.levelCustom
-    val totalHpScale = lc.worldDifficultyTier.enemyHpScale * collectionDifficulty.enemyHpScale * ngPlusSpec.enemyHpScale
-    val totalSpeedScale = lc.worldDifficultyTier.enemySpeedScale * collectionDifficulty.enemySpeedScale * ngPlusSpec.enemySpeedScale
-    val roundHpMult = 1.0f + (w - 1L).coerceAtLeast(0L) * 0.65f + (w * w * 0.08f)
-    val roundArmorMult = 1.0f + (w - 1L).coerceAtLeast(0L) * 0.45f
+    val cm = progression.collectionCustomMode
+    val activeArea = progression.activeAreaId
+    val totalHpScale = lc.worldDifficultyTier.enemyHpScale * collectionDifficulty.enemyHpScale * ngPlusSpec.enemyHpScale * cm.effectiveHostileHpMultFor(activeArea)
+    val totalSpeedScale = lc.worldDifficultyTier.enemySpeedScale * collectionDifficulty.enemySpeedScale * ngPlusSpec.enemySpeedScale * cm.effectiveEnemySpeedMultFor(activeArea)
+    val roundHpMult = 1.0f + (w - 1L).coerceAtLeast(0L) * 0.28f + (w * w * 0.03f)
+    val roundArmorMult = 1.0f + (w - 1L).coerceAtLeast(0L) * 0.16f
     val playerBonusScale = loadout.playerBonusHealthScale.coerceAtLeast(1.0f)
-    val armorBonusScale = 1f + (playerBonusScale - 1f) * 0.70f
+    val armorBonusScale = 1f + (playerBonusScale - 1f) * 0.40f
 
     val hp = if (lc.instagibMutator) 6 else {
-      ((36 + w.toInt() * 14) * roundHpMult * totalHpScale * playerBonusScale).roundToInt().coerceAtLeast(36)
+      ((24 + w.toInt() * 8) * roundHpMult * totalHpScale * playerBonusScale).roundToInt().coerceAtLeast(24)
     }
     val bossArmor = if (lc.instagibMutator) 0 else {
-      ((22 + w.toInt() * 9) * roundArmorMult * totalHpScale * armorBonusScale).roundToInt().coerceAtLeast(20)
+      ((12 + w.toInt() * 5) * roundArmorMult * totalHpScale * armorBonusScale).roundToInt().coerceAtLeast(10)
     }
     val immunities = rollImmunitiesForWave(wave = w, isElite = true, isBoss = true, indexSeed = w.toInt())
     hostiles.add(
@@ -2481,7 +2501,7 @@ class ArenaSimState(
       h.isElite -> (0.38f * wonderBoost).coerceAtMost(0.95f)
       else -> (0.08f * wonderBoost).coerceAtMost(0.45f)
     }
-    if (Random.nextFloat() < wonderChance) {
+    if (Random.nextFloat() < wonderChance && (!progression.collectionCustomMode.shouldSuppressCrateWonderDrops(progression.activeAreaId) || h.isBoss)) {
       spawnRandomWonderWeapon(h.x, h.y)
     }
   }
@@ -2694,7 +2714,8 @@ class ArenaSimState(
     if (hudShield < loadout.maxShield && (damageFlashTicks <= 0f || insideCamp)) {
       val assistMult = (if (liveSettings.assistShieldBoost) 1.55f else 1.0f) * (if (insideCamp) 3.2f else 1.0f)
       val toxicMult = if (activeHaz?.kind == ArenaHazardKind.TOXIC) 0.45f else 1.0f
-      regenAccum += (loadout.passiveRegenPerSec + if (insideCamp) 8f else 0f) * assistMult * toxicMult * dtSec
+      val customRegenMult = progression.collectionCustomMode.effectiveRegenMultFor(progression.activeAreaId)
+      regenAccum += (loadout.passiveRegenPerSec + if (insideCamp) 8f else 0f) * assistMult * toxicMult * customRegenMult * dtSec
       if (regenAccum >= 1f) {
         val add = regenAccum.toInt()
         regenAccum -= add
@@ -3059,7 +3080,8 @@ class ArenaSimState(
         if (dx * dx + dy * dy <= 0.036f * 0.036f) {
           b.life = 0f
           val rawShot = if (liveSettings.assistShieldBoost) 5 else 8
-          val shotDmg = if (matchRules.friendlyFire) (rawShot * 1.35f).roundToInt() else rawShot
+          val customIncomingMult = progression.collectionCustomMode.effectiveIncomingDamageMultFor(progression.activeAreaId)
+          val shotDmg = ((if (matchRules.friendlyFire) rawShot * 1.35f else rawShot.toFloat()) * customIncomingMult).roundToInt().coerceAtLeast(1)
           hudShield = (hudShield - shotDmg).coerceAtLeast(0)
           damageFlashTicks = if (liveSettings.reduceFlashes) 0f else 12f
           if (hudShield <= 0) hudRunEnded = true
@@ -3152,7 +3174,9 @@ class ArenaSimState(
           if (meleeDamageAccum >= contactThreshold) {
             meleeDamageAccum = 0f
             val baseDmg = if (h.isBoss) 14 else 9
-            val dmg = if (liveSettings.assistShieldBoost) (baseDmg * 2 / 3).coerceAtLeast(4) else baseDmg
+            val customIncomingMult = progression.collectionCustomMode.effectiveIncomingDamageMultFor(progression.activeAreaId)
+            val preGuardDmg = if (liveSettings.assistShieldBoost) (baseDmg * 2 / 3).coerceAtLeast(4) else baseDmg
+            val dmg = (preGuardDmg * customIncomingMult).roundToInt().coerceAtLeast(1)
             hudShield = (hudShield - dmg).coerceAtLeast(0)
             damageFlashTicks = if (liveSettings.reduceFlashes) 0f else 12f
             if (hudShield <= 0) {

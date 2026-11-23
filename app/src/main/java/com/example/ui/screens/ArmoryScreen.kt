@@ -181,12 +181,16 @@ fun ArmoryScreen(
   onMaxAllStars: () -> Unit = {},
   onGrantEssenceBonus: () -> Unit = {},
   onImportBo3Preset: () -> Unit = {},
+  onDeployArea: (String) -> Unit = {},
+  onUpdateCollectionCustomMode: ((com.example.data.model.CollectionCustomModeConfig) -> com.example.data.model.CollectionCustomModeConfig) -> Unit = {},
+  onDeployCollectionCustomMode: () -> Unit = {},
 ) {
   val categories = listOf("all", "perk", "power", "upgrade", "consumable", "workshop_bo3")
   var selectedSection by remember { mutableStateOf(ArmorySection.MODS) }
   var selectedCategory by remember { mutableStateOf("all") }
   var showCreateDialog by remember { mutableStateOf(false) }
   var showCodesDialog by remember { mutableStateOf(false) }
+  var showCustomModeDialog by remember { mutableStateOf(false) }
 
   val filtered = when (selectedCategory) {
     "all" -> armory
@@ -546,7 +550,7 @@ fun ArmoryScreen(
                     }
                   }
                   Text(
-                    text = "Imports Treyarch Black Ops 3 Mod Tools assets (.gdt, .xmodel_export, .xanim_export, .gsc scripts) and Steam Workshop mods with 1:1 weapon models, audio cues, perks, and custom behavior up to Tier 25.",
+                    text = "Imports Treyarch Black Ops 3 Mod Tools assets (.gdt, .xmodel_export, .xanim_export, .gsc scripts) and Steam Workshop mods with 1:1 weapon models, audio cues, perks, and custom maps up to Tier 25.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                   )
@@ -565,6 +569,88 @@ fun ArmoryScreen(
                       modifier = Modifier.weight(1f).height(48.dp).testTag("bo3_section_boost_codes_btn"),
                     ) {
                       Text("⚡ Boost & Codes", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                    }
+                  }
+                  Button(
+                    onClick = { showCustomModeDialog = true },
+                    colors = ButtonDefaults.buttonColors(
+                      containerColor = if (progression.collectionCustomMode.enabled) Color(0xFFFF9100) else Color(0xFF6200EE),
+                      contentColor = if (progression.collectionCustomMode.enabled) Color.Black else Color.White,
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth().height(48.dp).testTag("bo3_open_custom_mode_btn"),
+                  ) {
+                    Text(
+                      text = "BO3 / Steam / Collections Custom Mode • ${progression.collectionCustomMode.impactLabel}",
+                      fontWeight = FontWeight.Bold,
+                      style = MaterialTheme.typography.labelSmall,
+                    )
+                  }
+                }
+              }
+            }
+
+            item {
+              Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.fillMaxWidth().border(1.dp, Color(0xFF00E676).copy(alpha = 0.45f), RoundedCornerShape(14.dp)),
+              ) {
+                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                  Text(
+                    text = "BO3 MOD TOOLS PLAYABLE MAPS (${com.example.export.Bo3ModToolsImporter.bo3CustomMaps.size})",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF00E676),
+                  )
+                  LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.testTag("bo3_maps_row"),
+                  ) {
+                    items(com.example.export.Bo3ModToolsImporter.bo3CustomMaps, key = { it.areaId }) { mapSpec ->
+                      val isSelected = activeAreaId == mapSpec.areaId
+                      Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isSelected) Color(0xFF00E676).copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        modifier = Modifier
+                          .width(210.dp)
+                          .border(
+                            width = if (isSelected) 1.5.dp else 1.dp,
+                            color = if (isSelected) Color(0xFF00E676) else MaterialTheme.colorScheme.outline,
+                            shape = RoundedCornerShape(12.dp),
+                          ),
+                      ) {
+                        Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                          Text(
+                            text = "${mapSpec.title} (${mapSpec.mapCode})",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                          )
+                          Text(
+                            text = "WW: ${mapSpec.wonderWeapon} • ${mapSpec.description}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                          )
+                          Button(
+                            onClick = {
+                              onSelectArea(mapSpec.areaId)
+                              onDeployArea(mapSpec.areaId)
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                              containerColor = Color(0xFF00E676),
+                              contentColor = Color(0xFF04140A),
+                            ),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("bo3_deploy_map_${mapSpec.areaId}"),
+                          ) {
+                            Text(if (isSelected) "Play Active Map" else "Deploy BO3 Map", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                          }
+                        }
+                      }
                     }
                   }
                 }
@@ -626,6 +712,15 @@ fun ArmoryScreen(
       onMaxAllStars = onMaxAllStars,
       onGrantEssence = onGrantEssenceBonus,
       onImportBo3Pack = onImportBo3Preset,
+    )
+  }
+
+  if (showCustomModeDialog) {
+    CollectionCustomModeDialog(
+      initialConfig = progression.collectionCustomMode,
+      onSave = onUpdateCollectionCustomMode,
+      onDeploy = onDeployCollectionCustomMode,
+      onDismiss = { showCustomModeDialog = false },
     )
   }
 }

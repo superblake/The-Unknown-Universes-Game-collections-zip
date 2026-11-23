@@ -9,9 +9,68 @@ import org.json.JSONObject
 import java.util.Locale
 import java.util.UUID
 
+data class Bo3CustomMapSpec(
+  val areaId: String,
+  val mapCode: String,
+  val title: String,
+  val description: String,
+  val wonderWeapon: String,
+  val defaultModeId: String = "zombies",
+)
+
 object Bo3ModToolsImporter {
 
   const val BO3_TAG = "BO3 Mod Tools"
+
+  val bo3CustomMaps: List<Bo3CustomMapSpec> = listOf(
+    Bo3CustomMapSpec(
+      areaId = "area_bo3_nacht",
+      mapCode = "zm_prototype",
+      title = "BO3 Nacht der Untoten",
+      description = "Classic BO3 bunker survival remaster with Wunderfizz courtyard & Help Door Mystery Box.",
+      wonderWeapon = "Ray Gun Mk.II",
+    ),
+    Bo3CustomMapSpec(
+      areaId = "area_bo3_the_giant",
+      mapCode = "zm_factory",
+      title = "BO3 The Giant (Der Riese)",
+      description = "Teleporter A/B/C Mainframe, Pack-a-Punch Courtyard & Annihilator Furnace.",
+      wonderWeapon = "Wunderwaffe DG-2",
+    ),
+    Bo3CustomMapSpec(
+      areaId = "area_bo3_gorod",
+      mapCode = "zm_stalingrad",
+      title = "BO3 Gorod Krovi",
+      description = "Dragon Command, Belinski Square, Department Store & Ray Gun Mk.III Vault.",
+      wonderWeapon = "GKZ-45 Mk3",
+    ),
+    Bo3CustomMapSpec(
+      areaId = "area_bo3_shadows",
+      mapCode = "zm_zod",
+      title = "BO3 Shadows of Evil",
+      description = "Morg City noir districts, Beast Mode Altars & Apothicon Subway Pack.",
+      wonderWeapon = "Apothicon Servant",
+    ),
+    Bo3CustomMapSpec(
+      areaId = "area_zombies_der_riese",
+      mapCode = "zm_der_riese_aether",
+      title = "Der Riese & Dark Aether",
+      description = "Original Element 115 Teleporter Reactor & Pack-a-Punch Catwalk.",
+      wonderWeapon = "Thundergun",
+    ),
+  )
+
+  fun resolveBo3AreaId(rawText: String): String? {
+    val lower = rawText.lowercase(Locale.US)
+    return when {
+      lower.contains("zm_prototype") || lower.contains("nacht") -> "area_bo3_nacht"
+      lower.contains("zm_factory") || lower.contains("the giant") || lower.contains("area_bo3_the_giant") -> "area_bo3_the_giant"
+      lower.contains("zm_stalingrad") || lower.contains("gorod") -> "area_bo3_gorod"
+      lower.contains("zm_zod") || lower.contains("shadows of evil") || lower.contains("morg city") -> "area_bo3_shadows"
+      lower.contains("der riese") || lower.contains("der_riese") -> "area_zombies_der_riese"
+      else -> null
+    }
+  }
 
   fun parseBo3PackageOrScript(rawText: String, targetUserId: String): Result<SteamWorkshopImportPreview> {
     return try {
@@ -22,19 +81,32 @@ object Bo3ModToolsImporter {
 
       val now = System.currentTimeMillis()
 
-      // Check if JSON manifest
-      if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-        return parseJsonBo3Manifest(trimmed, targetUserId, now)
+      // Check if GDT asset definition (contains .gdf or ("...") block definitions)
+      if (trimmed.contains(".gdf", ignoreCase = true) || (trimmed.contains("(") && trimmed.contains(")") && trimmed.contains("{"))) {
+        return parseGdtScript(trimmed, targetUserId, now)
       }
 
-      // Check if GDT asset definition
-      if (trimmed.contains(".gdf", ignoreCase = true) || (trimmed.contains("\"") && trimmed.contains("{") && trimmed.contains("}"))) {
-        return parseGdtScript(trimmed, targetUserId, now)
+      // Check if JSON manifest
+      if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+        val jsonRes = try {
+          parseJsonBo3Manifest(trimmed, targetUserId, now)
+        } catch (_: Exception) {
+          null
+        }
+        if (jsonRes != null && jsonRes.isSuccess) {
+          return jsonRes
+        }
       }
 
       // Check if XMODEL_EXPORT / XANIM_EXPORT
       if (trimmed.contains("NUMBONES", ignoreCase = true) || trimmed.contains("XMODEL", ignoreCase = true) || trimmed.contains("XANIM", ignoreCase = true)) {
         return parseExportFile(trimmed, targetUserId, now)
+      }
+
+      // Check if other GDT definition format
+      if (trimmed.contains("\"") && trimmed.contains("{") && trimmed.contains("}")) {
+        val gdtRes = parseGdtScript(trimmed, targetUserId, now)
+        if (gdtRes.isSuccess) return gdtRes
       }
 
       // Fallback: Freeform script / plain text description of a BO3 weapon or perk
@@ -196,7 +268,9 @@ object Bo3ModToolsImporter {
       blenderRigScript = null,
       generatedModule = null,
       generatedRig = null,
-      sourceNote = "6 BO3 modules & 1 viewmodel rig ready to equip and upgrade up to Tier 25 Multiversal.",
+      sourceNote = "6 BO3 modules, 1 viewmodel rig & 5 playable BO3 maps (Nacht, The Giant, Gorod Krovi, Shadows, Der Riese).",
+      linkedWorldId = "sector_zero",
+      linkedAreaId = "area_bo3_the_giant",
     )
   }
 
@@ -266,6 +340,8 @@ object Bo3ModToolsImporter {
       )
     }
 
+    val resolvedAreaId = resolveBo3AreaId("${root.optString("map")} $title $desc") ?: "area_bo3_the_giant"
+
     return Result.success(
       SteamWorkshopImportPreview(
         sourceKind = "BO3_MOD_TOOLS_IMPORT",
@@ -282,7 +358,9 @@ object Bo3ModToolsImporter {
         blenderRigScript = null,
         generatedModule = null,
         generatedRig = null,
-        sourceNote = "Successfully imported ${armoryList.size} BO3 Mod Tools item(s) up to Tier 25 Multiversal.",
+        sourceNote = "Imported ${armoryList.size} BO3 Mod Tools item(s) up to Tier 25 + linked BO3 map.",
+        linkedWorldId = "sector_zero",
+        linkedAreaId = resolvedAreaId,
       )
     )
   }
@@ -307,9 +385,9 @@ object Bo3ModToolsImporter {
         val value = quoteMatches[1]
         when (key) {
           "name" -> currentName = value.take(50)
-          "type", "category" -> currentType = if (value.contains("perk", ignoreCase = true)) "perk" else if (value.contains("wonder", ignoreCase = true)) "power" else "upgrade"
+          "type", "category" -> currentType = if (value.contains("perk", ignoreCase = true)) "perk" else if (value.contains("wonder", ignoreCase = true) || value.contains("power", ignoreCase = true)) "power" else "upgrade"
           "description", "desc" -> currentDesc = value.take(240)
-          "damage", "power", "cost" -> currentPwr = value.filter(Char::isDigit).toLongOrNull()?.coerceIn(100L, 1200L) ?: 250L
+          "damage", "power", "cost" -> currentPwr = value.filter(Char::isDigit).toLongOrNull()?.coerceIn(100L, 1500L) ?: 250L
         }
       }
     }
@@ -335,6 +413,8 @@ object Bo3ModToolsImporter {
     )
     items.add(modItem)
 
+    val resolvedAreaId = resolveBo3AreaId(gdtText) ?: "area_bo3_the_giant"
+
     return Result.success(
       SteamWorkshopImportPreview(
         sourceKind = "BO3_MOD_TOOLS_IMPORT",
@@ -351,7 +431,9 @@ object Bo3ModToolsImporter {
         blenderRigScript = null,
         generatedModule = null,
         generatedRig = null,
-        sourceNote = "BO3 .GDT asset parsed accurately into an equipable Tier 25 Armory Module.",
+        sourceNote = "BO3 .GDT asset parsed into an equipable Tier 25 Armory Module.",
+        linkedWorldId = "sector_zero",
+        linkedAreaId = resolvedAreaId,
       )
     )
   }
@@ -433,6 +515,8 @@ object Bo3ModToolsImporter {
       updatedAtMillis = now,
     )
 
+    val resolvedAreaId = resolveBo3AreaId(rawText) ?: "area_bo3_nacht"
+
     return Result.success(
       SteamWorkshopImportPreview(
         sourceKind = "BO3_MOD_TOOLS_IMPORT",
@@ -450,6 +534,8 @@ object Bo3ModToolsImporter {
         generatedModule = null,
         generatedRig = null,
         sourceNote = "Imported 1 custom BO3 Mod Tools item ready for Tier 1-25 progression.",
+        linkedWorldId = "sector_zero",
+        linkedAreaId = resolvedAreaId,
       )
     )
   }

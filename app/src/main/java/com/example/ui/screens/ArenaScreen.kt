@@ -102,6 +102,8 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
+import com.example.data.model.MultiverseArsenalCatalog
+
 @Composable
 fun ArenaScreen(
   profile: OperatorProfile,
@@ -113,6 +115,11 @@ fun ArenaScreen(
   onOpenSettings: () -> Unit = {},
   onRecordProgression: (MatchProgressionReport) -> Unit = {},
   onSendChatMessage: (ChatChannel, String, String?, Boolean) -> Unit = { _, _, _, _ -> },
+  onSelectArea: ((String) -> Unit)? = null,
+  onSelectMode: ((String) -> Unit)? = null,
+  onUpdateCollectionCustomMode: (((com.example.data.model.CollectionCustomModeConfig) -> com.example.data.model.CollectionCustomModeConfig) -> Unit)? = null,
+  onDeployCollectionCustomMode: (() -> Unit)? = null,
+  externalSimProvider: ((String, () -> ArenaSimState) -> ArenaSimState)? = null,
   onSaveMatchAndExit: (score: Long, wave: Long, eliminations: Long, extracted: Boolean, durationSec: Long) -> Unit,
 ) {
   val world = remember(profile.activeUniverseId) { UniverseCatalog.worldById(profile.activeUniverseId) }
@@ -135,22 +142,27 @@ fun ArenaScreen(
   }
   val hasConsumable = remember(armory) { armory.any { it.equipped && it.category == "consumable" } }
 
-  val sim = remember(
-    world.id,
-    mode.id,
-    progression.activeAreaId,
-    progression.joinedMatch?.id,
-  ) {
-    ArenaSimState(
-      world = world,
-      modeId = mode.id,
-      loadout = loadout,
-      hasConsumableEquipped = hasConsumable,
-      initialSettings = settings,
-      progression = progression,
-      armoryItems = armory,
-      initialBlueEssence = profile.totalEssence,
-    )
+  val cm = progression.collectionCustomMode
+  val customKeySuffix = if (cm.isActiveForArea(progression.activeAreaId)) {
+    "cm_${cm.scope.id}_${cm.safeCollectionGuard}_${cm.negativeImpactPercent}_${cm.enemyArmorFlood}_${cm.collectionAmbushSurge}"
+  } else {
+    "cm_off"
+  }
+  val simSessionKey = "${world.id}|${mode.id}|${progression.activeAreaId}|${progression.joinedMatch?.id ?: ""}|$customKeySuffix"
+  val sim = remember(simSessionKey) {
+    val factory = {
+      ArenaSimState(
+        world = world,
+        modeId = mode.id,
+        loadout = loadout,
+        hasConsumableEquipped = hasConsumable,
+        initialSettings = settings,
+        progression = progression,
+        armoryItems = armory,
+        initialBlueEssence = profile.totalEssence,
+      )
+    }
+    externalSimProvider?.invoke(simSessionKey, factory) ?: factory()
   }
 
   LaunchedEffect(loadout) {
@@ -206,6 +218,8 @@ fun ArenaScreen(
   var thumbOffsetY by remember { mutableFloatStateOf(0f) }
   var hudFps by remember { mutableIntStateOf(60) }
   var showTacticalLiveChatDialog by remember { mutableStateOf(false) }
+  var showMapSwitcherDialog by remember { mutableStateOf(false) }
+  var showCustomModeDialog by remember { mutableStateOf(false) }
   val gamepad by GamepadInputBridge.state.collectAsStateWithLifecycle()
 
   LaunchedEffect(
@@ -265,9 +279,9 @@ fun ArenaScreen(
     thumbOffsetY = dy * 22f * settings.joystickScale
   }
 
-  LaunchedEffect(sim, isPausedForSettings, settings.targetFpsCap, settings.showFpsCounter) {
+  LaunchedEffect(sim, isPausedForSettings, showMapSwitcherDialog, settings.targetFpsCap, settings.showFpsCounter) {
     runCatching { focusRequester.requestFocus() }
-    if (isPausedForSettings) return@LaunchedEffect
+    if (isPausedForSettings || showMapSwitcherDialog) return@LaunchedEffect
 
     var lastNanos = withFrameNanos { it }
     var accumNanos = 0L
@@ -425,6 +439,21 @@ fun ArenaScreen(
                 )
               }
             }
+            if (progression.collectionCustomMode.isActiveForArea(progression.activeAreaId)) {
+              Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = Color(0xFFFF9100).copy(alpha = 0.22f),
+                modifier = Modifier.border(1.dp, Color(0xFFFF9100), RoundedCornerShape(6.dp)).testTag("arena_custom_mode_badge"),
+              ) {
+                Text(
+                  text = "CUSTOM -${progression.collectionCustomMode.negativeImpactPercent}%",
+                  style = MaterialTheme.typography.labelSmall,
+                  fontWeight = FontWeight.Bold,
+                  color = Color(0xFFFF9100),
+                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                )
+              }
+            }
             if (settings.showFpsCounter) {
               Surface(
                 shape = RoundedCornerShape(6.dp),
@@ -437,6 +466,16 @@ fun ArenaScreen(
                   color = Color(0xFF00E676),
                   modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                 )
+              }
+            }
+            if (onSelectArea != null) {
+              OutlinedButton(
+                onClick = { showMapSwitcherDialog = true },
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                modifier = Modifier.height(48.dp).testTag("arena_map_switcher_btn"),
+              ) {
+                Text("Maps", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
               }
             }
             OutlinedButton(
@@ -490,7 +529,7 @@ fun ArenaScreen(
         }
 
         if (showPlacesBar) {
-          val places = remember(world.id, mode.id, sim.buildings.size, sim.restCamps.size) { sim.placeDestinations() }
+          val places = remember(sim) { sim.placeDestinations() }
           @OptIn(ExperimentalFoundationApi::class)
           LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -681,6 +720,7 @@ fun ArenaScreen(
           camX = camX,
           camY = camY,
           areaAgeEra = activeAreaState.currentEra,
+          areaId = activeAreaSpec.id,
         )
 
         drawBuildingsAndTraps(
@@ -1477,6 +1517,102 @@ fun ArenaScreen(
             Text("Close")
           }
         },
+      )
+    }
+
+    if (showMapSwitcherDialog && onSelectArea != null) {
+      AlertDialog(
+        onDismissRequest = { showMapSwitcherDialog = false },
+        title = {
+          Text("SWITCH ARENA MAP & MODE (${MultiverseArsenalCatalog.customAreas.size} MAPS)", fontWeight = FontWeight.Bold)
+        },
+        text = {
+          Column(modifier = Modifier.fillMaxWidth().height(420.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (onSelectMode != null) {
+              Text("DEPLOYMENT MODE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+              LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(UniverseCatalog.modes, key = { it.id }) { m ->
+                  FilterChip(
+                    selected = mode.id == m.id,
+                    onClick = { onSelectMode(m.id) },
+                    label = { Text("${m.shortTag} • ${m.label}", style = MaterialTheme.typography.labelSmall) },
+                    modifier = Modifier.heightIn(min = 48.dp).testTag("arena_quick_mode_${m.id}"),
+                  )
+                }
+              }
+            }
+            if (onUpdateCollectionCustomMode != null) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+              ) {
+                OutlinedButton(
+                  onClick = {
+                    onUpdateCollectionCustomMode { cfg -> cfg.copy(enabled = !cfg.enabled) }
+                  },
+                  modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("arena_custom_mode_toggle"),
+                ) {
+                  Text(
+                    text = if (progression.collectionCustomMode.enabled) "Custom Mode: ON" else "Custom Mode: OFF",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                  )
+                }
+                OutlinedButton(
+                  onClick = {
+                    showMapSwitcherDialog = false
+                    showCustomModeDialog = true
+                  },
+                  modifier = Modifier.heightIn(min = 48.dp).testTag("arena_open_custom_mode_btn"),
+                ) {
+                  Text("Configure", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                }
+              }
+            }
+            Text("ALL MAPS & BO3 CUSTOM ARENAS", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            LazyColumn(
+              modifier = Modifier.weight(1f).fillMaxWidth(),
+              verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+              items(MultiverseArsenalCatalog.customAreas, key = { it.id }) { area ->
+                val selected = area.id == progression.activeAreaId
+                val accent = Color(area.accentHex)
+                Surface(
+                  onClick = {
+                    onSelectArea(area.id)
+                    showMapSwitcherDialog = false
+                  },
+                  shape = RoundedCornerShape(12.dp),
+                  color = if (selected) accent.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant,
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .border(if (selected) 2.dp else 1.dp, if (selected) accent else MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
+                    .testTag("arena_quick_map_${area.id}"),
+                ) {
+                  Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(area.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = accent)
+                    Text("${area.storyEraNote} • ${area.buildingNames.take(3).joinToString(" / ")}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                  }
+                }
+              }
+            }
+          }
+        },
+        confirmButton = {
+          TextButton(onClick = { showMapSwitcherDialog = false }) {
+            Text("Done")
+          }
+        },
+      )
+    }
+
+    if (showCustomModeDialog && onUpdateCollectionCustomMode != null) {
+      CollectionCustomModeDialog(
+        initialConfig = progression.collectionCustomMode,
+        onSave = onUpdateCollectionCustomMode,
+        onDeploy = onDeployCollectionCustomMode ?: { showCustomModeDialog = false },
+        onDismiss = { showCustomModeDialog = false },
       )
     }
   }

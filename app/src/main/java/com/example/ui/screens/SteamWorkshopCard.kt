@@ -78,6 +78,7 @@ fun SteamWorkshopCard(
   onConfirmWorkshopImport: (SteamWorkshopImportPreview, Boolean, Boolean) -> Unit,
   onStatusMessage: (String) -> Unit,
   onOpenBo3Export: (() -> Unit)? = null,
+  onDeployWorkshopArea: ((String) -> Unit)? = null,
   modifier: Modifier = Modifier,
 ) {
   val context = LocalContext.current
@@ -85,6 +86,7 @@ fun SteamWorkshopCard(
   val activeRig = rigs.firstOrNull { it.id == profile.activeRigId } ?: rigs.firstOrNull()
 
   var activeTab by remember { mutableStateOf("import") }
+  var selectedPresetKey by remember { mutableStateOf("bo3") }
   var workshopUrlOrId by remember { mutableStateOf("") }
   var isFetching by remember { mutableStateOf(false) }
 
@@ -345,20 +347,69 @@ fun SteamWorkshopCard(
             }
           }
 
-          Button(
-            onClick = {
-              val bo3Pack = Bo3ModToolsImporter.getCuratedBo3ModPack(profile.userId)
-              importModulePreset = true
-              importRigPreset = true
-              pendingImportPreview = bo3Pack
-            },
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF), contentColor = Color.Black),
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("workshop_import_bo3_preset_btn"),
+          val selectedPreset = SteamWorkshopCodec.findCollectionPreset(selectedPresetKey)
+            ?: SteamWorkshopCodec.collectionGamePresets.first()
+          Text(
+            text = "Game Collection Workshop Packs",
+            style = MaterialTheme.typography.labelMedium,
+            color = SteamAccent,
+            fontWeight = FontWeight.SemiBold,
+          )
+          Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
           ) {
-            Icon(AppIcons.Bolt, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("Import Curated BO3 Mod Tools Pack", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+            SteamWorkshopCodec.collectionGamePresets.forEach { preset ->
+              FilterChip(
+                selected = selectedPresetKey == preset.key,
+                onClick = {
+                  selectedPresetKey = preset.key
+                  exportAppId = preset.appId
+                },
+                label = { Text(preset.label, style = MaterialTheme.typography.labelSmall) },
+                modifier = Modifier.heightIn(min = 48.dp).testTag("workshop_import_preset_${preset.key}"),
+              )
+            }
+          }
+
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+          ) {
+            Button(
+              onClick = {
+                val pack = SteamWorkshopCodec.getGameCollectionWorkshopPack(selectedPreset.key, profile.userId)
+                importModulePreset = true
+                importRigPreset = true
+                pendingImportPreview = pack
+              },
+              colors = ButtonDefaults.buttonColors(containerColor = SteamAccent, contentColor = Color(0xFF06131F)),
+              shape = RoundedCornerShape(12.dp),
+              modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("workshop_import_collection_pack_btn"),
+            ) {
+              Icon(AppIcons.Bolt, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(Modifier.width(6.dp))
+              Text(
+                text = "Import ${selectedPreset.label.substringBefore(" (")} Pack",
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+              )
+            }
+
+            OutlinedButton(
+              onClick = {
+                val bo3Pack = Bo3ModToolsImporter.getCuratedBo3ModPack(profile.userId)
+                importModulePreset = true
+                importRigPreset = true
+                pendingImportPreview = bo3Pack
+              },
+              shape = RoundedCornerShape(12.dp),
+              modifier = Modifier.heightIn(min = 48.dp).testTag("workshop_import_bo3_preset_btn"),
+            ) {
+              Text("BO3 Pack", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+            }
           }
         }
       }
@@ -369,26 +420,19 @@ fun SteamWorkshopCard(
             modifier = Modifier.horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
           ) {
-            FilterChip(
-              selected = exportAppId == "311210",
-              onClick = {
-                exportAppId = "311210"
-                exportTitle = "BO3 Mod Tools — ${activeRig?.name ?: "UnknownRig"}".take(80)
-                exportDesc = "Call of Duty: Black Ops 3 Mod Tools Workshop item by ${profile.callsign}. Includes custom .xmodel_export and .xanim_export assets."
-              },
-              label = { Text("BO3 Mod Tools (311210)") },
-              modifier = Modifier.testTag("workshop_preset_bo3"),
-            )
-            FilterChip(
-              selected = exportAppId == "480",
-              onClick = {
-                exportAppId = "480"
-                exportTitle = "${profile.callsign} — ${activeRig?.name ?: "UnknownOS Loadout"}".take(80)
-                exportDesc = "UnknownOS Workshop Pack built by ${profile.callsign}."
-              },
-              label = { Text("Generic / Spacewar (480)") },
-              modifier = Modifier.testTag("workshop_preset_generic"),
-            )
+            SteamWorkshopCodec.collectionGamePresets.forEach { preset ->
+              FilterChip(
+                selected = exportAppId == preset.appId,
+                onClick = {
+                  selectedPresetKey = preset.key
+                  exportAppId = preset.appId
+                  exportTitle = "${preset.gameTitle.substringBefore(':')} — ${activeRig?.name ?: "UnknownRig"}".take(80)
+                  exportDesc = "${preset.gameTitle} Steam Workshop loadout by ${profile.callsign}. ${preset.description}"
+                },
+                label = { Text(preset.label) },
+                modifier = Modifier.heightIn(min = 48.dp).testTag("workshop_preset_${preset.key}"),
+              )
+            }
           }
 
           Row(
@@ -674,6 +718,16 @@ fun SteamWorkshopCard(
             }
           }
 
+          preview.linkedAreaId?.let { areaId ->
+            val areaName = com.example.data.model.MultiverseArsenalCatalog.areaById(areaId).name
+            Text(
+              text = "Linked Playable Map: $areaName",
+              style = MaterialTheme.typography.labelSmall,
+              color = Color(0xFF00E676),
+              fontWeight = FontWeight.Bold,
+            )
+          }
+
           preview.publishedFileId?.let { pubId ->
             TextButton(
               onClick = { openExternalUrl(SteamWorkshopCodec.workshopItemWebUrl(pubId)) },
@@ -685,13 +739,26 @@ fun SteamWorkshopCard(
         }
       },
       confirmButton = {
-        Button(
-          onClick = {
-            onConfirmWorkshopImport(preview, importModulePreset, importRigPreset)
-            pendingImportPreview = null
-          },
-          modifier = Modifier.testTag("workshop_confirm_import_btn"),
-        ) { Text("Import to Armory & Rigs") }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          val linkedAreaId = preview.linkedAreaId
+          if (linkedAreaId != null && onDeployWorkshopArea != null) {
+            OutlinedButton(
+              onClick = {
+                onConfirmWorkshopImport(preview, importModulePreset, importRigPreset)
+                pendingImportPreview = null
+                onDeployWorkshopArea(linkedAreaId)
+              },
+              modifier = Modifier.heightIn(min = 48.dp).testTag("workshop_import_and_play_btn"),
+            ) { Text("Import & Play Map") }
+          }
+          Button(
+            onClick = {
+              onConfirmWorkshopImport(preview, importModulePreset, importRigPreset)
+              pendingImportPreview = null
+            },
+            modifier = Modifier.heightIn(min = 48.dp).testTag("workshop_confirm_import_btn"),
+          ) { Text("Import to Armory & Rigs") }
+        }
       },
       dismissButton = {
         TextButton(onClick = { pendingImportPreview = null }) { Text("Cancel") }

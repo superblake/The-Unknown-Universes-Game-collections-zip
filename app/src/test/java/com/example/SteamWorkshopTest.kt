@@ -302,4 +302,56 @@ class SteamWorkshopTest {
     assertNotNull(importedPreview)
     assertEquals("42424242", importedPreview?.publishedFileId)
   }
+
+  @Test
+  fun collectionGamePresets_coverAllUserCollectionsAndDeployLinkedMaps() {
+    val keys = SteamWorkshopCodec.collectionGamePresets.map { it.key }.toSet()
+    assertTrue(keys.containsAll(listOf("bo3", "prototype", "arkham", "spiderman", "godofwar", "division", "force_unleashed", "ironman", "ship_of_heroes", "generic")))
+
+    SteamWorkshopCodec.collectionGamePresets.forEach { preset ->
+      val pack = SteamWorkshopCodec.getGameCollectionWorkshopPack(preset.key, "u_col")
+      assertTrue("${preset.key} should have modules", pack.armoryItems.isNotEmpty())
+      assertTrue("${preset.key} should have rig", pack.customRigs.isNotEmpty())
+      assertEquals(preset.linkedAreaId, pack.linkedAreaId)
+      assertTrue(pack.armoryItems.all { it.maxTier == 25L })
+    }
+
+    val vdfArkham = """
+      "workshopitem"
+      {
+        "appid" "209000"
+        "publishedfileid" "91919191"
+        "title" "Batman Black Gate Shock Gloves"
+        "description" "Arkham Origins armor perk"
+      }
+    """.trimIndent()
+    val arkhamPreview = SteamWorkshopCodec.parseWorkshopImportInput(vdfArkham, "u_col").getOrThrow()
+    assertEquals("area_gotham_blackgate", arkhamPreview.linkedAreaId)
+    assertEquals("TUU Arkham", arkhamPreview.generatedModule?.universeTag)
+
+    var deployedArea: String? = null
+    var importedFromCard: SteamWorkshopImportPreview? = null
+    composeRule.setContent {
+      UnknownUniversesTheme(darkTheme = true) {
+        SteamWorkshopCard(
+          profile = OperatorProfile(id = "u1", userId = "u1", callsign = "SuperBlake"),
+          armory = emptyList(),
+          rigs = emptyList(),
+          linkedSteamAccount = null,
+          onConfirmWorkshopImport = { preview, _, _ -> importedFromCard = preview },
+          onStatusMessage = {},
+          onDeployWorkshopArea = { deployedArea = it },
+        )
+      }
+    }
+    composeRule.waitForIdle()
+    composeRule.onNodeWithTag("workshop_import_preset_spiderman").performClick()
+    composeRule.onNodeWithTag("workshop_import_collection_pack_btn").performClick()
+    composeRule.waitForIdle()
+
+    composeRule.onNodeWithTag("workshop_import_and_play_btn").assertIsDisplayed().performClick()
+    composeRule.waitForIdle()
+    assertEquals("area_spiderman_queens", deployedArea)
+    assertEquals("181707001", importedFromCard?.publishedFileId)
+  }
 }

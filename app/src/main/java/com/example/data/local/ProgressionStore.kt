@@ -11,6 +11,8 @@ import com.example.data.model.BotDifficulty
 import com.example.data.model.ChallengeState
 import com.example.data.model.CharacterCustomization
 import com.example.data.model.CharacterRarity
+import com.example.data.model.CollectionCustomModeConfig
+import com.example.data.model.CollectionCustomScope
 import com.example.data.model.CollectionDifficulty
 import com.example.data.model.CustomAreaState
 import com.example.data.model.EquipmentSlotType
@@ -199,6 +201,24 @@ class ProgressionStore(
   fun updatePrivateMatchRules(transform: (PrivateMatchRules) -> PrivateMatchRules) {
     val nextRules = transform(current.privateMatchRules)
     save(current.copy(privateMatchRules = nextRules))
+  }
+
+  fun updateCollectionCustomMode(transform: (CollectionCustomModeConfig) -> CollectionCustomModeConfig) {
+    val updated = transform(current.collectionCustomMode)
+    val allowedIds = CollectionCustomModeConfig.scopedAreas(updated.scope).map { it.id }.toSet()
+    val safeAreaId = if (updated.targetAreaId in allowedIds) {
+      updated.targetAreaId
+    } else {
+      allowedIds.firstOrNull() ?: updated.targetAreaId
+    }
+    save(
+      current.copy(
+        collectionCustomMode = updated.copy(
+          targetAreaId = safeAreaId,
+          enemyHpBoostPercent = updated.enemyHpBoostPercent.coerceIn(0, 100),
+        ),
+      ),
+    )
   }
 
   fun hostPrivateMatch(rules: PrivateMatchRules, hostCallsign: String): MultiverseMatchListing {
@@ -2170,6 +2190,20 @@ class ProgressionStore(
       put("worldCollectionDifficultyMap", JSONObject().apply {
         next.worldCollectionDifficultyMap.forEach { (k, v) -> put(k, v) }
       })
+      put("collectionCustomMode", JSONObject().apply {
+        val cm = next.collectionCustomMode
+        put("enabled", cm.enabled)
+        put("safeCollectionGuard", cm.safeCollectionGuard)
+        put("scope", cm.scope.id)
+        put("targetAreaId", cm.targetAreaId)
+        put("enemyHpBoostPercent", cm.enemyHpBoostPercent)
+        put("enemyArmorFlood", cm.enemyArmorFlood)
+        put("powerAndCooldownSuppression", cm.powerAndCooldownSuppression)
+        put("essenceAndShardDrain", cm.essenceAndShardDrain)
+        put("shieldAttritionLeak", cm.shieldAttritionLeak)
+        put("collectionAmbushSurge", cm.collectionAmbushSurge)
+        put("disableWonderDrops", cm.disableWonderDrops)
+      })
     }
   }
 
@@ -2763,6 +2797,28 @@ class ProgressionStore(
       } ?: fallback.worldCollectionDifficultyMap
     }
 
+    val customModeCfg = safeParse(fallback.collectionCustomMode) {
+      root.optJSONObject("collectionCustomMode")?.let { obj ->
+        val parsedScope = CollectionCustomScope.fromId(obj.optString("scope", fallback.collectionCustomMode.scope.id))
+        val rawAreaId = obj.optString("targetAreaId", fallback.collectionCustomMode.targetAreaId)
+        val allowedAreaIds = CollectionCustomModeConfig.scopedAreas(parsedScope).map { it.id }.toSet()
+        val safeAreaId = if (rawAreaId in allowedAreaIds) rawAreaId else (allowedAreaIds.firstOrNull() ?: "area_bo3_the_giant")
+        CollectionCustomModeConfig(
+          enabled = obj.optBoolean("enabled", fallback.collectionCustomMode.enabled),
+          safeCollectionGuard = obj.optBoolean("safeCollectionGuard", fallback.collectionCustomMode.safeCollectionGuard),
+          scope = parsedScope,
+          targetAreaId = safeAreaId,
+          enemyHpBoostPercent = obj.optInt("enemyHpBoostPercent", fallback.collectionCustomMode.enemyHpBoostPercent).coerceIn(0, 100),
+          enemyArmorFlood = obj.optBoolean("enemyArmorFlood", fallback.collectionCustomMode.enemyArmorFlood),
+          powerAndCooldownSuppression = obj.optBoolean("powerAndCooldownSuppression", fallback.collectionCustomMode.powerAndCooldownSuppression),
+          essenceAndShardDrain = obj.optBoolean("essenceAndShardDrain", fallback.collectionCustomMode.essenceAndShardDrain),
+          shieldAttritionLeak = obj.optBoolean("shieldAttritionLeak", fallback.collectionCustomMode.shieldAttritionLeak),
+          collectionAmbushSurge = obj.optBoolean("collectionAmbushSurge", fallback.collectionCustomMode.collectionAmbushSurge),
+          disableWonderDrops = obj.optBoolean("disableWonderDrops", fallback.collectionCustomMode.disableWonderDrops),
+        )
+      } ?: fallback.collectionCustomMode
+    }
+
     return OperatorProgressionState(
       playerXp = root.optLong("playerXp", fallback.playerXp).coerceAtLeast(0L),
       playerPrestige = root.optInt("playerPrestige", fallback.playerPrestige).coerceAtLeast(0),
@@ -2835,6 +2891,7 @@ class ProgressionStore(
       unlockedNgPlusTier = root.optInt("unlockedNgPlusTier", fallback.unlockedNgPlusTier).coerceIn(0, NewGamePlusVersion.MAX_NG_PLUS_TIER),
       ngPlusCompletions = root.optInt("ngPlusCompletions", fallback.ngPlusCompletions).coerceAtLeast(0),
       worldCollectionDifficultyMap = worldColDiffMap,
+      collectionCustomMode = customModeCfg,
     )
   }
 

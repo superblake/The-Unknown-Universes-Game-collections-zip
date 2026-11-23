@@ -14,6 +14,7 @@ import com.example.data.model.BattlePassVersion
 import com.example.data.model.BlastCoreColor
 import com.example.data.model.ChallengeState
 import com.example.data.model.CharacterCustomization
+import com.example.data.model.CollectionCustomModeConfig
 import com.example.data.model.CollectionDifficulty
 import com.example.data.model.EquipmentSlotType
 import com.example.data.model.GearSlot
@@ -319,6 +320,10 @@ class UniverseViewModel(
   fun selectUniverse(universeId: String) {
     viewModelScope.launch {
       val world = UniverseCatalog.worldById(universeId)
+      val curJoined = progressionState.value.joinedMatch
+      if (curJoined != null && curJoined.worldId != world.id) {
+        progressionStore?.leaveJoinedMatch()
+      }
       val curArea = MultiverseArsenalCatalog.areaById(progressionState.value.activeAreaId)
       if (curArea.linkedWorldId != world.id) {
         MultiverseArsenalCatalog.customAreas.firstOrNull { it.linkedWorldId == world.id }?.let { matchingArea ->
@@ -603,6 +608,45 @@ class UniverseViewModel(
 
   fun updatePrivateMatchRules(transform: (PrivateMatchRules) -> PrivateMatchRules) {
     progressionStore?.updatePrivateMatchRules(transform)
+  }
+
+  fun updateCollectionCustomMode(transform: (CollectionCustomModeConfig) -> CollectionCustomModeConfig) {
+    progressionStore?.updateCollectionCustomMode(transform)
+  }
+
+  fun deployCollectionCustomMode() {
+    val store = progressionStore ?: return
+    val currentCfg = progressionState.value.collectionCustomMode
+    val scoped = CollectionCustomModeConfig.scopedAreas(currentCfg.scope)
+    val safeArea = scoped.firstOrNull { it.id == currentCfg.targetAreaId } ?: scoped.firstOrNull()
+    val areaId = safeArea?.id ?: progressionState.value.activeAreaId
+    store.updateCollectionCustomMode { cfg ->
+      cfg.copy(enabled = true, targetAreaId = areaId)
+    }
+    val curJoined = progressionState.value.joinedMatch
+    if (curJoined != null && curJoined.areaId != areaId) {
+      store.leaveJoinedMatch()
+    }
+    store.selectArea(areaId)
+    val areaSpec = MultiverseArsenalCatalog.areaById(areaId)
+    val linkedWorld = UniverseCatalog.worldById(areaSpec.linkedWorldId)
+    val resolvedMode = if (areaId.startsWith("area_bo3_") && "zombies" in linkedWorld.supportedModes) {
+      "zombies"
+    } else {
+      val currentProfile = (uiState.value as? UniverseUiState.Ready)?.profile
+      val currentMode = currentProfile?.activeMode ?: linkedWorld.defaultModeId
+      if (currentMode in linkedWorld.supportedModes) currentMode else linkedWorld.defaultModeId
+    }
+    val activeCfg = progressionState.value.collectionCustomMode
+    viewModelScope.launch {
+      repository.updateProfileSelection(
+        userId = currentUserId,
+        activeUniverseId = linkedWorld.id,
+        activeMode = resolvedMode,
+      )
+      _statusBanner.value = "Custom Mode (${activeCfg.scope.label}): ${areaSpec.name} • ${activeCfg.impactLabel}"
+      _activeTab.value = OsWorkspaceTab.ARENA_PLAY
+    }
   }
 
   fun hostPrivateMatch(rules: PrivateMatchRules, hostCallsign: String): MultiverseMatchListing? {
@@ -1134,6 +1178,10 @@ class UniverseViewModel(
 
   fun selectCustomArea(areaId: String) {
     val store = progressionStore ?: return
+    val curJoined = progressionState.value.joinedMatch
+    if (curJoined != null && curJoined.areaId != areaId) {
+      store.leaveJoinedMatch()
+    }
     store.selectArea(areaId)
     val spec = MultiverseArsenalCatalog.areaById(areaId)
     val linkedWorld = UniverseCatalog.worldById(spec.linkedWorldId)
@@ -1149,6 +1197,29 @@ class UniverseViewModel(
     }
     val st = progressionState.value.areaState(areaId)
     _statusBanner.value = "Area Selected: ${spec.name} • ${linkedWorld.title} (${st.ageYears} yrs • ${st.currentEra.label})"
+  }
+
+  fun deployToAreaAndPlay(areaId: String) {
+    val store = progressionStore ?: return
+    val curJoined = progressionState.value.joinedMatch
+    if (curJoined != null && curJoined.areaId != areaId) {
+      store.leaveJoinedMatch()
+    }
+    store.selectArea(areaId)
+    val spec = MultiverseArsenalCatalog.areaById(areaId)
+    val linkedWorld = UniverseCatalog.worldById(spec.linkedWorldId)
+    val currentProfile = (uiState.value as? UniverseUiState.Ready)?.profile
+    val currentMode = currentProfile?.activeMode ?: linkedWorld.defaultModeId
+    val resolvedMode = if (currentMode in linkedWorld.supportedModes) currentMode else linkedWorld.defaultModeId
+    viewModelScope.launch {
+      repository.updateProfileSelection(
+        userId = currentUserId,
+        activeUniverseId = linkedWorld.id,
+        activeMode = resolvedMode,
+      )
+      _statusBanner.value = "Deployed: ${spec.name} • ${linkedWorld.title}"
+      _activeTab.value = OsWorkspaceTab.ARENA_PLAY
+    }
   }
 
   fun upgradeAreaFeature(areaId: String, feature: String, currentBlueEssence: Long) {
@@ -1244,8 +1315,11 @@ class UniverseViewModel(
     val ngAndColMult = prog.combinedGameplayRewardMultiplier(universeId)
     val rules = prog.effectiveMatchRules()
     val mutatorEssenceMult = (if (rules.doubleBlueEssence) 2.0f else 1.0f) * (if (rules.friendlyFire) 1.25f else 1.0f)
+    val customEssenceMult = prog.collectionCustomMode.effectiveEssenceMultFor(prog.activeAreaId)
     val baseEssence = (score / 10L).coerceAtLeast(150L) + if (extracted) 350L else 0L
-    val essenceEarned = (baseEssence * passMult * clanMult * mutatorEssenceMult * ngAndColMult).toLong()
+    val essenceEarned = (baseEssence * passMult * clanMult * mutatorEssenceMult * ngAndColMult * customEssenceMult)
+      .toLong()
+      .coerceAtLeast(100L)
     viewModelScope.launch {
       val res =
         repository.recordMatchResult(

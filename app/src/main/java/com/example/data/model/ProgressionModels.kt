@@ -125,11 +125,11 @@ enum class WorldDifficultyTier(
   val rewardScale: Float,
   val accentHex: Long,
 ) {
-  NORMAL("normal", "Normal", 1.0f, 1.0f, 1.0f, 0xFF00E5FF),
-  HARDENED("hardened", "Hardened", 1.35f, 1.12f, 1.35f, 0xFF00E676),
-  VETERAN("veteran", "Veteran", 1.80f, 1.24f, 1.80f, 0xFFFFAB40),
-  NIGHTMARE("nightmare", "Nightmare", 2.40f, 1.36f, 2.45f, 0xFFFF3D71),
-  GRANDMASTER("grandmaster", "Grandmaster", 3.20f, 1.48f, 3.25f, 0xFFE040FB);
+  NORMAL("normal", "Normal", 0.78f, 1.0f, 1.0f, 0xFF00E5FF),
+  HARDENED("hardened", "Hardened", 0.95f, 1.12f, 1.35f, 0xFF00E676),
+  VETERAN("veteran", "Veteran", 1.20f, 1.24f, 1.80f, 0xFFFFAB40),
+  NIGHTMARE("nightmare", "Nightmare", 1.50f, 1.36f, 2.45f, 0xFFFF3D71),
+  GRANDMASTER("grandmaster", "Grandmaster", 1.85f, 1.48f, 3.25f, 0xFFE040FB);
 
   companion object {
     fun fromId(id: String): WorldDifficultyTier =
@@ -153,8 +153,8 @@ enum class CollectionDifficulty(
     rank = 1,
     label = "I: Story Explorer",
     shortTag = "I",
-    summary = "Story Collection Balance • 0.85x Enemy HP • 0.95x Baseline Rewards",
-    enemyHpScale = 0.85f,
+    summary = "Story Collection Balance • 0.65x Enemy HP • 0.95x Baseline Rewards",
+    enemyHpScale = 0.65f,
     enemySpeedScale = 0.92f,
     rewardMultiplier = 0.95f,
     accentHex = 0xFF40C4FF,
@@ -164,8 +164,8 @@ enum class CollectionDifficulty(
     rank = 2,
     label = "II: Tactical Operative",
     shortTag = "II",
-    summary = "Standard Collection Balance • 1.00x Enemy HP • 1.00x Rewards",
-    enemyHpScale = 1.00f,
+    summary = "Standard Collection Balance • 0.85x Enemy HP • 1.00x Rewards",
+    enemyHpScale = 0.85f,
     enemySpeedScale = 1.00f,
     rewardMultiplier = 1.00f,
     accentHex = 0xFF00E676,
@@ -175,8 +175,8 @@ enum class CollectionDifficulty(
     rank = 3,
     label = "III: Vanguard Hunter",
     shortTag = "III",
-    summary = "Aggressive Collection Foes • 1.45x HP • 1.50x Rewards",
-    enemyHpScale = 1.45f,
+    summary = "Aggressive Collection Foes • 1.10x HP • 1.50x Rewards",
+    enemyHpScale = 1.10f,
     enemySpeedScale = 1.12f,
     rewardMultiplier = 1.50f,
     accentHex = 0xFFFFD54F,
@@ -186,8 +186,8 @@ enum class CollectionDifficulty(
     rank = 4,
     label = "IV: Multiverse Legend",
     shortTag = "IV",
-    summary = "Elite Collection Assault • 2.15x HP • 2.25x Rewards",
-    enemyHpScale = 2.15f,
+    summary = "Elite Collection Assault • 1.40x HP • 2.25x Rewards",
+    enemyHpScale = 1.40f,
     enemySpeedScale = 1.24f,
     rewardMultiplier = 2.25f,
     accentHex = 0xFFFF9100,
@@ -197,8 +197,8 @@ enum class CollectionDifficulty(
     rank = 5,
     label = "V: Apotheosis Sovereign",
     shortTag = "V",
-    summary = "Peak Collection Crucible • 3.10x HP • 3.25x Rewards",
-    enemyHpScale = 3.10f,
+    summary = "Peak Collection Crucible • 1.75x HP • 3.25x Rewards",
+    enemyHpScale = 1.75f,
     enemySpeedScale = 1.38f,
     rewardMultiplier = 3.25f,
     accentHex = 0xFFFF3D71,
@@ -226,7 +226,7 @@ enum class NewGamePlusVersion(
     shortTag = "STD",
     subtitle = "Initial timeline run • Complete a run to unlock New Game+",
     rewardMultiplier = 1.00f,
-    enemyHpScale = 1.00f,
+    enemyHpScale = 0.85f,
     enemySpeedScale = 1.00f,
     accentHex = 0xFF00E5FF,
   ),
@@ -236,7 +236,7 @@ enum class NewGamePlusVersion(
     shortTag = "NG+1",
     subtitle = "New Game+ Base • +75% base rewards & higher Essence drops",
     rewardMultiplier = 1.75f,
-    enemyHpScale = 1.40f,
+    enemyHpScale = 1.05f,
     enemySpeedScale = 1.08f,
     accentHex = 0xFF00E676,
   ),
@@ -246,7 +246,7 @@ enum class NewGamePlusVersion(
     shortTag = "NG+2",
     subtitle = "Post-Completion Version #1 • 2.60x rewards & elite surges",
     rewardMultiplier = 2.60f,
-    enemyHpScale = 1.90f,
+    enemyHpScale = 1.28f,
     enemySpeedScale = 1.16f,
     accentHex = 0xFF7C4DFF,
   ),
@@ -256,7 +256,7 @@ enum class NewGamePlusVersion(
     shortTag = "NG+3",
     subtitle = "Post-Completion Version #2 • 3.60x rewards & dense bosses",
     rewardMultiplier = 3.60f,
-    enemyHpScale = 2.50f,
+    enemyHpScale = 1.55f,
     enemySpeedScale = 1.24f,
     accentHex = 0xFFFFAB40,
   ),
@@ -266,7 +266,7 @@ enum class NewGamePlusVersion(
     shortTag = "NG+4",
     subtitle = "Post-Completion Version #3 • 4.85x rewards & apex hunters",
     rewardMultiplier = 4.85f,
-    enemyHpScale = 3.25f,
+    enemyHpScale = 1.85f,
     enemySpeedScale = 1.32f,
     accentHex = 0xFFFF3D71,
   ),
@@ -276,7 +276,7 @@ enum class NewGamePlusVersion(
     shortTag = "NG+5",
     subtitle = "Post-Completion Version #4 • 6.50x rewards & mythic mayhem",
     rewardMultiplier = 6.50f,
-    enemyHpScale = 4.15f,
+    enemyHpScale = 2.15f,
     enemySpeedScale = 1.40f,
     accentHex = 0xFFFFD54F,
   );
@@ -811,6 +811,7 @@ data class OperatorProgressionState(
   val unlockedNgPlusTier: Int = 0,
   val ngPlusCompletions: Int = 0,
   val worldCollectionDifficultyMap: Map<String, String> = emptyMap(),
+  val collectionCustomMode: CollectionCustomModeConfig = CollectionCustomModeConfig(),
 ) {
   val playerLevel: Int
     get() = ProgressionCatalog.levelForXp(playerXp)
@@ -1699,5 +1700,292 @@ object UpgradeCosts {
    */
   const val NO_APK_PLAY_GUIDE: String = UniverseCatalog.NO_APK_PLAY_GUIDE
 }
+
+enum class CollectionCustomScope(
+  val id: String,
+  val label: String,
+  val shortNote: String,
+) {
+  ALL_CURATED(
+    id = "all_curated",
+    label = "BO3 + Steam + Collections",
+    shortNote = "Scoped strictly to BO3 Mod Tools, Steam Workshop & your Game Collections.",
+  ),
+  BO3_ONLY(
+    id = "bo3_only",
+    label = "BO3 Mod Tools Only",
+    shortNote = "Only Treyarch BO3 Zombies maps (Nacht, The Giant, Gorod, Shadows, Der Riese) & BO3 mods.",
+  ),
+  STEAM_ONLY(
+    id = "steam_only",
+    label = "Steam Workshop Only",
+    shortNote = "Only Steam Workshop game collection presets, .VDF/.JSON packs & imported Rigs.",
+  ),
+  COLLECTIONS_ONLY(
+    id = "collections_only",
+    label = "Game Collections Only",
+    shortNote = "Only your Game Collections (Prototype, inFAMOUS, Arkham, Spider-Man, GoW, Division, Starkiller, Ship of Heroes).",
+  );
+
+  companion object {
+    fun fromId(id: String): CollectionCustomScope =
+      entries.firstOrNull { it.id == id } ?: ALL_CURATED
+  }
+}
+
+@Immutable
+data class CollectionCustomModeConfig(
+  val enabled: Boolean = false,
+  val safeCollectionGuard: Boolean = true,
+  val scope: CollectionCustomScope = CollectionCustomScope.ALL_CURATED,
+  val targetAreaId: String = "area_bo3_the_giant",
+  val enemyHpBoostPercent: Int = 30,
+  val enemyArmorFlood: Boolean = false,
+  val powerAndCooldownSuppression: Boolean = true,
+  val essenceAndShardDrain: Boolean = true,
+  val shieldAttritionLeak: Boolean = false,
+  val collectionAmbushSurge: Boolean = false,
+  val disableWonderDrops: Boolean = false,
+) {
+  val effectiveCappedHpPercent: Int
+    get() = if (safeCollectionGuard) enemyHpBoostPercent.coerceIn(0, 75) else enemyHpBoostPercent.coerceIn(0, 100)
+
+  val activeNegativeCount: Int
+    get() = listOf(
+      effectiveCappedHpPercent > 0,
+      enemyArmorFlood,
+      powerAndCooldownSuppression,
+      essenceAndShardDrain,
+      shieldAttritionLeak,
+      collectionAmbushSurge,
+      disableWonderDrops,
+    ).count { it }
+
+  val negativeImpactPercent: Int
+    get() {
+      val hpScore = (effectiveCappedHpPercent / 4).coerceAtMost(25)
+      val toggleScore =
+        (if (enemyArmorFlood) (if (safeCollectionGuard) 8 else 14) else 0) +
+          (if (powerAndCooldownSuppression) (if (safeCollectionGuard) 12 else 16) else 0) +
+          (if (essenceAndShardDrain) (if (safeCollectionGuard) 12 else 18) else 0) +
+          (if (shieldAttritionLeak) (if (safeCollectionGuard) 10 else 14) else 0) +
+          (if (collectionAmbushSurge) (if (safeCollectionGuard) 9 else 12) else 0) +
+          (if (disableWonderDrops) (if (safeCollectionGuard) 6 else 10) else 0)
+      return (hpScore + toggleScore).coerceIn(0, if (safeCollectionGuard) 82 else 100)
+    }
+
+  val impactLabel: String
+    get() = when {
+      !enabled -> "Custom Mode OFF"
+      negativeImpactPercent >= 65 -> "High Strain (${negativeImpactPercent}%)${if (safeCollectionGuard) " • Safe" else ""}"
+      negativeImpactPercent >= 35 -> "Heavy Collection Impact (${negativeImpactPercent}%)"
+      negativeImpactPercent > 0 -> "Moderate Collection Strain (${negativeImpactPercent}%)"
+      else -> "Clean Custom Rules (0% Negative Impact)"
+    }
+
+  val collectionSafetyNote: String
+    get() = if (safeCollectionGuard) {
+      "Collection Safeguard ON: BO3/Steam/Collection unlocks, Tiers (1-25), Stars, Bank & Wonder Weapons stay 100% intact; enemy HP/armor caps prevent softlocks."
+    } else {
+      "Safeguard Relaxed: Stronger negative penalties active in scoped runs (saved Collection items & Bank still remain safe)."
+    }
+
+  fun isAreaInScope(areaId: String): Boolean =
+    scopedAreas(scope).any { it.id == areaId }
+
+  fun isActiveForArea(areaId: String): Boolean =
+    enabled && isAreaInScope(areaId)
+
+  fun effectiveHostileHpMultFor(areaId: String): Float =
+    if (!isActiveForArea(areaId)) 1.0f else 1.0f + (effectiveCappedHpPercent / 100f)
+
+  fun effectiveDamageMultFor(areaId: String): Float =
+    if (!isActiveForArea(areaId) || !powerAndCooldownSuppression) 1.0f
+    else if (safeCollectionGuard) 0.75f else 0.65f
+
+  fun effectiveCooldownMultFor(areaId: String): Float =
+    if (!isActiveForArea(areaId) || !powerAndCooldownSuppression) 1.0f
+    else if (safeCollectionGuard) 1.35f else 1.55f
+
+  fun effectiveEssenceMultFor(areaId: String): Float =
+    if (!isActiveForArea(areaId) || !essenceAndShardDrain) 1.0f
+    else if (safeCollectionGuard) 0.65f else 0.55f
+
+  fun effectiveIncomingDamageMultFor(areaId: String): Float =
+    if (!isActiveForArea(areaId) || !shieldAttritionLeak) 1.0f
+    else if (safeCollectionGuard) 1.25f else 1.40f
+
+  fun effectiveRegenMultFor(areaId: String): Float =
+    if (!isActiveForArea(areaId) || !shieldAttritionLeak) 1.0f
+    else if (safeCollectionGuard) 0.55f else 0.35f
+
+  fun effectiveSpawnCountMultFor(areaId: String): Float =
+    if (!isActiveForArea(areaId) || !collectionAmbushSurge) 1.0f
+    else if (safeCollectionGuard) 1.25f else 1.35f
+
+  fun effectiveEnemySpeedMultFor(areaId: String): Float =
+    if (!isActiveForArea(areaId) || !collectionAmbushSurge) 1.0f
+    else if (safeCollectionGuard) 1.25f else 1.40f
+
+  fun shouldSuppressCrateWonderDrops(areaId: String): Boolean =
+    isActiveForArea(areaId) && disableWonderDrops
+
+  fun shouldReinforceArmor(areaId: String, isElite: Boolean): Boolean {
+    if (!isActiveForArea(areaId) || !enemyArmorFlood) return false
+    return if (safeCollectionGuard) isElite else true
+  }
+
+  val effectiveHostileHpMult: Float
+    get() = if (!enabled) 1.0f else 1.0f + (effectiveCappedHpPercent / 100f)
+
+  val effectiveDamageMult: Float
+    get() = if (!enabled || !powerAndCooldownSuppression) 1.0f else if (safeCollectionGuard) 0.75f else 0.65f
+
+  val effectiveCooldownMult: Float
+    get() = if (!enabled || !powerAndCooldownSuppression) 1.0f else if (safeCollectionGuard) 1.35f else 1.55f
+
+  val effectiveEssenceMult: Float
+    get() = if (!enabled || !essenceAndShardDrain) 1.0f else if (safeCollectionGuard) 0.65f else 0.55f
+
+  val effectiveIncomingDamageMult: Float
+    get() = if (!enabled || !shieldAttritionLeak) 1.0f else if (safeCollectionGuard) 1.25f else 1.40f
+
+  val effectiveRegenMult: Float
+    get() = if (!enabled || !shieldAttritionLeak) 1.0f else if (safeCollectionGuard) 0.55f else 0.35f
+
+  companion object {
+    private val bo3AreaIds = setOf(
+      "area_bo3_nacht",
+      "area_bo3_the_giant",
+      "area_bo3_gorod",
+      "area_bo3_shadows",
+      "area_zombies_der_riese",
+    )
+
+    private val steamLinkedAreaIds = setOf(
+      "area_bo3_the_giant",
+      "area_bo3_nacht",
+      "area_bo3_gorod",
+      "area_bo3_shadows",
+      "area_blacklight_hive",
+      "area_gotham_blackgate",
+      "area_spiderman_queens",
+      "area_hellbreaker_crucible",
+      "area_sector_zero",
+      "area_aegis_orbital",
+      "area_ironman_stark",
+      "area_ship_of_heroes_deck",
+      "area_empire_city",
+    )
+
+    private val collectionAreaIds = setOf(
+      "area_empire_city",
+      "area_batcave",
+      "area_gotham_blackgate",
+      "area_ironman_stark",
+      "area_spiderman_queens",
+      "area_spider_bugle_subway",
+      "area_blacklight_hive",
+      "area_hellbreaker_crucible",
+      "area_chrono_gate",
+      "area_aegis_orbital",
+      "area_sector_zero",
+      "area_ship_of_heroes_deck",
+      "area_mended_convergence",
+      "area_hero_frontier",
+    )
+
+    fun scopedAreas(scope: CollectionCustomScope): List<CustomAreaSpec> =
+      when (scope) {
+        CollectionCustomScope.BO3_ONLY ->
+          MultiverseArsenalCatalog.customAreas.filter { it.id in bo3AreaIds }
+        CollectionCustomScope.STEAM_ONLY ->
+          MultiverseArsenalCatalog.customAreas.filter { it.id in steamLinkedAreaIds }
+        CollectionCustomScope.COLLECTIONS_ONLY ->
+          MultiverseArsenalCatalog.customAreas.filter { it.id in collectionAreaIds }
+        CollectionCustomScope.ALL_CURATED ->
+          MultiverseArsenalCatalog.customAreas.filter {
+            it.id in bo3AreaIds || it.id in steamLinkedAreaIds || it.id in collectionAreaIds
+          }
+      }
+
+    fun isArmoryItemEligible(item: ArmoryItem, scope: CollectionCustomScope): Boolean {
+      val tag = item.universeTag.lowercase()
+      val id = item.id.lowercase()
+      val isBo3 = tag.contains("bo3") || id.startsWith("bo3_")
+      val isSteam = tag.contains("workshop") || id.startsWith("ws_")
+      val isCollection = tag.contains("tuu") ||
+        tag.contains("prototype") ||
+        tag.contains("infamous") ||
+        tag.contains("arkham") ||
+        tag.contains("spider") ||
+        tag.contains("stark") ||
+        tag.contains("god of war") ||
+        tag.contains("sector zero") ||
+        tag.contains("aegis") ||
+        tag.contains("ship of heroes") ||
+        tag.contains("crossover") ||
+        tag.contains("chrono")
+      return when (scope) {
+        CollectionCustomScope.BO3_ONLY -> isBo3
+        CollectionCustomScope.STEAM_ONLY -> isSteam || isBo3
+        CollectionCustomScope.COLLECTIONS_ONLY -> isCollection
+        CollectionCustomScope.ALL_CURATED -> isBo3 || isSteam || isCollection
+      }
+    }
+
+    fun severeNegativePreset(
+      scope: CollectionCustomScope = CollectionCustomScope.ALL_CURATED,
+      areaId: String = scopedAreas(scope).firstOrNull()?.id ?: "area_bo3_the_giant",
+    ): CollectionCustomModeConfig = CollectionCustomModeConfig(
+      enabled = true,
+      safeCollectionGuard = true,
+      scope = scope,
+      targetAreaId = areaId,
+      enemyHpBoostPercent = 75,
+      enemyArmorFlood = true,
+      powerAndCooldownSuppression = true,
+      essenceAndShardDrain = true,
+      shieldAttritionLeak = true,
+      collectionAmbushSurge = true,
+      disableWonderDrops = true,
+    )
+
+    fun mildStrainPreset(
+      scope: CollectionCustomScope = CollectionCustomScope.ALL_CURATED,
+      areaId: String = scopedAreas(scope).firstOrNull()?.id ?: "area_bo3_the_giant",
+    ): CollectionCustomModeConfig = CollectionCustomModeConfig(
+      enabled = true,
+      safeCollectionGuard = true,
+      scope = scope,
+      targetAreaId = areaId,
+      enemyHpBoostPercent = 30,
+      enemyArmorFlood = false,
+      powerAndCooldownSuppression = true,
+      essenceAndShardDrain = false,
+      shieldAttritionLeak = false,
+      collectionAmbushSurge = false,
+      disableWonderDrops = false,
+    )
+
+    fun cleanPreset(
+      scope: CollectionCustomScope = CollectionCustomScope.ALL_CURATED,
+      areaId: String = scopedAreas(scope).firstOrNull()?.id ?: "area_bo3_the_giant",
+    ): CollectionCustomModeConfig = CollectionCustomModeConfig(
+      enabled = true,
+      safeCollectionGuard = true,
+      scope = scope,
+      targetAreaId = areaId,
+      enemyHpBoostPercent = 0,
+      enemyArmorFlood = false,
+      powerAndCooldownSuppression = false,
+      essenceAndShardDrain = false,
+      shieldAttritionLeak = false,
+      collectionAmbushSurge = false,
+      disableWonderDrops = false,
+    )
+  }
+}
+
 
 

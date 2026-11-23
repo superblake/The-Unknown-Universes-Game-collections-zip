@@ -67,6 +67,7 @@ import com.example.data.local.CloudSyncState
 import com.example.data.local.SaveBundlePreview
 import com.example.data.model.AchievementState
 import com.example.data.model.ArmoryItem
+import com.example.data.model.CollectionCustomModeConfig
 import com.example.data.model.CollectionDifficulty
 import com.example.data.model.FriendOnlineStatus
 import com.example.data.model.LinkedAccount
@@ -135,6 +136,9 @@ fun OsDesktopScreen(
   onMaxAllStars: () -> Unit = {},
   onGrantEssenceBonus: () -> Unit = {},
   onImportBo3Preset: () -> Unit = {},
+  onDeployArea: (String) -> Unit = { areaId -> onSelectArea(areaId); onLaunchArena() },
+  onUpdateCollectionCustomMode: ((CollectionCustomModeConfig) -> CollectionCustomModeConfig) -> Unit = {},
+  onDeployCollectionCustomMode: () -> Unit = {},
   onSignOut: () -> Unit,
 ) {
   val activeWorld = UniverseCatalog.worldById(profile.activeUniverseId)
@@ -146,6 +150,7 @@ fun OsDesktopScreen(
   var showCallsignDialog by remember { mutableStateOf(false) }
   var showLobbyRosterDialog by remember { mutableStateOf(false) }
   var showCodesDialog by remember { mutableStateOf(false) }
+  var showCustomModeDialog by remember { mutableStateOf(false) }
   var callsignDraft by remember(profile.callsign) { mutableStateOf(profile.callsign) }
   val claimableAchievements = achievements.count { it.unlocked && !it.claimed }
   val haptic = LocalHapticFeedback.current
@@ -1201,6 +1206,54 @@ fun OsDesktopScreen(
               }
             }
           }
+
+          val cm = progression.collectionCustomMode
+          Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = if (cm.enabled) Color(0xFFFF9100).copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+            modifier = Modifier
+              .fillMaxWidth()
+              .border(
+                1.dp,
+                if (cm.enabled) Color(0xFFFF9100).copy(alpha = 0.6f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                RoundedCornerShape(12.dp),
+              ),
+          ) {
+            Row(
+              modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+              Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                  text = "BO3 • STEAM • COLLECTIONS CUSTOM MODE",
+                  style = MaterialTheme.typography.labelMedium,
+                  fontWeight = FontWeight.Bold,
+                  color = if (cm.enabled) Color(0xFFFF9100) else Color(0xFF00E5FF),
+                )
+                Text(
+                  text = "${cm.impactLabel} • ${if (cm.safeCollectionGuard) "Safeguard ON" else "Unguarded"}",
+                  style = MaterialTheme.typography.labelSmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                )
+              }
+              Spacer(Modifier.width(8.dp))
+              Button(
+                onClick = { showCustomModeDialog = true },
+                colors = ButtonDefaults.buttonColors(
+                  containerColor = if (cm.enabled) Color(0xFFFF9100) else Color(0xFF00E5FF),
+                  contentColor = Color.Black,
+                ),
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                modifier = Modifier.heightIn(min = 48.dp).testTag("os_custom_mode_btn"),
+              ) {
+                Text("Custom Mode", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+              }
+            }
+          }
         }
       }
     }
@@ -1485,6 +1538,7 @@ fun OsDesktopScreen(
         onConfirmWorkshopImport = onConfirmWorkshopImport,
         onStatusMessage = onStatusMessage,
         onOpenBo3Export = onOpenExport,
+        onDeployWorkshopArea = onDeployArea,
       )
     }
   }
@@ -1539,6 +1593,15 @@ fun OsDesktopScreen(
       onMaxAllStars = onMaxAllStars,
       onGrantEssence = onGrantEssenceBonus,
       onImportBo3Pack = onImportBo3Preset,
+    )
+  }
+
+  if (showCustomModeDialog) {
+    CollectionCustomModeDialog(
+      initialConfig = progression.collectionCustomMode,
+      onSave = onUpdateCollectionCustomMode,
+      onDeploy = onDeployCollectionCustomMode,
+      onDismiss = { showCustomModeDialog = false },
     )
   }
 }

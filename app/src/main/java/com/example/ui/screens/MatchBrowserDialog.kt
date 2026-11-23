@@ -703,9 +703,9 @@ private fun HostPrivateMatchTab(
             selected = customRules.areaId == area.id,
             onClick = {
               val linkedWorld = UniverseCatalog.worldById(area.linkedWorldId)
-              val syncedMode = when (area.id) {
-                "area_zombies_der_riese" -> "zombies"
-                "area_campaign_nexus" -> "campaign"
+              val syncedMode = when {
+                area.id == "area_zombies_der_riese" || area.id.startsWith("area_bo3_") -> "zombies"
+                area.id == "area_campaign_nexus" -> "campaign"
                 else -> linkedWorld.defaultModeId
               }
               onRulesChanged(

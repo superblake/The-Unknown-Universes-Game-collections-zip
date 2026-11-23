@@ -68,8 +68,16 @@ class ArenaBackdropCache {
   private var cachedBrush: Brush? = null
   private var cachedSkyBrush: Brush? = null
 
-  fun brushFor(worldId: String, skyThemeId: String, areaAgeEra: AreaAgeEra, w: Float, h: Float): Brush {
-    val key = "$worldId|$skyThemeId|${areaAgeEra.name}"
+  fun brushFor(
+    worldId: String,
+    skyThemeId: String,
+    areaAgeEra: AreaAgeEra,
+    w: Float,
+    h: Float,
+    areaId: String = "",
+    floorAccentHex: Long = 0L,
+  ): Brush {
+    val key = "$worldId|$areaId|$skyThemeId|${areaAgeEra.name}|$floorAccentHex"
     val existing = cachedBrush
     if (existing != null && cachedWorldId == key && cachedW == w && cachedH == h) {
       return existing
@@ -93,8 +101,16 @@ class ArenaBackdropCache {
     return created
   }
 
-  fun skyBrushFor(worldId: String, skyThemeId: String, areaAgeEra: AreaAgeEra, w: Float, h: Float): Brush {
-    brushFor(worldId, skyThemeId, areaAgeEra, w, h)
+  fun skyBrushFor(
+    worldId: String,
+    skyThemeId: String,
+    areaAgeEra: AreaAgeEra,
+    w: Float,
+    h: Float,
+    areaId: String = "",
+    floorAccentHex: Long = 0L,
+  ): Brush {
+    brushFor(worldId, skyThemeId, areaAgeEra, w, h, areaId, floorAccentHex)
     return cachedSkyBrush ?: Brush.verticalGradient(listOf(Color(0xFF02040A), Color(0xFF0C1426)))
   }
 
@@ -144,6 +160,7 @@ fun DrawScope.drawWorldArenaBackdrop(
   camX: Float = ARENA_CENTER - 0.5f,
   camY: Float = ARENA_CENTER - 0.5f,
   areaAgeEra: AreaAgeEra = AreaAgeEra.YOUNG,
+  areaId: String = "",
 ) {
   val w = size.width
   val h = size.height
@@ -151,11 +168,12 @@ fun DrawScope.drawWorldArenaBackdrop(
   val pulse = if (reduceMotion || reduceFlashes) 0.35f else (sin(elapsedTicks * 0.06f) + 1f) * 0.5f
   val effAccent = floorAccentOverride ?: accentColor
   val outerFrontier = (camX + 0.5f) < 0f || (camX + 0.5f) > ARENA_WORLD_SIZE || (camY + 0.5f) < 0f || (camY + 0.5f) > ARENA_WORLD_SIZE
+  val floorHexLong = floorAccentOverride?.value?.toLong() ?: 0L
 
   if (highContrast) {
     drawRect(color = Color(0xFF020307))
   } else {
-    val bgBrush = backdropCache?.brushFor(worldId, skyThemeId, areaAgeEra, w, h) ?: Brush.radialGradient(
+    val bgBrush = backdropCache?.brushFor(worldId, skyThemeId, areaAgeEra, w, h, areaId, floorHexLong) ?: Brush.radialGradient(
       colors = listOf(Color(0xFF0A121C), Color(0xFF04060D)),
       center = Offset(w * 0.5f, h * 0.54f),
       radius = maxOf(w, h).coerceAtLeast(1f) * 0.86f,
@@ -163,7 +181,7 @@ fun DrawScope.drawWorldArenaBackdrop(
     drawRect(brush = bgBrush)
 
     // 2.5D Atmospheric Horizon & Parallax Skyline Silhouette
-    val skyBrush = backdropCache?.skyBrushFor(worldId, skyThemeId, areaAgeEra, w, h)
+    val skyBrush = backdropCache?.skyBrushFor(worldId, skyThemeId, areaAgeEra, w, h, areaId, floorHexLong)
       ?: Brush.verticalGradient(listOf(Color(0xFF02040A), effAccent.copy(alpha = 0.25f)))
     drawRect(brush = skyBrush, topLeft = Offset.Zero, size = Size(w, horizonY))
 
