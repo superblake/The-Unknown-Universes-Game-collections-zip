@@ -135,6 +135,8 @@ enum class ArenaDamageType(
   THERMAL("thermal", "Thermal", "FIR", Color(0xFFFF5722)),
   CRYO("cryo", "Cryo", "CRY", Color(0xFF80D8FF)),
   BIO("bio", "Bio-Corrosive", "BIO", Color(0xFF76FF03)),
+  SAND("sand", "Sand / Earth", "SND", Color(0xFFD7CCC8)),
+  VOID("void", "Void / Cosmic", "VOD", Color(0xFFE040FB)),
 }
 
 data class ArenaHostile(
@@ -800,6 +802,13 @@ class ArenaSimState(
     val wonder = activeWonderWeapon
     if (wonder != null) {
       return when (wonder) {
+        WonderWeaponKind.STAFF_SAND -> ArenaDamageType.SAND
+        WonderWeaponKind.STAFF_CRYO -> ArenaDamageType.CRYO
+        WonderWeaponKind.STAFF_THERMAL -> ArenaDamageType.THERMAL
+        WonderWeaponKind.STAFF_BIO -> ArenaDamageType.BIO
+        WonderWeaponKind.STAFF_ARC -> ArenaDamageType.ENERGY
+        WonderWeaponKind.STAFF_KINETIC -> ArenaDamageType.KINETIC
+        WonderWeaponKind.STAFF_VOID -> ArenaDamageType.VOID
         WonderWeaponKind.CRUCIBLE_BFG -> ArenaDamageType.THERMAL
         WonderWeaponKind.CHRONO_ZAT, WonderWeaponKind.GATE_HORIZON_CANNON -> ArenaDamageType.CRYO
         WonderWeaponKind.BLACKLIGHT_WHIP, WonderWeaponKind.MERCER_BIOCLAW_SWARM -> ArenaDamageType.BIO
@@ -808,10 +817,14 @@ class ArenaSimState(
       }
     }
     return when {
-      loadout.ammoModId == "cryo_stasis" -> ArenaDamageType.CRYO
-      loadout.ammoModId == "arc_chain" -> ArenaDamageType.ENERGY
-      loadout.ammoModId == "vampiric_bio" -> ArenaDamageType.BIO
-      loadout.ammoModId == "incendiary_core" -> ArenaDamageType.THERMAL
+      loadout.ammoModId in setOf("cryo_stasis", "nitrogen_subzero", "staff_cryo") || loadout.ammoModId.contains("cryo") || loadout.ammoModId.contains("nitrogen") -> ArenaDamageType.CRYO
+      loadout.ammoModId in setOf("arc_chain", "tesla_hv", "suckerpunch_infamous_conduit", "staff_arc") || loadout.ammoModId.contains("arc") || loadout.ammoModId.contains("tesla") || loadout.ammoModId.contains("conduit") || loadout.ammoModId.contains("insomniac") -> ArenaDamageType.ENERGY
+      loadout.ammoModId in setOf("vampiric_bio", "acid_venom", "staff_bio") || loadout.ammoModId.contains("bio") || loadout.ammoModId.contains("acid") || loadout.ammoModId.contains("venom") -> ArenaDamageType.BIO
+      loadout.ammoModId in setOf("incendiary_core", "plasma_scorched", "bioware_ea_mass_plasma", "staff_thermal") || loadout.ammoModId.contains("incendiary") || loadout.ammoModId.contains("plasma") || loadout.ammoModId.contains("thermal") || loadout.ammoModId.contains("bioware") -> ArenaDamageType.THERMAL
+      loadout.ammoModId in setOf("sand_abrasive", "desert_glass", "staff_sand") || loadout.ammoModId.contains("sand") || loadout.ammoModId.contains("glass") -> ArenaDamageType.SAND
+      loadout.ammoModId in setOf("void_singularity", "remedy_valve_abyss_sand", "staff_void") || loadout.ammoModId.contains("void") || loadout.ammoModId.contains("singularity") || loadout.ammoModId.contains("remedy") -> ArenaDamageType.VOID
+      loadout.ammoModId in setOf("standard_core", "ap_sabot", "rocksteady_wb_arkham", "rock_slug", "staff_kinetic") || loadout.ammoModId.contains("kinetic") || loadout.ammoModId.contains("sabot") || loadout.ammoModId.contains("arkham") || loadout.ammoModId.contains("rock") || loadout.ammoModId.contains("rocksteady") -> ArenaDamageType.KINETIC
+      loadout.ammoModId.contains("activision") || loadout.ammoModId.contains("omni") -> ArenaDamageType.entries.random()
       loadout.weaponSpec.id in setOf("wpn_crucible_cannon", "wpn_hellbreaker_cannon", "wpn_olympian_spear") -> ArenaDamageType.THERMAL
       loadout.weaponSpec.id == "wpn_blacklight_carbine" -> ArenaDamageType.BIO
       loadout.weaponSpec.id == "wpn_chrono_repeater" -> ArenaDamageType.CRYO
@@ -1983,6 +1996,22 @@ class ArenaSimState(
               isSupercharged = true,
               pierceLeft = 6,
               damage = wonderDmg + 2,
+              color = wonderCol,
+              damageType = shotDmgType,
+            )
+          )
+        }
+        else -> {
+          bolts.add(
+            ArenaBolt(
+              x = playerX,
+              y = playerY,
+              vx = cos(baseAngle) * 0.026f,
+              vy = sin(baseAngle) * 0.026f,
+              life = 64f,
+              isSupercharged = true,
+              pierceLeft = 3,
+              damage = wonderDmg,
               color = wonderCol,
               damageType = shotDmgType,
             )

@@ -128,6 +128,8 @@ class ProgressionAndPassTest {
 
   @Test
   fun wonderWeapons_spawnCollectAndFireAllSixKinds() {
+    context.getSharedPreferences("${ProgressionStore.PREFS_PREFIX}_test_op", Context.MODE_PRIVATE)
+      .edit().clear().commit()
     val store = ProgressionStore(context, "test_op")
     store.activateOrUnlockPassVersion(BattlePassVersion.CHRONO_MULTIVERSE, 1000L)
     val world = UniverseCatalog.worldById("sector_zero")

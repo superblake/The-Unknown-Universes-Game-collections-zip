@@ -58,6 +58,8 @@ private val customWeaponElements: List<Pair<String, String>> = listOf(
   "thermal" to "Thermal",
   "cryo" to "Cryo",
   "bio" to "Bio / Blacklight",
+  "sand" to "Sand / Earth",
+  "void" to "Void / Cosmic",
 )
 
 private val customWeaponTracerPalette: List<Pair<String, Long>> = listOf(
