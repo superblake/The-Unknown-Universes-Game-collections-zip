@@ -92,6 +92,8 @@ class UniverseViewModel(
   private val _activeTab = MutableStateFlow(OsWorkspaceTab.OS_DESKTOP)
   val activeTab: StateFlow<OsWorkspaceTab> = _activeTab.asStateFlow()
 
+  private val _optimisticSelection = MutableStateFlow<Pair<String?, String?>?>(null)
+
   private val _statusBanner = MutableStateFlow<String?>(null)
   val statusBanner: StateFlow<String?> = _statusBanner.asStateFlow()
 
@@ -175,17 +177,28 @@ class UniverseViewModel(
 
   val uiState: StateFlow<UniverseUiState> =
     combine(
-      repository.observeProfile(currentUserId),
-      repository.observeArmoryItems(currentUserId),
-      repository.observeCustomRigs(currentUserId),
+      combine(
+        repository.observeProfile(currentUserId),
+        repository.observeArmoryItems(currentUserId),
+        repository.observeCustomRigs(currentUserId),
+      ) { profile, armory, rigs -> Triple(profile, armory, rigs) },
       repository.observeMatchLogs(currentUserId),
       repository.observeLinkedAccounts(currentUserId),
-    ) { profile, armory, rigs, logs, linked ->
+      _optimisticSelection,
+    ) { (profile, armory, rigs), logs, linked, opt ->
       if (profile == null) {
         UniverseUiState.Loading
       } else {
+        val effectiveProfile = if (opt != null) {
+          profile.copy(
+            activeUniverseId = opt.first ?: profile.activeUniverseId,
+            activeMode = opt.second ?: profile.activeMode,
+          )
+        } else {
+          profile
+        }
         UniverseUiState.Ready(
-          profile = profile,
+          profile = effectiveProfile,
           armory = armory,
           rigs = rigs,
           matchLogs = logs,
@@ -288,6 +301,7 @@ class UniverseViewModel(
         replaceExisting = replaceExisting,
       )
       if (res.isSuccess) {
+        _optimisticSelection.value = null
         preview.bundle.progressionJson?.let { progJson ->
           progressionStore?.importJsonObject(progJson, mergePreferHigher = !replaceExisting)
         }
@@ -325,54 +339,66 @@ class UniverseViewModel(
   }
 
   fun selectUniverse(universeId: String) {
+    val world = UniverseCatalog.worldById(universeId)
+    val curJoined = progressionState.value.joinedMatch
+    if (curJoined != null && curJoined.worldId != world.id) {
+      progressionStore?.leaveJoinedMatch()
+    }
+    val primaryAreaId = UniverseCatalog.primaryAreaIdForWorld(world.id)
+    val curArea = progressionState.value.resolveAreaSpec(progressionState.value.activeAreaId)
+    val shouldResetToPrimary = curArea.linkedWorldId != world.id ||
+      curArea.id.startsWith("area_bo3_") ||
+      curArea.id.startsWith("area_col_custom_")
+    if (shouldResetToPrimary) {
+      progressionStore?.selectArea(primaryAreaId)
+    }
+    val resolvedMode = world.defaultModeId
+    _optimisticSelection.value = Pair(world.id, resolvedMode)
+    _statusBanner.value = "Mounted ${world.title} (${UniverseCatalog.modeById(resolvedMode).shortTag})"
     viewModelScope.launch {
-      val world = UniverseCatalog.worldById(universeId)
-      val curJoined = progressionState.value.joinedMatch
-      if (curJoined != null && curJoined.worldId != world.id) {
-        progressionStore?.leaveJoinedMatch()
-      }
-      val curArea = progressionState.value.resolveAreaSpec(progressionState.value.activeAreaId)
-      if (curArea.linkedWorldId != world.id) {
-        MultiverseArsenalCatalog.customAreas.firstOrNull { it.linkedWorldId == world.id }?.let { matchingArea ->
-          progressionStore?.selectArea(matchingArea.id)
-        }
-      }
-      val currentMode = (uiState.value as? UniverseUiState.Ready)?.profile?.activeMode
-      val resolvedMode = if (currentMode != null && currentMode in world.supportedModes) currentMode else world.defaultModeId
       repository.updateProfileSelection(
         userId = currentUserId,
         activeUniverseId = world.id,
         activeMode = resolvedMode,
       )
-      _statusBanner.value = "Mounted ${world.title} (${UniverseCatalog.modeById(resolvedMode).shortTag})"
     }
   }
 
   fun mountAndDeploySeries(universeId: String, modeId: String) {
+    val world = UniverseCatalog.worldById(universeId)
+    val mode = UniverseCatalog.modeById(modeId)
+    val curJoined = progressionState.value.joinedMatch
+    if (curJoined != null && (curJoined.worldId != world.id || curJoined.modeId != mode.id)) {
+      progressionStore?.leaveJoinedMatch()
+    }
+    val primaryAreaId = UniverseCatalog.primaryAreaIdForWorld(world.id)
+    val curArea = progressionState.value.resolveAreaSpec(progressionState.value.activeAreaId)
+    val shouldResetToPrimary = curArea.linkedWorldId != world.id ||
+      curArea.id.startsWith("area_bo3_") ||
+      curArea.id.startsWith("area_col_custom_")
+    if (shouldResetToPrimary) {
+      progressionStore?.selectArea(primaryAreaId)
+    }
+    _optimisticSelection.value = Pair(world.id, mode.id)
+    _statusBanner.value = "Mounted ${world.title} (${mode.label})"
+    _activeTab.value = OsWorkspaceTab.ARENA_PLAY
     viewModelScope.launch {
-      val world = UniverseCatalog.worldById(universeId)
-      val mode = UniverseCatalog.modeById(modeId)
-      val curArea = progressionState.value.resolveAreaSpec(progressionState.value.activeAreaId)
-      if (curArea.linkedWorldId != world.id) {
-        MultiverseArsenalCatalog.customAreas.firstOrNull { it.linkedWorldId == world.id }?.let { matchingArea ->
-          progressionStore?.selectArea(matchingArea.id)
-        }
-      }
       repository.updateProfileSelection(
         userId = currentUserId,
         activeUniverseId = world.id,
         activeMode = mode.id,
       )
-      _statusBanner.value = "Mounted ${world.title} (${mode.label})"
-      _activeTab.value = OsWorkspaceTab.ARENA_PLAY
     }
   }
 
   fun selectMode(modeId: String) {
     val mode = UniverseCatalog.modeById(modeId)
+    val curUniverse = _optimisticSelection.value?.first
+      ?: (uiState.value as? UniverseUiState.Ready)?.profile?.activeUniverseId
+    _optimisticSelection.value = Pair(curUniverse, mode.id)
+    _statusBanner.value = "Mode active: ${mode.label} [${mode.shortTag}]"
     viewModelScope.launch {
       repository.updateProfileSelection(userId = currentUserId, activeMode = mode.id)
-      _statusBanner.value = "Mode active: ${mode.label} [${mode.shortTag}]"
     }
   }
 
@@ -618,7 +644,17 @@ class UniverseViewModel(
   }
 
   fun updateCollectionCustomMode(transform: (CollectionCustomModeConfig) -> CollectionCustomModeConfig) {
-    progressionStore?.updateCollectionCustomMode(transform)
+    val store = progressionStore ?: return
+    val prevEnabled = store.current.collectionCustomMode.enabled
+    store.updateCollectionCustomMode(transform)
+    val nextCfg = store.current.collectionCustomMode
+    if (prevEnabled != nextCfg.enabled) {
+      _statusBanner.value = if (nextCfg.enabled) {
+        "Switched to CUSTOM MODE (${nextCfg.scope.label} • ${nextCfg.impactLabel})"
+      } else {
+        "Switched to NORMAL MODE (Custom Modifiers OFF • Collections Untouched)"
+      }
+    }
   }
 
   fun switchNormalOrCustomMode(enableCustomMode: Boolean) {
@@ -657,17 +693,17 @@ class UniverseViewModel(
     store.selectArea(areaId)
     val areaSpec = progressionState.value.resolveAreaSpec(areaId)
     val linkedWorld = UniverseCatalog.worldById(areaSpec.linkedWorldId)
-    val currentProfile = (uiState.value as? UniverseUiState.Ready)?.profile
-    val resolvedMode = progressionState.value.defaultModeForArea(areaId, currentProfile?.activeMode)
+    val resolvedMode = progressionState.value.defaultModeForArea(areaId, null)
     val activeCfg = progressionState.value.collectionCustomMode
+    _optimisticSelection.value = Pair(linkedWorld.id, resolvedMode)
+    _statusBanner.value = "Custom Mode (${activeCfg.scope.label}): ${areaSpec.name} • ${activeCfg.impactLabel}"
+    _activeTab.value = OsWorkspaceTab.ARENA_PLAY
     viewModelScope.launch {
       repository.updateProfileSelection(
         userId = currentUserId,
         activeUniverseId = linkedWorld.id,
         activeMode = resolvedMode,
       )
-      _statusBanner.value = "Custom Mode (${activeCfg.scope.label}): ${areaSpec.name} • ${activeCfg.impactLabel}"
-      _activeTab.value = OsWorkspaceTab.ARENA_PLAY
     }
   }
 
@@ -717,6 +753,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return null
     val match = store.hostPrivateMatch(rules, hostCallsign)
     if (match.areaId.isNotBlank()) store.selectArea(match.areaId)
+    _optimisticSelection.value = Pair(match.worldId, match.modeId)
     viewModelScope.launch {
       repository.updateProfileSelection(
         userId = currentUserId,
@@ -733,6 +770,7 @@ class UniverseViewModel(
     val res = store.joinMatch(match, enteredPasscode)
     return if (res.isSuccess) {
       if (match.areaId.isNotBlank()) store.selectArea(match.areaId)
+      _optimisticSelection.value = Pair(match.worldId, match.modeId)
       viewModelScope.launch {
         repository.updateProfileSelection(
           userId = currentUserId,
@@ -1100,25 +1138,27 @@ class UniverseViewModel(
   }
 
   fun deployMissionTarget(scope: MissionScope, targetId: String) {
-    val currentMode = (uiState.value as? UniverseUiState.Ready)?.profile?.activeMode
     when (scope) {
       MissionScope.WORLD -> {
         val world = UniverseCatalog.worldById(targetId)
+        val primaryAreaId = UniverseCatalog.primaryAreaIdForWorld(world.id)
         val curArea = progressionState.value.resolveAreaSpec(progressionState.value.activeAreaId)
-        if (curArea.linkedWorldId != world.id) {
-          MultiverseArsenalCatalog.customAreas.firstOrNull { it.linkedWorldId == world.id }?.let { matchingArea ->
-            progressionStore?.selectArea(matchingArea.id)
-          }
+        val shouldReset = curArea.linkedWorldId != world.id ||
+          curArea.id.startsWith("area_bo3_") ||
+          curArea.id.startsWith("area_col_custom_")
+        if (shouldReset) {
+          progressionStore?.selectArea(primaryAreaId)
         }
-        val resolvedMode = if (currentMode != null && currentMode in world.supportedModes) currentMode else world.defaultModeId
+        val resolvedMode = world.defaultModeId
+        _optimisticSelection.value = Pair(world.id, resolvedMode)
+        _statusBanner.value = "Deploying to ${world.title} (${resolvedMode.uppercase()}) for World Missions"
+        _activeTab.value = OsWorkspaceTab.ARENA_PLAY
         viewModelScope.launch {
           repository.updateProfileSelection(
             userId = currentUserId,
             activeUniverseId = world.id,
             activeMode = resolvedMode,
           )
-          _statusBanner.value = "Deploying to ${world.title} (${resolvedMode.uppercase()}) for World Missions"
-          _activeTab.value = OsWorkspaceTab.ARENA_PLAY
         }
       }
       MissionScope.ARENA -> {
@@ -1126,19 +1166,16 @@ class UniverseViewModel(
         store?.selectArea(targetId)
         val area = progressionState.value.resolveAreaSpec(targetId)
         val linkedWorld = UniverseCatalog.worldById(area.linkedWorldId)
-        val targetMode = when {
-          currentMode != null && currentMode in linkedWorld.supportedModes -> currentMode
-          targetId == "area_campaign_nexus" || targetId == "area_mended_convergence" -> "campaign"
-          else -> linkedWorld.defaultModeId
-        }
+        val targetMode = progressionState.value.defaultModeForArea(targetId, null)
+        _optimisticSelection.value = Pair(linkedWorld.id, targetMode)
+        _statusBanner.value = "Deploying to ${area.name} (${linkedWorld.title}) for Arena Missions"
+        _activeTab.value = OsWorkspaceTab.ARENA_PLAY
         viewModelScope.launch {
           repository.updateProfileSelection(
             userId = currentUserId,
             activeUniverseId = linkedWorld.id,
             activeMode = targetMode,
           )
-          _statusBanner.value = "Deploying to ${area.name} (${linkedWorld.title}) for Arena Missions"
-          _activeTab.value = OsWorkspaceTab.ARENA_PLAY
         }
       }
     }
@@ -1249,8 +1286,10 @@ class UniverseViewModel(
     store.selectArea(areaId)
     val spec = progressionState.value.resolveAreaSpec(areaId)
     val linkedWorld = UniverseCatalog.worldById(spec.linkedWorldId)
-    val currentProfile = (uiState.value as? UniverseUiState.Ready)?.profile
-    val resolvedMode = progressionState.value.defaultModeForArea(areaId, currentProfile?.activeMode)
+    val resolvedMode = progressionState.value.defaultModeForArea(areaId, null)
+    _optimisticSelection.value = Pair(linkedWorld.id, resolvedMode)
+    val st = progressionState.value.areaState(areaId)
+    _statusBanner.value = "Area Selected: ${spec.name} • ${linkedWorld.title} [${UniverseCatalog.modeById(resolvedMode).shortTag}] (${st.ageYears} yrs • ${st.currentEra.label})"
     viewModelScope.launch {
       repository.updateProfileSelection(
         userId = currentUserId,
@@ -1258,8 +1297,6 @@ class UniverseViewModel(
         activeMode = resolvedMode,
       )
     }
-    val st = progressionState.value.areaState(areaId)
-    _statusBanner.value = "Area Selected: ${spec.name} • ${linkedWorld.title} (${st.ageYears} yrs • ${st.currentEra.label})"
   }
 
   fun deployToAreaAndPlay(areaId: String) {
@@ -1271,16 +1308,16 @@ class UniverseViewModel(
     store.selectArea(areaId)
     val spec = progressionState.value.resolveAreaSpec(areaId)
     val linkedWorld = UniverseCatalog.worldById(spec.linkedWorldId)
-    val currentProfile = (uiState.value as? UniverseUiState.Ready)?.profile
-    val resolvedMode = progressionState.value.defaultModeForArea(areaId, currentProfile?.activeMode)
+    val resolvedMode = progressionState.value.defaultModeForArea(areaId, null)
+    _optimisticSelection.value = Pair(linkedWorld.id, resolvedMode)
+    _statusBanner.value = "Deployed: ${spec.name} • ${linkedWorld.title} [${UniverseCatalog.modeById(resolvedMode).shortTag}]"
+    _activeTab.value = OsWorkspaceTab.ARENA_PLAY
     viewModelScope.launch {
       repository.updateProfileSelection(
         userId = currentUserId,
         activeUniverseId = linkedWorld.id,
         activeMode = resolvedMode,
       )
-      _statusBanner.value = "Deployed: ${spec.name} • ${linkedWorld.title} [${UniverseCatalog.modeById(resolvedMode).shortTag}]"
-      _activeTab.value = OsWorkspaceTab.ARENA_PLAY
     }
   }
 

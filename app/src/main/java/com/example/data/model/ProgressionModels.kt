@@ -873,21 +873,16 @@ data class OperatorProgressionState(
   fun defaultModeForArea(areaId: String, currentMode: String? = null): String {
     val customSpec = CuratedCustomMapsCatalog.findById(areaId, customGameMaps)
     if (customSpec != null) {
-      val world = UniverseCatalog.worldById(customSpec.gameCategory.linkedWorldId)
-      return when {
-        customSpec.gameCategory == CustomMapGameCategory.BO3 ->
-          if (currentMode != null && currentMode in world.supportedModes && currentMode != world.defaultModeId) currentMode else "zombies"
-        currentMode != null && currentMode in world.supportedModes -> currentMode
-        else -> customSpec.gameCategory.defaultModeId
-      }
+      return customSpec.gameCategory.defaultModeId
     }
     val spec = MultiverseArsenalCatalog.areaById(areaId)
     val world = UniverseCatalog.worldById(spec.linkedWorldId)
     return when {
-      areaId.startsWith("area_bo3_") -> "zombies"
+      areaId.startsWith("area_bo3_") || areaId == "area_zombies_der_riese" -> "zombies"
       areaId == "area_campaign_nexus" || areaId == "area_mended_convergence" -> "campaign"
+      world.defaultModeId.isNotBlank() -> world.defaultModeId
       currentMode != null && currentMode in world.supportedModes -> currentMode
-      else -> world.defaultModeId
+      else -> "zombies"
     }
   }
 
@@ -1995,6 +1990,8 @@ data class CollectionCustomModeConfig(
         tag.contains("prototype") ||
         tag.contains("infamous") ||
         tag.contains("arkham") ||
+        tag.contains("origins") ||
+        tag.contains("blackgate") ||
         tag.contains("spider") ||
         tag.contains("stark") ||
         tag.contains("god of war") ||
@@ -2002,7 +1999,13 @@ data class CollectionCustomModeConfig(
         tag.contains("aegis") ||
         tag.contains("ship of heroes") ||
         tag.contains("crossover") ||
-        tag.contains("chrono")
+        tag.contains("chrono") ||
+        tag.contains("gta") ||
+        tag.contains("liberty") ||
+        tag.contains("superman") ||
+        tag.contains("metropolis") ||
+        tag.contains("abyss") ||
+        tag.contains("dungeon")
       return when (scope) {
         CollectionCustomScope.BO3_ONLY -> isBo3
         CollectionCustomScope.STEAM_ONLY -> isSteam || isBo3
@@ -2106,13 +2109,43 @@ enum class CustomMapGameCategory(
   ),
   ARKHAM(
     id = "arkham",
-    label = "Batman Arkham",
+    label = "Batman Arkham (Origins/Blackgate)",
     linkedWorldId = "gotham_arkham",
-    defaultModeId = "dmz",
+    defaultModeId = "hero_patrol",
     accentColorHex = "#FFD54F",
     defaultAccentHex = 0xFFFFD54F,
     defaultWonderWeapon = "Shock-Gloves Detective Core",
-    defaultZones = listOf("Iceberg Lounge Ring", "Gotham Canal Docks", "GCPD Roof Beacon", "Black Gate Annex", "Wayne Forensic Pod", "Clocktower Perch"),
+    defaultZones = listOf("Pioneers Bridge", "Blackgate Cellblock A", "Royal Hotel Ballroom", "Wonder Tower Spire", "GCPD Roof Beacon", "Batcave Sub-Vault"),
+  ),
+  GTA4(
+    id = "gta4",
+    label = "GTA IV Liberty City",
+    linkedWorldId = "sector_zero",
+    defaultModeId = "dmz",
+    accentColorHex = "#FFAB40",
+    defaultAccentHex = 0xFFFFAB40,
+    defaultWonderWeapon = "Roman's Combat RPG & M4",
+    defaultZones = listOf("Hove Beach Safehouse", "Broker-Dukes Bridge", "Star Junction Plaza", "Bank of Liberty Vault", "Alderney Industrial Docks", "Happiness Island Statue"),
+  ),
+  SUPERMAN(
+    id = "superman",
+    label = "Superman Returns Metropolis",
+    linkedWorldId = "mr_crossover_nexus",
+    defaultModeId = "hero_patrol",
+    accentColorHex = "#2979FF",
+    defaultAccentHex = 0xFF2979FF,
+    defaultWonderWeapon = "Solar Heat-Vision Overdrive",
+    defaultZones = listOf("Daily Planet Globe", "LexCorp Tower Spire", "Centennial Park Harbor", "Warworld Gladiator Pit", "Hob's Bay Power Plant", "Fortress Solitude Conduit"),
+  ),
+  ABYSS_DUNGEONS(
+    id = "abyss_dungeons",
+    label = "Abyss of Dungeons",
+    linkedWorldId = "hellbreaker_citadel",
+    defaultModeId = "boss_rush",
+    accentColorHex = "#B388FF",
+    defaultAccentHex = 0xFFB388FF,
+    defaultWonderWeapon = "Abyssal Lich Staff / Greatsword",
+    defaultZones = listOf("Howling Crypt Entrance", "Torch Shrine Crossing", "Runic Forge Anvil", "Mimic Treasury Vault", "Goblin Cave Bridge", "Abyssal Lich Sanctum"),
   ),
   SPIDERMAN(
     id = "spiderman",
@@ -2414,6 +2447,177 @@ object CuratedCustomMapsCatalog {
       wonderWeapon = "Liberty Wunder-Arc",
       accentHex = 0xFFFFAB40,
       secondaryHex = 0xFF00E5FF,
+      isUserCreated = false,
+    ),
+    UserCustomGameMapSpec(
+      id = "area_col_custom_gta4_liberty",
+      mapCode = "gta4_liberty_city",
+      title = "GTA IV: Liberty City (Broker & Algonquin)",
+      gameCategory = CustomMapGameCategory.GTA4,
+      description = "GTA IV Liberty City sandbox/DMZ street war from Niko's Hove Beach safehouse across Broker Bridge into Star Junction & Bank of Liberty.",
+      buildingNames = listOf(
+        "Hove Beach Safehouse",
+        "Broker-Dukes Bridge",
+        "Star Junction Plaza",
+        "Bank of Liberty Vault",
+        "NOOSE Tactical Precinct",
+        "Bohan Industrial Depot",
+      ),
+      wonderWeapon = "Roman's Combat RPG & M4",
+      accentHex = 0xFFFFAB40,
+      secondaryHex = 0xFF00E676,
+      isUserCreated = false,
+    ),
+    UserCustomGameMapSpec(
+      id = "area_col_custom_gta4_alderney",
+      mapCode = "gta4_alderney_statue",
+      title = "GTA IV: Alderney & Happiness Island",
+      gameCategory = CustomMapGameCategory.GTA4,
+      description = "GTA IV West River Alderney Prison, Acter Industrial docks, Honkers strip, and Happiness Island 6-star NOOSE chopper standoff.",
+      buildingNames = listOf(
+        "Happiness Island Statue",
+        "Alderney Correctional Pen",
+        "Acter Industrial Docks",
+        "Sprunk Bottling Plant",
+        "Tudor Westdyke Safehouse",
+        "Middle Park Helipad",
+      ),
+      wonderWeapon = "Annihilator Explosive Minigun",
+      accentHex = 0xFFFF8F00,
+      secondaryHex = 0xFF00E5FF,
+      isUserCreated = false,
+    ),
+    UserCustomGameMapSpec(
+      id = "area_col_custom_arkham_origins_bridge",
+      mapCode = "arkham_origins_bridge",
+      title = "Batman: Arkham Origins (Pioneers Bridge & Royal Hotel)",
+      gameCategory = CustomMapGameCategory.ARKHAM,
+      description = "Christmas Eve Arkham Origins assault across Pioneers Bridge cable towers, Royal Hotel penthouse, and Final Offer cargo deck against Deathstroke, Firefly & Bane.",
+      buildingNames = listOf(
+        "Pioneers Bridge Span",
+        "Gotham Royal Hotel",
+        "Final Offer Casino Ship",
+        "Lacey Towers Penthouse",
+        "GCPD Basement Precinct",
+        "Coventry Comm Tower",
+      ),
+      wonderWeapon = "Electrocutioner Shock-Gloves",
+      accentHex = 0xFFFFD54F,
+      secondaryHex = 0xFF40C4FF,
+      isUserCreated = false,
+    ),
+    UserCustomGameMapSpec(
+      id = "area_col_custom_arkham_blackgate",
+      mapCode = "arkham_origins_blackgate",
+      title = "Batman: Arkham Origins Blackgate (3-Wing Prison)",
+      gameCategory = CustomMapGameCategory.ARKHAM,
+      description = "Sidescroller-inspired 3-wing prison riot spanning Penguin's Cell Blocks, Black Mask's Industrial Wing, and Joker's Administration Arcade.",
+      buildingNames = listOf(
+        "Cell Block A Lockdown",
+        "Black Mask Industrial",
+        "Joker Admin Wing",
+        "Blackgate Lighthouse",
+        "Sewer Smuggler Tunnels",
+        "Warden Armory Hub",
+      ),
+      wonderWeapon = "Gel-Launcher Detective Visor",
+      accentHex = 0xFF448AFF,
+      secondaryHex = 0xFFFFD54F,
+      isUserCreated = false,
+    ),
+    UserCustomGameMapSpec(
+      id = "area_col_custom_arkham_asylum_city",
+      mapCode = "arkham_asylum_city_knight",
+      title = "Arkham Asylum, Arkham City & Knight (Panessa)",
+      gameCategory = CustomMapGameCategory.ARKHAM,
+      description = "Classic Arkham trilogy gauntlet uniting Arkham Asylum Botanical Gardens, Arkham City Wonder Tower, and Arkham Knight Panessa Studios.",
+      buildingNames = listOf(
+        "Asylum Intensive Care",
+        "Botanical Titan Hall",
+        "Wonder Tower Observation",
+        "Sionis Steel Mill",
+        "Panessa Movie Studios",
+        "Elliott Memorial Hospital",
+      ),
+      wonderWeapon = "Batmobile Disruptor & Freeze Blast",
+      accentHex = 0xFFFFAB40,
+      secondaryHex = 0xFF7C4DFF,
+      isUserCreated = false,
+    ),
+    UserCustomGameMapSpec(
+      id = "area_col_custom_superman_metropolis",
+      mapCode = "superman_returns_metropolis",
+      title = "Superman Returns: Metropolis Skyline",
+      gameCategory = CustomMapGameCategory.SUPERMAN,
+      description = "Soar across Metropolis Daily Planet, LexCorp Tower, Centennial Park, and Hob's Bay shutting down tornadoes, Metallo bots & Kryptonite asteroids.",
+      buildingNames = listOf(
+        "Daily Planet Globe Roof",
+        "LexCorp Kryptonite Spire",
+        "Centennial Park Harbor",
+        "Hob's Bay Power Station",
+        "Suicide Slums Overpass",
+        "Metropolis Spaceport Pad",
+      ),
+      wonderWeapon = "Solar Heat-Vision Overdrive",
+      accentHex = 0xFF2979FF,
+      secondaryHex = 0xFFFF3D71,
+      isUserCreated = false,
+    ),
+    UserCustomGameMapSpec(
+      id = "area_col_custom_superman_warworld",
+      mapCode = "superman_warworld_fortress",
+      title = "Superman Returns: Warworld & Fortress",
+      gameCategory = CustomMapGameCategory.SUPERMAN,
+      description = "Arena combat shifting between Mongul's subterranean Warworld Gladiator coliseum and crystalline Fortress of Solitude solar chambers.",
+      buildingNames = listOf(
+        "Warworld Arena Pit",
+        "Mongul Throne Balcony",
+        "Fortress Crystal Dais",
+        "Phantom Zone Projector",
+        "Solar Recharge Chamber",
+        "New Krypton Shard Core",
+      ),
+      wonderWeapon = "Fortress Solar Super-Breath",
+      accentHex = 0xFF00E5FF,
+      secondaryHex = 0xFFFF5252,
+      isUserCreated = false,
+    ),
+    UserCustomGameMapSpec(
+      id = "area_col_custom_abyss_crypt",
+      mapCode = "abyss_howling_crypts",
+      title = "Abyss of Dungeons: Howling Crypts",
+      gameCategory = CustomMapGameCategory.ABYSS_DUNGEONS,
+      description = "Dark fantasy dungeon extraction crawl through torch-lit Howling Crypts, Runic Anvils, Mimic Treasury vaults, and Goblin Cave shrines.",
+      buildingNames = listOf(
+        "Howling Crypt Entrance",
+        "Torch Shrine Crossing",
+        "Mimic Treasury Vault",
+        "Runic Forge Anvil",
+        "Goblin Cave Bridge",
+        "Blue Stone Extraction",
+      ),
+      wonderWeapon = "Abyssal Lich Staff / Greatsword",
+      accentHex = 0xFFB388FF,
+      secondaryHex = 0xFFFFAB40,
+      isUserCreated = false,
+    ),
+    UserCustomGameMapSpec(
+      id = "area_col_custom_abyss_lich_sanctum",
+      mapCode = "abyss_lich_sanctum",
+      title = "Abyss of Dungeons: Inferno Lich Sanctum",
+      gameCategory = CustomMapGameCategory.ABYSS_DUNGEONS,
+      description = "High-roller Abyssal descent into Inferno blood altars, Hellhound kennels, Cursed Tombstones, and the Ghost King & Lich Lord boss sanctum.",
+      buildingNames = listOf(
+        "Inferno Blood Altar",
+        "Skeleton Champion Keep",
+        "Hellhound Kennel Ring",
+        "Soul Relic Extractor",
+        "Spectral Knight Gallery",
+        "Lich King Boss Throne",
+      ),
+      wonderWeapon = "Fulgor Runic Longsword",
+      accentHex = 0xFFFF3D71,
+      secondaryHex = 0xFFB388FF,
       isUserCreated = false,
     ),
   )

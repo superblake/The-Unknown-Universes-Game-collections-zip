@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.model.CollectionCustomModeConfig
 import com.example.data.model.CollectionCustomScope
+import com.example.data.model.UserCustomGameMapSpec
 import kotlin.math.roundToInt
 
 @Composable
@@ -50,10 +51,13 @@ fun CollectionCustomModeDialog(
   onSave: ((CollectionCustomModeConfig) -> CollectionCustomModeConfig) -> Unit,
   onDeploy: () -> Unit,
   onDismiss: () -> Unit,
+  customGameMaps: List<UserCustomGameMapSpec> = emptyList(),
 ) {
   var draft by remember(initialConfig) { mutableStateOf(initialConfig) }
-  val scopedAreas = remember(draft.scope) { CollectionCustomModeConfig.scopedAreas(draft.scope) }
-  val resolvedArea = remember(draft.scope, draft.targetAreaId) {
+  val scopedAreas = remember(draft.scope, customGameMaps) {
+    CollectionCustomModeConfig.scopedAreas(draft.scope, customGameMaps)
+  }
+  val resolvedArea = remember(draft.scope, draft.targetAreaId, customGameMaps) {
     scopedAreas.firstOrNull { it.id == draft.targetAreaId } ?: scopedAreas.firstOrNull()
   }
 
@@ -89,6 +93,25 @@ fun CollectionCustomModeDialog(
           .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(10.dp),
       ) {
+        // Normal Mode <-> Custom Mode Switcher
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          FilterChip(
+            selected = !draft.enabled,
+            onClick = { draft = draft.copy(enabled = false) },
+            label = { Text("Normal Mode", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall) },
+            modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("custom_mode_switch_normal"),
+          )
+          FilterChip(
+            selected = draft.enabled,
+            onClick = { draft = draft.copy(enabled = true) },
+            label = { Text("Custom Mode", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall) },
+            modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("custom_mode_switch_custom"),
+          )
+        }
+
         // Collection Safeguard Card
         Surface(
           shape = RoundedCornerShape(12.dp),
@@ -146,7 +169,7 @@ fun CollectionCustomModeDialog(
             FilterChip(
               selected = draft.scope == sc,
               onClick = {
-                val nextAreas = CollectionCustomModeConfig.scopedAreas(sc)
+                val nextAreas = CollectionCustomModeConfig.scopedAreas(sc, customGameMaps)
                 val nextAreaId = if (nextAreas.any { it.id == draft.targetAreaId }) {
                   draft.targetAreaId
                 } else {
@@ -336,12 +359,13 @@ fun CollectionCustomModeDialog(
       Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(
           onClick = {
-            onSave { draft.copy(enabled = true) }
+            val savedTarget = resolvedArea?.id ?: draft.targetAreaId
+            onSave { draft.copy(targetAreaId = savedTarget) }
             onDismiss()
           },
           modifier = Modifier.heightIn(min = 48.dp).testTag("custom_mode_save_btn"),
         ) {
-          Text("Save")
+          Text(if (draft.enabled) "Save" else "Save Normal")
         }
         Button(
           onClick = {

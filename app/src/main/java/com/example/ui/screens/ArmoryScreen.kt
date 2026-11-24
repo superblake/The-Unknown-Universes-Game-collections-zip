@@ -67,6 +67,8 @@ import com.example.data.model.BlastCoreColor
 import com.example.data.model.ChallengeState
 import com.example.data.model.CharacterCustomization
 import com.example.data.model.CollectionDifficulty
+import com.example.data.model.CuratedCustomMapsCatalog
+import com.example.data.model.CustomMapGameCategory
 import com.example.data.model.EquipmentSlotType
 import com.example.data.model.GearSlot
 import com.example.data.model.LevelCustomization
@@ -77,6 +79,7 @@ import com.example.data.model.ProgressionCatalog
 import com.example.data.model.RigAsset
 import com.example.data.model.StarRankMeta
 import com.example.data.model.UpgradeCosts
+import com.example.data.model.UserCustomGameMapSpec
 import com.example.data.model.WeaponCustomization
 
 enum class ArmorySection(val label: String, val tag: String) {
@@ -184,6 +187,17 @@ fun ArmoryScreen(
   onDeployArea: (String) -> Unit = {},
   onUpdateCollectionCustomMode: ((com.example.data.model.CollectionCustomModeConfig) -> com.example.data.model.CollectionCustomModeConfig) -> Unit = {},
   onDeployCollectionCustomMode: () -> Unit = {},
+  onForgeCustomMap: (
+    title: String,
+    mapCode: String,
+    category: CustomMapGameCategory,
+    description: String,
+    zones: List<String>,
+    wonderWeapon: String,
+    accentHex: Long,
+    deployNow: Boolean,
+  ) -> Unit = { _, _, _, _, _, _, _, _ -> },
+  onDeleteCustomMap: (String) -> Unit = {},
 ) {
   val categories = listOf("all", "perk", "power", "upgrade", "consumable", "workshop_bo3")
   var selectedSection by remember { mutableStateOf(ArmorySection.MODS) }
@@ -191,6 +205,8 @@ fun ArmoryScreen(
   var showCreateDialog by remember { mutableStateOf(false) }
   var showCodesDialog by remember { mutableStateOf(false) }
   var showCustomModeDialog by remember { mutableStateOf(false) }
+  var showForgeCustomMapDialog by remember { mutableStateOf(false) }
+  var customMapFilter by remember { mutableStateOf("all") }
 
   val filtered = when (selectedCategory) {
     "all" -> armory
@@ -586,6 +602,35 @@ fun ArmoryScreen(
                       style = MaterialTheme.typography.labelSmall,
                     )
                   }
+                  Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                  ) {
+                    FilterChip(
+                      selected = !progression.collectionCustomMode.enabled,
+                      onClick = { onUpdateCollectionCustomMode { it.copy(enabled = false) } },
+                      label = {
+                        Text(
+                          text = "Normal Mode",
+                          fontWeight = FontWeight.Bold,
+                          style = MaterialTheme.typography.labelSmall,
+                        )
+                      },
+                      modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("armory_switch_normal_mode"),
+                    )
+                    FilterChip(
+                      selected = progression.collectionCustomMode.enabled,
+                      onClick = { onUpdateCollectionCustomMode { it.copy(enabled = true) } },
+                      label = {
+                        Text(
+                          text = "Custom Mode",
+                          fontWeight = FontWeight.Bold,
+                          style = MaterialTheme.typography.labelSmall,
+                        )
+                      },
+                      modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("armory_switch_custom_mode"),
+                    )
+                  }
                 }
               }
             }
@@ -657,6 +702,166 @@ fun ArmoryScreen(
               }
             }
 
+            item {
+              val allCustomMaps = remember(progression.customGameMaps, customMapFilter) {
+                val merged = (progression.customGameMaps + CuratedCustomMapsCatalog.allCuratedCustomMaps)
+                  .distinctBy { it.id }
+                when (customMapFilter) {
+                  "bo3" -> merged.filter { it.gameCategory == CustomMapGameCategory.BO3 }
+                  "collections" -> merged.filter { it.gameCategory != CustomMapGameCategory.BO3 }
+                  else -> merged
+                }
+              }
+              Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .border(1.dp, Color(0xFFFFAB40).copy(alpha = 0.5f), RoundedCornerShape(14.dp)),
+              ) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                  Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                  ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                      Text(
+                        text = "CUSTOM MAPS FORGER (BO3 & GAME COLLECTIONS)",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFFFAB40),
+                      )
+                      Text(
+                        text = "Play curated or user-forged custom maps scoped strictly to BO3 & your Game Collections.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                      )
+                    }
+                    Button(
+                      onClick = { showForgeCustomMapDialog = true },
+                      colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFFFAB40),
+                        contentColor = Color.Black,
+                      ),
+                      contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                      shape = RoundedCornerShape(10.dp),
+                      modifier = Modifier.heightIn(min = 48.dp).testTag("open_forge_custom_map_btn"),
+                    ) {
+                      Text("+ Forge Map", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                    }
+                  }
+
+                  Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    FilterChip(
+                      selected = customMapFilter == "all",
+                      onClick = { customMapFilter = "all" },
+                      label = { Text("All", style = MaterialTheme.typography.labelSmall) },
+                      modifier = Modifier.heightIn(min = 48.dp).testTag("custom_map_filter_all"),
+                    )
+                    FilterChip(
+                      selected = customMapFilter == "bo3",
+                      onClick = { customMapFilter = "bo3" },
+                      label = { Text("BO3 Custom", style = MaterialTheme.typography.labelSmall) },
+                      modifier = Modifier.heightIn(min = 48.dp).testTag("custom_map_filter_bo3"),
+                    )
+                    FilterChip(
+                      selected = customMapFilter == "collections",
+                      onClick = { customMapFilter = "collections" },
+                      label = { Text("Collections", style = MaterialTheme.typography.labelSmall) },
+                      modifier = Modifier.heightIn(min = 48.dp).testTag("custom_map_filter_collections"),
+                    )
+                  }
+
+                  LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.testTag("custom_game_maps_row"),
+                  ) {
+                    items(allCustomMaps, key = { it.id }) { mapSpec: UserCustomGameMapSpec ->
+                      val isActive = activeAreaId == mapSpec.id
+                      val mapAccent = Color(mapSpec.accentHex)
+                      Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isActive) mapAccent.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
+                        modifier = Modifier
+                          .width(236.dp)
+                          .border(
+                            width = if (isActive) 1.5.dp else 1.dp,
+                            color = if (isActive) mapAccent else MaterialTheme.colorScheme.outline,
+                            shape = RoundedCornerShape(12.dp),
+                          ),
+                      ) {
+                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                          Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                          ) {
+                            Surface(
+                              shape = RoundedCornerShape(6.dp),
+                              color = mapAccent.copy(alpha = 0.2f),
+                            ) {
+                              Text(
+                                text = mapSpec.gameCategory.label,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = mapAccent,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                              )
+                            }
+                            if (mapSpec.isUserCreated) {
+                              IconButton(
+                                onClick = { onDeleteCustomMap(mapSpec.id) },
+                                modifier = Modifier.size(48.dp).testTag("custom_map_delete_${mapSpec.id}"),
+                              ) {
+                                Icon(
+                                  imageVector = Icons.Filled.Delete,
+                                  contentDescription = "Delete custom map",
+                                  tint = MaterialTheme.colorScheme.error,
+                                )
+                              }
+                            }
+                          }
+                          Text(
+                            text = "${mapSpec.title} (${mapSpec.mapCode})",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                          )
+                          Text(
+                            text = "WW: ${mapSpec.wonderWeapon} • ${mapSpec.buildingNames.size} Zones",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                          )
+                          Button(
+                            onClick = {
+                              onSelectArea(mapSpec.id)
+                              onDeployArea(mapSpec.id)
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                              containerColor = mapAccent,
+                              contentColor = Color.Black,
+                            ),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("custom_map_deploy_${mapSpec.id}"),
+                          ) {
+                            Text(
+                              text = if (isActive) "Active Custom Map" else "Deploy Custom Map",
+                              fontWeight = FontWeight.Bold,
+                              style = MaterialTheme.typography.labelSmall,
+                            )
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
             if (workshopItems.isEmpty()) {
               item {
                 Surface(
@@ -718,9 +923,20 @@ fun ArmoryScreen(
   if (showCustomModeDialog) {
     CollectionCustomModeDialog(
       initialConfig = progression.collectionCustomMode,
+      customGameMaps = progression.customGameMaps,
       onSave = onUpdateCollectionCustomMode,
       onDeploy = onDeployCollectionCustomMode,
       onDismiss = { showCustomModeDialog = false },
+    )
+  }
+
+  if (showForgeCustomMapDialog) {
+    ForgeCustomMapDialog(
+      onDismiss = { showForgeCustomMapDialog = false },
+      onConfirm = { title, code, category, desc, zones, ww, hex, deployNow ->
+        onForgeCustomMap(title, code, category, desc, zones, ww, hex, deployNow)
+        showForgeCustomMapDialog = false
+      },
     )
   }
 }

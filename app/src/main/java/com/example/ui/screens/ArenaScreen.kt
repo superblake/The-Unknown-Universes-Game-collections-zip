@@ -5,6 +5,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -129,13 +130,13 @@ fun ArenaScreen(
     rigs.firstOrNull { it.id == profile.activeRigId } ?: rigs.firstOrNull()
   }
   val activeOutfit = remember(progression.equippedOutfitId) { progression.activeOutfitSpec() }
-  val activeAreaSpec = remember(progression.activeAreaId) { progression.activeAreaSpec() }
+  val activeAreaSpec = remember(progression.activeAreaId, progression.customGameMaps) { progression.activeAreaSpec() }
   val activeAreaState = remember(progression.activeAreaId, progression.areaStates) { progression.areaState() }
 
-  val loadout = remember(armory, world.accentHex, progression, profile.totalEssence) {
+  val loadout = remember(armory, activeAreaSpec.accentHex, progression, profile.totalEssence) {
     ArenaLoadoutStats.fromArmory(
       armory = armory,
-      fallbackAccent = Color(world.accentHex),
+      fallbackAccent = Color(activeAreaSpec.accentHex),
       progression = progression,
       blueEssence = profile.totalEssence,
     )
@@ -143,7 +144,7 @@ fun ArenaScreen(
   val hasConsumable = remember(armory) { armory.any { it.equipped && it.category == "consumable" } }
 
   val cm = progression.collectionCustomMode
-  val customKeySuffix = if (cm.isActiveForArea(progression.activeAreaId)) {
+  val customKeySuffix = if (cm.isActiveForArea(progression.activeAreaId, progression.customGameMaps)) {
     "cm_${cm.scope.id}_${cm.safeCollectionGuard}_${cm.negativeImpactPercent}_${cm.enemyArmorFlood}_${cm.collectionAmbushSurge}"
   } else {
     "cm_off"
@@ -170,7 +171,7 @@ fun ArenaScreen(
     sim.loadout = if (curWeaponId == loadout.weaponSpec.id) {
       loadout
     } else {
-      ArenaLoadoutStats.fromArmory(armory, Color(world.accentHex), progression, profile.totalEssence, curWeaponId)
+      ArenaLoadoutStats.fromArmory(armory, Color(activeAreaSpec.accentHex), progression, profile.totalEssence, curWeaponId)
     }
     sim.hudActiveWeaponName = sim.loadout.weaponSpec.name
   }
@@ -198,8 +199,8 @@ fun ArenaScreen(
     sim.hudAutoFire = settings.autoFireEnabled
   }
 
-  val palette = remember(world.accentHex, world.secondaryHex, settings.colorBlindMode, settings.highContrastMode, settings.themeMode) {
-    resolveArenaPalette(Color(world.accentHex), Color(world.secondaryHex), settings)
+  val palette = remember(activeAreaSpec.accentHex, activeAreaSpec.secondaryHex, settings.colorBlindMode, settings.highContrastMode, settings.themeMode) {
+    resolveArenaPalette(Color(activeAreaSpec.accentHex), Color(activeAreaSpec.secondaryHex), settings)
   }
 
   val haptic = LocalHapticFeedback.current
@@ -439,18 +440,39 @@ fun ArenaScreen(
                 )
               }
             }
-            if (progression.collectionCustomMode.isActiveForArea(progression.activeAreaId)) {
+            val customActiveHere = progression.collectionCustomMode.isActiveForArea(progression.activeAreaId, progression.customGameMaps)
+            if (customActiveHere || onUpdateCollectionCustomMode != null) {
               Surface(
-                shape = RoundedCornerShape(6.dp),
-                color = Color(0xFFFF9100).copy(alpha = 0.22f),
-                modifier = Modifier.border(1.dp, Color(0xFFFF9100), RoundedCornerShape(6.dp)).testTag("arena_custom_mode_badge"),
+                shape = RoundedCornerShape(8.dp),
+                color = if (customActiveHere) Color(0xFFFF9100).copy(alpha = 0.22f) else Color(0xFF00E5FF).copy(alpha = 0.16f),
+                modifier = Modifier
+                  .border(
+                    1.dp,
+                    if (customActiveHere) Color(0xFFFF9100) else Color(0xFF00E5FF).copy(alpha = 0.7f),
+                    RoundedCornerShape(8.dp),
+                  )
+                  .clip(RoundedCornerShape(8.dp))
+                  .let { mod ->
+                    if (onUpdateCollectionCustomMode != null) {
+                      mod.clickable {
+                        onUpdateCollectionCustomMode { cfg -> cfg.copy(enabled = !cfg.enabled) }
+                      }
+                    } else mod
+                  }
+                  .testTag(if (customActiveHere) "arena_custom_mode_badge" else "arena_normal_mode_badge"),
               ) {
                 Text(
-                  text = "CUSTOM -${progression.collectionCustomMode.negativeImpactPercent}%",
+                  text = if (customActiveHere) {
+                    "CUSTOM -${progression.collectionCustomMode.negativeImpactPercent}%"
+                  } else if (progression.collectionCustomMode.enabled) {
+                    "NORMAL (SCOPE)"
+                  } else {
+                    "NORMAL"
+                  },
                   style = MaterialTheme.typography.labelSmall,
                   fontWeight = FontWeight.Bold,
-                  color = Color(0xFFFF9100),
-                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                  color = if (customActiveHere) Color(0xFFFF9100) else Color(0xFF00E5FF),
+                  modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
                 )
               }
             }
@@ -1521,13 +1543,22 @@ fun ArenaScreen(
     }
 
     if (showMapSwitcherDialog && onSelectArea != null) {
+      val allAreas = remember(progression.customGameMaps) { progression.allPlayableAreas() }
+      var mapCategoryFilter by remember { mutableStateOf("all") }
+      val visibleAreas = remember(allAreas, mapCategoryFilter) {
+        when (mapCategoryFilter) {
+          "bo3" -> allAreas.filter { it.id.startsWith("area_bo3_") || it.id == "area_zombies_der_riese" }
+          "collections" -> allAreas.filter { it.id.startsWith("area_col_custom_") || it.storyEraNote.contains("Custom Map", ignoreCase = true) }
+          else -> allAreas
+        }
+      }
       AlertDialog(
         onDismissRequest = { showMapSwitcherDialog = false },
         title = {
-          Text("SWITCH ARENA MAP & MODE (${MultiverseArsenalCatalog.customAreas.size} MAPS)", fontWeight = FontWeight.Bold)
+          Text("SWITCH ARENA MAP & MODE (${allAreas.size} MAPS)", fontWeight = FontWeight.Bold)
         },
         text = {
-          Column(modifier = Modifier.fillMaxWidth().height(420.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          Column(modifier = Modifier.fillMaxWidth().height(440.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (onSelectMode != null) {
               Text("DEPLOYMENT MODE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
               LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1542,22 +1573,23 @@ fun ArenaScreen(
               }
             }
             if (onUpdateCollectionCustomMode != null) {
+              Text("RULESET: NORMAL MODE vs CUSTOM MODE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
               Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
               ) {
-                OutlinedButton(
-                  onClick = {
-                    onUpdateCollectionCustomMode { cfg -> cfg.copy(enabled = !cfg.enabled) }
-                  },
-                  modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("arena_custom_mode_toggle"),
-                ) {
-                  Text(
-                    text = if (progression.collectionCustomMode.enabled) "Custom Mode: ON" else "Custom Mode: OFF",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                  )
-                }
+                FilterChip(
+                  selected = !progression.collectionCustomMode.enabled,
+                  onClick = { onUpdateCollectionCustomMode { cfg -> cfg.copy(enabled = false) } },
+                  label = { Text("Normal Mode", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold) },
+                  modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("arena_switch_normal_mode"),
+                )
+                FilterChip(
+                  selected = progression.collectionCustomMode.enabled,
+                  onClick = { onUpdateCollectionCustomMode { cfg -> cfg.copy(enabled = true) } },
+                  label = { Text("Custom Mode", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold) },
+                  modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("arena_switch_custom_mode"),
+                )
                 OutlinedButton(
                   onClick = {
                     showMapSwitcherDialog = false
@@ -1565,16 +1597,26 @@ fun ArenaScreen(
                   },
                   modifier = Modifier.heightIn(min = 48.dp).testTag("arena_open_custom_mode_btn"),
                 ) {
-                  Text("Configure", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                  Text("Setup", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                 }
               }
             }
-            Text("ALL MAPS & BO3 CUSTOM ARENAS", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            Text("ALL MAPS & CUSTOM ARENAS (${visibleAreas.size})", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+              listOf("all" to "All Maps", "bo3" to "BO3 Custom", "collections" to "Collection Custom").forEach { (k, lbl) ->
+                FilterChip(
+                  selected = mapCategoryFilter == k,
+                  onClick = { mapCategoryFilter = k },
+                  label = { Text(lbl, style = MaterialTheme.typography.labelSmall) },
+                  modifier = Modifier.heightIn(min = 48.dp).testTag("arena_map_filter_$k"),
+                )
+              }
+            }
             LazyColumn(
               modifier = Modifier.weight(1f).fillMaxWidth(),
               verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-              items(MultiverseArsenalCatalog.customAreas, key = { it.id }) { area ->
+              items(visibleAreas, key = { it.id }) { area ->
                 val selected = area.id == progression.activeAreaId
                 val accent = Color(area.accentHex)
                 Surface(
@@ -1613,6 +1655,7 @@ fun ArenaScreen(
         onSave = onUpdateCollectionCustomMode,
         onDeploy = onDeployCollectionCustomMode ?: { showCustomModeDialog = false },
         onDismiss = { showCustomModeDialog = false },
+        customGameMaps = progression.customGameMaps,
       )
     }
   }

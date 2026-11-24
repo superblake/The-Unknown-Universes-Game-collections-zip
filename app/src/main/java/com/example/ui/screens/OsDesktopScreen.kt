@@ -36,6 +36,7 @@ import com.example.ui.theme.AppIcons
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -1219,38 +1220,64 @@ fun OsDesktopScreen(
                 RoundedCornerShape(12.dp),
               ),
           ) {
-            Row(
+            Column(
               modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-              Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                  text = "BO3 • STEAM • COLLECTIONS CUSTOM MODE",
-                  style = MaterialTheme.typography.labelMedium,
-                  fontWeight = FontWeight.Bold,
-                  color = if (cm.enabled) Color(0xFFFF9100) else Color(0xFF00E5FF),
-                )
-                Text(
-                  text = "${cm.impactLabel} • ${if (cm.safeCollectionGuard) "Safeguard ON" else "Unguarded"}",
-                  style = MaterialTheme.typography.labelSmall,
-                  color = MaterialTheme.colorScheme.onSurfaceVariant,
-                  maxLines = 1,
-                  overflow = TextOverflow.Ellipsis,
-                )
-              }
-              Spacer(Modifier.width(8.dp))
-              Button(
-                onClick = { showCustomModeDialog = true },
-                colors = ButtonDefaults.buttonColors(
-                  containerColor = if (cm.enabled) Color(0xFFFF9100) else Color(0xFF00E5FF),
-                  contentColor = Color.Black,
-                ),
-                shape = RoundedCornerShape(10.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                modifier = Modifier.heightIn(min = 48.dp).testTag("os_custom_mode_btn"),
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
               ) {
-                Text("Custom Mode", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                  Text(
+                    text = "BO3 • STEAM • COLLECTIONS CUSTOM MODE",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = if (cm.enabled) Color(0xFFFF9100) else Color(0xFF00E5FF),
+                  )
+                  Text(
+                    text = if (cm.enabled) {
+                      "${cm.impactLabel} • ${if (cm.safeCollectionGuard) "Safeguard ON" else "Unguarded"}"
+                    } else {
+                      "Normal Mode Active • Switch to Custom Mode anytime"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                  )
+                }
+                Spacer(Modifier.width(8.dp))
+                Button(
+                  onClick = { showCustomModeDialog = true },
+                  colors = ButtonDefaults.buttonColors(
+                    containerColor = if (cm.enabled) Color(0xFFFF9100) else Color(0xFF00E5FF),
+                    contentColor = Color.Black,
+                  ),
+                  shape = RoundedCornerShape(10.dp),
+                  contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                  modifier = Modifier.heightIn(min = 48.dp).testTag("os_custom_mode_btn"),
+                ) {
+                  Text("Configure", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                }
+              }
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+              ) {
+                FilterChip(
+                  selected = !cm.enabled,
+                  onClick = { onUpdateCollectionCustomMode { it.copy(enabled = false) } },
+                  label = { Text("Normal Mode", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold) },
+                  modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("os_switch_normal_mode_btn"),
+                )
+                FilterChip(
+                  selected = cm.enabled,
+                  onClick = { onUpdateCollectionCustomMode { it.copy(enabled = true) } },
+                  label = { Text("Custom Mode", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold) },
+                  modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("os_switch_custom_mode_btn"),
+                )
               }
             }
           }
@@ -1357,20 +1384,22 @@ fun OsDesktopScreen(
 
     // Playable Arenas & Custom Locations Switcher
     item {
+      val playableAreas = progression.allPlayableAreas()
       Text(
-        text = "PLAYABLE ARENAS & LOCATIONS (${MultiverseArsenalCatalog.customAreas.size} ARENAS • BATCAVE • QUEENS • STARK • CONVERGENCE)",
+        text = "PLAYABLE ARENAS & CUSTOM MAPS (${playableAreas.size} ARENAS • BO3 CUSTOM • COLLECTIONS)",
         style = MaterialTheme.typography.titleMedium,
         color = MaterialTheme.colorScheme.primary,
       )
     }
 
     item {
+      val playableAreas = remember(progression.customGameMaps) { progression.allPlayableAreas() }
       @OptIn(ExperimentalFoundationApi::class)
       LazyRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier.testTag("os_arenas_row"),
       ) {
-        items(MultiverseArsenalCatalog.customAreas, key = { it.id }) { area ->
+        items(playableAreas, key = { it.id }) { area ->
           val isSelected = area.id == progression.activeAreaId
           val areaSt = progression.areaState(area.id)
           val accent = Color(area.accentHex)
@@ -1602,6 +1631,7 @@ fun OsDesktopScreen(
       onSave = onUpdateCollectionCustomMode,
       onDeploy = onDeployCollectionCustomMode,
       onDismiss = { showCustomModeDialog = false },
+      customGameMaps = progression.customGameMaps,
     )
   }
 }

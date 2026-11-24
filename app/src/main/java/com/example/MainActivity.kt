@@ -774,6 +774,8 @@ fun UnknownOsShell(
                   onDeployArea = viewModel::deployToAreaAndPlay,
                   onUpdateCollectionCustomMode = viewModel::updateCollectionCustomMode,
                   onDeployCollectionCustomMode = viewModel::deployCollectionCustomMode,
+                  onForgeCustomMap = viewModel::createCustomGameMap,
+                  onDeleteCustomMap = viewModel::deleteCustomGameMap,
                 )
 
                 OsWorkspaceTab.MEDIA_VAULT -> MediaVaultScreen(

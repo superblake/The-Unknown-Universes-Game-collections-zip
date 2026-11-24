@@ -146,7 +146,7 @@ object SteamWorkshopCodec {
       key = "arkham",
       appId = "209000",
       label = "Batman Arkham (209000)",
-      gameTitle = "Batman: Arkham Origins & Black Gate",
+      gameTitle = "Batman: Arkham Origins, Blackgate & City",
       universeTag = "TUU Arkham",
       linkedWorldId = "gotham_arkham",
       linkedAreaId = "area_gotham_blackgate",
@@ -157,7 +157,58 @@ object SteamWorkshopCodec {
         "Shock-Gloves Detective Pulse" to "power",
         "Hellbat Kevlar Weave" to "perk",
       ),
-      description = "Black Gate detective recon, Shock Gloves kinetic bursts, and Batcave WayneTech rigs.",
+      description = "Arkham Origins Pioneers Bridge, Origins Blackgate 3-wing prison, Asylum/City/Knight stealth & Shock Gloves.",
+    ),
+    GameCollectionWorkshopPreset(
+      key = "gta4",
+      appId = "12210",
+      label = "GTA IV Liberty City (12210)",
+      gameTitle = "GTA IV: Liberty City & Episodes",
+      universeTag = "GTA IV Liberty",
+      linkedWorldId = "sector_zero",
+      linkedAreaId = "area_col_custom_gta4_liberty",
+      archetype = "operator",
+      accentHex = "#FFAB40",
+      sampleWorkshopId = "12210001",
+      modNames = listOf(
+        "Roman's RPG & Combat M4" to "power",
+        "Liberty Kevlar Safehouse Rig" to "perk",
+      ),
+      description = "Broker Hove Beach, Algonquin Star Junction, Bank of Liberty heists, and Alderney NOOSE 6-star defense.",
+    ),
+    GameCollectionWorkshopPreset(
+      key = "superman",
+      appId = "208650",
+      label = "Superman Returns (208650)",
+      gameTitle = "Superman Returns: Metropolis & Warworld",
+      universeTag = "Superman Metropolis",
+      linkedWorldId = "mr_crossover_nexus",
+      linkedAreaId = "area_col_custom_superman_metropolis",
+      archetype = "chrono",
+      accentHex = "#2979FF",
+      sampleWorkshopId = "208650001",
+      modNames = listOf(
+        "Solar Heat-Vision Super-Flare" to "power",
+        "Kryptonian Fortress Shield" to "perk",
+      ),
+      description = "Daily Planet rooftop rescues, LexCorp Kryptonite disruption, and Mongul Warworld arena duels.",
+    ),
+    GameCollectionWorkshopPreset(
+      key = "abyss_dungeons",
+      appId = "2016590",
+      label = "Abyss of Dungeons (2016590)",
+      gameTitle = "Abyss of Dungeons: Howling Crypts",
+      universeTag = "Abyss of Dungeons",
+      linkedWorldId = "hellbreaker_citadel",
+      linkedAreaId = "area_col_custom_abyss_crypt",
+      archetype = "infernal",
+      accentHex = "#B388FF",
+      sampleWorkshopId = "201659001",
+      modNames = listOf(
+        "Fulgor Abyssal Lich Blade" to "power",
+        "Runic Torch Relic Protection" to "perk",
+      ),
+      description = "Dark fantasy crypt crawls, Mimic vault extractions, Runic Forge upgrades, and Lich Sanctum raids.",
     ),
     GameCollectionWorkshopPreset(
       key = "spiderman",
@@ -289,7 +340,10 @@ object SteamWorkshopCodec {
       when (preset.key) {
         "bo3" -> token.contains("bo3") || token.contains("black ops") || token.contains("zombies") || token.contains("treyarch")
         "prototype" -> token.contains("prototype") || token.contains("mercer") || token.contains("blacklight")
-        "arkham" -> token.contains("batman") || token.contains("arkham") || token.contains("gotham") || token.contains("blackgate")
+        "arkham" -> token.contains("batman") || token.contains("arkham") || token.contains("gotham") || token.contains("blackgate") || token.contains("black gate")
+        "gta4" -> token.contains("gta") || token.contains("liberty city") || token.contains("hove beach") || token.contains("alderney") || token.contains("niko")
+        "superman" -> token.contains("superman") || token.contains("metropolis") || token.contains("warworld") || token.contains("lexcorp") || token.contains("daily planet")
+        "abyss_dungeons" -> token.contains("abyss") || token.contains("dungeon") || token.contains("crypt") || token.contains("lich")
         "spiderman" -> token.contains("spider") || token.contains("symbiote") || token.contains("oscorp")
         "godofwar" -> token.contains("god of war") || token.contains("kratos") || token.contains("crucible")
         "division" -> token.contains("division") || token.contains("shd") || token.contains("isac") || token.contains("sector zero")
@@ -374,6 +428,15 @@ object SteamWorkshopCodec {
       lower.contains("red-zone") || lower.contains("redzone") || lower.contains("prot_redzone") -> "area_col_custom_blacklight_rooftops"
       lower.contains("stasis pier") || lower.contains("inf_stasis_pier") -> "area_col_custom_infamous_pier"
       lower.contains("iceberg lounge") || lower.contains("arkham_iceberg_lounge") -> "area_col_custom_arkham_lounge"
+      lower.contains("pioneers bridge") || lower.contains("royal hotel") || lower.contains("arkham_origins_bridge") -> "area_col_custom_arkham_origins_bridge"
+      lower.contains("origins blackgate") || lower.contains("3-wing") || lower.contains("arkham_origins_blackgate") -> "area_col_custom_arkham_blackgate"
+      lower.contains("wonder tower") || lower.contains("asylum") || lower.contains("arkham_asylum_city") -> "area_col_custom_arkham_asylum_city"
+      lower.contains("gta4_alderney") || lower.contains("alderney") || lower.contains("happiness island") -> "area_col_custom_gta4_alderney"
+      lower.contains("gta4") || lower.contains("liberty city") || lower.contains("hove beach") || lower.contains("star junction") -> "area_col_custom_gta4_liberty"
+      lower.contains("warworld") || lower.contains("fortress") || lower.contains("superman_warworld") -> "area_col_custom_superman_warworld"
+      lower.contains("superman") || lower.contains("metropolis") || lower.contains("daily planet") -> "area_col_custom_superman_metropolis"
+      lower.contains("lich sanctum") || lower.contains("inferno blood altar") || lower.contains("abyss_lich") -> "area_col_custom_abyss_lich_sanctum"
+      lower.contains("abyss") || lower.contains("howling crypt") || lower.contains("dungeons") -> "area_col_custom_abyss_crypt"
       lower.contains("oscorp") && lower.contains("helipad") || lower.contains("spidey_oscorp") -> "area_col_custom_spider_helipad"
       lower.contains("tartarus") || lower.contains("gow_tartarus") -> "area_col_custom_gow_tartarus"
       lower.contains("dz-09 mall") || lower.contains("dz09_mall") -> "area_col_custom_division_mall"
@@ -942,6 +1005,9 @@ object SteamWorkshopCodec {
       val cat = when (matchedPreset?.key) {
         "prototype" -> CustomMapGameCategory.PROTOTYPE
         "arkham" -> CustomMapGameCategory.ARKHAM
+        "gta4" -> CustomMapGameCategory.GTA4
+        "superman" -> CustomMapGameCategory.SUPERMAN
+        "abyss_dungeons" -> CustomMapGameCategory.ABYSS_DUNGEONS
         "spiderman" -> CustomMapGameCategory.SPIDERMAN
         "godofwar" -> CustomMapGameCategory.GODOFWAR
         "division" -> CustomMapGameCategory.DIVISION

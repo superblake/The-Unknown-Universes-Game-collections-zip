@@ -486,8 +486,8 @@ data class ArenaLoadoutStats(
       }
 
       val cm = progression.collectionCustomMode
-      val customModeCdMult = cm.effectiveCooldownMultFor(progression.activeAreaId)
-      val customModeDmgMult = cm.effectiveDamageMultFor(progression.activeAreaId)
+      val customModeCdMult = cm.effectiveCooldownMultFor(progression.activeAreaId, progression.customGameMaps)
+      val customModeDmgMult = cm.effectiveDamageMultFor(progression.activeAreaId, progression.customGameMaps)
       val clawItem = upgrades.firstOrNull { it.id == "upgrade_claws" || it.name.contains("Claw", ignoreCase = true) || it.name.contains("Melee", ignoreCase = true) }
       val primaryPower = powers.firstOrNull()
       val skillCdMult = ((1f - skCd * 0.06f) * (1f - resonance.cooldownReductionRatio * 0.45f)).coerceIn(0.22f, 1.0f)
@@ -762,10 +762,19 @@ class ArenaSimState(
   var hudRunEnded by mutableStateOf(false)
   var hudExtractedSuccess by mutableStateOf(false)
 
+  private val areaSpec = progression.activeAreaSpec()
+  private val customAreaSpec = com.example.data.model.CuratedCustomMapsCatalog.findById(progression.activeAreaId, progression.customGameMaps)
+  private val customAreaCategory = customAreaSpec?.gameCategory
+  private val isBo3Map = progression.activeAreaId.startsWith("area_bo3_") ||
+    progression.activeAreaId == "area_zombies_der_riese" ||
+    customAreaCategory == com.example.data.model.CustomMapGameCategory.BO3
+
   val collectionDifficulty = progression.collectionDifficulty(world.id)
   val ngPlusSpec = progression.ngPlusSpec
   val gameplayRewardMultiplier = progression.combinedGameplayRewardMultiplier(world.id)
-  var hudCurrentPlaceName by mutableStateOf(world.mapSectors.firstOrNull() ?: "Central Courtyard")
+  var hudCurrentPlaceName by mutableStateOf(
+    "${areaSpec.name.substringBefore(" (")} • ${areaSpec.buildingNames.firstOrNull() ?: world.mapSectors.firstOrNull() ?: "Central Sector"}"
+  )
   var selectedElementOverride by mutableStateOf<ArenaDamageType?>(null)
   var hudBossArmorRatio by mutableFloatStateOf(0f)
   var hudBossImmuneSummary by mutableStateOf<String?>(null)
@@ -773,7 +782,7 @@ class ArenaSimState(
   val hudActiveDamageType: ArenaDamageType
     get() = activeWeaponDamageType()
 
-  private val accentColor = Color(world.accentHex)
+  private val accentColor = Color(areaSpec.accentHex)
   val matchRules = progression.effectiveMatchRules()
 
   init {
@@ -1049,25 +1058,55 @@ class ArenaSimState(
     lootCrates.clear()
     catEasterEggs.clear()
 
-    val areaTitle = progression.activeAreaSpec().name.substringBefore(" (").take(22)
-    val (campCentral, campNorth, campWest) = when (world.id) {
-      "gotham_arkham" -> Triple("Batcomputer Safe Alcove", "$areaTitle Gargoyle Perch", "Oracle Overwatch Niche")
-      "spiderverse_queens" -> Triple("F.E.A.S.T. Rooftop Haven", "$areaTitle Web-Anchor Loft", "Queens Subway Refuge")
-      "stark_orbital" -> Triple("J.A.R.V.I.S. Shield Pod", "$areaTitle Maintenance Bay", "Reactor Recovery Deck")
-      "empire_city_infamous" -> Triple("Zeke's Stash Sanctuary", "$areaTitle Substation Shelter", "Neon Rooftop Camp")
-      "chrono_vault" -> Triple("Library Resonance Study", "$areaTitle TARDIS Alcove", "Dialer Safe Chamber")
-      "aegis_starblade" -> Triple("Kyber Meditation Alcove", "$areaTitle Hangar Refuge", "Clone Command Pod")
-      "ship_of_heroes_apotheosis" -> Triple("Justice Medical Bay", "$areaTitle Cadet Sanctuary", "Promenade Safe Zone")
-      "hellbreaker_citadel" -> Triple("Spartan Forge Sanctuary", "$areaTitle Hearth Refuge", "Crucible Rest Alcove")
-      "blacklight_conduit" -> Triple("Gentek Decontam Pod", "$areaTitle Safehouse Vault", "Liberty Tunnel Shelter")
+    val areaTitle = areaSpec.name.substringBefore(" (").take(22)
+    val (campCentral, campNorth, campWest) = when {
+      customAreaCategory == com.example.data.model.CustomMapGameCategory.GTA4 ->
+        Triple("Hove Beach Safehouse", "Algonquin High-Rise Loft", "Alderney Docks Cache")
+      customAreaCategory == com.example.data.model.CustomMapGameCategory.SUPERMAN ->
+        Triple("Daily Planet Roof Sanctuary", "Fortress Solar Chamber", "Centennial Harbor Pad")
+      customAreaCategory == com.example.data.model.CustomMapGameCategory.ABYSS_DUNGEONS ->
+        Triple("Lit Torch Safe Shrine", "Runic Campfire Alcove", "Blue Stone Extraction Altar")
+      isBo3Map ->
+        Triple("BO3 Teleporter Staging Pad", "$areaTitle Quick-Revive Camp", "Mystery Box Courtyard")
+      world.id == "gotham_arkham" ->
+        Triple("Batcomputer Safe Alcove", "$areaTitle Gargoyle Perch", "Oracle Overwatch Niche")
+      world.id == "spiderverse_queens" ->
+        Triple("F.E.A.S.T. Rooftop Haven", "$areaTitle Web-Anchor Loft", "Queens Subway Refuge")
+      world.id == "stark_orbital" ->
+        Triple("J.A.R.V.I.S. Shield Pod", "$areaTitle Maintenance Bay", "Reactor Recovery Deck")
+      world.id == "empire_city_infamous" ->
+        Triple("Zeke's Stash Sanctuary", "$areaTitle Substation Shelter", "Neon Rooftop Camp")
+      world.id == "chrono_vault" ->
+        Triple("Library Resonance Study", "$areaTitle TARDIS Alcove", "Dialer Safe Chamber")
+      world.id == "aegis_starblade" ->
+        Triple("Kyber Meditation Alcove", "$areaTitle Hangar Refuge", "Clone Command Pod")
+      world.id == "ship_of_heroes_apotheosis" ->
+        Triple("Justice Medical Bay", "$areaTitle Cadet Sanctuary", "Promenade Safe Zone")
+      world.id == "hellbreaker_citadel" ->
+        Triple("Spartan Forge Sanctuary", "$areaTitle Hearth Refuge", "Crucible Rest Alcove")
+      world.id == "blacklight_conduit" ->
+        Triple("Gentek Decontam Pod", "$areaTitle Safehouse Vault", "Liberty Tunnel Shelter")
       else -> Triple("$areaTitle Forward Camp", "North Sector Safe Camp", "Frontier Ridge Bivouac")
     }
-    val stationNames = when (world.id) {
-      "gotham_arkham" -> listOf("Wayne Tech Workbench", "Arkham Detective Rig", "Utility Belt Resupply", "Batcave Outer Forge", "Grapnel Ammo Cache", "Batsuit Upgrade Rack")
-      "spiderverse_queens" -> listOf("Horizon Lab Bench", "Parker Bio-Enhancer", "Web-Shooter Cartridge", "Oscorp Tier Bench", "Midtown Supply Drop", "Symbiote Stabilizer")
-      "stark_orbital" -> listOf("Mark-X Armor Gantry", "Arc Reactor Overclock", "Munitions Pod Bay", "Outer Orbital Gantry", "Repulsor Reserve Crate", "Nano-Suit Dispensary")
-      "empire_city_infamous" -> listOf("Conduit Amplifier", "Static Surge Dispenser", "Blast Shard Cache", "Warren Grid Booster", "Neon Conduit Crate", "Ray-Field Stabilizer")
-      "chrono_vault" -> listOf("Chevron Upgrade Pedestal", "Chrono Elixir Fountain", "Artifact Supply Chest", "Outer Gate Amplifier", "TARDIS Supply Locker", "Sonic Resonator Stand")
+    val stationNames = when {
+      customAreaCategory == com.example.data.model.CustomMapGameCategory.GTA4 ->
+        listOf("Roman's Ammu-Nation Pack", "Sprunk & Burger Shot", "LCPD Evidence Stash", "Algonquin Arms Dealer", "Alderney Munitions Van", "Liberty Armor Rack")
+      customAreaCategory == com.example.data.model.CustomMapGameCategory.SUPERMAN ->
+        listOf("Fortress Solar Forge", "S.T.A.R. Labs Conduit", "Metropolis Defense Crate", "Warworld Gladiator Anvil", "Daily Planet Drop Box", "Kryptonian Sun Font")
+      customAreaCategory == com.example.data.model.CustomMapGameCategory.ABYSS_DUNGEONS ->
+        listOf("Runic Forge Anvil", "Cleric Crimson Altar", "Mimic Quiver Chest", "Abyssal Enchant Pedestal", "Goblin Supply Sack", "Soul Tonic Fountain")
+      isBo3Map ->
+        listOf("BO3 Pack-a-Punch Machine", "Der Wunderfizz Perks", "Max Ammo Wall Crate", "Aether Pack Station", "Mystery Box Resupply", "Juggernog & Speed Cola")
+      world.id == "gotham_arkham" ->
+        listOf("Wayne Tech Workbench", "Arkham Detective Rig", "Utility Belt Resupply", "Batcave Outer Forge", "Grapnel Ammo Cache", "Batsuit Upgrade Rack")
+      world.id == "spiderverse_queens" ->
+        listOf("Horizon Lab Bench", "Parker Bio-Enhancer", "Web-Shooter Cartridge", "Oscorp Tier Bench", "Midtown Supply Drop", "Symbiote Stabilizer")
+      world.id == "stark_orbital" ->
+        listOf("Mark-X Armor Gantry", "Arc Reactor Overclock", "Munitions Pod Bay", "Outer Orbital Gantry", "Repulsor Reserve Crate", "Nano-Suit Dispensary")
+      world.id == "empire_city_infamous" ->
+        listOf("Conduit Amplifier", "Static Surge Dispenser", "Blast Shard Cache", "Warren Grid Booster", "Neon Conduit Crate", "Ray-Field Stabilizer")
+      world.id == "chrono_vault" ->
+        listOf("Chevron Upgrade Pedestal", "Chrono Elixir Fountain", "Artifact Supply Chest", "Outer Gate Amplifier", "TARDIS Supply Locker", "Sonic Resonator Stand")
       else -> listOf("Pack-a-Punch Machine", "Juggernog & Speed Cola", "Tactical Ammo Crate", "Outer Sector Pack Station", "Conduit Ammo Cache", "Quick-Revive & Double-Tap")
     }
     val papMain = stationNames[0]
@@ -1217,7 +1256,7 @@ class ArenaSimState(
         color = Color(crate.rarity.colorHex),
       )
     )
-    if ((crate.fromHazard || crate.rarity.rank >= 4) && !progression.collectionCustomMode.shouldSuppressCrateWonderDrops(progression.activeAreaId)) {
+    if ((crate.fromHazard || crate.rarity.rank >= 4) && !progression.collectionCustomMode.shouldSuppressCrateWonderDrops(progression.activeAreaId, progression.customGameMaps)) {
       spawnRandomWonderWeapon(crate.x, crate.y)
     }
     pulseRingRadius = 0.05f
@@ -1398,7 +1437,7 @@ class ArenaSimState(
     greenEssenceEarned = greenEssenceEarned,
     combinedEssenceEarned = combinedEssenceEarned,
     blastShardsEarned = if (blastShardsEarned > 0L) {
-      (blastShardsEarned * progression.collectionCustomMode.effectiveEssenceMultFor(progression.activeAreaId)).toLong().coerceAtLeast(1L)
+      (blastShardsEarned * progression.collectionCustomMode.effectiveEssenceMultFor(progression.activeAreaId, progression.customGameMaps)).toLong().coerceAtLeast(1L)
     } else 0L,
     perkDrinksCollected = perkDrinksCollected,
     blastCoresEarned = blastCoresEarned.toMap(),
@@ -1433,13 +1472,14 @@ class ArenaSimState(
     }
     val cm = progression.collectionCustomMode
     val activeArea = progression.activeAreaId
+    val customMaps = progression.customGameMaps
     val ngPlusSpawnBoost = 1f + ngPlusSpec.tier * 0.12f
-    val customSpawnBoost = cm.effectiveSpawnCountMultFor(activeArea)
+    val customSpawnBoost = cm.effectiveSpawnCountMultFor(activeArea, customMaps)
     val count = (rawCount * lc.enemyDensityMultiplier.coerceIn(0.75f, 2.5f) * ngPlusSpawnBoost * customSpawnBoost).roundToInt().coerceIn(8, 72)
     val roundHpMult = 1.0f + (w - 1L).coerceAtLeast(0L) * 0.22f + (w * w * 0.02f)
     val roundArmorMult = 1.0f + (w - 1L).coerceAtLeast(0L) * 0.10f
-    val customHpScale = cm.effectiveHostileHpMultFor(activeArea)
-    val customSpeedScale = cm.effectiveEnemySpeedMultFor(activeArea)
+    val customHpScale = cm.effectiveHostileHpMultFor(activeArea, customMaps)
+    val customSpeedScale = cm.effectiveEnemySpeedMultFor(activeArea, customMaps)
     val totalHpScale = diffTier.enemyHpScale * collectionDifficulty.enemyHpScale * ngPlusSpec.enemyHpScale * customHpScale
     val totalSpeedScale = diffTier.enemySpeedScale * collectionDifficulty.enemySpeedScale * ngPlusSpec.enemySpeedScale * customSpeedScale
     val playerBonusScale = loadout.playerBonusHealthScale.coerceAtLeast(1.0f)
@@ -1462,9 +1502,9 @@ class ArenaSimState(
       val hasArmorUnit = isElite ||
         archetype in setOf("mech", "dup_conduit", "ultron_sentry", "blackgate_enforcer") ||
         (w >= 3L && i % 4 == 0) ||
-        cm.shouldReinforceArmor(activeArea, isElite = isElite)
+        cm.shouldReinforceArmor(activeArea, isElite = isElite, userCustomMaps = customMaps)
       val rawArmor = if (lc.instagibMutator || !hasArmorUnit) 0 else {
-        val armorCustomBump = if (cm.shouldReinforceArmor(activeArea, isElite = isElite)) 2 else 0
+        val armorCustomBump = if (cm.shouldReinforceArmor(activeArea, isElite = isElite, userCustomMaps = customMaps)) 2 else 0
         (((1 + w.toInt() / 2 + if (isElite) 4 else 0) + armorCustomBump) * roundArmorMult * totalHpScale * armorBonusScale)
           .roundToInt()
           .coerceAtLeast(1)
@@ -1496,7 +1536,7 @@ class ArenaSimState(
     val scheduledBoss = lc.bossRushMutator || matchRules.bossRush || modeId == "boss_rush" || w % 3L == 0L || (modeId == "br" && w == 4L)
     if (scheduledBoss) {
       spawnBossForWorld(w)
-    } else if (cm.isActiveForArea(activeArea) && cm.collectionAmbushSurge && w >= 2L && w % 2L == 0L) {
+    } else if (cm.isActiveForArea(activeArea, customMaps) && cm.collectionAmbushSurge && w >= 2L && w % 2L == 0L) {
       spawnBossForWorld(w)
     }
 
@@ -1536,12 +1576,27 @@ class ArenaSimState(
   }
 
   fun spawnBossForWorld(w: Long) {
-    val (arch, name) = if (progression.activeAreaId == "area_mended_convergence") {
-      if (w % 2L == 0L) "boss_hydra" to "MENDED CONVERGENCE LOOM" else "boss_mech" to "FRACTURE REMNANT SOVEREIGN"
-    } else if (progression.activeAreaId == "area_hero_frontier") {
-      "boss_hydra" to "HERO FRONTIER SOVEREIGN"
-    } else {
-      when (world.id) {
+    val activeId = progression.activeAreaId
+    val (arch, name) = when {
+      activeId == "area_mended_convergence" ->
+        if (w % 2L == 0L) "boss_hydra" to "MENDED CONVERGENCE LOOM" else "boss_mech" to "FRACTURE REMNANT SOVEREIGN"
+      activeId == "area_hero_frontier" ->
+        "boss_hydra" to "HERO FRONTIER SOVEREIGN"
+      customAreaCategory == com.example.data.model.CustomMapGameCategory.GTA4 ->
+        if (w % 2L != 0L) "boss_mech" to "NOOSE ANNIHILATOR CHOPPER" else "boss_bane" to "DIMITRI & LCPD ENFORCER"
+      customAreaCategory == com.example.data.model.CustomMapGameCategory.SUPERMAN ->
+        if (w % 2L != 0L) "boss_mech" to "METALLO KRYPTONITE MECH" else "boss_bane" to "MONGUL WARWORLD WARLORD"
+      customAreaCategory == com.example.data.model.CustomMapGameCategory.ABYSS_DUNGEONS ->
+        if (w % 2L != 0L) "boss_hydra" to "ABYSSAL LICH KING" else "boss_croc" to "CAVE TROLL JUGGERNAUT"
+      activeId == "area_col_custom_arkham_origins_bridge" ->
+        if (w % 2L != 0L) "boss_bane" to "DEATHSTROKE & FIREFLY SQUAD" else "boss_croc" to "TN-1 BANE ARKHAM ORIGINS"
+      activeId == "area_col_custom_arkham_blackgate" ->
+        if (w % 2L != 0L) "boss_croc" to "SOLOMON GRUNDY BLACKGATE" else "boss_bane" to "BLACK MASK CELLBLOCK JUGGERNAUT"
+      activeId == "area_col_custom_arkham_asylum_city" ->
+        if (w % 2L != 0L) "boss_bane" to "TITAN JOKER ASYLUM PRIME" else "boss_mech" to "MR. FREEZE CRYO-SUIT"
+      isBo3Map ->
+        if (w % 2L != 0L) "boss_mech" to "PANZERSOLDAT MK.II" else "boss_hydra" to "MARGWA AETHER TITAN"
+      else -> when (world.id) {
         "blacklight_conduit" -> if (w % 2L != 0L) "boss_hydra" to "WATER HYDRA ALPHA" else "boss_mech" to "BLACKWATCH SUPER-HUNTER"
         "hellbreaker_citadel" -> if (w % 2L == 0L) "boss_mech" to "ASSAULT MECH TITAN" else "boss_croc" to "KILLER CROC JUGGERNAUT"
         "aegis_starblade" -> "boss_croc" to "COSMIC STARBLADE DREADNOUGHT"
@@ -1559,8 +1614,8 @@ class ArenaSimState(
     val lc = progression.levelCustom
     val cm = progression.collectionCustomMode
     val activeArea = progression.activeAreaId
-    val totalHpScale = lc.worldDifficultyTier.enemyHpScale * collectionDifficulty.enemyHpScale * ngPlusSpec.enemyHpScale * cm.effectiveHostileHpMultFor(activeArea)
-    val totalSpeedScale = lc.worldDifficultyTier.enemySpeedScale * collectionDifficulty.enemySpeedScale * ngPlusSpec.enemySpeedScale * cm.effectiveEnemySpeedMultFor(activeArea)
+    val totalHpScale = lc.worldDifficultyTier.enemyHpScale * collectionDifficulty.enemyHpScale * ngPlusSpec.enemyHpScale * cm.effectiveHostileHpMultFor(activeArea, progression.customGameMaps)
+    val totalSpeedScale = lc.worldDifficultyTier.enemySpeedScale * collectionDifficulty.enemySpeedScale * ngPlusSpec.enemySpeedScale * cm.effectiveEnemySpeedMultFor(activeArea, progression.customGameMaps)
     val roundHpMult = 1.0f + (w - 1L).coerceAtLeast(0L) * 0.28f + (w * w * 0.03f)
     val roundArmorMult = 1.0f + (w - 1L).coerceAtLeast(0L) * 0.16f
     val playerBonusScale = loadout.playerBonusHealthScale.coerceAtLeast(1.0f)
@@ -1604,6 +1659,33 @@ class ArenaSimState(
         5 -> "symbiote_stalker"
         else -> "blackgate_enforcer"
       }
+    }
+    when (customAreaCategory) {
+      com.example.data.model.CustomMapGameCategory.GTA4 -> return when (index % 4) {
+        0 -> "blackgate_enforcer"
+        1 -> "trooper"
+        2 -> "arkham_thug"
+        else -> "rusher"
+      }
+      com.example.data.model.CustomMapGameCategory.SUPERMAN -> return when (index % 4) {
+        0 -> "mech"
+        1 -> "ultron_sentry"
+        2 -> "cosmic_raider"
+        else -> "dup_conduit"
+      }
+      com.example.data.model.CustomMapGameCategory.ABYSS_DUNGEONS -> return when (index % 4) {
+        0 -> "necromorph"
+        1 -> "slasher"
+        2 -> "rift_phantom"
+        else -> "clockwork_automaton"
+      }
+      com.example.data.model.CustomMapGameCategory.BO3 -> return when (index % 4) {
+        0 -> "necromorph"
+        1 -> "slasher"
+        2 -> if (wave >= 2) "mech" else "gentek_mutant"
+        else -> "rusher"
+      }
+      else -> Unit
     }
     return when (worldId) {
       "blacklight_conduit" -> when (index % 5) {
@@ -2055,7 +2137,58 @@ class ArenaSimState(
     pulseRingRadius = 0.05f
     val scoreMult = if (doubleEssenceTicks > 0f) 2L else 1L
 
-    if (world.id == "sector_zero") {
+    if (customAreaCategory == com.example.data.model.CustomMapGameCategory.GTA4) {
+      hudShield = (hudShield + 45).coerceAtMost(loadout.maxShield)
+      val angle = atan2(aimY, aimX)
+      for (offset in listOf(-0.18f, 0f, 0.18f)) {
+        val a = angle + offset
+        bolts.add(
+          ArenaBolt(
+            x = playerX,
+            y = playerY,
+            vx = cos(a) * 0.025f,
+            vy = sin(a) * 0.025f,
+            life = 60f,
+            isSupercharged = true,
+            pierceLeft = 3,
+            damage = 7,
+            color = Color(0xFFFFAB40),
+            damageType = ArenaDamageType.THERMAL,
+          )
+        )
+      }
+      postCallout("GTA IV SAFEHOUSE RPG BARRAGE! +45 ARMOR")
+      return
+    }
+    if (customAreaCategory == com.example.data.model.CustomMapGameCategory.SUPERMAN) {
+      val iter = hostiles.iterator()
+      while (iter.hasNext()) {
+        val h = iter.next()
+        val dx = h.x - playerX
+        val dy = h.y - playerY
+        if (dx * dx + dy * dy <= 0.65f * 0.65f) {
+          applyDamageToHostile(h, 6, ArenaDamageType.THERMAL)
+          h.cryoSlowTicks = maxOf(h.cryoSlowTicks, 150f)
+          arcs.add(ArenaArcLine(playerX, playerY, h.x, h.y, Color(0xFFFF3D71), 20f))
+          if (h.hp <= 0) {
+            iter.remove()
+            onHostileDefeated(h, scoreMult)
+          }
+        }
+      }
+      hudShield = (hudShield + 40).coerceAtMost(loadout.maxShield)
+      postCallout("SOLAR HEAT-VISION & ARCTIC BREATH SURGE!")
+      return
+    }
+    if (customAreaCategory == com.example.data.model.CustomMapGameCategory.ABYSS_DUNGEONS) {
+      combinedEssenceEarned += 20L
+      blastShardsEarned += 4L
+      hudShield = (hudShield + 40).coerceAtMost(loadout.maxShield)
+      stasisTicks = maxOf(stasisTicks, 140f)
+      postCallout("ABYSSAL TORCH SHRINE LIT! +20 COMBINED ESSENCE & STASIS")
+      return
+    }
+    if (isBo3Map || world.id == "sector_zero") {
       upgradePackAPunch()
       return
     }
@@ -2501,7 +2634,7 @@ class ArenaSimState(
       h.isElite -> (0.38f * wonderBoost).coerceAtMost(0.95f)
       else -> (0.08f * wonderBoost).coerceAtMost(0.45f)
     }
-    if (Random.nextFloat() < wonderChance && (!progression.collectionCustomMode.shouldSuppressCrateWonderDrops(progression.activeAreaId) || h.isBoss)) {
+    if (Random.nextFloat() < wonderChance && (!progression.collectionCustomMode.shouldSuppressCrateWonderDrops(progression.activeAreaId, progression.customGameMaps) || h.isBoss)) {
       spawnRandomWonderWeapon(h.x, h.y)
     }
   }
@@ -2619,9 +2752,10 @@ class ArenaSimState(
     val moving = (joyDx * joyDx + joyDy * joyDy) > 0.0064f
     frameTick = (frameTick + (if (moving) 1.35f else 0.7f) * dt) % 60f
 
-    if (powerCd > 0f) powerCd = (powerCd - dt).coerceAtLeast(0f)
-    if (consumableCd > 0f) consumableCd = (consumableCd - dt).coerceAtLeast(0f)
-    if (interactCd > 0f) interactCd = (interactCd - dt).coerceAtLeast(0f)
+    val cdRate = if (modeId == "onslaught") dt * 1.35f else dt
+    if (powerCd > 0f) powerCd = (powerCd - cdRate).coerceAtLeast(0f)
+    if (consumableCd > 0f) consumableCd = (consumableCd - cdRate).coerceAtLeast(0f)
+    if (interactCd > 0f) interactCd = (interactCd - cdRate).coerceAtLeast(0f)
     for (si in 0 until worldStations.size) {
       val st = worldStations[si]
       if (st.cooldownTicks > 0f) st.cooldownTicks = (st.cooldownTicks - dt).coerceAtLeast(0f)
@@ -2714,7 +2848,7 @@ class ArenaSimState(
     if (hudShield < loadout.maxShield && (damageFlashTicks <= 0f || insideCamp)) {
       val assistMult = (if (liveSettings.assistShieldBoost) 1.55f else 1.0f) * (if (insideCamp) 3.2f else 1.0f)
       val toxicMult = if (activeHaz?.kind == ArenaHazardKind.TOXIC) 0.45f else 1.0f
-      val customRegenMult = progression.collectionCustomMode.effectiveRegenMultFor(progression.activeAreaId)
+      val customRegenMult = progression.collectionCustomMode.effectiveRegenMultFor(progression.activeAreaId, progression.customGameMaps)
       regenAccum += (loadout.passiveRegenPerSec + if (insideCamp) 8f else 0f) * assistMult * toxicMult * customRegenMult * dtSec
       if (regenAccum >= 1f) {
         val add = regenAccum.toInt()
@@ -3080,7 +3214,7 @@ class ArenaSimState(
         if (dx * dx + dy * dy <= 0.036f * 0.036f) {
           b.life = 0f
           val rawShot = if (liveSettings.assistShieldBoost) 5 else 8
-          val customIncomingMult = progression.collectionCustomMode.effectiveIncomingDamageMultFor(progression.activeAreaId)
+          val customIncomingMult = progression.collectionCustomMode.effectiveIncomingDamageMultFor(progression.activeAreaId, progression.customGameMaps)
           val shotDmg = ((if (matchRules.friendlyFire) rawShot * 1.35f else rawShot.toFloat()) * customIncomingMult).roundToInt().coerceAtLeast(1)
           hudShield = (hudShield - shotDmg).coerceAtLeast(0)
           damageFlashTicks = if (liveSettings.reduceFlashes) 0f else 12f
@@ -3174,7 +3308,7 @@ class ArenaSimState(
           if (meleeDamageAccum >= contactThreshold) {
             meleeDamageAccum = 0f
             val baseDmg = if (h.isBoss) 14 else 9
-            val customIncomingMult = progression.collectionCustomMode.effectiveIncomingDamageMultFor(progression.activeAreaId)
+            val customIncomingMult = progression.collectionCustomMode.effectiveIncomingDamageMultFor(progression.activeAreaId, progression.customGameMaps)
             val preGuardDmg = if (liveSettings.assistShieldBoost) (baseDmg * 2 / 3).coerceAtLeast(4) else baseDmg
             val dmg = (preGuardDmg * customIncomingMult).roundToInt().coerceAtLeast(1)
             hudShield = (hudShield - dmg).coerceAtLeast(0)
@@ -3325,7 +3459,25 @@ class ArenaSimState(
         if (world.id == "chrono_vault") {
           hudChevronsLocked = ((hudWave.toInt() - 1) % 7) + 1
         }
-        postCallout("ROUND ${formatRoundRoman(hudWave)} INCOMING")
+        when (modeId) {
+          "campaign" -> {
+            combinedEssenceEarned += 15L
+            postCallout("CAMPAIGN ANCHOR SECURED! ROUND ${formatRoundRoman(hudWave)} INCOMING (+15 COMB ESS)")
+          }
+          "conduit_ctf" -> {
+            blastShardsEarned += 4L
+            traps.forEach { it.cooldownTicks = 0f }
+            postCallout("CONDUIT RELAY CHARGED! TRAPS ARMED (+4 SHARDS)")
+          }
+          "hero_patrol" -> {
+            characterShardsCollected += 1L
+            overdriveTicks = maxOf(overdriveTicks, 180f)
+            postCallout("SECTOR PATROL SECURED! +1 HERO SHARD • ROUND ${formatRoundRoman(hudWave)}")
+          }
+          else -> {
+            postCallout("ROUND ${formatRoundRoman(hudWave)} INCOMING")
+          }
+        }
         spawnWave(hudWave)
       }
     }

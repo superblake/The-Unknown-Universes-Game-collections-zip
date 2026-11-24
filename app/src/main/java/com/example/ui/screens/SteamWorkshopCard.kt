@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.example.R
 import com.example.data.model.ArmoryItem
+import com.example.data.model.CuratedCustomMapsCatalog
 import com.example.data.model.LinkedAccount
 import com.example.data.model.OperatorProfile
 import com.example.data.model.RigAsset
@@ -411,6 +412,57 @@ fun SteamWorkshopCard(
               Text("BO3 Pack", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
             }
           }
+
+          Text(
+            text = "Workshop Custom Maps (BO3 & Game Collections)",
+            style = MaterialTheme.typography.labelMedium,
+            color = Color(0xFF00E676),
+            fontWeight = FontWeight.SemiBold,
+          )
+          Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()).testTag("workshop_custom_maps_row"),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+          ) {
+            SteamWorkshopCodec.collectionCustomMapsCatalog.forEach { mapSpec ->
+              val mapAccent = Color(mapSpec.accentHex)
+              Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = mapAccent.copy(alpha = 0.12f),
+                modifier = Modifier
+                  .width(196.dp)
+                  .border(1.dp, mapAccent.copy(alpha = 0.55f), RoundedCornerShape(12.dp))
+                  .testTag("workshop_custom_map_card_${mapSpec.id}"),
+              ) {
+                Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                  Text(
+                    text = mapSpec.title,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = mapAccent,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                  )
+                  Text(
+                    text = "${mapSpec.gameCategory.label} • ${mapSpec.buildingNames.size} zones",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                  )
+                  OutlinedButton(
+                    onClick = {
+                      importModulePreset = true
+                      importRigPreset = true
+                      pendingImportPreview = SteamWorkshopCodec.getCollectionCustomMapPack(mapSpec.id, profile.userId)
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("workshop_preview_custom_map_${mapSpec.id}"),
+                  ) {
+                    Text("Import / Play Map", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                  }
+                }
+              }
+            }
+          }
         }
       }
 
@@ -719,7 +771,7 @@ fun SteamWorkshopCard(
           }
 
           preview.linkedAreaId?.let { areaId ->
-            val areaName = com.example.data.model.MultiverseArsenalCatalog.areaById(areaId).name
+            val areaName = preview.customMap?.title ?: CuratedCustomMapsCatalog.resolveAreaSpec(areaId).name
             Text(
               text = "Linked Playable Map: $areaName",
               style = MaterialTheme.typography.labelSmall,

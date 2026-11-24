@@ -205,14 +205,15 @@ fun DrawScope.drawWorldArenaBackdrop(
 
   // Domain-Specific Ground Arteries projected into 2.5D Perspective (Highways only on urban worlds; Bulkheads/Causeways elsewhere)
   if (!lowGraphics) {
-    val isUrbanRoadWorld = worldId in setOf(
+    val isAbyssMap = areaId.contains("abyss")
+    val isUrbanRoadWorld = !isAbyssMap && (worldId in setOf(
       "sector_zero",
       "spiderverse_queens",
       "empire_city_infamous",
       "blacklight_conduit",
       "campaign_origins",
       "mr_crossover_nexus",
-    )
+    ) || areaId.contains("gta4") || areaId.contains("superman") || areaId.contains("arkham"))
     val isOrbitalDeckWorld = worldId in setOf(
       "stark_orbital",
       "aegis_starblade",
@@ -309,7 +310,23 @@ fun DrawScope.drawWorldArenaBackdrop(
   val cCenter = worldToPerspectiveScreen(ARENA_CENTER, ARENA_CENTER, camX, camY, w, h)
   val cScale = perspectiveScaleForRelY(ARENA_CENTER - camY)
   if (cCenter.x in -240f..w + 240f && cCenter.y in -240f..h + 240f) {
-    when (worldId) {
+    when {
+      areaId.contains("abyss") -> {
+        val r = minOf(w, h) * 0.22f * cScale
+        drawOval(Color(0xFFB388FF).copy(alpha = 0.24f + pulse * 0.16f), topLeft = Offset(cCenter.x - r, cCenter.y - r * 0.65f), size = Size(r * 2f, r * 1.3f), style = Stroke(width = 5f * cScale))
+        drawCircle(Color(0xFFFFAB40).copy(alpha = 0.72f), radius = r * 0.34f, center = cCenter, style = Stroke(width = 3f * cScale))
+      }
+      areaId.contains("gta4") -> {
+        val r = minOf(w, h) * 0.21f * cScale
+        drawOval(Color(0xFFFFAB40).copy(alpha = 0.24f + pulse * 0.14f), topLeft = Offset(cCenter.x - r, cCenter.y - r * 0.62f), size = Size(r * 2f, r * 1.24f), style = Stroke(width = 4f * cScale))
+        drawOval(Color(0xFF00E676).copy(alpha = 0.62f), topLeft = Offset(cCenter.x - r * 0.58f, cCenter.y - r * 0.36f), size = Size(r * 1.16f, r * 0.72f), style = Stroke(width = 3f * cScale))
+      }
+      areaId.contains("superman") -> {
+        val r = minOf(w, h) * 0.22f * cScale
+        drawOval(Color(0xFF2979FF).copy(alpha = 0.26f + pulse * 0.14f), topLeft = Offset(cCenter.x - r, cCenter.y - r * 0.64f), size = Size(r * 2f, r * 1.28f), style = Stroke(width = 4.5f * cScale))
+        drawOval(Color(0xFFFF3D71).copy(alpha = 0.72f), topLeft = Offset(cCenter.x - r * 0.52f, cCenter.y - r * 0.32f), size = Size(r * 1.04f, r * 0.64f), style = Stroke(width = 3.2f * cScale))
+      }
+      else -> when (worldId) {
       "chrono_vault" -> {
         val gateCenter = Offset(cCenter.x, cCenter.y - h * 0.12f * cScale)
         val gateRadius = minOf(w, h) * 0.16f * cScale
@@ -391,6 +408,24 @@ fun DrawScope.drawWorldArenaBackdrop(
         drawOval(effAccent.copy(alpha = 0.22f + pulse * 0.12f), topLeft = Offset(cCenter.x - r, cCenter.y - r * 0.65f), size = Size(r * 2f, r * 1.3f), style = Stroke(width = 3.5f * cScale))
         drawCircle(secondaryColor.copy(alpha = if (stationReady) 0.36f else 0.2f), radius = 14f * cScale, center = cCenter)
       }
+    }
+    }
+    if (areaId.startsWith("area_bo3_")) {
+      val rBo3 = minOf(w, h) * 0.27f * cScale
+      drawOval(
+        color = Color(0xFF00E676).copy(alpha = 0.36f + pulse * 0.18f),
+        topLeft = Offset(cCenter.x - rBo3, cCenter.y - rBo3 * 0.64f),
+        size = Size(rBo3 * 2f, rBo3 * 1.28f),
+        style = Stroke(width = 3f * cScale, pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f))),
+      )
+    } else if (areaId.startsWith("area_col_custom_")) {
+      val rCol = minOf(w, h) * 0.27f * cScale
+      drawOval(
+        color = effAccent.copy(alpha = 0.42f + pulse * 0.18f),
+        topLeft = Offset(cCenter.x - rCol, cCenter.y - rCol * 0.64f),
+        size = Size(rCol * 2f, rCol * 1.28f),
+        style = Stroke(width = 3f * cScale, pathEffect = PathEffect.dashPathEffect(floatArrayOf(18f, 8f))),
+      )
     }
   }
 }

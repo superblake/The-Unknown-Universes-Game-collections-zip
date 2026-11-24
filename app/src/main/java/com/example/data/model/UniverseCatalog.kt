@@ -58,48 +58,48 @@ object UniverseCatalog {
     UniverseWorld(
       id = "sector_zero",
       title = "Sector Zero: Undead Ops",
-      subtitle = "TUU Call of Duty Stories • Quarantine & Exfil",
-      inspirations = "TUU Call of Duty Stories • Zombies & DMZ • The Division SHD",
-      description = "Hold containment lines against escalating spectral-undead hordes, dial Pack-a-Tier weapon stations, or drop into contested DMZ sectors with ISAC scan rings for dark-tech extraction.",
+      subtitle = "Call of Duty Stories • GTA IV Liberty City • SHD",
+      inspirations = "Call of Duty Zombies & DMZ • BO3 Mod Tools • GTA IV Liberty City • The Division SHD",
+      description = "Hold Call of Duty quarantine & BO3 Mod Tools lines, dial Pack-a-Tier weapon stations, drop into contested DMZ sectors, or fight LCPD/NOOSE patrols across GTA IV Liberty City.",
       signatureMechanic = "Mystery Cache + Pack-a-Tier + Exfil Chopper",
       defaultModeId = "zombies",
       accentHex = 0xFFFF8F00,
       secondaryHex = 0xFF00E5FF,
       bannerRes = R.drawable.img_sector_zero_banner_1794591189085,
       supportedModes = allModeIds,
-      mapSectors = listOf("Quarantine Yard", "Sub-Zero Bunker", "Helipad Exfil", "ISAC Relay"),
+      mapSectors = listOf("Quarantine Yard", "Liberty Star Junction", "Sub-Zero Bunker", "ISAC Helipad"),
       interactActionLabel = "PACK-A-TIER",
       platformBadges = "PS5/PS4/PS3 • XBOX 360/X|S • PC",
     ),
     UniverseWorld(
       id = "blacklight_conduit",
-      title = "Blacklight Conduit: Metro",
-      subtitle = "TUU Prototype & Infamous Journey • Mr Crossover",
-      inspirations = "TUU Prototype (Gentek/Water Hive) • TUU Infamous (DUP) • Mr Crossover",
-      description = "Traverse Red-Zone Gentek sectors and Liberty Metro relays with mutated crimson tendril blades, chain-lightning arcs, and Water Hive bio-storms against DUP and Blackwatch.",
+      title = "Blacklight Conduit: Red-Zone NYC",
+      subtitle = "Prototype (Alex Mercer) • inFAMOUS & Mr Crossover",
+      inspirations = "Prototype (Gentek / Blackwatch / Water Hive) • inFAMOUS DUP • Mr Crossover",
+      description = "Traverse Red-Zone NYC viral districts, Gentek labs, and Liberty Metro relays with Alex Mercer's mutated bio-blades, Tendril Devastators, and chain-lightning surges against Blackwatch.",
       signatureMechanic = "Bio-Tendril Slash + Arc Pylon Overload",
       defaultModeId = "sandbox",
       accentHex = 0xFF7C4DFF,
       secondaryHex = 0xFFFF3D71,
       bannerRes = R.drawable.img_conduit_citadel_banner_1794591189064,
       supportedModes = allModeIds,
-      mapSectors = listOf("Gentek Red-Zone", "Water Hive Lab", "DUP Conduit Spire", "Liberty Viaduct"),
+      mapSectors = listOf("Gentek Red-Zone", "Water Hive Lab", "Blackwatch Fuel Yard", "Liberty Viaduct"),
       interactActionLabel = "ARC PYLON",
       platformBadges = "PS3/PS4/PS5 • XBOX • SWITCH • PC",
     ),
     UniverseWorld(
       id = "hellbreaker_citadel",
-      title = "Hellbreaker: Mythic Crucible",
-      subtitle = "TUU God of War & Necromorph Crucible",
-      inspirations = "TUU God of War • Doom Crucible • Wolverine & Necromorph Clash",
-      description = "Chain glory-dashes, mythic blades, and twin adamantium-molten claws through cyber-fiends, Killer Croc juggernauts, and assault mechs in zero-cooldown crucible fury.",
-      signatureMechanic = "Twin-Claw Berserk + Glory Siphon Dash",
+      title = "Hellbreaker & Abyss of Dungeons",
+      subtitle = "God of War Crucible • Abyss of Dungeons Dark Crypts",
+      inspirations = "TUU God of War • Abyss of Dungeons • Doom Crucible • Necromorph Clash",
+      description = "Chain glory-dashes and mythic blades through Abyss of Dungeons torch-lit crypts, Lich Sanctums, Runic Anvils, Hydra rifts, and assault mechs in zero-cooldown crucible fury.",
+      signatureMechanic = "Twin-Claw Berserk + Abyssal Glory Siphon",
       defaultModeId = "zombies",
       accentHex = 0xFFFF5252,
       secondaryHex = 0xFFFFAB40,
       bannerRes = R.drawable.img_hellbreaker_banner_1794596418917,
       supportedModes = allModeIds,
-      mapSectors = listOf("Crucible Core", "Water Hydra Rift", "Molten Forge", "Mech Arena"),
+      mapSectors = listOf("Abyssal Crypt Core", "Water Hydra Rift", "Runic Molten Forge", "Lich Mech Arena"),
       interactActionLabel = "BERSERK",
       platformBadges = "PS5/PS4 • XBOX X|S • SWITCH • PC",
     ),
@@ -138,16 +138,16 @@ object UniverseCatalog {
     UniverseWorld(
       id = "gotham_arkham",
       title = "Gotham: Arkham Knightfall",
-      subtitle = "Batman v1–v3 • Batcave • Black Gate & DC",
-      inspirations = "Batman • TUU Arkham Origins • TUU DC Heroes • Black Gate",
-      description = "Glide above Gotham rooftops, Black Gate cellblocks, and the Batcave sub-vault as Batman v1/Hellbat/Beyond battling Joker enforcers, Killer Croc, and Bane Titans.",
-      signatureMechanic = "Bat-Signal Recon + Grapnel Detective Pulse",
+      subtitle = "Arkham Origins • Blackgate • Asylum • City • Knight",
+      inspirations = "Batman: Arkham Origins • Origins Blackgate • Arkham Asylum • Arkham City • Arkham Knight",
+      description = "Patrol Gotham's Pioneers Bridge, Blackgate Prison cellblocks, Arkham Asylum, Wonder Tower, and the Batcave—countering Deathstroke, Firefly, Killer Croc, Joker thugs, and Bane Titans with Shock Gloves & Detective Recon.",
+      signatureMechanic = "Shock Gloves + Bat-Signal Detective Pulse",
       defaultModeId = "hero_patrol",
       accentHex = 0xFFFFD54F,
       secondaryHex = 0xFF448AFF,
       bannerRes = R.drawable.img_aegis_starblade_banner_1794596418262,
       supportedModes = allModeIds,
-      mapSectors = listOf("Batcave Nexus", "Black Gate Yard", "Ace Chemicals", "GCPD Bat-Signal Roof"),
+      mapSectors = listOf("Batcave Nexus", "Blackgate Prison", "Pioneers Bridge", "Wonder Tower Roof"),
       interactActionLabel = "BAT-SIGNAL",
       platformBadges = "PS5/PS4/PS3 • XBOX • SWITCH • PC • iOS",
     ),
@@ -218,16 +218,16 @@ object UniverseCatalog {
     UniverseWorld(
       id = "mr_crossover_nexus",
       title = "Mr. Crossover: Infinite Nexus",
-      subtitle = "All Universes Converged • Original Creator Hub",
-      inspirations = "Mr Crossover • Batman • Spider-Man • Cole • Mercer • CoD",
-      description = "The ultimate zero-boundary convergence where Batman, Spider-Man, Cole McGrath, Alex Mercer, Starkiller, Iron Man, and TUU Originals fight side by side across reality.",
-      signatureMechanic = "Quad-Essence Prism Nova + Cross-Universe Portal",
+      subtitle = "Superman Returns Metropolis • GTA IV • All Heroes",
+      inspirations = "Superman Returns • Batman Arkham • inFAMOUS • Prototype • GTA IV • CoD",
+      description = "Soar across Superman Returns Metropolis Daily Planet & Warworld alongside Batman, Spider-Man, Cole McGrath, Alex Mercer, and Call of Duty operators against Metallo, Mongul, and Rift Sovereigns.",
+      signatureMechanic = "Solar Heat-Vision Nova + Cross-Universe Portal",
       defaultModeId = "onslaught",
       accentHex = 0xFF00E676,
-      secondaryHex = 0xFFE040FB,
+      secondaryHex = 0xFF2979FF,
       bannerRes = R.drawable.img_chrono_aegis_banner_1794591190129,
       supportedModes = allModeIds,
-      mapSectors = listOf("Convergence Ring", "Crossover Bastion", "All-Hero Plaza", "Outer Rift Horizon"),
+      mapSectors = listOf("Convergence Ring", "Daily Planet Plaza", "All-Hero Bastion", "Warworld Rift"),
       interactActionLabel = "PRISM NOVA",
       platformBadges = "ALL PLATFORMS • HTML5 • CONSOLES • PC",
     ),
@@ -408,6 +408,22 @@ object UniverseCatalog {
 
   fun consoleById(id: String): ConsoleCompatTarget =
     consoleTargets.firstOrNull { it.id == id } ?: consoleTargets.first()
+
+  fun primaryAreaIdForWorld(worldId: String): String = when (worldId) {
+    "sector_zero" -> "area_sector_zero"
+    "empire_city_infamous" -> "area_empire_city"
+    "gotham_arkham" -> "area_gotham_blackgate"
+    "blacklight_conduit" -> "area_blacklight_hive"
+    "hellbreaker_citadel" -> "area_hellbreaker_crucible"
+    "chrono_vault" -> "area_chrono_gate"
+    "aegis_starblade" -> "area_aegis_orbital"
+    "spiderverse_queens" -> "area_spiderman_queens"
+    "stark_orbital" -> "area_ironman_stark"
+    "ship_of_heroes_apotheosis" -> "area_ship_of_heroes_deck"
+    "mr_crossover_nexus" -> "area_hero_frontier"
+    "campaign_origins" -> "area_campaign_nexus"
+    else -> "area_sector_zero"
+  }
 
   /**
    * Embedded No-APK Play Guide bundled directly inside the Game Collection Catalog.

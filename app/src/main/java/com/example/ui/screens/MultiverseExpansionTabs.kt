@@ -764,7 +764,7 @@ fun AreasAndAgingTab(
       }
     }
 
-    items(MultiverseArsenalCatalog.customAreas, key = { it.id }) { spec ->
+    items(progression.allPlayableAreas(), key = { it.id }) { spec ->
       val area = progression.areaState(spec.id)
       val isSelected = progression.activeAreaId == spec.id
       val accent = Color(spec.accentHex)
