@@ -95,6 +95,267 @@ data class PrivateMatchRules(
 }
 
 @Immutable
+data class RegionDefaultProfile(
+  val targetFpsCap: Int,
+  val autoAimEnabled: Boolean,
+  val particleDensityName: String,
+  val showTacticalGrid: Boolean,
+  val showMiniRadar: Boolean,
+  val gameSpeedMultiplier: Float,
+  val assistShieldBoost: Boolean,
+  val reduceMotion: Boolean,
+  val damageBonusMult: Float,
+  val shieldBonusMult: Float,
+  val fireRateBonusMult: Float,
+  val essenceYieldMult: Float,
+  val summary: String,
+)
+
+enum class WorldRegion(
+  val id: String,
+  val displayName: String,
+  val shortTag: String,
+  val accentHex: Long,
+  val defaultProfile: RegionDefaultProfile,
+) {
+  NA_EAST(
+    id = "na_east",
+    displayName = "North America East",
+    shortTag = "NA-E",
+    accentHex = 0xFF00E5FF,
+    defaultProfile = RegionDefaultProfile(
+      targetFpsCap = 60,
+      autoAimEnabled = true,
+      particleDensityName = "HIGH",
+      showTacticalGrid = true,
+      showMiniRadar = true,
+      gameSpeedMultiplier = 1.0f,
+      assistShieldBoost = false,
+      reduceMotion = false,
+      damageBonusMult = 1.05f,
+      shieldBonusMult = 1.05f,
+      fireRateBonusMult = 1.05f,
+      essenceYieldMult = 1.10f,
+      summary = "60 FPS • Auto-Aim ON • High VFX • Tactical Grid & Radar ON (+5% DMG/SHD/RATE)",
+    ),
+  ),
+  NA_WEST(
+    id = "na_west",
+    displayName = "North America West",
+    shortTag = "NA-W",
+    accentHex = 0xFF40C4FF,
+    defaultProfile = RegionDefaultProfile(
+      targetFpsCap = 120,
+      autoAimEnabled = true,
+      particleDensityName = "HIGH",
+      showTacticalGrid = true,
+      showMiniRadar = true,
+      gameSpeedMultiplier = 1.08f,
+      assistShieldBoost = false,
+      reduceMotion = false,
+      damageBonusMult = 1.08f,
+      shieldBonusMult = 1.02f,
+      fireRateBonusMult = 1.12f,
+      essenceYieldMult = 1.12f,
+      summary = "120 FPS • 1.08x Combat Speed • Auto-Aim ON • Radar ON (+12% RATE)",
+    ),
+  ),
+  EUROPE(
+    id = "europe",
+    displayName = "Europe Central",
+    shortTag = "EU-C",
+    accentHex = 0xFF00E676,
+    defaultProfile = RegionDefaultProfile(
+      targetFpsCap = 60,
+      autoAimEnabled = true,
+      particleDensityName = "REDUCED",
+      showTacticalGrid = true,
+      showMiniRadar = true,
+      gameSpeedMultiplier = 1.0f,
+      assistShieldBoost = true,
+      reduceMotion = false,
+      damageBonusMult = 1.06f,
+      shieldBonusMult = 1.14f,
+      fireRateBonusMult = 1.04f,
+      essenceYieldMult = 1.15f,
+      summary = "60 FPS • Reduced VFX • Assist Shield Boost ON • Grid ON (+14% SHD)",
+    ),
+  ),
+  ASIA_PACIFIC(
+    id = "asia_pacific",
+    displayName = "Asia Pacific",
+    shortTag = "APAC",
+    accentHex = 0xFFFFD54F,
+    defaultProfile = RegionDefaultProfile(
+      targetFpsCap = 120,
+      autoAimEnabled = false,
+      particleDensityName = "REDUCED",
+      showTacticalGrid = false,
+      showMiniRadar = true,
+      gameSpeedMultiplier = 1.15f,
+      assistShieldBoost = false,
+      reduceMotion = false,
+      damageBonusMult = 1.16f,
+      shieldBonusMult = 1.05f,
+      fireRateBonusMult = 1.15f,
+      essenceYieldMult = 1.18f,
+      summary = "120 FPS • Manual Precision (Auto-Aim OFF) • 1.15x Speed • Minimal Grid (+16% DMG)",
+    ),
+  ),
+  SOUTH_AMERICA(
+    id = "south_america",
+    displayName = "South America",
+    shortTag = "SA-E",
+    accentHex = 0xFFFFAB40,
+    defaultProfile = RegionDefaultProfile(
+      targetFpsCap = 60,
+      autoAimEnabled = true,
+      particleDensityName = "HIGH",
+      showTacticalGrid = true,
+      showMiniRadar = true,
+      gameSpeedMultiplier = 1.02f,
+      assistShieldBoost = true,
+      reduceMotion = false,
+      damageBonusMult = 1.10f,
+      shieldBonusMult = 1.12f,
+      fireRateBonusMult = 1.08f,
+      essenceYieldMult = 1.20f,
+      summary = "60 FPS • Auto-Aim & Assist Shield ON • +20% Blue Essence Yield",
+    ),
+  ),
+  MIDDLE_EAST(
+    id = "middle_east",
+    displayName = "Middle East",
+    shortTag = "ME-C",
+    accentHex = 0xFFE040FB,
+    defaultProfile = RegionDefaultProfile(
+      targetFpsCap = 60,
+      autoAimEnabled = true,
+      particleDensityName = "REDUCED",
+      showTacticalGrid = true,
+      showMiniRadar = true,
+      gameSpeedMultiplier = 0.96f,
+      assistShieldBoost = true,
+      reduceMotion = true,
+      damageBonusMult = 1.12f,
+      shieldBonusMult = 1.16f,
+      fireRateBonusMult = 1.06f,
+      essenceYieldMult = 1.15f,
+      summary = "60 FPS • Reduce Motion & Assist Shield ON • Heavy Fortress Preset (+16% SHD)",
+    ),
+  ),
+  OCEANIA(
+    id = "oceania",
+    displayName = "Oceania",
+    shortTag = "OCE",
+    accentHex = 0xFF7C4DFF,
+    defaultProfile = RegionDefaultProfile(
+      targetFpsCap = 120,
+      autoAimEnabled = true,
+      particleDensityName = "HIGH",
+      showTacticalGrid = false,
+      showMiniRadar = true,
+      gameSpeedMultiplier = 1.10f,
+      assistShieldBoost = false,
+      reduceMotion = false,
+      damageBonusMult = 1.12f,
+      shieldBonusMult = 1.08f,
+      fireRateBonusMult = 1.14f,
+      essenceYieldMult = 1.16f,
+      summary = "120 FPS • High VFX • 1.10x Speed • Clean Floor (+14% RATE / +12% DMG)",
+    ),
+  ),
+  AFRICA(
+    id = "africa",
+    displayName = "Africa South",
+    shortTag = "AF-S",
+    accentHex = 0xFFFF3D71,
+    defaultProfile = RegionDefaultProfile(
+      targetFpsCap = 60,
+      autoAimEnabled = true,
+      particleDensityName = "REDUCED",
+      showTacticalGrid = true,
+      showMiniRadar = true,
+      gameSpeedMultiplier = 1.05f,
+      assistShieldBoost = true,
+      reduceMotion = false,
+      damageBonusMult = 1.14f,
+      shieldBonusMult = 1.14f,
+      fireRateBonusMult = 1.10f,
+      essenceYieldMult = 1.22f,
+      summary = "60 FPS • Reduced VFX • Assist Shield ON • Vanguard Surge (+14% DMG/SHD)",
+    ),
+  );
+
+  companion object {
+    fun fromId(id: String): WorldRegion =
+      entries.firstOrNull { it.id == id } ?: NA_EAST
+  }
+}
+
+@Immutable
+data class RegionalServerSpec(
+  val id: String,
+  val region: WorldRegion,
+  val name: String,
+  val code: String,
+  val basePingMs: Int,
+  val tickRateHz: Int,
+  val activeOperators: Int,
+  val maxCapacity: Int = 200,
+  val bonusTag: String,
+  val bonusDamageMult: Float = 1.0f,
+  val bonusShieldMult: Float = 1.0f,
+  val bonusRateMult: Float = 1.0f,
+)
+
+object RegionalServerCatalog {
+  val servers: List<RegionalServerSpec> = listOf(
+    // NA East (3 servers)
+    RegionalServerSpec("srv_na_east_1", WorldRegion.NA_EAST, "Virginia Convergence #1", "USE-01", 16, 128, 148, 200, "+8% Rate", 1.04f, 1.04f, 1.08f),
+    RegionalServerSpec("srv_na_east_2", WorldRegion.NA_EAST, "New York SHD Relay #2", "USE-02", 21, 120, 174, 200, "+12% DMG", 1.12f, 1.04f, 1.02f),
+    RegionalServerSpec("srv_na_east_3", WorldRegion.NA_EAST, "Miami Abyssal Hub #3", "USE-03", 28, 90, 112, 200, "+12% SHD", 1.04f, 1.12f, 1.04f),
+    // NA West (3 servers)
+    RegionalServerSpec("srv_na_west_1", WorldRegion.NA_WEST, "Silicon Metropolis #1", "USW-01", 22, 128, 162, 200, "+14% Rate", 1.05f, 1.02f, 1.14f),
+    RegionalServerSpec("srv_na_west_2", WorldRegion.NA_WEST, "Seattle Conduit #2", "USW-02", 26, 120, 118, 200, "+10% DMG/SHD", 1.10f, 1.10f, 1.04f),
+    RegionalServerSpec("srv_na_west_3", WorldRegion.NA_WEST, "Phoenix Solar Node #3", "USW-03", 31, 90, 96, 200, "+15% DMG", 1.15f, 1.00f, 1.05f),
+    // Europe (3 servers)
+    RegionalServerSpec("srv_europe_1", WorldRegion.EUROPE, "Frankfurt Citadel #1", "EUC-01", 24, 128, 186, 200, "+12% SHD", 1.05f, 1.12f, 1.05f),
+    RegionalServerSpec("srv_europe_2", WorldRegion.EUROPE, "London Gotham Gate #2", "EUW-02", 29, 120, 152, 200, "+10% Rate", 1.06f, 1.06f, 1.10f),
+    RegionalServerSpec("srv_europe_3", WorldRegion.EUROPE, "Warsaw Crypt Node #3", "EUE-03", 34, 90, 124, 200, "+14% DMG", 1.14f, 1.08f, 1.02f),
+    // Asia Pacific (3 servers)
+    RegionalServerSpec("srv_apac_1", WorldRegion.ASIA_PACIFIC, "Tokyo Speed Force #1", "AP-TYO", 32, 128, 192, 200, "+16% Rate", 1.08f, 1.04f, 1.16f),
+    RegionalServerSpec("srv_apac_2", WorldRegion.ASIA_PACIFIC, "Singapore Aegis #2", "AP-SIN", 38, 120, 164, 200, "+14% DMG", 1.14f, 1.06f, 1.06f),
+    RegionalServerSpec("srv_apac_3", WorldRegion.ASIA_PACIFIC, "Seoul Nexus #3", "AP-SEL", 35, 128, 178, 200, "+12% All", 1.12f, 1.12f, 1.12f),
+    // South America (3 servers)
+    RegionalServerSpec("srv_sa_1", WorldRegion.SOUTH_AMERICA, "Sao Paulo Core #1", "SA-GRU", 42, 120, 144, 200, "+14% SHD", 1.06f, 1.14f, 1.06f),
+    RegionalServerSpec("srv_sa_2", WorldRegion.SOUTH_AMERICA, "Santiago Spire #2", "SA-SCL", 48, 90, 108, 200, "+12% DMG", 1.12f, 1.08f, 1.05f),
+    RegionalServerSpec("srv_sa_3", WorldRegion.SOUTH_AMERICA, "Bogota Relay #3", "SA-BOG", 45, 90, 92, 200, "+12% Rate", 1.05f, 1.08f, 1.12f),
+    // Middle East (3 servers)
+    RegionalServerSpec("srv_me_1", WorldRegion.MIDDLE_EAST, "Dubai Fortress #1", "ME-DXB", 39, 120, 136, 200, "+16% SHD", 1.06f, 1.16f, 1.05f),
+    RegionalServerSpec("srv_me_2", WorldRegion.MIDDLE_EAST, "Riyadh Lantern #2", "ME-RUH", 44, 120, 114, 200, "+14% DMG", 1.14f, 1.08f, 1.04f),
+    RegionalServerSpec("srv_me_3", WorldRegion.MIDDLE_EAST, "Manama Vault #3", "ME-BAH", 47, 90, 88, 200, "+12% Rate", 1.06f, 1.08f, 1.12f),
+    // Oceania (3 servers)
+    RegionalServerSpec("srv_oce_1", WorldRegion.OCEANIA, "Sydney Harbor #1", "OCE-SYD", 40, 128, 156, 200, "+14% Rate", 1.08f, 1.06f, 1.14f),
+    RegionalServerSpec("srv_oce_2", WorldRegion.OCEANIA, "Melbourne Rift #2", "OCE-MEL", 44, 120, 122, 200, "+14% DMG", 1.14f, 1.06f, 1.06f),
+    RegionalServerSpec("srv_oce_3", WorldRegion.OCEANIA, "Auckland Beacon #3", "OCE-AKL", 49, 90, 94, 200, "+14% SHD", 1.06f, 1.14f, 1.06f),
+    // Africa (3 servers)
+    RegionalServerSpec("srv_af_1", WorldRegion.AFRICA, "Johannesburg Core #1", "AF-JNB", 46, 120, 132, 200, "+14% DMG/SHD", 1.14f, 1.14f, 1.06f),
+    RegionalServerSpec("srv_af_2", WorldRegion.AFRICA, "Cape Town Spire #2", "AF-CPT", 51, 90, 102, 200, "+12% Rate", 1.08f, 1.08f, 1.12f),
+    RegionalServerSpec("srv_af_3", WorldRegion.AFRICA, "Nairobi Conduit #3", "AF-NBO", 54, 90, 86, 200, "+15% Essence", 1.10f, 1.10f, 1.08f),
+  )
+
+  fun serversForRegion(region: WorldRegion): List<RegionalServerSpec> =
+    servers.filter { it.region == region }
+
+  fun serverById(serverId: String): RegionalServerSpec =
+    servers.firstOrNull { it.id == serverId } ?: servers.first()
+
+  fun defaultServerFor(region: WorldRegion): RegionalServerSpec =
+    serversForRegion(region).first()
+}
+
+@Immutable
 data class MultiverseMatchListing(
   val id: String,
   val roomName: String,
@@ -116,6 +377,8 @@ data class MultiverseMatchListing(
   val currentWave: Int,
   val activeMutators: List<String>,
   val clanTag: String? = null,
+  val regionId: String = WorldRegion.NA_EAST.id,
+  val serverId: String = "srv_na_east_1",
 ) {
   val isFull: Boolean get() = currentPlayers >= maxPlayers
   val isPrivate: Boolean get() = privacy != MatchPrivacy.PUBLIC
@@ -620,6 +883,54 @@ object SocialCatalog {
       currentWave = 12,
       activeMutators = listOf("Wonder Boost", "2x Blue Essence", "Boss Rush"),
       clanTag = "CONV",
+      regionId = WorldRegion.NA_EAST.id,
+      serverId = "srv_na_east_2",
+    ),
+    MultiverseMatchListing(
+      id = "match_metropolis_128",
+      roomName = "Metropolis Invasion (128 Operators)",
+      hostCallsign = "KalEl_Solar",
+      hostLevel = 80,
+      hostStars = 10,
+      worldId = "mr_crossover_nexus",
+      worldTitle = "Mr. Crossover Nexus",
+      modeId = "hero_patrol",
+      modeLabel = "Hero Patrol",
+      areaId = "area_col_custom_superman_metropolis",
+      areaName = "Superman Returns: Metropolis Skyline",
+      currentPlayers = 114,
+      maxPlayers = 128,
+      privacy = MatchPrivacy.PUBLIC,
+      roomCode = "MET-128",
+      pingMs = 24,
+      currentWave = 18,
+      activeMutators = listOf("Boss Rush", "2x Blue Essence", "Wonder Boost"),
+      clanTag = "CONV",
+      regionId = WorldRegion.NA_WEST.id,
+      serverId = "srv_na_west_1",
+    ),
+    MultiverseMatchListing(
+      id = "match_abyss_200",
+      roomName = "Abyssal Crusade (200 Operators)",
+      hostCallsign = "LichLord_99",
+      hostLevel = 120,
+      hostStars = 10,
+      worldId = "hellbreaker_citadel",
+      worldTitle = "Hellbreaker: Mythic Crucible",
+      modeId = "boss_rush",
+      modeLabel = "Boss Rush",
+      areaId = "area_col_custom_abyss_lich_sanctum",
+      areaName = "Abyss of Dungeons: Inferno Lich Sanctum",
+      currentPlayers = 184,
+      maxPlayers = 200,
+      privacy = MatchPrivacy.PUBLIC,
+      roomCode = "ABYSS-200",
+      pingMs = 29,
+      currentWave = 25,
+      activeMutators = listOf("Boss Rush", "Vampiric Siphon", "2x Blue Essence"),
+      clanTag = "AETH",
+      regionId = WorldRegion.EUROPE.id,
+      serverId = "srv_europe_1",
     ),
   )
 }

@@ -138,7 +138,7 @@ class MultiverseExpansionTest {
   @Test
   fun heroOutfits_coverAll36VersionsWithIndependentSkillsGearEquipment() {
     val outfits = MultiverseArsenalCatalog.outfits
-    assertEquals(36, outfits.size)
+    assertEquals(CharacterUniverseGroup.entries.count { it != CharacterUniverseGroup.ALL } * 3, outfits.size)
     // Ensure every requested character group has v1/v2/v3
     for (group in CharacterUniverseGroup.entries.filter { it != CharacterUniverseGroup.ALL }) {
       val groupOutfits = outfits.filter { it.characterGroup == group }
@@ -213,7 +213,7 @@ class MultiverseExpansionTest {
   @Test
   fun areasAndAging_transitionsYoungMatureAncientAndRejuvenatesToYoung() {
     val store = ProgressionStore(context, "exp_test")
-    assertEquals(20, MultiverseArsenalCatalog.customAreas.size)
+    assertEquals(22, MultiverseArsenalCatalog.customAreas.size)
     store.selectArea("area_batcave")
     assertEquals("area_batcave", store.current.activeAreaId)
 

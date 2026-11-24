@@ -42,7 +42,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.model.CollectionCustomModeConfig
 import com.example.data.model.CollectionCustomScope
+import com.example.data.model.CustomMapGameCategory
 import com.example.data.model.UserCustomGameMapSpec
+import com.example.data.model.UserCustomWeaponSpec
 import kotlin.math.roundToInt
 
 @Composable
@@ -52,6 +54,9 @@ fun CollectionCustomModeDialog(
   onDeploy: () -> Unit,
   onDismiss: () -> Unit,
   customGameMaps: List<UserCustomGameMapSpec> = emptyList(),
+  customWeapons: List<UserCustomWeaponSpec> = emptyList(),
+  onOpenForgeMap: ((CustomMapGameCategory) -> Unit)? = null,
+  onOpenForgeWeapon: ((CustomMapGameCategory) -> Unit)? = null,
 ) {
   var draft by remember(initialConfig) { mutableStateOf(initialConfig) }
   val scopedAreas = remember(draft.scope, customGameMaps) {
@@ -259,6 +264,53 @@ fun CollectionCustomModeDialog(
               },
               modifier = Modifier.heightIn(min = 48.dp).testTag("custom_mode_area_${area.id}"),
             )
+          }
+        }
+
+        if (onOpenForgeMap != null || onOpenForgeWeapon != null) {
+          val suggestedCategory = when (draft.scope) {
+            CollectionCustomScope.BO3_ONLY -> CustomMapGameCategory.BO3
+            CollectionCustomScope.COLLECTIONS_ONLY -> CustomMapGameCategory.ARKHAM
+            else -> CustomMapGameCategory.BO3
+          }
+          Surface(
+            shape = RoundedCornerShape(12.dp),
+            color = Color(0xFF00E5FF).copy(alpha = 0.1f),
+            modifier = Modifier
+              .fillMaxWidth()
+              .border(1.dp, Color(0xFF00E5FF).copy(alpha = 0.45f), RoundedCornerShape(12.dp)),
+          ) {
+            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+              Text(
+                text = "IN-COLLECTION FORGE (${customGameMaps.size} Maps • ${customWeapons.size} Custom Weapons)",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF00E5FF),
+              )
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+              ) {
+                if (onOpenForgeMap != null) {
+                  OutlinedButton(
+                    onClick = { onOpenForgeMap(suggestedCategory) },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("collection_forge_map_btn"),
+                  ) {
+                    Text("+ Forge Map", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                  }
+                }
+                if (onOpenForgeWeapon != null) {
+                  OutlinedButton(
+                    onClick = { onOpenForgeWeapon(suggestedCategory) },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("collection_forge_weapon_btn"),
+                  ) {
+                    Text("+ Forge Weapon", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                  }
+                }
+              }
+            }
           }
         }
 

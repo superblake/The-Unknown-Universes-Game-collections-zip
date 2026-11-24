@@ -45,6 +45,7 @@ import com.example.data.model.UpgradeCosts
 import com.example.data.model.StarRankMeta
 import com.example.data.model.UniverseCatalog
 import com.example.data.model.UserCustomGameMapSpec
+import com.example.data.model.UserCustomWeaponSpec
 import com.example.data.model.WeaponCustomization
 import com.example.data.remote.extractFirestoreRootError
 import com.google.firebase.firestore.FirebaseFirestoreException
@@ -91,6 +92,12 @@ class UniverseViewModel(
 
   private val _activeTab = MutableStateFlow(OsWorkspaceTab.OS_DESKTOP)
   val activeTab: StateFlow<OsWorkspaceTab> = _activeTab.asStateFlow()
+
+  private val _selectedArmorySection = MutableStateFlow("armory_items")
+  val selectedArmorySection: StateFlow<String> = _selectedArmorySection.asStateFlow()
+
+  private val _selectedArmoryCategory = MutableStateFlow("ALL")
+  val selectedArmoryCategory: StateFlow<String> = _selectedArmoryCategory.asStateFlow()
 
   private val _optimisticSelection = MutableStateFlow<Pair<String?, String?>?>(null)
 
@@ -221,6 +228,14 @@ class UniverseViewModel(
     _activeTab.value = tab
   }
 
+  fun selectArmorySection(sectionId: String) {
+    _selectedArmorySection.value = sectionId
+  }
+
+  fun selectArmoryCategory(categoryId: String) {
+    _selectedArmoryCategory.value = categoryId
+  }
+
   fun dismissBanner() {
     _statusBanner.value = null
   }
@@ -346,9 +361,7 @@ class UniverseViewModel(
     }
     val primaryAreaId = UniverseCatalog.primaryAreaIdForWorld(world.id)
     val curArea = progressionState.value.resolveAreaSpec(progressionState.value.activeAreaId)
-    val shouldResetToPrimary = curArea.linkedWorldId != world.id ||
-      curArea.id.startsWith("area_bo3_") ||
-      curArea.id.startsWith("area_col_custom_")
+    val shouldResetToPrimary = curArea.linkedWorldId != world.id
     if (shouldResetToPrimary) {
       progressionStore?.selectArea(primaryAreaId)
     }
@@ -373,9 +386,7 @@ class UniverseViewModel(
     }
     val primaryAreaId = UniverseCatalog.primaryAreaIdForWorld(world.id)
     val curArea = progressionState.value.resolveAreaSpec(progressionState.value.activeAreaId)
-    val shouldResetToPrimary = curArea.linkedWorldId != world.id ||
-      curArea.id.startsWith("area_bo3_") ||
-      curArea.id.startsWith("area_col_custom_")
+    val shouldResetToPrimary = curArea.linkedWorldId != world.id
     if (shouldResetToPrimary) {
       progressionStore?.selectArea(primaryAreaId)
     }
@@ -749,6 +760,62 @@ class UniverseViewModel(
     _statusBanner.value = "Removed custom map."
   }
 
+  fun createCustomWeapon(
+    name: String,
+    weaponCode: String,
+    category: CustomMapGameCategory,
+    description: String,
+    damageTypeId: String,
+    baseDamage: Int,
+    baseCadenceTicks: Float,
+    baseSpreadCount: Int,
+    basePierce: Int,
+    tracerHex: Long,
+    equipNow: Boolean = true,
+  ) {
+    val store = progressionStore ?: return
+    val slug = weaponCode.lowercase().replace(Regex("[^a-z0-9_]+"), "_").trim('_').ifEmpty {
+      name.lowercase().replace(Regex("[^a-z0-9_]+"), "_").trim('_').ifEmpty { "custom" }
+    }
+    val wpnId = "wpn_${category.id}_${slug.take(18)}_${System.currentTimeMillis() % 10000}"
+    val spec = store.addOrUpdateCustomWeapon(
+      UserCustomWeaponSpec(
+        id = wpnId,
+        weaponCode = weaponCode.ifBlank { "${category.id}_${slug.take(14)}" },
+        name = name,
+        gameCategory = category,
+        description = description,
+        damageTypeId = damageTypeId,
+        baseDamage = baseDamage,
+        baseCadenceTicks = baseCadenceTicks,
+        baseProjectileSpeed = 0.026f,
+        baseSpreadCount = baseSpreadCount,
+        basePierce = basePierce,
+        defaultTracerHex = tracerHex,
+        isUserCreated = true,
+        createdAtMillis = System.currentTimeMillis(),
+      )
+    )
+    if (equipNow) {
+      store.updateWeaponCustomization { wc ->
+        val nextMulti = (listOf(spec.id) + wc.equippedWeaponIds).distinct().take(3)
+        wc.copy(
+          equippedWeaponId = spec.id,
+          equippedWeaponIds = nextMulti,
+          tracerColorHex = spec.defaultTracerHex,
+        )
+      }
+      _statusBanner.value = "Forged & Equipped Custom Weapon: ${spec.name} (${spec.damageTypeId.uppercase()})"
+    } else {
+      _statusBanner.value = "Saved Custom Weapon: ${spec.name}"
+    }
+  }
+
+  fun deleteCustomWeapon(weaponId: String) {
+    progressionStore?.deleteCustomWeapon(weaponId)
+    _statusBanner.value = "Removed custom weapon."
+  }
+
   fun hostPrivateMatch(rules: PrivateMatchRules, hostCallsign: String): MultiverseMatchListing? {
     val store = progressionStore ?: return null
     val match = store.hostPrivateMatch(rules, hostCallsign)
@@ -970,7 +1037,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeWeaponTier(weaponId, currentBlueEssence), "Cannot upgrade Weapon Tier") {
       val nextTier = progressionState.value.weaponTier(weaponId)
-      "${ProgressionCatalog.weaponById(weaponId).name} Tier $nextTier/25 (${ProgressionCatalog.tierMeta(nextTier).label})!"
+      "${ProgressionCatalog.weaponById(weaponId, progressionState.value.customWeapons).name} Tier $nextTier/25 (${ProgressionCatalog.tierMeta(nextTier).label})!"
     }
   }
 
@@ -1047,7 +1114,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeWeaponStar(weaponId, currentBlueEssence), "Cannot upgrade Weapon Star") {
       val stars = progressionState.value.weaponStar(weaponId)
-      "${ProgressionCatalog.weaponById(weaponId).name} elevated to $stars★/10★!"
+      "${ProgressionCatalog.weaponById(weaponId, progressionState.value.customWeapons).name} elevated to $stars★/10★!"
     }
   }
 
@@ -1143,9 +1210,7 @@ class UniverseViewModel(
         val world = UniverseCatalog.worldById(targetId)
         val primaryAreaId = UniverseCatalog.primaryAreaIdForWorld(world.id)
         val curArea = progressionState.value.resolveAreaSpec(progressionState.value.activeAreaId)
-        val shouldReset = curArea.linkedWorldId != world.id ||
-          curArea.id.startsWith("area_bo3_") ||
-          curArea.id.startsWith("area_col_custom_")
+        val shouldReset = curArea.linkedWorldId != world.id
         if (shouldReset) {
           progressionStore?.selectArea(primaryAreaId)
         }
@@ -1209,7 +1274,8 @@ class UniverseViewModel(
 
   fun toggleMultiWeaponEquip(weaponId: String) {
     val list = progressionStore?.toggleMultiWeaponEquip(weaponId) ?: return
-    _statusBanner.value = "Equipped Weapons (${list.size}/3): ${list.joinToString { ProgressionCatalog.weaponById(it).name }}"
+    val custom = progressionState.value.customWeapons
+    _statusBanner.value = "Equipped Weapons (${list.size}/3): ${list.joinToString { ProgressionCatalog.weaponById(it, custom).name }}"
   }
 
   fun toggleMultiWonderEquip(wonderId: String) {

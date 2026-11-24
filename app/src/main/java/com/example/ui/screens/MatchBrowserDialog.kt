@@ -61,12 +61,15 @@ import com.example.data.model.MultiverseArsenalCatalog
 import com.example.data.model.MultiverseMatchListing
 import com.example.data.model.OperatorProgressionState
 import com.example.data.model.PrivateMatchRules
+import com.example.data.model.RegionalServerCatalog
+import com.example.data.model.RegionalServerSpec
 import com.example.data.model.SocialCatalog
 import com.example.data.model.UniverseCatalog
+import com.example.data.model.WorldRegion
 import com.example.ui.theme.AppIcons
 
 private val matchBrowserTabs = listOf("ALL", "PUBLIC", "PRIVATE", "FRIENDS", "HOST PRIVATE", "DIRECT CODE")
-private val lobbySizes = listOf(1, 2, 4, 8, 12, 16, 24, 32)
+private val lobbySizes = listOf(1, 2, 4, 8, 12, 16, 24, 32, 64, 100, 128, 150, 200)
 private val startingWaveOptions = listOf(1, 5, 10, 15, 20, 25, 30)
 private val customWaveGoalOptions = listOf(0, 5, 10, 15, 20, 30)
 
@@ -75,6 +78,9 @@ fun MatchBrowserDialog(
   progression: OperatorProgressionState,
   playerCallsign: String,
   initialTabIdx: Int = 0,
+  activeRegion: WorldRegion = WorldRegion.NA_EAST,
+  activeServer: RegionalServerSpec? = null,
+  onSelectRegionServer: ((String, String) -> Unit)? = null,
   onHostPrivateMatch: (PrivateMatchRules) -> Unit,
   onJoinMatch: (MultiverseMatchListing, String?) -> Boolean,
   onLeaveMatch: () -> Unit = {},
@@ -85,6 +91,7 @@ fun MatchBrowserDialog(
   var filterOnlyAvailable by remember { mutableStateOf(false) }
   var filterLowPing by remember { mutableStateOf(false) }
   var filterMegaLobbies by remember { mutableStateOf(false) }
+  var selectedRegionFilter by remember { mutableStateOf<String?>(null) }
 
   var matchPendingPasscode by remember { mutableStateOf<MultiverseMatchListing?>(null) }
   var passcodeDraft by remember { mutableStateOf("") }
@@ -99,7 +106,7 @@ fun MatchBrowserDialog(
     if (joined != null && base.none { it.id == joined.id }) listOf(joined) + base else base
   }
 
-  val filteredMatches = remember(allMatches, selectedTabIdx, searchQuery, filterOnlyAvailable, filterLowPing, filterMegaLobbies, progression.friends) {
+  val filteredMatches = remember(allMatches, selectedTabIdx, searchQuery, filterOnlyAvailable, filterLowPing, filterMegaLobbies, selectedRegionFilter, progression.friends) {
     allMatches.filter { match ->
       // Tab filter
       val matchesTab = when (selectedTabIdx) {
@@ -119,13 +126,15 @@ fun MatchBrowserDialog(
         val inWorld = match.worldTitle.lowercase().contains(q)
         val inMode = match.modeLabel.lowercase().contains(q)
         val inCode = match.roomCode.lowercase().contains(q)
-        if (!inName && !inHost && !inWorld && !inMode && !inCode) return@filter false
+        val inReg = WorldRegion.fromId(match.regionId).shortTag.lowercase().contains(q)
+        if (!inName && !inHost && !inWorld && !inMode && !inCode && !inReg) return@filter false
       }
 
       // Filter chips
       if (filterOnlyAvailable && match.isFull) return@filter false
       if (filterLowPing && match.pingMs > 40) return@filter false
       if (filterMegaLobbies && match.maxPlayers <= 8) return@filter false
+      if (selectedRegionFilter != null && match.regionId != selectedRegionFilter) return@filter false
 
       true
     }
@@ -279,8 +288,26 @@ fun MatchBrowserDialog(
                       FilterChip(
                         selected = filterMegaLobbies,
                         onClick = { filterMegaLobbies = !filterMegaLobbies },
-                        label = { Text("Mega Lobbies (>8P)") },
+                        label = { Text("Mega Lobbies (>8P / 100+)") },
                         modifier = Modifier.testTag("filter_mega_chip"),
+                      )
+                    }
+                    item {
+                      FilterChip(
+                        selected = selectedRegionFilter == null,
+                        onClick = { selectedRegionFilter = null },
+                        label = { Text("All Regions") },
+                        modifier = Modifier.testTag("filter_region_all"),
+                      )
+                    }
+                    items(WorldRegion.entries, key = { it.id }) { region ->
+                      FilterChip(
+                        selected = selectedRegionFilter == region.id,
+                        onClick = {
+                          selectedRegionFilter = if (selectedRegionFilter == region.id) null else region.id
+                        },
+                        label = { Text(region.shortTag) },
+                        modifier = Modifier.testTag("filter_region_${region.id}"),
                       )
                     }
                   }
@@ -331,7 +358,10 @@ fun MatchBrowserDialog(
             // HOST PRIVATE MATCH: High customization tab
             HostPrivateMatchTab(
               customRules = customRules,
-              playerCallsign = playerCallsign,
+              progression = progression,
+              activeRegion = activeRegion,
+              activeServer = activeServer ?: RegionalServerCatalog.defaultServerFor(activeRegion),
+              onSelectRegionServer = onSelectRegionServer,
               onRulesChanged = { customRules = it },
               onDeploy = {
                 onHostPrivateMatch(customRules)
@@ -352,7 +382,8 @@ fun MatchBrowserDialog(
                 } else {
                   val selectedWorld = UniverseCatalog.worldById(customRules.worldId)
                   val selectedMode = UniverseCatalog.modeById(customRules.modeId)
-                  val selectedArea = MultiverseArsenalCatalog.areaById(customRules.areaId)
+                  val selectedArea = progression.resolveAreaSpec(customRules.areaId)
+                  val srv = activeServer ?: RegionalServerCatalog.defaultServerFor(activeRegion)
                   val generated = MultiverseMatchListing(
                     id = "match_${code.lowercase().trim()}",
                     roomName = "Direct Session [$code]",
@@ -369,9 +400,11 @@ fun MatchBrowserDialog(
                     maxPlayers = customRules.maxPlayers,
                     privacy = MatchPrivacy.INVITE_ONLY,
                     roomCode = code.trim().uppercase(),
-                    pingMs = 20,
+                    pingMs = srv.basePingMs,
                     currentWave = customRules.startingWave,
                     activeMutators = listOf("Custom Direct Join"),
+                    regionId = activeRegion.id,
+                    serverId = srv.id,
                   )
                   onJoinMatch(generated, pass)
                 }
@@ -517,13 +550,18 @@ private fun MatchListingCard(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
       ) {
+        val reg = WorldRegion.fromId(match.regionId)
+        val srv = RegionalServerCatalog.serverById(match.serverId)
         Text(
           text = "${match.worldTitle} • ${match.areaName} • ${match.modeLabel}",
           style = MaterialTheme.typography.labelMedium,
           color = MaterialTheme.colorScheme.primary,
+          modifier = Modifier.weight(1f),
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
         )
         Text(
-          text = "${match.pingMs}ms",
+          text = "${reg.shortTag}/${srv.code} • ${match.pingMs}ms",
           style = MaterialTheme.typography.labelSmall,
           color = if (match.pingMs < 35) Color(0xFF00E676) else Color(0xFFFFB74D),
           fontWeight = FontWeight.Bold,
@@ -591,10 +629,16 @@ private fun MatchListingCard(
 @Composable
 private fun HostPrivateMatchTab(
   customRules: PrivateMatchRules,
-  playerCallsign: String,
+  progression: OperatorProgressionState,
+  activeRegion: WorldRegion,
+  activeServer: RegionalServerSpec,
+  onSelectRegionServer: ((String, String) -> Unit)?,
   onRulesChanged: (PrivateMatchRules) -> Unit,
   onDeploy: () -> Unit,
 ) {
+  val playableAreas = remember(progression.customGameMaps) { progression.allPlayableAreas() }
+  val regionServers = remember(activeRegion) { RegionalServerCatalog.serversForRegion(activeRegion) }
+
   LazyColumn(
     modifier = Modifier.fillMaxSize().testTag("host_private_match_tab"),
     contentPadding = PaddingValues(16.dp),
@@ -609,9 +653,37 @@ private fun HostPrivateMatchTab(
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
           Text("HIGH-CUSTOMIZATION PRIVATE MATCH", style = MaterialTheme.typography.titleMedium, color = Color(0xFF00E5FF), fontWeight = FontWeight.Bold)
           Text(
-            text = "Configure custom game rules, mutators, waves, lobby size (up to 32 players), AI bots, and passcodes for private tactical simulations.",
+            text = "Configure custom rules, mutators, region servers, waves, lobby size (up to 200 players), AI bots, and passcodes.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+        }
+      }
+    }
+
+    item {
+      Text("WORLD REGION & SERVER (${activeRegion.shortTag} • ${activeServer.code})", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+      LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(WorldRegion.entries, key = { it.id }) { region ->
+          FilterChip(
+            selected = activeRegion == region,
+            onClick = {
+              val defSrv = RegionalServerCatalog.defaultServerFor(region)
+              onSelectRegionServer?.invoke(region.id, defSrv.id)
+            },
+            label = { Text("${region.shortTag} (${region.displayName})") },
+            modifier = Modifier.heightIn(min = 48.dp).testTag("host_region_chip_${region.id}"),
+          )
+        }
+      }
+      Spacer(Modifier.height(6.dp))
+      LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(regionServers, key = { it.id }) { srv ->
+          FilterChip(
+            selected = activeServer.id == srv.id,
+            onClick = { onSelectRegionServer?.invoke(srv.region.id, srv.id) },
+            label = { Text("${srv.code} • ${srv.basePingMs}ms (${srv.bonusTag})") },
+            modifier = Modifier.heightIn(min = 48.dp).testTag("host_server_chip_${srv.id}"),
           )
         }
       }
@@ -668,8 +740,8 @@ private fun HostPrivateMatchTab(
           FilterChip(
             selected = customRules.worldId == world.id,
             onClick = {
-              val matchingArea = MultiverseArsenalCatalog.customAreas.firstOrNull { it.linkedWorldId == world.id }
-              val keepArea = MultiverseArsenalCatalog.areaById(customRules.areaId).linkedWorldId == world.id
+              val matchingArea = playableAreas.firstOrNull { it.linkedWorldId == world.id }
+              val keepArea = progression.resolveAreaSpec(customRules.areaId).linkedWorldId == world.id
               onRulesChanged(
                 customRules.copy(
                   worldId = world.id,
@@ -696,18 +768,14 @@ private fun HostPrivateMatchTab(
         }
       }
       Spacer(Modifier.height(8.dp))
-      Text("CUSTOM AREA LANDMARK", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+      Text("CUSTOM AREA LANDMARK (${playableAreas.size} MAPS)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
       LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(MultiverseArsenalCatalog.customAreas, key = { it.id }) { area ->
+        items(playableAreas, key = { it.id }) { area ->
           FilterChip(
             selected = customRules.areaId == area.id,
             onClick = {
               val linkedWorld = UniverseCatalog.worldById(area.linkedWorldId)
-              val syncedMode = when {
-                area.id == "area_zombies_der_riese" || area.id.startsWith("area_bo3_") -> "zombies"
-                area.id == "area_campaign_nexus" -> "campaign"
-                else -> linkedWorld.defaultModeId
-              }
+              val syncedMode = progression.defaultModeForArea(area.id, linkedWorld.defaultModeId)
               onRulesChanged(
                 customRules.copy(
                   areaId = area.id,
@@ -749,7 +817,7 @@ private fun HostPrivateMatchTab(
         }
       }
       Spacer(Modifier.height(8.dp))
-      Text("MAX CAPACITY (UP TO 32 PLAYERS)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+      Text("MAX CAPACITY (UP TO 200 PLAYERS)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
       LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(lobbySizes) { size ->
           FilterChip(

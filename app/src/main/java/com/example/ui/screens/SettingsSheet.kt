@@ -61,6 +61,8 @@ import com.example.data.local.ColorBlindMode
 import com.example.data.local.GraphicsQuality
 import com.example.data.local.ParticleDensity
 import com.example.data.local.ThemeVisualMode
+import com.example.data.model.RegionalServerCatalog
+import com.example.data.model.WorldRegion
 import com.example.security.AppSecurityManager
 import com.example.security.SecurityAuditReport
 import com.example.ui.theme.AppIcons
@@ -86,6 +88,9 @@ fun SettingsDialog(
   onDismiss: () -> Unit,
   progressionIntegrityValid: Boolean = true,
   onVerifyIntegrity: () -> Boolean = { true },
+  onSelectRegion: ((String) -> Unit)? = null,
+  onSelectServer: ((String) -> Unit)? = null,
+  onToggleRegionDefaultSettings: ((Boolean) -> Unit)? = null,
 ) {
   val context = LocalContext.current
   var selectedCategory by remember { mutableStateOf(SettingsCategory.ALL) }
@@ -218,6 +223,125 @@ fun SettingsDialog(
                 onClick = onResetDefaults,
                 modifier = Modifier.fillMaxWidth().height(48.dp).testTag("preset_reset_btn"),
               ) { Text("Reset All Settings to Defaults") }
+            }
+          }
+
+          if (selectedCategory == SettingsCategory.ALL || selectedCategory == SettingsCategory.PERFORMANCE) {
+            item {
+              val activeRegion = settings.activeRegion
+              val activeServer = settings.activeServer
+              val regionServers = RegionalServerCatalog.serversForRegion(activeRegion)
+              SettingsSectionCard(
+                title = "WORLD REGION, MULTI-SERVER NETWORK & AUTO-SETTINGS",
+                subtitle = "24 global servers (3 per region). Regional optimization settings are ON by default and automatically adjust when switching regions.",
+                icon = AppIcons.Public,
+                accent = Color(activeRegion.accentHex),
+              ) {
+                SettingSwitchRow(
+                  title = "Auto-Apply Region Default Settings",
+                  description = "Current profile (${activeRegion.shortTag}): ${activeRegion.defaultProfile.summary}",
+                  checked = settings.useRegionDefaultSettings,
+                  tag = "switch_region_auto_settings",
+                  onCheckedChange = { enabled ->
+                    if (onToggleRegionDefaultSettings != null) {
+                      onToggleRegionDefaultSettings(enabled)
+                    } else {
+                      onUpdateSettings { cur ->
+                        val next = cur.copy(useRegionDefaultSettings = enabled)
+                        if (enabled) AppSettingsPresets.forRegion(next, next.activeRegion) else next
+                      }
+                    }
+                  },
+                )
+
+                Text(
+                  text = "Select World Region (${WorldRegion.entries.size} Regions)",
+                  style = MaterialTheme.typography.titleMedium,
+                )
+                Row(
+                  modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                  horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                  WorldRegion.entries.forEach { region ->
+                    FilterChip(
+                      selected = activeRegion == region,
+                      onClick = {
+                        if (onSelectRegion != null) {
+                          onSelectRegion(region.id)
+                        } else {
+                          val defaultSrv = RegionalServerCatalog.defaultServerFor(region)
+                          onUpdateSettings { cur ->
+                            val base = cur.copy(selectedRegionId = region.id, selectedServerId = defaultSrv.id)
+                            if (base.useRegionDefaultSettings) AppSettingsPresets.forRegion(base, region) else base
+                          }
+                        }
+                      },
+                      label = { Text("${region.shortTag} • ${region.displayName}") },
+                      modifier = Modifier.height(48.dp).testTag("settings_region_${region.id}"),
+                    )
+                  }
+                }
+
+                Text(
+                  text = "${activeRegion.displayName} Servers (${regionServers.size} Nodes)",
+                  style = MaterialTheme.typography.titleMedium,
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                  regionServers.forEach { srv ->
+                    val isSrvSelected = activeServer.id == srv.id
+                    Surface(
+                      onClick = {
+                        if (onSelectServer != null) {
+                          onSelectServer(srv.id)
+                        } else {
+                          onUpdateSettings { cur ->
+                            val base = cur.copy(selectedRegionId = srv.region.id, selectedServerId = srv.id)
+                            if (base.useRegionDefaultSettings) AppSettingsPresets.forRegion(base, srv.region) else base
+                          }
+                        }
+                      },
+                      shape = RoundedCornerShape(12.dp),
+                      color = if (isSrvSelected) Color(activeRegion.accentHex).copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                      modifier = Modifier
+                        .fillMaxWidth()
+                        .border(
+                          width = if (isSrvSelected) 1.5.dp else 1.dp,
+                          color = if (isSrvSelected) Color(activeRegion.accentHex) else MaterialTheme.colorScheme.outline,
+                          shape = RoundedCornerShape(12.dp),
+                        )
+                        .testTag("settings_server_${srv.id}"),
+                    ) {
+                      Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                      ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                          Text(
+                            text = "${srv.name} (${srv.code})",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSrvSelected) Color(activeRegion.accentHex) else MaterialTheme.colorScheme.onSurface,
+                          )
+                          Text(
+                            text = "${srv.basePingMs}ms • ${srv.tickRateHz}Hz • ${srv.activeOperators}/${srv.maxCapacity}P • ${srv.bonusTag}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                          )
+                        }
+                        if (isSrvSelected) {
+                          Text(
+                            text = "CONNECTED",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF00E676),
+                          )
+                        }
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
 
@@ -641,7 +765,14 @@ fun SettingsDialog(
             }
           }
 
-          item {
+        }
+
+        // Sticky Bottom Action Bar
+        Surface(
+          color = MaterialTheme.colorScheme.surface,
+          modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outline),
+        ) {
+          Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
             Button(
               onClick = onDismiss,
               shape = RoundedCornerShape(14.dp),
@@ -649,7 +780,6 @@ fun SettingsDialog(
             ) {
               Text("Save & Return", style = MaterialTheme.typography.labelLarge)
             }
-            Spacer(Modifier.height(16.dp))
           }
         }
       }

@@ -56,7 +56,7 @@ object PortablePackageGenerator {
     val pwr = progression.computePowerAndLightLevel(profile.totalEssence)
     val activeHero = progression.activeOutfitSpec()
     val heroRarity = progression.outfitRarity(activeHero.id)
-    val activeWpn = com.example.data.model.ProgressionCatalog.weaponById(progression.weaponCustom.equippedWeaponId)
+    val activeWpn = com.example.data.model.ProgressionCatalog.weaponById(progression.weaponCustom.equippedWeaponId, progression.customWeapons)
     val safeCallsign = escapeHtml(profile.callsign)
     val safeWorld = escapeHtml(world.title)
     val safeMode = escapeHtml(mode.label)

@@ -60,6 +60,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
 import com.example.R
+import com.example.data.local.AppSettings
 import com.example.data.model.AchievementState
 import com.example.data.model.ArmoryItem
 import com.example.data.model.BattlePassVersion
@@ -70,6 +71,7 @@ import com.example.data.model.CollectionDifficulty
 import com.example.data.model.CuratedCustomMapsCatalog
 import com.example.data.model.CustomMapGameCategory
 import com.example.data.model.EquipmentSlotType
+import com.example.data.model.EssenceResonanceBonuses
 import com.example.data.model.GearSlot
 import com.example.data.model.LevelCustomization
 import com.example.data.model.MissionScope
@@ -80,6 +82,7 @@ import com.example.data.model.RigAsset
 import com.example.data.model.StarRankMeta
 import com.example.data.model.UpgradeCosts
 import com.example.data.model.UserCustomGameMapSpec
+import com.example.data.model.UserCustomWeaponSpec
 import com.example.data.model.WeaponCustomization
 
 enum class ArmorySection(val label: String, val tag: String) {
@@ -198,14 +201,54 @@ fun ArmoryScreen(
     deployNow: Boolean,
   ) -> Unit = { _, _, _, _, _, _, _, _ -> },
   onDeleteCustomMap: (String) -> Unit = {},
+  onForgeCustomWeapon: (
+    name: String,
+    weaponCode: String,
+    category: CustomMapGameCategory,
+    description: String,
+    damageTypeId: String,
+    baseDamage: Int,
+    baseCadenceTicks: Float,
+    baseSpreadCount: Int,
+    basePierce: Int,
+    tracerHex: Long,
+    equipNow: Boolean,
+  ) -> Unit = { _, _, _, _, _, _, _, _, _, _, _ -> },
+  onDeleteCustomWeapon: (String) -> Unit = {},
+  settings: AppSettings = AppSettings(),
+  persistedSectionTag: String? = null,
+  onPersistSectionTag: ((String) -> Unit)? = null,
+  persistedCategory: String? = null,
+  onPersistCategory: ((String) -> Unit)? = null,
 ) {
   val categories = listOf("all", "perk", "power", "upgrade", "consumable", "workshop_bo3")
-  var selectedSection by remember { mutableStateOf(ArmorySection.MODS) }
-  var selectedCategory by remember { mutableStateOf("all") }
+  var localSection by remember { mutableStateOf(ArmorySection.MODS) }
+  var localCategory by remember { mutableStateOf("all") }
+  val selectedSection = if (onPersistSectionTag != null && persistedSectionTag != null) {
+    ArmorySection.entries.firstOrNull { it.tag == persistedSectionTag } ?: ArmorySection.MODS
+  } else {
+    localSection
+  }
+  val setSelectedSection: (ArmorySection) -> Unit = { next ->
+    localSection = next
+    onPersistSectionTag?.invoke(next.tag)
+  }
+  val selectedCategory = if (onPersistCategory != null && persistedCategory != null) {
+    persistedCategory.lowercase().let { if (it in categories) it else "all" }
+  } else {
+    localCategory
+  }
+  val setSelectedCategory: (String) -> Unit = { next ->
+    localCategory = next
+    onPersistCategory?.invoke(next)
+  }
   var showCreateDialog by remember { mutableStateOf(false) }
   var showCodesDialog by remember { mutableStateOf(false) }
   var showCustomModeDialog by remember { mutableStateOf(false) }
   var showForgeCustomMapDialog by remember { mutableStateOf(false) }
+  var forgeMapInitialCategory by remember { mutableStateOf(CustomMapGameCategory.BO3) }
+  var showForgeCustomWeaponDialog by remember { mutableStateOf(false) }
+  var forgeWeaponInitialCategory by remember { mutableStateOf(CustomMapGameCategory.BO3) }
   var customMapFilter by remember { mutableStateOf("all") }
 
   val filtered = when (selectedCategory) {
@@ -217,13 +260,20 @@ fun ArmoryScreen(
   val curIdx = sections.indexOf(selectedSection).coerceAtLeast(0)
   val resonance = remember(
     totalEssence,
-    progression.redEssence,
-    progression.yellowEssence,
-    progression.greenEssence,
-    progression.combinedEssence,
-    progression.blastShards,
-  ) { progression.essenceResonance(totalEssence) }
+    progression,
+    armory,
+    settings.selectedRegionId,
+    settings.selectedServerId,
+  ) {
+    progression.comprehensiveBonuses(
+      blueEssence = totalEssence,
+      armoryItems = armory,
+      region = settings.activeRegion,
+      server = settings.activeServer,
+    )
+  }
   val powerLight = progression.computePowerAndLightLevel(totalEssence)
+  val upgradedMaps = progression.upgradedAreaCount()
 
   Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
     Surface(
@@ -262,7 +312,7 @@ fun ArmoryScreen(
         }
 
         Text(
-          text = "Red ${progression.redEssence} • Yellow ${progression.yellowEssence} • Green ${progression.greenEssence} • Combined ${progression.combinedEssence} • ${resonance.summary}",
+          text = "R:${progression.redEssence} Y:${progression.yellowEssence} G:${progression.greenEssence} • ${resonance.summary} • $upgradedMaps/${EssenceResonanceBonuses.MAX_SYNERGY_MAPS} Maps • ${settings.activeRegion.shortTag}/${settings.activeServer.code}",
           style = MaterialTheme.typography.labelSmall,
           color = Color(0xFFE040FB),
           fontWeight = FontWeight.SemiBold,
@@ -274,7 +324,7 @@ fun ArmoryScreen(
           verticalAlignment = Alignment.CenterVertically,
         ) {
           OutlinedButton(
-            onClick = { selectedSection = sections[(curIdx - 1 + sections.size) % sections.size] },
+            onClick = { setSelectedSection(sections[(curIdx - 1 + sections.size) % sections.size]) },
             shape = RoundedCornerShape(10.dp),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
             modifier = Modifier.height(48.dp).testTag("armory_prev_section_btn"),
@@ -291,7 +341,7 @@ fun ArmoryScreen(
             Text("⚡ Codes & Boost", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
           }
           OutlinedButton(
-            onClick = { selectedSection = sections[(curIdx + 1) % sections.size] },
+            onClick = { setSelectedSection(sections[(curIdx + 1) % sections.size]) },
             shape = RoundedCornerShape(10.dp),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
             modifier = Modifier.height(48.dp).testTag("armory_next_section_btn"),
@@ -331,7 +381,7 @@ fun ArmoryScreen(
             topRowSections.forEach { sec ->
               FilterChip(
                 selected = selectedSection == sec,
-                onClick = { selectedSection = sec },
+                onClick = { setSelectedSection(sec) },
                 label = { Text(sec.label, fontWeight = if (selectedSection == sec) FontWeight.Bold else FontWeight.Medium) },
                 modifier = Modifier.height(48.dp).testTag("armory_tab_${sec.tag}"),
               )
@@ -341,7 +391,7 @@ fun ArmoryScreen(
             bottomRowSections.forEach { sec ->
               FilterChip(
                 selected = selectedSection == sec,
-                onClick = { selectedSection = sec },
+                onClick = { setSelectedSection(sec) },
                 label = { Text(sec.label, fontWeight = if (selectedSection == sec) FontWeight.Bold else FontWeight.Medium) },
                 modifier = Modifier.height(48.dp).testTag("armory_tab_${sec.tag}"),
               )
@@ -364,7 +414,7 @@ fun ArmoryScreen(
                 items(categories) { cat ->
                   FilterChip(
                     selected = selectedCategory == cat,
-                    onClick = { selectedCategory = cat },
+                    onClick = { setSelectedCategory(cat) },
                     label = {
                       Text(
                         text = when (cat) {
@@ -380,6 +430,23 @@ fun ArmoryScreen(
                     modifier = Modifier.heightIn(min = 48.dp).testTag("armory_filter_$cat"),
                   )
                 }
+              }
+            }
+            item {
+              Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFF00E676).copy(alpha = 0.1f),
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .border(1.dp, Color(0xFF00E676).copy(alpha = 0.45f), RoundedCornerShape(12.dp)),
+              ) {
+                Text(
+                  text = "Mod 30-Map Synergy: $upgradedMaps/${EssenceResonanceBonuses.MAX_SYNERGY_MAPS} Maps Upgraded • ${resonance.extendedSourcesSummary.ifBlank { resonance.summary }}",
+                  style = MaterialTheme.typography.labelSmall,
+                  color = Color(0xFF00E676),
+                  fontWeight = FontWeight.SemiBold,
+                  modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp).testTag("mods_30_map_synergy_banner"),
+                )
               }
             }
 
@@ -439,6 +506,11 @@ fun ArmoryScreen(
           onPrestigeWeapon = onPrestigeWeapon,
           onToggleMultiWeaponEquip = onToggleMultiWeaponEquip,
           onToggleMultiWonderEquip = onToggleMultiWonderEquip,
+          onOpenForgeWeapon = {
+            forgeWeaponInitialCategory = CustomMapGameCategory.BO3
+            showForgeCustomWeaponDialog = true
+          },
+          onDeleteCustomWeapon = onDeleteCustomWeapon,
         )
 
         ArmorySection.SHARDS_CORES -> ShardsPerksAndCoresTab(
@@ -450,6 +522,9 @@ fun ArmoryScreen(
           onUpgradePerkDrink = onUpgradePerkDrink,
           onUpgradeBlastCore = onUpgradeBlastCore,
           onUpgradeVacuumBotStar = onUpgradeVacuumBotStar,
+          armoryItems = armory,
+          region = settings.activeRegion,
+          server = settings.activeServer,
         )
 
         ArmorySection.AREAS -> AreasAndAgingTab(
@@ -459,6 +534,15 @@ fun ArmoryScreen(
           onUpgradeAreaFeature = onUpgradeAreaFeature,
           onAdvanceAreaAge = onAdvanceAreaAge,
           onUpgradeAreaStar = onUpgradeAreaStar,
+          onOpenForgeMap = {
+            forgeMapInitialCategory = CustomMapGameCategory.ARKHAM
+            showForgeCustomMapDialog = true
+          },
+          onOpenForgeWeapon = {
+            forgeWeaponInitialCategory = CustomMapGameCategory.ARKHAM
+            showForgeCustomWeaponDialog = true
+          },
+          onDeployArea = onDeployArea,
         )
 
         ArmorySection.CHARACTER -> CharacterCustomizationTab(
@@ -739,7 +823,10 @@ fun ArmoryScreen(
                       )
                     }
                     Button(
-                      onClick = { showForgeCustomMapDialog = true },
+                      onClick = {
+                        forgeMapInitialCategory = CustomMapGameCategory.BO3
+                        showForgeCustomMapDialog = true
+                      },
                       colors = ButtonDefaults.buttonColors(
                         containerColor = Color(0xFFFFAB40),
                         contentColor = Color.Black,
@@ -862,6 +949,121 @@ fun ArmoryScreen(
               }
             }
 
+            item {
+              Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .border(1.dp, Color(0xFF00E5FF).copy(alpha = 0.5f), RoundedCornerShape(14.dp)),
+              ) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                  Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                  ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                      Text(
+                        text = "CUSTOM WEAPONS FORGER (BO3 & GAME COLLECTIONS)",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF00E5FF),
+                      )
+                      Text(
+                        text = "${progression.customWeapons.size} custom-forged weapon(s) ready across Collections & Arena.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                      )
+                    }
+                    Button(
+                      onClick = {
+                        forgeWeaponInitialCategory = CustomMapGameCategory.BO3
+                        showForgeCustomWeaponDialog = true
+                      },
+                      colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF00E5FF),
+                        contentColor = Color.Black,
+                      ),
+                      contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                      shape = RoundedCornerShape(10.dp),
+                      modifier = Modifier.heightIn(min = 48.dp).testTag("bo3_open_forge_weapon_btn"),
+                    ) {
+                      Text("+ Forge Weapon", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                    }
+                  }
+                  if (progression.customWeapons.isNotEmpty()) {
+                    LazyRow(
+                      horizontalArrangement = Arrangement.spacedBy(8.dp),
+                      modifier = Modifier.testTag("custom_game_weapons_row"),
+                    ) {
+                      items(progression.customWeapons, key = { it.id }) { wpn: UserCustomWeaponSpec ->
+                        val isEquippedWpn = progression.weaponCustom.equippedWeaponId == wpn.id
+                        val wAccent = Color(wpn.defaultTracerHex)
+                        Surface(
+                          shape = RoundedCornerShape(12.dp),
+                          color = if (isEquippedWpn) wAccent.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
+                          modifier = Modifier
+                            .width(232.dp)
+                            .border(
+                              width = if (isEquippedWpn) 1.5.dp else 1.dp,
+                              color = if (isEquippedWpn) wAccent else MaterialTheme.colorScheme.outline,
+                              shape = RoundedCornerShape(12.dp),
+                            ),
+                        ) {
+                          Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(
+                              modifier = Modifier.fillMaxWidth(),
+                              horizontalArrangement = Arrangement.SpaceBetween,
+                              verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                              Text(
+                                text = wpn.gameCategory.label,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = wAccent,
+                              )
+                              IconButton(
+                                onClick = { onDeleteCustomWeapon(wpn.id) },
+                                modifier = Modifier.size(48.dp).testTag("bo3_delete_wpn_${wpn.id}"),
+                              ) {
+                                Icon(
+                                  imageVector = Icons.Filled.Delete,
+                                  contentDescription = "Delete custom weapon",
+                                  tint = MaterialTheme.colorScheme.error,
+                                )
+                              }
+                            }
+                            Text(wpn.name, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, maxLines = 1)
+                            Text(
+                              text = "${wpn.damageTypeId.uppercase()} • DMG ${wpn.baseDamage} • Spread ${wpn.baseSpreadCount} • P${wpn.basePierce}",
+                              style = MaterialTheme.typography.labelSmall,
+                              color = MaterialTheme.colorScheme.onSurfaceVariant,
+                              maxLines = 1,
+                            )
+                            Button(
+                              onClick = {
+                                onUpdateWeaponCustom { wc ->
+                                  val nextMulti = (listOf(wpn.id) + wc.equippedWeaponIds).distinct().take(3)
+                                  wc.copy(equippedWeaponId = wpn.id, equippedWeaponIds = nextMulti, tracerColorHex = wpn.defaultTracerHex)
+                                }
+                              },
+                              colors = ButtonDefaults.buttonColors(containerColor = wAccent, contentColor = Color.Black),
+                              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                              shape = RoundedCornerShape(8.dp),
+                              modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("bo3_equip_wpn_${wpn.id}"),
+                            ) {
+                              Text(if (isEquippedWpn) "Equipped Weapon" else "Equip Custom Weapon", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
             if (workshopItems.isEmpty()) {
               item {
                 Surface(
@@ -924,6 +1126,17 @@ fun ArmoryScreen(
     CollectionCustomModeDialog(
       initialConfig = progression.collectionCustomMode,
       customGameMaps = progression.customGameMaps,
+      customWeapons = progression.customWeapons,
+      onOpenForgeMap = { cat ->
+        showCustomModeDialog = false
+        forgeMapInitialCategory = cat
+        showForgeCustomMapDialog = true
+      },
+      onOpenForgeWeapon = { cat ->
+        showCustomModeDialog = false
+        forgeWeaponInitialCategory = cat
+        showForgeCustomWeaponDialog = true
+      },
       onSave = onUpdateCollectionCustomMode,
       onDeploy = onDeployCollectionCustomMode,
       onDismiss = { showCustomModeDialog = false },
@@ -932,10 +1145,22 @@ fun ArmoryScreen(
 
   if (showForgeCustomMapDialog) {
     ForgeCustomMapDialog(
+      initialCategory = forgeMapInitialCategory,
       onDismiss = { showForgeCustomMapDialog = false },
       onConfirm = { title, code, category, desc, zones, ww, hex, deployNow ->
         onForgeCustomMap(title, code, category, desc, zones, ww, hex, deployNow)
         showForgeCustomMapDialog = false
+      },
+    )
+  }
+
+  if (showForgeCustomWeaponDialog) {
+    ForgeCustomWeaponDialog(
+      initialCategory = forgeWeaponInitialCategory,
+      onDismiss = { showForgeCustomWeaponDialog = false },
+      onConfirm = { name, code, category, desc, dmgType, dmg, cadence, spread, pierce, hex, equipNow ->
+        onForgeCustomWeapon(name, code, category, desc, dmgType, dmg, cadence, spread, pierce, hex, equipNow)
+        showForgeCustomWeaponDialog = false
       },
     )
   }
@@ -1165,8 +1390,8 @@ private fun ForgeArmoryItemDialog(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
           OutlinedTextField(
             value = powerStr,
-            onValueChange = { powerStr = it.filter { c -> c.isDigit() }.take(4) },
-            label = { Text("Power (1-1500)") },
+            onValueChange = { powerStr = it.filter { c -> c.isDigit() }.take(5) },
+            label = { Text("Power (1-50000)") },
             singleLine = true,
             modifier = Modifier.weight(1f),
           )

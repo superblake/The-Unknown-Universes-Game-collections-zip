@@ -188,7 +188,7 @@ class SettingsAndAccessibilityTest {
     composeRule.onNodeWithTag("chip_fps_30").performScrollTo().performClick()
     assertEquals(30, current.targetFpsCap)
 
-    composeRule.onNodeWithTag("done_settings_btn").performScrollTo().performClick()
+    composeRule.onNodeWithTag("done_settings_btn").performClick()
     assertTrue(dismissed)
   }
 

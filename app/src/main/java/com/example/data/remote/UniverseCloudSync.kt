@@ -173,18 +173,32 @@ class UniverseCloudSync(
       starterArmory.forEach { (id, item) -> mergedArmoryMap[id] = item }
       guestArmory.filter { it.isCustom || it.tier > 1L }.forEach { item ->
         val current = mergedArmoryMap[item.id]
-        if (current == null || item.tier > current.tier) mergedArmoryMap[item.id] = item
+        if (current == null || item.tier > current.tier || item.powerValue > current.powerValue) {
+          mergedArmoryMap[item.id] = item
+        }
       }
       localArmory.values.forEach { item ->
         val current = mergedArmoryMap[item.id]
-        if (current == null || item.updatedAtMillis >= current.updatedAtMillis || item.tier > current.tier) {
+        if (current == null || item.updatedAtMillis >= current.updatedAtMillis || item.tier > current.tier || item.powerValue > current.powerValue) {
           mergedArmoryMap[item.id] = item
         }
       }
       remoteArmory.values.forEach { item ->
         val current = mergedArmoryMap[item.id]
-        if (current == null || item.updatedAtMillis > current.updatedAtMillis || item.tier > current.tier) {
+        if (current == null) {
           mergedArmoryMap[item.id] = item
+        } else if (item.tier > current.tier || (item.tier == current.tier && item.updatedAtMillis > current.updatedAtMillis && item.powerValue >= current.powerValue)) {
+          mergedArmoryMap[item.id] = item.copy(
+            tier = maxOf(item.tier, current.tier),
+            maxTier = maxOf(item.maxTier, current.maxTier),
+            powerValue = maxOf(item.powerValue, current.powerValue),
+          )
+        } else if (current.tier > item.tier || current.powerValue > item.powerValue) {
+          mergedArmoryMap[item.id] = current.copy(
+            tier = maxOf(current.tier, item.tier),
+            maxTier = maxOf(current.maxTier, item.maxTier),
+            powerValue = maxOf(current.powerValue, item.powerValue),
+          )
         }
       }
 
@@ -256,7 +270,7 @@ class UniverseCloudSync(
         if (remote == null) {
           doc.set(item.toFirestoreCreateMap(userId)).await()
           uploaded++
-        } else if (item.updatedAtMillis > remote.updatedAtMillis || item.tier > remote.tier || item.equipped != remote.equipped) {
+        } else if (item.updatedAtMillis > remote.updatedAtMillis || item.tier > remote.tier || item.powerValue > remote.powerValue || item.equipped != remote.equipped) {
           doc.update(item.toFirestoreUpdateMap()).await()
           uploaded++
         }
@@ -341,8 +355,28 @@ class UniverseCloudSync(
 
     val armoryFlow = userRef.collection("armoryItems").snapshots(MetadataChanges.EXCLUDE).map { snap ->
       if (!snap.metadata.hasPendingWrites()) {
-        val items = snap.documents.mapNotNull { it.toArmoryItemOrNull(userId) }
-        if (items.isNotEmpty()) dao.upsertArmoryItems(items)
+        val remoteItems = snap.documents.mapNotNull { it.toArmoryItemOrNull(userId) }
+        if (remoteItems.isNotEmpty()) {
+          val localById = dao.getArmoryItemsOnce(userId).associateBy { it.id }
+          val mergedItems = remoteItems.mapNotNull { remote ->
+            val local = localById[remote.id]
+            when {
+              local == null -> remote
+              remote.updatedAtMillis > local.updatedAtMillis + 3000L || remote.tier > local.tier -> {
+                remote.copy(
+                  tier = maxOf(remote.tier, local.tier),
+                  maxTier = maxOf(remote.maxTier, local.maxTier),
+                  powerValue = maxOf(remote.powerValue, local.powerValue),
+                  updatedAtMillis = maxOf(remote.updatedAtMillis, local.updatedAtMillis),
+                )
+              }
+              else -> null // Keep higher or more recently updated local Armory Mod state intact!
+            }
+          }
+          if (mergedItems.isNotEmpty()) {
+            dao.upsertArmoryItems(mergedItems)
+          }
+        }
       }
       System.currentTimeMillis()
     }

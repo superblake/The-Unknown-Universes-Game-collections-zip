@@ -270,7 +270,7 @@ class UniverseRepository(
         userId = userId,
         tier = nextTier,
         maxTier = effectiveMaxTier,
-        powerValue = (liveItem.powerValue + 75L).coerceAtMost(1500L),
+        powerValue = maxOf(liveItem.powerValue + 75L, 100L + nextTier * 75L).coerceAtMost(50_000L),
         updatedAtMillis = now,
       )
       val updatedProfile = profile.copy(
@@ -306,7 +306,7 @@ class UniverseRepository(
         item.copy(
           tier = newTier,
           maxTier = effectiveMax,
-          powerValue = (100L + newTier * 50L).coerceAtMost(1500L),
+          powerValue = maxOf(item.powerValue, (100L + newTier * 75L)).coerceAtMost(50_000L),
           updatedAtMillis = now,
         )
       }

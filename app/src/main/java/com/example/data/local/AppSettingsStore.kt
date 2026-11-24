@@ -5,6 +5,9 @@ import android.content.SharedPreferences
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.edit
+import com.example.data.model.RegionalServerCatalog
+import com.example.data.model.RegionalServerSpec
+import com.example.data.model.WorldRegion
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -80,7 +83,20 @@ data class AppSettings(
   val musicVolume: Float = 0.22f,
   val selectedMusicTrack: Int = 0, // 0 = Auto Cycle, 1 = My Feelings of Music, 2 = Destiny Legendary Stories 1
   val immersiveFullscreen: Boolean = true,
+
+  // 7. World Region, Multi-Server & Region Default Auto-Tuning
+  val selectedRegionId: String = WorldRegion.NA_EAST.id,
+  val selectedServerId: String = "srv_na_east_1",
+  val useRegionDefaultSettings: Boolean = true,
 ) {
+  val activeRegion: WorldRegion
+    get() = WorldRegion.fromId(selectedRegionId)
+
+  val activeServer: RegionalServerSpec
+    get() = RegionalServerCatalog.serverById(selectedServerId).let { srv ->
+      if (srv.region == activeRegion) srv else RegionalServerCatalog.defaultServerFor(activeRegion)
+    }
+
   val effectiveDarkTheme: Boolean
     get() = themeMode != ThemeVisualMode.HIGH_CONTRAST_LIGHT
 
@@ -131,6 +147,22 @@ object AppSettingsPresets {
     showMiniRadar = true,
     showFpsCounter = true,
   )
+
+  fun forRegion(current: AppSettings, region: WorldRegion): AppSettings {
+    val profile = region.defaultProfile
+    val density = runCatching { ParticleDensity.valueOf(profile.particleDensityName) }
+      .getOrDefault(current.particleDensity)
+    return current.copy(
+      targetFpsCap = profile.targetFpsCap,
+      autoAimEnabled = profile.autoAimEnabled,
+      particleDensity = density,
+      showTacticalGrid = profile.showTacticalGrid,
+      showMiniRadar = profile.showMiniRadar,
+      gameSpeedMultiplier = profile.gameSpeedMultiplier,
+      assistShieldBoost = profile.assistShieldBoost,
+      reduceMotion = profile.reduceMotion,
+    )
+  }
 
   fun defaults(): AppSettings = AppSettings()
 }
@@ -228,6 +260,35 @@ class AppSettingsStore(context: Context) {
     replace(AppSettings())
   }
 
+  fun selectRegion(regionId: String, serverId: String? = null) {
+    val region = WorldRegion.fromId(regionId)
+    val regionServers = RegionalServerCatalog.serversForRegion(region)
+    val chosenServer = regionServers.firstOrNull { it.id == serverId } ?: regionServers.first()
+    update { current ->
+      val updatedBase = current.copy(
+        selectedRegionId = region.id,
+        selectedServerId = chosenServer.id,
+      )
+      if (updatedBase.useRegionDefaultSettings) {
+        AppSettingsPresets.forRegion(updatedBase, region)
+      } else {
+        updatedBase
+      }
+    }
+  }
+
+  fun selectServer(serverId: String) {
+    val srv = RegionalServerCatalog.serverById(serverId)
+    selectRegion(srv.region.id, srv.id)
+  }
+
+  fun setUseRegionDefaultSettings(enabled: Boolean) {
+    update { current ->
+      val updated = current.copy(useRegionDefaultSettings = enabled)
+      if (enabled) AppSettingsPresets.forRegion(updated, updated.activeRegion) else updated
+    }
+  }
+
   private fun sanitize(s: AppSettings): AppSettings = s.copy(
     joystickScale = s.joystickScale.coerceIn(0.8f, 1.4f),
     buttonScale = s.buttonScale.coerceIn(1.0f, 1.35f),
@@ -290,6 +351,9 @@ class AppSettingsStore(context: Context) {
         musicVolume = prefs.getFloat("music_volume", d.musicVolume),
         selectedMusicTrack = prefs.getInt("selected_music_track", d.selectedMusicTrack),
         immersiveFullscreen = prefs.getBoolean("immersive_fullscreen", d.immersiveFullscreen),
+        selectedRegionId = prefs.getString("selected_region_id", d.selectedRegionId) ?: d.selectedRegionId,
+        selectedServerId = prefs.getString("selected_server_id", d.selectedServerId) ?: d.selectedServerId,
+        useRegionDefaultSettings = prefs.getBoolean("use_region_defaults", d.useRegionDefaultSettings),
       )
     )
   }
@@ -329,6 +393,9 @@ class AppSettingsStore(context: Context) {
       putFloat("music_volume", s.musicVolume)
       putInt("selected_music_track", s.selectedMusicTrack)
       putBoolean("immersive_fullscreen", s.immersiveFullscreen)
+      putString("selected_region_id", s.selectedRegionId)
+      putString("selected_server_id", s.selectedServerId)
+      putBoolean("use_region_defaults", s.useRegionDefaultSettings)
     }
   }
 

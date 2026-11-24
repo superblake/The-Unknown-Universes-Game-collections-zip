@@ -45,7 +45,7 @@ import com.example.data.model.LobbyPartyMode
 import com.example.data.model.ProgressionCatalog
 import com.example.ui.theme.AppIcons
 
-private val lobbyCapacityOptions = listOf(1, 2, 4, 8, 12, 16, 24, 32)
+private val lobbyCapacityOptions = listOf(1, 2, 4, 8, 12, 16, 24, 32, 64, 100, 128, 150, 200)
 
 @Composable
 fun LobbyQuickCard(
@@ -125,8 +125,8 @@ fun LobbyQuickCard(
         }
       }
 
-      // Lobby Player Count (including >8 player lobbies: 12, 16, 24, 32)
-      Text("LOBBY CAPACITY (SUPPORTS >8 PLAYERS)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+      // Lobby Player Count (including >100 player mega lobbies up to 200)
+      Text("LOBBY CAPACITY (SUPPORTS >100 PLAYERS)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
       LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         items(lobbyCapacityOptions) { cap ->
           val selected = lobbyConfig.targetPlayers == cap
@@ -262,7 +262,7 @@ fun LobbyAndBotsDialog(
                     )
                   }
                 }
-                Text("LOBBY SIZE PRESETS (1 TO 32 PLAYERS)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                Text("LOBBY SIZE PRESETS (1 TO 200 PLAYERS)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                   items(lobbyCapacityOptions) { cap ->
                     FilterChip(

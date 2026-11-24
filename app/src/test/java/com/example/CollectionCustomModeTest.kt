@@ -209,7 +209,7 @@ class CollectionCustomModeTest {
 
   @Test
   fun testCuratedBo3AndCollectionCustomMapsResolveAndKeepCatalogIntact() {
-    assertEquals(20, MultiverseArsenalCatalog.customAreas.size)
+    assertEquals(22, MultiverseArsenalCatalog.customAreas.size)
     assertEquals(6, CuratedCustomMapsCatalog.curatedBo3CustomMaps.size)
     assertEquals(15, CuratedCustomMapsCatalog.curatedCollectionCustomMaps.size)
 

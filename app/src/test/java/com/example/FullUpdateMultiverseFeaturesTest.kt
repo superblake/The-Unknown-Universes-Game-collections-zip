@@ -250,7 +250,7 @@ class FullUpdateMultiverseFeaturesTest {
   fun all12Worlds10Modes16Arenas_andBatmanSpiderManCombatAndDesktopWork() {
     assertEquals(12, UniverseCatalog.worlds.size)
     assertEquals(10, UniverseCatalog.modes.size)
-    assertEquals(20, MultiverseArsenalCatalog.customAreas.size)
+    assertEquals(22, MultiverseArsenalCatalog.customAreas.size)
 
     val expectedWorldIds = setOf(
       "gotham_arkham",

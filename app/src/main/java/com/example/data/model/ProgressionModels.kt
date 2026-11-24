@@ -429,6 +429,7 @@ data class LobbyConfig(
   val humanPlayersOnline: Int = 1,
 ) {
   val isOverEightLobby: Boolean get() = targetPlayers > 8
+  val isOver100Lobby: Boolean get() = targetPlayers >= 100
   val activeBotCount: Int
     get() = if (autoFillBots) (targetPlayers - humanPlayersOnline).coerceAtLeast(0) else 0
 }
@@ -492,7 +493,42 @@ data class WeaponSpec(
   val baseSpreadCount: Int,
   val basePierce: Int,
   val defaultTracerHex: Long,
+  val damageTypeId: String = "kinetic",
+  val isCustomWeapon: Boolean = false,
 )
+
+@Immutable
+data class UserCustomWeaponSpec(
+  val id: String,
+  val weaponCode: String,
+  val name: String,
+  val gameCategory: CustomMapGameCategory = CustomMapGameCategory.INFAMOUS,
+  val description: String = "",
+  val damageTypeId: String = "arc",
+  val baseDamage: Int = 4,
+  val baseCadenceTicks: Float = 8.5f,
+  val baseProjectileSpeed: Float = 0.025f,
+  val baseSpreadCount: Int = 2,
+  val basePierce: Int = 2,
+  val defaultTracerHex: Long = gameCategory.defaultAccentHex,
+  val isUserCreated: Boolean = true,
+  val createdAtMillis: Long = 0L,
+) {
+  fun toWeaponSpec(): WeaponSpec = WeaponSpec(
+    id = id,
+    name = name,
+    universeOrigin = "${gameCategory.label} Custom",
+    summary = description.ifBlank { "${gameCategory.label} forged custom weapon ($weaponCode) • Element: ${damageTypeId.uppercase()}" },
+    baseDamage = baseDamage.coerceIn(1, 30),
+    baseCadenceTicks = baseCadenceTicks.coerceIn(3.5f, 18.0f),
+    baseProjectileSpeed = baseProjectileSpeed.coerceIn(0.015f, 0.045f),
+    baseSpreadCount = baseSpreadCount.coerceIn(1, 7),
+    basePierce = basePierce.coerceIn(0, 8),
+    defaultTracerHex = defaultTracerHex,
+    damageTypeId = damageTypeId,
+    isCustomWeapon = true,
+  )
+}
 
 @Immutable
 data class WeaponCustomization(
@@ -813,6 +849,7 @@ data class OperatorProgressionState(
   val worldCollectionDifficultyMap: Map<String, String> = emptyMap(),
   val collectionCustomMode: CollectionCustomModeConfig = CollectionCustomModeConfig(),
   val customGameMaps: List<UserCustomGameMapSpec> = emptyList(),
+  val customWeapons: List<UserCustomWeaponSpec> = emptyList(),
 ) {
   val playerLevel: Int
     get() = ProgressionCatalog.levelForXp(playerXp)
@@ -870,6 +907,38 @@ data class OperatorProgressionState(
   fun allPlayableAreas(): List<CustomAreaSpec> =
     CuratedCustomMapsCatalog.allPlayableAreas(customGameMaps)
 
+  fun allWeapons(): List<WeaponSpec> =
+    ProgressionCatalog.allWeapons(customWeapons)
+
+  fun resolveWeaponSpec(weaponId: String): WeaponSpec =
+    ProgressionCatalog.weaponById(weaponId, customWeapons)
+
+  fun customWeaponById(weaponId: String): UserCustomWeaponSpec? =
+    customWeapons.firstOrNull { it.id == weaponId }
+
+  fun upgradedAreaCount(): Int {
+    val upgradedIds = areaStates.values.count { st ->
+      st.powerGridTier > 1 ||
+        st.defenseTurretTier > 1 ||
+        st.trapDensityTier > 1 ||
+        st.lootRichnessTier > 1 ||
+        st.starLevel > 1 ||
+        st.rebirthCycles > 0 ||
+        st.ageYears != 12
+    }
+    return upgradedIds.coerceIn(0, EssenceResonanceBonuses.MAX_SYNERGY_MAPS)
+  }
+
+  fun totalAreaTierPoints(): Int =
+    areaStates.values.sumOf { st ->
+      (st.powerGridTier - 1) +
+        (st.defenseTurretTier - 1) +
+        (st.trapDensityTier - 1) +
+        (st.lootRichnessTier - 1) +
+        (st.starLevel - 1) * 2 +
+        (st.rebirthCycles * 3)
+    }
+
   fun defaultModeForArea(areaId: String, currentMode: String? = null): String {
     val customSpec = CuratedCustomMapsCatalog.findById(areaId, customGameMaps)
     if (customSpec != null) {
@@ -926,14 +995,52 @@ data class OperatorProgressionState(
   fun blastCoreLevel(color: BlastCoreColor): Int = (blastCoreLevels[color.id] ?: 1).coerceIn(1, 20)
 
   fun essenceResonance(blueEssence: Long): EssenceResonanceBonuses =
-    EssenceResonanceBonuses.compute(
+    comprehensiveBonuses(blueEssence = blueEssence)
+
+  fun comprehensiveBonuses(
+    blueEssence: Long,
+    armoryItems: List<ArmoryItem> = emptyList(),
+    region: WorldRegion = WorldRegion.NA_EAST,
+    server: RegionalServerSpec? = null,
+  ): EssenceResonanceBonuses {
+    val activeRegionBonus = region.defaultProfile
+    val srvDmg = activeRegionBonus.damageBonusMult * (server?.bonusDamageMult ?: 1.0f)
+    val srvShd = activeRegionBonus.shieldBonusMult * (server?.bonusShieldMult ?: 1.0f)
+    val srvRate = activeRegionBonus.fireRateBonusMult * (server?.bonusRateMult ?: 1.0f)
+    val activeOutfit = outfitState(equippedOutfitId)
+    val activeRarity = outfitRarity(equippedOutfitId)
+    return EssenceResonanceBonuses.computeComprehensive(
       blueEssence = blueEssence,
+      blueEssenceSpent = totalBlueEssenceSpent,
       redEssence = redEssence,
       yellowEssence = yellowEssence,
       greenEssence = greenEssence,
       combinedEssence = combinedEssence,
       blastShards = blastShards,
+      upgradedMapCount = upgradedAreaCount(),
+      totalMapTierPoints = totalAreaTierPoints(),
+      armoryModCount = armoryItems.size,
+      armoryModTotalTiers = armoryItems.sumOf { it.tier },
+      armoryModTotalPower = armoryItems.sumOf { it.powerValue },
+      weaponTierSum = weaponTierMap.values.sumOf { (it - 1).coerceAtLeast(0) },
+      weaponStarSum = weaponStarMap.values.sumOf { (it - 1).coerceAtLeast(0) },
+      customWeaponCount = customWeapons.size,
+      wonderTierSum = wonderTierMap.values.sumOf { (it - 1).coerceAtLeast(0) },
+      gearTierSum = gearMap.values.sumOf { (it.tier - 1).coerceAtLeast(0) },
+      gearLevelSum = gearMap.values.sumOf { (it.level - 1).coerceAtLeast(0) },
+      equipmentTierSum = equipmentMap.values.sumOf { (it.tier - 1).coerceAtLeast(0) },
+      skillTierSum = skillNodes.values.sumOf { (if (it.unlocked) it.tier else 0) },
+      outfitTierSum = (activeOutfit.tier - 1) + (activeOutfit.starLevel - 1) + (activeOutfit.gearRank - 1),
+      outfitRarityRank = (activeRarity.rank - 1).coerceAtLeast(0),
+      perkRankSum = perkRanks.values.sum(),
+      blastCoreLevelSum = blastCoreLevels.values.sumOf { (it - 1).coerceAtLeast(0) },
+      clanLevel = clan.level,
+      ngPlusTier = activeNgPlusTier,
+      serverDamageMult = srvDmg,
+      serverShieldMult = srvShd,
+      serverFireRateMult = srvRate,
     )
+  }
 
   fun effectiveWeaponList(): List<String> =
     weaponCustom.equippedWeaponIds.ifEmpty { listOf(weaponCustom.equippedWeaponId) }.distinct()
@@ -1099,8 +1206,13 @@ object ProgressionCatalog {
     ),
   )
 
-  fun weaponById(id: String): WeaponSpec =
-    weapons.firstOrNull { it.id == id } ?: weapons.first()
+  fun allWeapons(customWeapons: List<UserCustomWeaponSpec> = emptyList()): List<WeaponSpec> =
+    (weapons + customWeapons.map { it.toWeaponSpec() }).distinctBy { it.id }
+
+  fun weaponById(id: String, customWeapons: List<UserCustomWeaponSpec> = emptyList()): WeaponSpec =
+    customWeapons.firstOrNull { it.id == id }?.toWeaponSpec()
+      ?: weapons.firstOrNull { it.id == id }
+      ?: weapons.first()
 
   val camos: List<Pair<String, String>> = listOf(
     "cyber_matte" to "Cyber Matte",
@@ -1284,7 +1396,8 @@ object ProgressionCatalog {
     AchievementSpec("ach_wpn_30", "MasterMarksman", "Level any primary weapon to Level 30.", "PROGRESSION", 30L, 750L, 1000L, 4),
     AchievementSpec("ach_wpn_60", "Weapon Perfection", "Reach max Level 60 on any weapon.", "PROGRESSION", 60L, 1800L, 2200L, 7),
     AchievementSpec("ach_over8_lobby", "Over-Capacity Ops", "Deploy into a 12+ player Mega Lobby with AI Bots.", "LOBBY", 12L, 700L, 1100L, 5),
-    AchievementSpec("ach_war_32", "Total Multiverse War", "Deploy into a maximum 32-Player Lobby.", "LOBBY", 32L, 1500L, 2200L, 8),
+    AchievementSpec("ach_war_32", "Total Multiverse War", "Deploy into a 32-Player Mega Lobby.", "LOBBY", 32L, 1500L, 2200L, 8),
+    AchievementSpec("ach_war_128", "Omniverse 100+ Crusade", "Deploy into a 100+ to 200-Player Grand Lobby.", "LOBBY", 128L, 3500L, 5000L, 10),
     AchievementSpec("ach_pack_5", "Mythic Pacifier", "Upgrade Pack-a-Punch to Tier V+ inside an Arena.", "ARMORY", 5L, 850L, 1200L, 5),
     AchievementSpec("ach_pack_10", "Omega Transcendence", "Upgrade Pack-a-Punch to Tier X+ in combat.", "ARMORY", 10L, 2500L, 3500L, 10),
     AchievementSpec("ach_pack_15", "Apex Conduit", "Upgrade Pack-a-Punch to Tier XV+ in combat.", "ARMORY", 15L, 4500L, 6500L, 15),
@@ -1457,7 +1570,7 @@ object ProgressionCatalog {
   private val botAccents = listOf(0xFF00E676L, 0xFF00E5FFL, 0xFFFFAB40L, 0xFFE040FBL, 0xFFFF5252L, 0xFFFFD54FL)
 
   fun generateLobbyRoster(config: LobbyConfig, playerCallsign: String, playerLevel: Int, playerPrestige: Int): List<LobbyBotMember> {
-    val totalSlots = config.targetPlayers.coerceIn(1, 32)
+    val totalSlots = config.targetPlayers.coerceIn(1, 250)
     val members = ArrayList<LobbyBotMember>(totalSlots)
     val squadSize = config.partyMode.squadSize.coerceAtLeast(1)
 
@@ -1479,7 +1592,9 @@ object ProgressionCatalog {
       for (slotIdx in 1 until totalSlots) {
         val squadIdx = (slotIdx / squadSize) + 1
         val isAllied = squadIdx == 1
-        val botName = botCallsigns[(slotIdx - 1) % botCallsigns.size]
+        val baseName = botCallsigns[(slotIdx - 1) % botCallsigns.size]
+        val suffixCycle = (slotIdx - 1) / botCallsigns.size
+        val botName = if (suffixCycle == 0) baseName else "$baseName-${suffixCycle + 1}"
         val botLvl = (playerLevel + ((slotIdx * 7) % 25) - 5).coerceIn(1, 1000)
         val botPrestige = if (config.botDifficulty == BotDifficulty.APEX) (slotIdx % 10) + 1 else (slotIdx % 4)
         members.add(

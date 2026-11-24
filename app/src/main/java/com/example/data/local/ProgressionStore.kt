@@ -39,6 +39,8 @@ import com.example.data.model.StarRankMeta
 import com.example.data.model.TradeCurrencyKind
 import com.example.data.model.VacuumBotState
 import com.example.data.model.WeaponCustomization
+import com.example.data.model.UserCustomWeaponSpec
+import com.example.data.model.WorldRegion
 import com.example.data.model.ChatChannel
 import com.example.data.model.ChatMessage
 import com.example.data.model.ClanData
@@ -128,7 +130,7 @@ class ProgressionStore(
     } else {
       curList.first()
     }
-    val spec = ProgressionCatalog.weaponById(nextPrimary)
+    val spec = ProgressionCatalog.weaponById(nextPrimary, cur.customWeapons)
     save(
       cur.copy(
         weaponCustom = cur.weaponCustom.copy(
@@ -193,9 +195,10 @@ class ProgressionStore(
 
   fun updateLobbyConfig(transform: (LobbyConfig) -> LobbyConfig) {
     val nextConfig = transform(current.lobbyConfig)
+    val clampedTarget = nextConfig.targetPlayers.coerceIn(1, 250)
     val clamped = nextConfig.copy(
-      targetPlayers = nextConfig.targetPlayers.coerceIn(1, 32),
-      humanPlayersOnline = nextConfig.humanPlayersOnline.coerceIn(1, nextConfig.targetPlayers.coerceIn(1, 32)),
+      targetPlayers = clampedTarget,
+      humanPlayersOnline = nextConfig.humanPlayersOnline.coerceIn(1, clampedTarget),
     )
     save(current.copy(lobbyConfig = clamped))
   }
@@ -258,6 +261,55 @@ class ProgressionStore(
         customGameMaps = nextMaps,
         activeAreaId = nextActive,
         collectionCustomMode = cur.collectionCustomMode.copy(targetAreaId = nextCustomModeArea),
+      ),
+    )
+  }
+
+  fun addOrUpdateCustomWeapon(weaponSpec: UserCustomWeaponSpec): UserCustomWeaponSpec {
+    val cur = current
+    val normalized = weaponSpec.copy(
+      name = weaponSpec.name.trim().take(48).ifBlank { "Custom ${weaponSpec.gameCategory.label} Armament" },
+      weaponCode = weaponSpec.weaponCode.trim().take(36).ifBlank { "wpn_custom" },
+      description = weaponSpec.description.trim().take(200),
+      baseDamage = weaponSpec.baseDamage.coerceIn(1, 30),
+      baseCadenceTicks = weaponSpec.baseCadenceTicks.coerceIn(3.5f, 18.0f),
+      baseProjectileSpeed = weaponSpec.baseProjectileSpeed.coerceIn(0.015f, 0.045f),
+      baseSpreadCount = weaponSpec.baseSpreadCount.coerceIn(1, 7),
+      basePierce = weaponSpec.basePierce.coerceIn(0, 8),
+    )
+    val nextWeapons = (cur.customWeapons.filterNot { it.id == normalized.id } + normalized).take(40)
+    val nextTierMap = if (cur.weaponTierMap.containsKey(normalized.id)) {
+      cur.weaponTierMap
+    } else {
+      cur.weaponTierMap + (normalized.id to 1)
+    }
+    val nextStarMap = if (cur.weaponStarMap.containsKey(normalized.id)) {
+      cur.weaponStarMap
+    } else {
+      cur.weaponStarMap + (normalized.id to 1)
+    }
+    save(
+      cur.copy(
+        customWeapons = nextWeapons,
+        weaponTierMap = nextTierMap,
+        weaponStarMap = nextStarMap,
+      ),
+    )
+    return normalized
+  }
+
+  fun deleteCustomWeapon(weaponId: String) {
+    val cur = current
+    val nextWeapons = cur.customWeapons.filterNot { it.id == weaponId }
+    val nextPrimary = if (cur.weaponCustom.equippedWeaponId == weaponId) "wpn_pulse_carbine" else cur.weaponCustom.equippedWeaponId
+    val nextMulti = cur.weaponCustom.equippedWeaponIds.filterNot { it == weaponId }.ifEmpty { listOf(nextPrimary) }
+    save(
+      cur.copy(
+        customWeapons = nextWeapons,
+        weaponCustom = cur.weaponCustom.copy(
+          equippedWeaponId = nextPrimary,
+          equippedWeaponIds = nextMulti,
+        ),
       ),
     )
   }
@@ -1538,7 +1590,7 @@ class ProgressionStore(
         "ach_boss_5", "ach_boss_20" -> state.totalBossesLifetime
         "ach_lvl_25", "ach_lvl_100", "ach_lvl_500" -> state.playerLevel.toLong()
         "ach_wpn_30", "ach_wpn_60" -> maxWeaponLvl
-        "ach_over8_lobby", "ach_war_32" -> state.largestLobbyPlayed.toLong()
+        "ach_over8_lobby", "ach_war_32", "ach_war_128" -> state.largestLobbyPlayed.toLong()
         "ach_pack_5", "ach_pack_10", "ach_pack_15", "ach_pack_20", "ach_pack_25" -> state.highestPackTierReached.toLong()
         "ach_wonder_10" -> state.wonderWeaponsPickedTotal
         "ach_store_1", "ach_store_5" -> state.storePurchasesCount.toLong()
@@ -1600,7 +1652,7 @@ class ProgressionStore(
         val wpnId = cur.weaponCustom.equippedWeaponId
         val nextWpnXp = (cur.weaponXp(wpnId) + 3000L)
         next = next.copy(weaponXpMap = cur.weaponXpMap + (wpnId to nextWpnXp))
-        "${ProgressionCatalog.weaponById(wpnId).name} reached W.Lv.${next.weaponLevel(wpnId)}"
+        "${ProgressionCatalog.weaponById(wpnId, cur.customWeapons).name} reached W.Lv.${next.weaponLevel(wpnId)}"
       }
       "store_bp_skip_1500" -> {
         next = next.copy(battlePassXp = cur.battlePassXp + 1800L)
@@ -1638,11 +1690,11 @@ class ProgressionStore(
         "All Gear & Equipment boosted +5 Levels!"
       }
       "store_all_weapons_xp" -> {
-        val boosted = ProgressionCatalog.weapons.associate { w ->
+        val boosted = ProgressionCatalog.allWeapons(cur.customWeapons).associate { w ->
           w.id to ((cur.weaponXpMap[w.id] ?: 0L) + 2000L)
         }
         next = next.copy(weaponXpMap = cur.weaponXpMap + boosted)
-        "+2,000 Weapon XP granted to all 5 primary weapons!"
+        "+2,000 Weapon XP granted to all ${boosted.size} weapons!"
       }
       "store_bot_uplink" -> {
         val nextBoost = (cur.botDamageBoostPct + 15).coerceAtMost(150)
@@ -2223,6 +2275,8 @@ class ProgressionStore(
           put("currentWave", jm.currentWave)
           put("activeMutators", JSONArray(jm.activeMutators))
           put("clanTag", jm.clanTag ?: "")
+          put("regionId", jm.regionId)
+          put("serverId", jm.serverId)
         })
       }
       put("activeNgPlusTier", next.activeNgPlusTier)
@@ -2259,6 +2313,26 @@ class ProgressionStore(
             put("secondaryHex", m.secondaryHex)
             put("isUserCreated", m.isUserCreated)
             put("createdAtMillis", m.createdAtMillis)
+          })
+        }
+      })
+      put("customWeapons", JSONArray().apply {
+        next.customWeapons.forEach { w ->
+          put(JSONObject().apply {
+            put("id", w.id)
+            put("weaponCode", w.weaponCode)
+            put("name", w.name)
+            put("gameCategory", w.gameCategory.id)
+            put("description", w.description)
+            put("damageTypeId", w.damageTypeId)
+            put("baseDamage", w.baseDamage)
+            put("baseCadenceTicks", w.baseCadenceTicks.toDouble())
+            put("baseProjectileSpeed", w.baseProjectileSpeed.toDouble())
+            put("baseSpreadCount", w.baseSpreadCount)
+            put("basePierce", w.basePierce)
+            put("defaultTracerHex", w.defaultTracerHex)
+            put("isUserCreated", w.isUserCreated)
+            put("createdAtMillis", w.createdAtMillis)
           })
         }
       })
@@ -2466,10 +2540,10 @@ class ProgressionStore(
         val diff = BotDifficulty.entries.firstOrNull { it.id == diffId } ?: BotDifficulty.OPERATIVE
         LobbyConfig(
           partyMode = pMode,
-          targetPlayers = lobbyObj.optInt("targetPlayers", 12).coerceIn(1, 32),
+          targetPlayers = lobbyObj.optInt("targetPlayers", 12).coerceIn(1, 250),
           autoFillBots = lobbyObj.optBoolean("autoFillBots", true),
           botDifficulty = diff,
-          humanPlayersOnline = lobbyObj.optInt("humanPlayersOnline", 1).coerceIn(1, 32),
+          humanPlayersOnline = lobbyObj.optInt("humanPlayersOnline", 1).coerceIn(1, 250),
         )
       } else fallback.lobbyConfig
     }
@@ -2841,6 +2915,8 @@ class ProgressionStore(
           currentWave = jmObj.optInt("currentWave", 1),
           activeMutators = muts,
           clanTag = jmObj.optString("clanTag", "").ifEmpty { null },
+          regionId = jmObj.optString("regionId", WorldRegion.NA_EAST.id),
+          serverId = jmObj.optString("serverId", "srv_na_east_1"),
         )
       } else null
     }
@@ -2887,6 +2963,36 @@ class ProgressionStore(
         }
         list
       } else fallback.customGameMaps
+    }
+
+    val customWeaponsList = safeParse(fallback.customWeapons) {
+      val arr = root.optJSONArray("customWeapons")
+      if (arr != null) {
+        val list = ArrayList<UserCustomWeaponSpec>(arr.length())
+        for (i in 0 until arr.length()) {
+          val obj = arr.optJSONObject(i) ?: continue
+          val cat = CustomMapGameCategory.fromId(obj.optString("gameCategory", CustomMapGameCategory.INFAMOUS.id))
+          list.add(
+            UserCustomWeaponSpec(
+              id = obj.optString("id", "wpn_custom_$i").ifBlank { "wpn_custom_$i" },
+              weaponCode = obj.optString("weaponCode", "wpn_custom_$i"),
+              name = obj.optString("name", "Custom Armament $i"),
+              gameCategory = cat,
+              description = obj.optString("description", "${cat.label} forged custom weapon."),
+              damageTypeId = obj.optString("damageTypeId", "arc"),
+              baseDamage = obj.optInt("baseDamage", 4).coerceIn(1, 30),
+              baseCadenceTicks = obj.optDouble("baseCadenceTicks", 8.5).toFloat().coerceIn(3.5f, 18.0f),
+              baseProjectileSpeed = obj.optDouble("baseProjectileSpeed", 0.025).toFloat().coerceIn(0.015f, 0.045f),
+              baseSpreadCount = obj.optInt("baseSpreadCount", 2).coerceIn(1, 7),
+              basePierce = obj.optInt("basePierce", 2).coerceIn(0, 8),
+              defaultTracerHex = obj.optLong("defaultTracerHex", cat.defaultAccentHex),
+              isUserCreated = obj.optBoolean("isUserCreated", true),
+              createdAtMillis = obj.optLong("createdAtMillis", 0L),
+            )
+          )
+        }
+        list
+      } else fallback.customWeapons
     }
 
     val customModeCfg = safeParse(fallback.collectionCustomMode) {
@@ -2965,7 +3071,7 @@ class ProgressionStore(
       totalMatchesPlayed = root.optLong("totalMatchesPlayed", fallback.totalMatchesPlayed).coerceAtLeast(0L),
       totalBlueEssenceSpent = root.optLong("totalBlueEssenceSpent", fallback.totalBlueEssenceSpent).coerceAtLeast(0L),
       highestPackTierReached = root.optInt("highestPackTierReached", fallback.highestPackTierReached).coerceIn(1, 25),
-      largestLobbyPlayed = root.optInt("largestLobbyPlayed", fallback.largestLobbyPlayed).coerceIn(1, 32),
+      largestLobbyPlayed = root.optInt("largestLobbyPlayed", fallback.largestLobbyPlayed).coerceIn(1, 250),
       storePurchasesCount = root.optInt("storePurchasesCount", fallback.storePurchasesCount).coerceAtLeast(0),
       purchasedStoreItems = purchasedStoreItems,
       xpBoosterMatchesRemaining = root.optInt("xpBoosterMatchesRemaining", fallback.xpBoosterMatchesRemaining).coerceAtLeast(0),
@@ -2985,6 +3091,7 @@ class ProgressionStore(
       worldCollectionDifficultyMap = worldColDiffMap,
       collectionCustomMode = customModeCfg,
       customGameMaps = customMapsList,
+      customWeapons = customWeaponsList,
     )
   }
 
@@ -3141,6 +3248,7 @@ class ProgressionStore(
       ngPlusCompletions = maxOf(base.ngPlusCompletions, incoming.ngPlusCompletions),
       worldCollectionDifficultyMap = base.worldCollectionDifficultyMap + incoming.worldCollectionDifficultyMap,
       customGameMaps = (base.customGameMaps + incoming.customGameMaps).distinctBy { it.id },
+      customWeapons = (base.customWeapons + incoming.customWeapons).distinctBy { it.id },
     )
   }
 

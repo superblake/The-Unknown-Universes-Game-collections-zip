@@ -293,7 +293,7 @@ class ModTiersAndBo3ModesTest {
       assertTrue("Area ${area.id} should produce places", places.size >= 6)
       seenFirstBuildings[area.id] = area.buildingNames.first()
     }
-    assertEquals(20, seenFirstBuildings.size)
+    assertEquals(22, seenFirstBuildings.size)
   }
 
   @Test

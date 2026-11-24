@@ -47,17 +47,21 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.data.model.ArmoryItem
 import com.example.data.model.BlastCoreColor
 import com.example.data.model.CharacterRarity
 import com.example.data.model.CharacterUniverseGroup
 import com.example.data.model.EssenceColor
+import com.example.data.model.EssenceResonanceBonuses
 import com.example.data.model.HeroOutfitSpec
 import com.example.data.model.MultiverseArsenalCatalog
 import com.example.data.model.OperatorProgressionState
 import com.example.data.model.ProgressionCatalog
+import com.example.data.model.RegionalServerSpec
 import com.example.data.model.StarRankMeta
 import com.example.data.model.UniverseCatalog
 import com.example.data.model.UpgradeCosts
+import com.example.data.model.WorldRegion
 import com.example.ui.rig.RigEvaluator
 import com.example.ui.rig.drawRigCharacter
 import java.util.Locale
@@ -470,17 +474,24 @@ fun ShardsPerksAndCoresTab(
   onUpgradePerkDrink: (String) -> Unit,
   onUpgradeBlastCore: (BlastCoreColor) -> Unit,
   onUpgradeVacuumBotStar: () -> Unit = {},
+  armoryItems: List<ArmoryItem> = emptyList(),
+  region: WorldRegion = WorldRegion.NA_EAST,
+  server: RegionalServerSpec? = null,
 ) {
   val haptic = LocalHapticFeedback.current
   val resonance = remember(
     totalBlueEssence,
-    progression.redEssence,
-    progression.yellowEssence,
-    progression.greenEssence,
-    progression.combinedEssence,
-    progression.blastShards,
+    progression,
+    armoryItems,
+    region,
+    server,
   ) {
-    progression.essenceResonance(totalBlueEssence)
+    progression.comprehensiveBonuses(
+      blueEssence = totalBlueEssence,
+      armoryItems = armoryItems,
+      region = region,
+      server = server,
+    )
   }
   val bot = progression.vacuumBot
   val botCost = UpgradeCosts.vacuumBot(bot.tier)
@@ -498,9 +509,9 @@ fun ShardsPerksAndCoresTab(
         modifier = Modifier.fillMaxWidth().border(1.5.dp, Color(0xFFE040FB).copy(alpha = 0.7f), RoundedCornerShape(16.dp)),
       ) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-          Text("ESSENCE RESONANCE (SCALES WITH HELD ESSENCE)", style = MaterialTheme.typography.titleMedium, color = Color(0xFFE040FB), fontWeight = FontWeight.Bold)
+          Text("OMNI-SOURCE RESONANCE & BONUSES", style = MaterialTheme.typography.titleMedium, color = Color(0xFFE040FB), fontWeight = FontWeight.Bold)
           Text(
-            text = "Everything you own scales stronger from total Essence held. Blue, Red, Yellow, Green & Combined Quad-Essence each push different stats & caps!",
+            text = "All bonuses scale uncapped from held/spent Essence, Armory Mods, 30 Upgraded Maps, Weapons, Gear, Skills, Perks, Blast Cores & ${region.shortTag} Server.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
@@ -509,13 +520,23 @@ fun ShardsPerksAndCoresTab(
             color = Color(0xFF0A1220),
             modifier = Modifier.fillMaxWidth().border(1.dp, Color(0xFF00E5FF).copy(alpha = 0.5f), RoundedCornerShape(10.dp)),
           ) {
-            Text(
-              text = "LIVE BONUS: ${resonance.summary} • CDR ${(resonance.cooldownReductionRatio * 100).toInt()}% • Regen +${String.format(Locale.US, "%.1f", resonance.regenBonusPerSec)}/s",
-              style = MaterialTheme.typography.labelMedium,
-              color = Color(0xFF00E5FF),
-              fontWeight = FontWeight.Bold,
-              modifier = Modifier.padding(10.dp).testTag("essence_resonance_summary"),
-            )
+            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+              Text(
+                text = "LIVE BONUS: ${resonance.summary} • CDR ${(resonance.cooldownReductionRatio * 100).toInt()}% • Regen +${String.format(Locale.US, "%.1f", resonance.regenBonusPerSec)}/s",
+                style = MaterialTheme.typography.labelMedium,
+                color = Color(0xFF00E5FF),
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.testTag("essence_resonance_summary"),
+              )
+              if (resonance.extendedSourcesSummary.isNotBlank()) {
+                Text(
+                  text = "Sources: ${resonance.extendedSourcesSummary}",
+                  style = MaterialTheme.typography.labelSmall,
+                  color = Color(0xFF00E676),
+                  modifier = Modifier.testTag("essence_extended_sources_summary"),
+                )
+              }
+            }
           }
           EssenceColor.entries.forEach { ec ->
             val bal = when (ec) {
@@ -725,10 +746,15 @@ fun AreasAndAgingTab(
   onUpgradeAreaFeature: (String, String) -> Unit,
   onAdvanceAreaAge: (String, Int) -> Unit,
   onUpgradeAreaStar: (String) -> Unit = {},
+  onOpenForgeMap: () -> Unit = {},
+  onOpenForgeWeapon: () -> Unit = {},
+  onDeployArea: (String) -> Unit = {},
 ) {
   val haptic = LocalHapticFeedback.current
   val activeSpec = progression.activeAreaSpec()
   val activeArea = progression.areaState(activeSpec.id)
+  val upgradedMaps = progression.upgradedAreaCount()
+  val mapTierPts = progression.totalAreaTierPoints()
 
   LazyColumn(
     modifier = Modifier.fillMaxSize().testTag("areas_aging_list"),
@@ -741,7 +767,7 @@ fun AreasAndAgingTab(
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier.fillMaxWidth().border(1.5.dp, Color(activeArea.currentEra.colorHex).copy(alpha = 0.8f), RoundedCornerShape(16.dp)),
       ) {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
           Text(
             text = "ACTIVE AREA: ${activeSpec.name}",
             style = MaterialTheme.typography.titleMedium,
@@ -756,10 +782,40 @@ fun AreasAndAgingTab(
             fontWeight = FontWeight.Bold,
           )
           Text(
+            text = "30-Map Mod Synergy: $upgradedMaps/${EssenceResonanceBonuses.MAX_SYNERGY_MAPS} Upgraded Maps ($mapTierPts Tier Pts) • ${progression.customWeapons.size} Custom Weapons",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color(0xFF00E676),
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.testTag("areas_30_map_synergy_badge"),
+          )
+          LinearProgressIndicator(
+            progress = { (upgradedMaps.toFloat() / EssenceResonanceBonuses.MAX_SYNERGY_MAPS.toFloat()).coerceIn(0f, 1f) },
+            color = Color(0xFF00E676),
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+          )
+          Text(
             text = activeSpec.storyEraNote,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+              onClick = onOpenForgeMap,
+              colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFAB40), contentColor = Color.Black),
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("areas_forge_map_btn"),
+            ) {
+              Text("+ Forge Map", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            }
+            OutlinedButton(
+              onClick = onOpenForgeWeapon,
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("areas_forge_weapon_btn"),
+            ) {
+              Text("+ Forge Weapon", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            }
+          }
         }
       }
     }

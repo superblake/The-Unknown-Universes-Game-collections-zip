@@ -228,6 +228,10 @@ fun DrawScope.drawRigCharacter(
   val isSpiderMan = outfitId.startsWith("spiderman") || archetype == "spiderman"
   val isIronMan = outfitId.startsWith("ironman")
   val isIronSpider = outfitId == "spiderman_v3"
+  val isSuperman = outfitId.startsWith("superman")
+  val isFlash = outfitId.startsWith("flash")
+  val isGreenLantern = outfitId.startsWith("green_lantern")
+  val isAbyss = outfitId.startsWith("abyss")
   val bodyStroke = if (highContrast) 13f else 11f
   val armorColor =
     if (visorColorOverride != null || cloakOverride != null) primaryColor
@@ -270,7 +274,7 @@ fun DrawScope.drawRigCharacter(
   }
 
   // Flowing trenchcoat / hero cape behind torso + Iron Spider golden waldoes
-  val showCloak = cloakOverride ?: (isBatman || archetype == "chrono" || archetype == "starblade" || archetype == "biomorph")
+  val showCloak = cloakOverride ?: (isBatman || isSuperman || isAbyss || archetype == "chrono" || archetype == "starblade" || archetype == "biomorph")
   if (isIronSpider) {
     val waldoGold = Color(0xFFFFD54F)
     val armOffsets = listOf(
@@ -287,9 +291,17 @@ fun DrawScope.drawRigCharacter(
       drawCircle(waldoGold, radius = 3.5f, center = elbow)
     }
   }
+  if (isFlash && !highContrast) {
+    // Speed-force lightning trail arcs behind Flash
+    val boltCol = if (outfitId == "flash_v3") Color(0xFF00E5FF) else Color(0xFFFFD54F)
+    drawLine(boltCol.copy(alpha = 0.72f), skeleton.chest, Offset(skeleton.pelvis.x - 24f, skeleton.pelvis.y + 8f), strokeWidth = 2.6f, cap = StrokeCap.Round)
+    drawLine(boltCol.copy(alpha = 0.72f), skeleton.rElbow, Offset(skeleton.lFoot.x - 26f, skeleton.lFoot.y - 8f), strokeWidth = 2.4f, cap = StrokeCap.Round)
+  }
   if (showCloak) {
     val capeColor = when {
       isBatman -> Color(0xFF0B0E17)
+      isSuperman -> Color(0xFFD50000)
+      isAbyss -> Color(0xFF2B0E3B)
       archetype == "biomorph" -> Color(0xFF3A0E24)
       archetype == "chrono" -> Color(0xFF1D2C4D)
       else -> armorColor.copy(alpha = 0.28f)
@@ -359,6 +371,42 @@ fun DrawScope.drawRigCharacter(
     isIronMan -> {
       drawCircle(color = Color(0xFF00E5FF), radius = 6.5f, center = chestMid)
       drawCircle(color = Color.White, radius = 3.2f, center = chestMid)
+    }
+    isSuperman -> {
+      val shield = Path().apply {
+        moveTo(chestMid.x - 8f, chestMid.y - 5f)
+        lineTo(chestMid.x + 8f, chestMid.y - 5f)
+        lineTo(chestMid.x + 10f, chestMid.y - 1f)
+        lineTo(chestMid.x, chestMid.y + 8f)
+        lineTo(chestMid.x - 10f, chestMid.y - 1f)
+        close()
+      }
+      drawPath(shield, color = Color(0xFFFFD54F))
+      drawPath(shield, color = Color(0xFFD50000), style = Stroke(width = 2.4f))
+      drawLine(Color(0xFFD50000), Offset(chestMid.x - 5f, chestMid.y - 2f), Offset(chestMid.x + 5f, chestMid.y + 2f), strokeWidth = 2.6f, cap = StrokeCap.Round)
+    }
+    isFlash -> {
+      val crestCol = if (outfitId == "flash_v3") Color(0xFF00E5FF) else Color(0xFFFFD54F)
+      drawCircle(color = Color.White, radius = 7f, center = chestMid)
+      drawCircle(color = crestCol, radius = 7f, center = chestMid, style = Stroke(width = 2f))
+      drawLine(crestCol, Offset(chestMid.x + 2f, chestMid.y - 6f), Offset(chestMid.x - 3f, chestMid.y), strokeWidth = 2.6f, cap = StrokeCap.Round)
+      drawLine(crestCol, Offset(chestMid.x - 3f, chestMid.y), Offset(chestMid.x + 3f, chestMid.y + 1f), strokeWidth = 2.6f, cap = StrokeCap.Round)
+      drawLine(crestCol, Offset(chestMid.x + 3f, chestMid.y + 1f), Offset(chestMid.x - 2f, chestMid.y + 7f), strokeWidth = 2.6f, cap = StrokeCap.Round)
+    }
+    isGreenLantern -> {
+      val lanCol = Color(0xFF00E676)
+      drawCircle(color = Color.White, radius = 7f, center = chestMid)
+      drawCircle(color = lanCol, radius = 4.2f, center = chestMid, style = Stroke(width = 2.6f))
+      drawLine(lanCol, Offset(chestMid.x - 6f, chestMid.y - 5f), Offset(chestMid.x + 6f, chestMid.y - 5f), strokeWidth = 2.2f)
+      drawLine(lanCol, Offset(chestMid.x - 6f, chestMid.y + 5f), Offset(chestMid.x + 6f, chestMid.y + 5f), strokeWidth = 2.2f)
+      // Emerald Power Ring glow on right hand
+      drawCircle(color = lanCol.copy(alpha = 0.5f), radius = 9f, center = skeleton.rHand)
+      drawCircle(color = Color.White, radius = 3.5f, center = skeleton.rHand)
+    }
+    isAbyss -> {
+      drawCircle(color = Color(0xFFFFAB40).copy(alpha = 0.35f), radius = 8f, center = chestMid)
+      drawLine(secondaryColor, Offset(chestMid.x, chestMid.y - 7f), Offset(chestMid.x, chestMid.y + 7f), strokeWidth = 3f, cap = StrokeCap.Round)
+      drawLine(secondaryColor, Offset(chestMid.x - 6f, chestMid.y), Offset(chestMid.x + 6f, chestMid.y), strokeWidth = 2.6f, cap = StrokeCap.Round)
     }
     else -> drawCircle(color = secondaryColor, radius = 5f, center = chestMid)
   }
@@ -433,7 +481,17 @@ fun DrawScope.drawRigCharacter(
   val headFill = when {
     isSpiderMan && outfitId != "spiderman_v2" -> Color(0xFFB71C1C)
     isIronMan -> Color(0xFFC62828)
+    isFlash -> Color(0xFFD50000)
+    isSuperman -> Color(0xFF1A237E)
+    isGreenLantern -> Color(0xFF0A2416)
+    isAbyss -> Color(0xFF1D0C2B)
     else -> Color(0xFF0E1629)
+  }
+  if (isFlash) {
+    // Golden ear-wing fins
+    val wingCol = if (outfitId == "flash_v3") Color(0xFF00E5FF) else Color(0xFFFFD54F)
+    drawLine(wingCol, Offset(skeleton.head.x - 16f, skeleton.head.y), Offset(skeleton.head.x - 25f, skeleton.head.y - 12f), strokeWidth = 3.5f, cap = StrokeCap.Round)
+    drawLine(wingCol, Offset(skeleton.head.x + 16f, skeleton.head.y), Offset(skeleton.head.x + 25f, skeleton.head.y - 12f), strokeWidth = 3.5f, cap = StrokeCap.Round)
   }
   if (isBatman) {
     // Pointed Bat-Cowl Ears!
@@ -458,7 +516,7 @@ fun DrawScope.drawRigCharacter(
   }
   drawCircle(color = headFill, radius = 17f, center = skeleton.head)
   drawCircle(color = if (highContrast) Color.White else armorColor, radius = 17f, center = skeleton.head, style = Stroke(width = if (highContrast) 4f else 3.2f))
-  if (archetype == "infernal" && !isBatman && !isIronMan) {
+  if (archetype == "infernal" && !isBatman && !isIronMan && !isAbyss) {
     drawLine(Color(0xFFFFAB40), Offset(skeleton.head.x - 9f, skeleton.head.y - 14f), Offset(skeleton.head.x + 9f, skeleton.head.y - 14f), strokeWidth = 3.5f, cap = StrokeCap.Round)
   }
   if (isSpiderMan) {
@@ -485,6 +543,12 @@ fun DrawScope.drawRigCharacter(
     val cowlEye = visorColorOverride ?: Color.White
     drawLine(cowlEye, Offset(skeleton.head.x - 9f, skeleton.head.y - 3f), Offset(skeleton.head.x - 2f, skeleton.head.y - 1f), strokeWidth = 3.5f, cap = StrokeCap.Round)
     drawLine(cowlEye, Offset(skeleton.head.x + 3f, skeleton.head.y - 1f), Offset(skeleton.head.x + 10f, skeleton.head.y - 3f), strokeWidth = 3.5f, cap = StrokeCap.Round)
+  } else if (isGreenLantern) {
+    // Emerald Domino Mask
+    val maskCol = Color(0xFF00E676)
+    drawLine(maskCol, Offset(skeleton.head.x - 10f, skeleton.head.y - 2f), Offset(skeleton.head.x + 10f, skeleton.head.y - 2f), strokeWidth = 6f, cap = StrokeCap.Round)
+    drawCircle(Color.White, radius = 2.4f, center = Offset(skeleton.head.x - 5f, skeleton.head.y - 2f))
+    drawCircle(Color.White, radius = 2.4f, center = Offset(skeleton.head.x + 5f, skeleton.head.y - 2f))
   } else {
     drawLine(
       color = visorColorOverride ?: secondaryColor,

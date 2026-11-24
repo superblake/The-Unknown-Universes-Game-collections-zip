@@ -64,8 +64,11 @@ data class EssenceResonanceBonuses(
   val regenBonusPerSec: Float,
   val lootLuckBonus: Float,
   val summary: String,
+  val extendedSourcesSummary: String = "",
 ) {
   companion object {
+    const val MAX_SYNERGY_MAPS: Int = 30
+
     fun compute(
       blueEssence: Long,
       redEssence: Long,
@@ -79,35 +82,35 @@ data class EssenceResonanceBonuses(
       val yScale = sqrt(yellowEssence.coerceAtLeast(0L) / 150f)
       val gScale = sqrt(greenEssence.coerceAtLeast(0L) / 150f)
       val cScale = sqrt(combinedEssence.coerceAtLeast(0L) / 80f)
-      val shardBoost = ln(1f + blastShards.coerceAtLeast(0L) / 5f) * 0.14f
+      val shardBoost = ln(1f + blastShards.coerceAtLeast(0L) / 5f) * 0.16f
 
-      // Each color reaches different caps; Combined pushes past all single-color limits.
-      val blueDmg = (bScale * 0.08f).coerceAtMost(1.00f)
-      val redDmg = (rScale * 0.22f).coerceAtMost(2.40f)
-      val combinedDmg = (cScale * 0.35f).coerceAtMost(4.50f)
+      // Unstuck scaling: base curve + soft diminishing-return tail beyond old hard limits.
+      val blueDmg = (bScale * 0.08f).coerceAtMost(1.00f) + ln(1f + (bScale - 12.5f).coerceAtLeast(0f)) * 0.25f
+      val redDmg = (rScale * 0.22f).coerceAtMost(3.20f) + ln(1f + (rScale - 14.5f).coerceAtLeast(0f)) * 0.45f
+      val combinedDmg = (cScale * 0.35f).coerceAtMost(6.50f) + ln(1f + (cScale - 18.5f).coerceAtLeast(0f)) * 0.70f
       val damageMult = 1.0f + blueDmg + redDmg + combinedDmg + shardBoost
 
-      val blueShd = (bScale * 0.10f).coerceAtMost(1.20f)
-      val greenShd = (gScale * 0.24f).coerceAtMost(2.60f)
-      val combinedShd = (cScale * 0.36f).coerceAtMost(4.50f)
-      val shieldMult = 1.0f + blueShd + greenShd + combinedShd + shardBoost * 0.8f
+      val blueShd = (bScale * 0.10f).coerceAtMost(1.20f) + ln(1f + (bScale - 12f).coerceAtLeast(0f)) * 0.28f
+      val greenShd = (gScale * 0.24f).coerceAtMost(3.40f) + ln(1f + (gScale - 14f).coerceAtLeast(0f)) * 0.48f
+      val combinedShd = (cScale * 0.36f).coerceAtMost(6.50f) + ln(1f + (cScale - 18f).coerceAtLeast(0f)) * 0.70f
+      val shieldMult = 1.0f + blueShd + greenShd + combinedShd + shardBoost * 0.85f
 
-      val yellowMove = (yScale * 0.12f).coerceAtMost(1.40f)
-      val blueMove = (bScale * 0.04f).coerceAtMost(0.35f)
-      val combinedMove = (cScale * 0.16f).coerceAtMost(1.80f)
+      val yellowMove = (yScale * 0.12f).coerceAtMost(1.80f) + ln(1f + (yScale - 15f).coerceAtLeast(0f)) * 0.25f
+      val blueMove = (bScale * 0.04f).coerceAtMost(0.55f)
+      val combinedMove = (cScale * 0.16f).coerceAtMost(2.40f) + ln(1f + (cScale - 15f).coerceAtLeast(0f)) * 0.35f
       val moveSpeedMult = 1.0f + yellowMove + blueMove + combinedMove
 
-      val yellowRate = (yScale * 0.16f).coerceAtMost(1.80f)
-      val redRate = (rScale * 0.06f).coerceAtMost(0.55f)
-      val combinedRate = (cScale * 0.24f).coerceAtMost(2.60f)
+      val yellowRate = (yScale * 0.16f).coerceAtMost(2.60f) + ln(1f + (yScale - 16f).coerceAtLeast(0f)) * 0.40f
+      val redRate = (rScale * 0.06f).coerceAtMost(0.85f)
+      val combinedRate = (cScale * 0.24f).coerceAtMost(3.60f) + ln(1f + (cScale - 15f).coerceAtLeast(0f)) * 0.55f
       val fireRateMult = 1.0f + yellowRate + redRate + combinedRate
 
-      val yellowCdr = (yScale * 0.045f).coerceAtMost(0.55f)
-      val combinedCdr = (cScale * 0.06f).coerceAtMost(0.75f)
-      val cooldownReductionRatio = (1f - (1f - yellowCdr) * (1f - combinedCdr)).coerceIn(0f, 0.82f)
+      val yellowCdr = (yScale * 0.045f).coerceAtMost(0.68f)
+      val combinedCdr = (cScale * 0.065f).coerceAtMost(0.82f)
+      val cooldownReductionRatio = (1f - (1f - yellowCdr) * (1f - combinedCdr)).coerceIn(0f, 0.90f)
 
-      val regenBonus = ((gScale * 1.4f).coerceAtMost(16f) + (cScale * 2.2f).coerceAtMost(24f))
-      val lootLuck = (bScale * 0.05f + cScale * 0.12f).coerceAtMost(2.0f)
+      val regenBonus = ((gScale * 1.4f).coerceAtMost(26f) + (cScale * 2.2f).coerceAtMost(38f))
+      val lootLuck = (bScale * 0.05f + cScale * 0.12f).coerceAtMost(3.5f)
 
       val dmgPct = ((damageMult - 1f) * 100f).toInt()
       val shdPct = ((shieldMult - 1f) * 100f).toInt()
@@ -121,6 +124,96 @@ data class EssenceResonanceBonuses(
         regenBonusPerSec = regenBonus,
         lootLuckBonus = lootLuck,
         summary = "+${dmgPct}% DMG • +${shdPct}% SHD • +${spdPct}% RATE",
+      )
+    }
+
+    fun computeComprehensive(
+      blueEssence: Long,
+      blueEssenceSpent: Long,
+      redEssence: Long,
+      yellowEssence: Long,
+      greenEssence: Long,
+      combinedEssence: Long,
+      blastShards: Long,
+      upgradedMapCount: Int,
+      totalMapTierPoints: Int,
+      armoryModCount: Int,
+      armoryModTotalTiers: Long,
+      armoryModTotalPower: Long,
+      weaponTierSum: Int,
+      weaponStarSum: Int,
+      customWeaponCount: Int,
+      wonderTierSum: Int,
+      gearTierSum: Int,
+      gearLevelSum: Int,
+      equipmentTierSum: Int,
+      skillTierSum: Int,
+      outfitTierSum: Int,
+      outfitRarityRank: Int,
+      perkRankSum: Int,
+      blastCoreLevelSum: Int,
+      clanLevel: Int,
+      ngPlusTier: Int,
+      serverDamageMult: Float = 1.0f,
+      serverShieldMult: Float = 1.0f,
+      serverFireRateMult: Float = 1.0f,
+    ): EssenceResonanceBonuses {
+      // Spent Blue Essence preserves and amplifies resonance so upgrading never weakens stats!
+      val effectiveBlue = blueEssence.coerceAtLeast(0L) + (blueEssenceSpent.coerceAtLeast(0L) / 2L)
+      val base = compute(
+        blueEssence = effectiveBlue,
+        redEssence = redEssence,
+        yellowEssence = yellowEssence,
+        greenEssence = greenEssence,
+        combinedEssence = combinedEssence,
+        blastShards = blastShards,
+      )
+
+      val effectiveMaps = upgradedMapCount.coerceIn(0, MAX_SYNERGY_MAPS)
+      val mapDmg = (effectiveMaps * 0.045f) + (totalMapTierPoints.coerceAtLeast(0) * 0.008f)
+      val mapShd = (effectiveMaps * 0.050f) + (totalMapTierPoints.coerceAtLeast(0) * 0.009f)
+      val mapRate = (effectiveMaps * 0.030f) + (totalMapTierPoints.coerceAtLeast(0) * 0.005f)
+
+      val modDmg = (armoryModCount.coerceAtLeast(0) * 0.04f) +
+        (armoryModTotalTiers.coerceAtLeast(0L) * 0.025f) +
+        sqrt(armoryModTotalPower.coerceAtLeast(0L) / 100f) * 0.14f
+      val modShd = (armoryModCount.coerceAtLeast(0) * 0.05f) +
+        (armoryModTotalTiers.coerceAtLeast(0L) * 0.030f) +
+        sqrt(armoryModTotalPower.coerceAtLeast(0L) / 100f) * 0.15f
+      val modRate = (armoryModCount.coerceAtLeast(0) * 0.025f) +
+        (armoryModTotalTiers.coerceAtLeast(0L) * 0.018f) +
+        sqrt(armoryModTotalPower.coerceAtLeast(0L) / 140f) * 0.10f
+
+      val arsenalDmg = (weaponTierSum * 0.03f) + (weaponStarSum * 0.035f) + (customWeaponCount * 0.08f) + (wonderTierSum * 0.025f)
+      val gearShd = (gearTierSum * 0.045f) + (gearLevelSum * 0.008f) + (equipmentTierSum * 0.035f) + (outfitTierSum * 0.02f) + (outfitRarityRank * 0.09f)
+      val skillRate = (skillTierSum * 0.020f) + (equipmentTierSum * 0.022f) + (perkRankSum * 0.024f) + (blastCoreLevelSum * 0.025f)
+      val clanAndNgBonus = (clanLevel * 0.03f) + (ngPlusTier * 0.12f)
+
+      val finalDmg = (base.damageMult + mapDmg + modDmg + arsenalDmg + (perkRankSum * 0.02f) + (blastCoreLevelSum * 0.03f) + clanAndNgBonus) * serverDamageMult
+      val finalShd = (base.shieldMult + mapShd + modShd + gearShd + (perkRankSum * 0.025f) + (blastCoreLevelSum * 0.03f) + clanAndNgBonus) * serverShieldMult
+      val finalRate = (base.fireRateMult + mapRate + modRate + skillRate + (customWeaponCount * 0.05f)) * serverFireRateMult
+      val finalMove = base.moveSpeedMult + (effectiveMaps * 0.015f) + (armoryModTotalTiers * 0.006f) + (perkRankSum * 0.012f)
+      val extraCdr = (1f - (1f - base.cooldownReductionRatio) *
+        (1f - (effectiveMaps * 0.006f).coerceAtMost(0.22f)) *
+        (1f - (skillTierSum * 0.004f).coerceAtMost(0.25f)) *
+        (1f - (armoryModTotalTiers * 0.003f).coerceAtMost(0.20f))).coerceIn(0f, 0.92f)
+      val finalRegen = base.regenBonusPerSec + (effectiveMaps * 0.45f) + (gearTierSum * 0.35f) + (perkRankSum * 0.5f)
+      val finalLuck = base.lootLuckBonus + (effectiveMaps * 0.04f) + (armoryModCount * 0.03f)
+
+      val dmgPct = ((finalDmg - 1f) * 100f).toInt()
+      val shdPct = ((finalShd - 1f) * 100f).toInt()
+      val spdPct = ((finalRate - 1f) * 100f).toInt()
+      val cdrPct = (extraCdr * 100f).toInt()
+      return EssenceResonanceBonuses(
+        damageMult = finalDmg,
+        shieldMult = finalShd,
+        moveSpeedMult = finalMove,
+        fireRateMult = finalRate,
+        cooldownReductionRatio = extraCdr,
+        regenBonusPerSec = finalRegen,
+        lootLuckBonus = finalLuck,
+        summary = "+${dmgPct}% DMG • +${shdPct}% SHD • +${spdPct}% RATE • ${cdrPct}% CDR",
+        extendedSourcesSummary = "Sources: Essences + ${blueEssenceSpent} Spent • $effectiveMaps/$MAX_SYNERGY_MAPS Maps • $armoryModCount Mods (T$armoryModTotalTiers) • Gear/Skills/Wpn/Cores",
       )
     }
   }
@@ -169,6 +262,10 @@ enum class CharacterUniverseGroup(val id: String, val label: String) {
   STARKILLER("starkiller", "Starkiller"),
   IRON_MAN("ironman", "Iron Man"),
   ZOMBIES("zombies", "WaW/BO/MW Zombies"),
+  SUPERMAN("superman", "Superman"),
+  FLASH("flash", "The Flash"),
+  GREEN_LANTERN("green_lantern", "Green Lantern"),
+  ABYSS_DUNGEONS("abyss_dungeons", "Abyss of Dungeons"),
 }
 
 @Immutable
@@ -1112,6 +1209,278 @@ object MultiverseArsenalCatalog {
       isOriginalCharacter = true,
       originTag = "Ship of Heroes",
     ),
+
+    // SUPERMAN (RETURNS / METROPOLIS / SOLAR PRIME - v1, v2, v3)
+    HeroOutfitSpec(
+      id = "superman_v1",
+      characterGroup = CharacterUniverseGroup.SUPERMAN,
+      nameWithVersion = "Superman v1",
+      subtitle = "Superman Returns Metropolis Suit",
+      rigArchetype = "starblade",
+      primaryHex = 0xFF1565C0,
+      secondaryHex = 0xFFC62828,
+      visorHex = 0xFFFFD54F,
+      cloakEnabled = true,
+      auraId = "pulse_ring",
+      signatureSkillSummary = "Solar Heat-Vision Beam & Super-Breath Freeze",
+      signatureGearSummary = "Kryptonian Raised S-Crest & Crimson Cape",
+      signatureLethalId = "lethal_cluster",
+      signatureTacticalId = "tactical_emp",
+      baseShieldBonus = 160,
+      baseDamageBonus = 9,
+      baseMoveBonus = 0.28f,
+      baseFireRateBonus = 0.24f,
+      isOriginalCharacter = false,
+      originTag = "Superman Returns",
+    ),
+    HeroOutfitSpec(
+      id = "superman_v2",
+      characterGroup = CharacterUniverseGroup.SUPERMAN,
+      nameWithVersion = "Superman v2",
+      subtitle = "Black Recovery Solar-Regen Suit",
+      rigArchetype = "infernal",
+      primaryHex = 0xFF101820,
+      secondaryHex = 0xFFB0BEC5,
+      visorHex = 0xFFFF3D71,
+      cloakEnabled = false,
+      auraId = "chrono_spark",
+      signatureSkillSummary = "Yellow-Sun Overcharge (+40% Shield & Rapid Regen)",
+      signatureGearSummary = "Fortress Silver Crest Regeneration Matrix",
+      signatureLethalId = "lethal_c4",
+      signatureTacticalId = "tactical_stim",
+      baseShieldBonus = 200,
+      baseDamageBonus = 11,
+      baseMoveBonus = 0.30f,
+      baseFireRateBonus = 0.28f,
+      isOriginalCharacter = false,
+      originTag = "Superman Returns",
+    ),
+    HeroOutfitSpec(
+      id = "superman_v3",
+      characterGroup = CharacterUniverseGroup.SUPERMAN,
+      nameWithVersion = "Superman v3",
+      subtitle = "Solar Prime One-Million Mk.III",
+      rigArchetype = "starblade",
+      primaryHex = 0xFFFFD54F,
+      secondaryHex = 0xFFFF5252,
+      visorHex = 0xFFFFFFFF,
+      cloakEnabled = true,
+      auraId = "infernal_flare",
+      signatureSkillSummary = "Golden Sunflare Volley & Invulnerable Apex Shield",
+      signatureGearSummary = "Solar Fortress Prime Exo-Mantle",
+      signatureLethalId = "lethal_cluster",
+      signatureTacticalId = "tactical_insertion",
+      baseShieldBonus = 240,
+      baseDamageBonus = 14,
+      baseMoveBonus = 0.34f,
+      baseFireRateBonus = 0.32f,
+      isOriginalCharacter = false,
+      originTag = "Superman Returns",
+    ),
+
+    // THE FLASH (SPEED FORCE - v1, v2, v3)
+    HeroOutfitSpec(
+      id = "flash_v1",
+      characterGroup = CharacterUniverseGroup.FLASH,
+      nameWithVersion = "The Flash v1",
+      subtitle = "Central City Scarlet Speedster",
+      rigArchetype = "chrono",
+      primaryHex = 0xFFD50000,
+      secondaryHex = 0xFFFFD54F,
+      visorHex = 0xFFFFEA00,
+      cloakEnabled = false,
+      auraId = "chrono_spark",
+      signatureSkillSummary = "Speed Force Lightning Bolt & Extreme Fire Rate",
+      signatureGearSummary = "Frictionless Polymer Suit & Winged Cowl",
+      signatureLethalId = "lethal_frag",
+      signatureTacticalId = "tactical_stim",
+      baseShieldBonus = 85,
+      baseDamageBonus = 6,
+      baseMoveBonus = 0.42f,
+      baseFireRateBonus = 0.44f,
+      isOriginalCharacter = false,
+      originTag = "Speed Force",
+    ),
+    HeroOutfitSpec(
+      id = "flash_v2",
+      characterGroup = CharacterUniverseGroup.FLASH,
+      nameWithVersion = "The Flash v2",
+      subtitle = "Blue Speed-Force Temporal Shift",
+      rigArchetype = "chrono",
+      primaryHex = 0xFF00B0FF,
+      secondaryHex = 0xFFFFFFFF,
+      visorHex = 0xFF00E5FF,
+      cloakEnabled = false,
+      auraId = "pulse_ring",
+      signatureSkillSummary = "Time-Remnant Volley & 35% Faster Cooldowns",
+      signatureGearSummary = "Future Tachyon Speed Harness",
+      signatureLethalId = "lethal_cluster",
+      signatureTacticalId = "tactical_emp",
+      baseShieldBonus = 115,
+      baseDamageBonus = 8,
+      baseMoveBonus = 0.48f,
+      baseFireRateBonus = 0.50f,
+      isOriginalCharacter = false,
+      originTag = "Speed Force",
+    ),
+    HeroOutfitSpec(
+      id = "flash_v3",
+      characterGroup = CharacterUniverseGroup.FLASH,
+      nameWithVersion = "The Flash v3",
+      subtitle = "Godspeed Sovereign Crimson-Gold Mk.III",
+      rigArchetype = "starblade",
+      primaryHex = 0xFF210B14,
+      secondaryHex = 0xFFFFD54F,
+      visorHex = 0xFF00E5FF,
+      cloakEnabled = false,
+      auraId = "infernal_flare",
+      signatureSkillSummary = "Infinite Mass Surge & Maximum Cadence Overload",
+      signatureGearSummary = "Gold-Bolt Tachyon Gauntlets & Trail",
+      signatureLethalId = "lethal_cluster",
+      signatureTacticalId = "tactical_insertion",
+      baseShieldBonus = 140,
+      baseDamageBonus = 10,
+      baseMoveBonus = 0.56f,
+      baseFireRateBonus = 0.58f,
+      isOriginalCharacter = false,
+      originTag = "Speed Force",
+    ),
+
+    // GREEN LANTERN (CORPS / WILLPOWER CONSTRUCTS - v1, v2, v3)
+    HeroOutfitSpec(
+      id = "green_lantern_v1",
+      characterGroup = CharacterUniverseGroup.GREEN_LANTERN,
+      nameWithVersion = "Green Lantern v1",
+      subtitle = "Sector 2814 Oa Corps Knight",
+      rigArchetype = "operator",
+      primaryHex = 0xFF00C853,
+      secondaryHex = 0xFF101815,
+      visorHex = 0xFF00E676,
+      cloakEnabled = false,
+      auraId = "pulse_ring",
+      signatureSkillSummary = "Hard-Light Construct Cannon & Emerald Barrier",
+      signatureGearSummary = "Oa Power Ring & Willpower Lattice Armor",
+      signatureLethalId = "lethal_cluster",
+      signatureTacticalId = "tactical_decoy",
+      baseShieldBonus = 145,
+      baseDamageBonus = 8,
+      baseMoveBonus = 0.24f,
+      baseFireRateBonus = 0.26f,
+      isOriginalCharacter = false,
+      originTag = "Green Lantern Corps",
+    ),
+    HeroOutfitSpec(
+      id = "green_lantern_v2",
+      characterGroup = CharacterUniverseGroup.GREEN_LANTERN,
+      nameWithVersion = "Green Lantern v2",
+      subtitle = "Ion Parallax Overdrive Armor",
+      rigArchetype = "starblade",
+      primaryHex = 0xFF00E676,
+      secondaryHex = 0xFFFFD54F,
+      visorHex = 0xFFFFFFFF,
+      cloakEnabled = true,
+      auraId = "chrono_spark",
+      signatureSkillSummary = "Heavy Construct Gatling & Orbital Ring Aegis",
+      signatureGearSummary = "Oa Central Battery Ion Plate",
+      signatureLethalId = "lethal_c4",
+      signatureTacticalId = "tactical_emp",
+      baseShieldBonus = 185,
+      baseDamageBonus = 11,
+      baseMoveBonus = 0.26f,
+      baseFireRateBonus = 0.30f,
+      isOriginalCharacter = false,
+      originTag = "Green Lantern Corps",
+    ),
+    HeroOutfitSpec(
+      id = "green_lantern_v3",
+      characterGroup = CharacterUniverseGroup.GREEN_LANTERN,
+      nameWithVersion = "Green Lantern v3",
+      subtitle = "White Lantern Life-Entity Sovereign",
+      rigArchetype = "starblade",
+      primaryHex = 0xFFE0F7FA,
+      secondaryHex = 0xFF00E676,
+      visorHex = 0xFF00E5FF,
+      cloakEnabled = true,
+      auraId = "chrono_spark",
+      signatureSkillSummary = "Seven-Spectrum Construct Barrage & Team Regen",
+      signatureGearSummary = "Spectrum Life-Ring Exo-Wings",
+      signatureLethalId = "lethal_cluster",
+      signatureTacticalId = "tactical_insertion",
+      baseShieldBonus = 225,
+      baseDamageBonus = 13,
+      baseMoveBonus = 0.30f,
+      baseFireRateBonus = 0.34f,
+      isOriginalCharacter = false,
+      originTag = "Green Lantern Corps",
+    ),
+
+    // ABYSS OF DUNGEONS (CRYPT DELVER / SPELLBLADE / LICH KNIGHT - v1, v2, v3)
+    HeroOutfitSpec(
+      id = "abyss_v1",
+      characterGroup = CharacterUniverseGroup.ABYSS_DUNGEONS,
+      nameWithVersion = "Abyss Rogue v1",
+      subtitle = "Howling Crypt Shadow Delver",
+      rigArchetype = "operator",
+      primaryHex = 0xFF2D223B,
+      secondaryHex = 0xFFB388FF,
+      visorHex = 0xFFFFAB40,
+      cloakEnabled = true,
+      auraId = "none",
+      signatureSkillSummary = "Runic Dagger Volley & Crypt Torch Stealth",
+      signatureGearSummary = "Cursed Leather Hood & Mimic Pouch",
+      signatureLethalId = "lethal_molotov",
+      signatureTacticalId = "tactical_decoy",
+      baseShieldBonus = 105,
+      baseDamageBonus = 8,
+      baseMoveBonus = 0.28f,
+      baseFireRateBonus = 0.30f,
+      isOriginalCharacter = false,
+      originTag = "Abyss of Dungeons",
+    ),
+    HeroOutfitSpec(
+      id = "abyss_v2",
+      characterGroup = CharacterUniverseGroup.ABYSS_DUNGEONS,
+      nameWithVersion = "Abyss Paladin v2",
+      subtitle = "Sanctum Oathkeeper Knight",
+      rigArchetype = "infernal",
+      primaryHex = 0xFF263238,
+      secondaryHex = 0xFFFFD54F,
+      visorHex = 0xFF00E5FF,
+      cloakEnabled = true,
+      auraId = "pulse_ring",
+      signatureSkillSummary = "Runic Greatsword Arc & Sanctuary Aegis",
+      signatureGearSummary = "Forged Crypt Plate & Blue-Stone Lantern",
+      signatureLethalId = "lethal_frag",
+      signatureTacticalId = "tactical_stim",
+      baseShieldBonus = 175,
+      baseDamageBonus = 10,
+      baseMoveBonus = 0.22f,
+      baseFireRateBonus = 0.24f,
+      isOriginalCharacter = false,
+      originTag = "Abyss of Dungeons",
+    ),
+    HeroOutfitSpec(
+      id = "abyss_v3",
+      characterGroup = CharacterUniverseGroup.ABYSS_DUNGEONS,
+      nameWithVersion = "Abyss Lich Lord v3",
+      subtitle = "Inferno Necro-Arcanist Sovereign",
+      rigArchetype = "infernal",
+      primaryHex = 0xFF1A0B24,
+      secondaryHex = 0xFFFF3D71,
+      visorHex = 0xFFE040FB,
+      cloakEnabled = true,
+      auraId = "infernal_flare",
+      signatureSkillSummary = "Soul-Harvester Staff Nova & Crimson Siphon",
+      signatureGearSummary = "Inferno Crown & Runeblade Phylactery",
+      signatureLethalId = "lethal_c4",
+      signatureTacticalId = "tactical_insertion",
+      baseShieldBonus = 205,
+      baseDamageBonus = 13,
+      baseMoveBonus = 0.26f,
+      baseFireRateBonus = 0.32f,
+      isOriginalCharacter = false,
+      originTag = "Abyss of Dungeons",
+    ),
   )
 
   fun outfitById(id: String): HeroOutfitSpec =
@@ -1369,6 +1738,28 @@ object MultiverseArsenalCatalog {
       ),
       storyEraNote = "BO3 Mod Tools • Morg City Aether Noir",
       uniqueTraits = "Beast Conduit Pylons • Ritual Rift Teleporters & High-Tier Cores",
+    ),
+    CustomAreaSpec(
+      id = "area_col_custom_superman_metropolis",
+      name = "Superman Returns: Metropolis Skyline",
+      linkedWorldId = "mr_crossover_nexus",
+      description = "Metropolis Skyline & Daily Planet rooftop towers. Features Solar Heat-Vision matrix and Kryptonian defense turrets.",
+      accentHex = 0xFF1565C0,
+      secondaryHex = 0xFFFFD54F,
+      buildingNames = listOf("Daily Planet Tower", "LexCorp Tower", "Metropolis Rooftops", "Fortress Relay", "Subway Terminal"),
+      storyEraNote = "Superman Returns • Metropolis Sector",
+      uniqueTraits = "Solar Flight Pylons • High-Tier Armor & Shield Regeneration",
+    ),
+    CustomAreaSpec(
+      id = "area_col_custom_abyss_lich_sanctum",
+      name = "Abyss of Dungeons: Inferno Lich Sanctum",
+      linkedWorldId = "hellbreaker_citadel",
+      description = "Howling Crypts & Infernal Throne Room. Features soul-harvester conduits, curse traps and Lich Lord boss spawns.",
+      accentHex = 0xFF2B0E3B,
+      secondaryHex = 0xFFFF3D71,
+      buildingNames = listOf("Crypt Entry Gate", "Howling Crypt Halls", "Inferno Throne Room", "Soul Phylactery Vault", "Lich Sanctum"),
+      storyEraNote = "Abyss of Dungeons • Crypt Sector",
+      uniqueTraits = "Soul Siphon Traps • High-Tier Blast Core & Red Essence Drops",
     ),
   )
 

@@ -23,9 +23,13 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -100,12 +104,15 @@ fun WeaponCustomizationTab(
   onPrestigeWeapon: (String) -> Unit = {},
   onToggleMultiWeaponEquip: (String) -> Unit = {},
   onToggleMultiWonderEquip: (String) -> Unit = {},
+  onOpenForgeWeapon: () -> Unit = {},
+  onDeleteCustomWeapon: (String) -> Unit = {},
 ) {
   val haptic = LocalHapticFeedback.current
   val wc = progression.weaponCustom
   val multiWeapons = progression.effectiveWeaponList()
   val multiWonders = progression.effectiveWonderList()
-  val equippedWeapon = ProgressionCatalog.weaponById(wc.equippedWeaponId)
+  val allWeapons = remember(progression.customWeapons) { ProgressionCatalog.allWeapons(progression.customWeapons) }
+  val equippedWeapon = ProgressionCatalog.weaponById(wc.equippedWeaponId, progression.customWeapons)
   val wpnXp = progression.weaponXp(equippedWeapon.id)
   val wpnLevel = progression.weaponLevel(equippedWeapon.id)
   val wpnPrestige = progression.weaponPrestige(equippedWeapon.id)
@@ -218,20 +225,37 @@ fun WeaponCustomizationTab(
     }
 
     item {
-      Text(
-        text = "PRIMARY WEAPONS (${multiWeapons.size}/3 EQUIPPED FOR ARENA SWAP)",
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.primary,
-      )
-      Text(
-        text = "Loadout: ${multiWeapons.joinToString(" • ") { ProgressionCatalog.weaponById(it).name }}",
-        style = MaterialTheme.typography.labelSmall,
-        color = Color(0xFF00E5FF),
-        modifier = Modifier.testTag("multi_weapon_loadout_summary"),
-      )
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Column(modifier = Modifier.weight(1f)) {
+          Text(
+            text = "PRIMARY WEAPONS (${multiWeapons.size}/3 EQUIPPED • ${allWeapons.size} TOTAL)",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary,
+          )
+          Text(
+            text = "Loadout: ${multiWeapons.joinToString(" • ") { ProgressionCatalog.weaponById(it, progression.customWeapons).name }}",
+            style = MaterialTheme.typography.labelSmall,
+            color = Color(0xFF00E5FF),
+            modifier = Modifier.testTag("multi_weapon_loadout_summary"),
+          )
+        }
+        Button(
+          onClick = onOpenForgeWeapon,
+          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF), contentColor = Color.Black),
+          shape = RoundedCornerShape(10.dp),
+          contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+          modifier = Modifier.heightIn(min = 48.dp).testTag("open_forge_custom_weapon_btn"),
+        ) {
+          Text("+ Forge Weapon", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+        }
+      }
       Spacer(Modifier.height(6.dp))
       LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        items(ProgressionCatalog.weapons, key = { it.id }) { weapon ->
+        items(allWeapons, key = { it.id }) { weapon ->
           val selected = weapon.id == wc.equippedWeaponId
           val inMulti = multiWeapons.contains(weapon.id)
           val lvl = progression.weaponLevel(weapon.id)
@@ -239,7 +263,7 @@ fun WeaponCustomizationTab(
             shape = RoundedCornerShape(14.dp),
             color = if (selected) Color(weapon.defaultTracerHex).copy(alpha = 0.16f) else MaterialTheme.colorScheme.surface,
             modifier = Modifier
-              .width(220.dp)
+              .width(232.dp)
               .clip(RoundedCornerShape(14.dp))
               .combinedClickable(
                 onClick = {
@@ -258,13 +282,36 @@ fun WeaponCustomizationTab(
               .testTag("select_weapon_${weapon.id}"),
           ) {
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-              Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(weapon.universeOrigin, style = MaterialTheme.typography.labelSmall, color = Color(weapon.defaultTracerHex))
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                Text(
+                  text = if (weapon.isCustomWeapon) "${weapon.universeOrigin} • CUSTOM" else weapon.universeOrigin,
+                  style = MaterialTheme.typography.labelSmall,
+                  color = Color(weapon.defaultTracerHex),
+                  modifier = Modifier.weight(1f),
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                )
                 Text("Lv.$lvl", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                if (weapon.isCustomWeapon) {
+                  IconButton(
+                    onClick = { onDeleteCustomWeapon(weapon.id) },
+                    modifier = Modifier.size(48.dp).testTag("custom_wpn_delete_${weapon.id}"),
+                  ) {
+                    Icon(
+                      imageVector = Icons.Filled.Delete,
+                      contentDescription = "Delete custom weapon",
+                      tint = MaterialTheme.colorScheme.error,
+                    )
+                  }
+                }
               }
-              Text(weapon.name, style = MaterialTheme.typography.titleMedium)
+              Text(weapon.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
               Text(
-                text = "DMG ${weapon.baseDamage} • Spread ${weapon.baseSpreadCount} • Pierce ${weapon.basePierce}",
+                text = "${weapon.damageTypeId.uppercase()} • DMG ${weapon.baseDamage} • Spread ${weapon.baseSpreadCount} • Pierce ${weapon.basePierce}",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
               )
