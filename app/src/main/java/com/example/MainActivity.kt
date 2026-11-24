@@ -706,6 +706,7 @@ fun UnknownOsShell(
                   activeAreaId = progression.activeAreaId,
                   activeRig = state.rigs.firstOrNull { it.id == state.profile.activeRigId } ?: state.rigs.firstOrNull(),
                   onUpdateWeaponCustom = viewModel::updateWeaponCustomization,
+                  onUpdateWonderCustom = viewModel::updateWonderWeaponCustomization,
                   onUpdateCharacterCustom = viewModel::updateCharacterCustomization,
                   onUpdateLevelCustom = viewModel::updateLevelCustomization,
                   onSelectOrUnlockPass = { version ->

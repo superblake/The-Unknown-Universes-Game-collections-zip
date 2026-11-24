@@ -170,7 +170,10 @@ enum class CharacterRarity(
   EPIC(4, "Epic", 0xFF7C4DFF, 1.70f, 15),
   LEGENDARY(5, "Legendary", 0xFFFFAB40, 2.10f, 22),
   EXOTIC(6, "Exotic", 0xFFFFD54F, 2.55f, 30),
-  MYTHIC(7, "Mythic", 0xFFFF3D71, 3.10f, 0);
+  MYTHIC(7, "Mythic", 0xFFFF3D71, 3.10f, 40),
+  TRANSCENDENT(8, "Transcendent", 0xFF00E5FF, 3.80f, 55),
+  COSMIC(9, "Cosmic", 0xFFE040FB, 4.60f, 75),
+  OMNIVERSE(10, "Omniverse Sovereign", 0xFFFFFFFF, 5.50f, 0);
 
   fun nextRarity(): CharacterRarity? = entries.firstOrNull { it.rank == rank + 1 }
 
@@ -414,13 +417,18 @@ enum class StarRankMeta(
   STAR_7(7, "7★ Astral Crown", 2.50f, 0xFFFF5252),
   STAR_8(8, "8★ Cosmic Apex", 2.75f, 0xFFE040FB),
   STAR_9(9, "9★ Reality Loom", 3.00f, 0xFF00E5FF),
-  STAR_10(10, "10★ Omniverse Nova", 3.25f, 0xFFFFFFFF);
+  STAR_10(10, "10★ Omniverse Nova", 3.25f, 0xFFFFFFFF),
+  STAR_11(11, "11★ Stellar Genesis", 3.55f, 0xFF00E5FF),
+  STAR_12(12, "12★ Singularity King", 3.85f, 0xFFFF3D71),
+  STAR_13(13, "13★ Infinite Cosmos", 4.15f, 0xFFE040FB),
+  STAR_14(14, "14★ Transcendent Apex", 4.45f, 0xFFFFD54F),
+  STAR_15(15, "15★ Omniverse Sovereign", 4.80f, 0xFFFFFFFF);
 
   companion object {
-    const val MAX_STARS: Int = 10
+    const val MAX_STARS: Int = 15
 
     fun forStars(stars: Int): StarRankMeta =
-      entries.firstOrNull { it.stars == stars.coerceIn(1, MAX_STARS) } ?: STAR_10
+      entries.firstOrNull { it.stars == stars.coerceIn(1, MAX_STARS) } ?: STAR_15
   }
 }
 
@@ -608,6 +616,14 @@ data class WeaponCustomization(
   val laserId: String = "none_laser",
   val ammoModId: String = "standard_core",
   val tracerColorHex: Long = 0xFF00E5FF,
+)
+
+@Immutable
+data class WonderWeaponCustomization(
+  val equippedWonderId: String = "ww_ray_mk3",
+  val coreId: String = "core_standard_wonder",
+  val lensId: String = "lens_standard_wonder",
+  val amplifierId: String = "amp_standard_wonder",
 )
 
 @Immutable
@@ -846,6 +862,7 @@ data class OperatorProgressionState(
   val gearMap: Map<String, GearState> = GearSlot.entries.associate { it.id to GearState(it) },
   val gearPrestige: Int = 0,
   val weaponCustom: WeaponCustomization = WeaponCustomization(),
+  val wonderCustom: WonderWeaponCustomization = WonderWeaponCustomization(),
   val characterCustom: CharacterCustomization = CharacterCustomization(),
   val levelCustom: LevelCustomization = LevelCustomization(),
   val lobbyConfig: LobbyConfig = LobbyConfig(),
@@ -1287,10 +1304,16 @@ object ProgressionCatalog {
   )
 
   val optics: List<Pair<String, String>> = listOf(
-    "iron_sight" to "Precision Ring",
-    "holo_cyan" to "Holo Diamond",
-    "isac_thermal" to "ISAC Crosshair",
-    "starblade_reflex" to "Twin-Core Reflex",
+    "iron_sight" to "Precision Ring Sight",
+    "holo_cyan" to "Holo Cyan Diamond",
+    "isac_thermal" to "ISAC Thermal Targeting Optic",
+    "starblade_reflex" to "Twin-Core Reflex Sight",
+    "arkham_detective_optic" to "Batman Arkham Detective Sonar Optic (+35% Crit & Tracking)",
+    "cod_thermal_hybrid" to "Call of Duty Thermal Hybrid Scope (+25% Precision Zoom)",
+    "infamous_amp_lens" to "inFamous Conduit Amp Focus Lens (+Electric Arc Flash)",
+    "prototype_viral_sight" to "Prototype Biomass Thermal Eye (+Vampiric Bio Leech)",
+    "superman_telescopic" to "Superman Kryptonian Telescopic Heat Visor (+40% Velocity)",
+    "dungeon_abyss_lens" to "Abyss of Dungeons Nether Sight (Penetrates Armor)",
   )
 
   val barrels: List<Pair<String, String>> = listOf(
@@ -1298,13 +1321,26 @@ object ProgressionCatalog {
     "overclocked_rifling" to "Overclocked (+22% Bolt Speed)",
     "spread_choke" to "Spread Choke (+1 Extra Bolt)",
     "heavy_bore" to "Heavy Bore (+2 Base Damage)",
+    "gta4_sawed_heavy" to "GTA IV South Bohan Sawed-Off Barrel (+2 Spread, +3 Close Damage)",
+    "cod_taskforce_barrel" to "Call of Duty Task Force Heavy Barrel (+45% Velocity, +2 Dmg)",
+    "arkham_disruptor_barrel" to "Arkham Origins Batclaw Disruptor Barrel (+Armor Shred)",
+    "infamous_conduit_barrel" to "Empire City Conduit Rail Barrel (+Chain Voltage Stagger)",
+    "prototype_blade_barrel" to "Prototype Biomass Arm-Blade Barrel (+3 Dmg, +2 Pierce)",
+    "superman_solar_bore" to "Superman Solar Charged Core Barrel (+Solar Plasma Beam)",
+    "abyss_nether_barrel" to "Abyss of Dungeons Netherflame Barrel (+Void Burn & Pierce)",
   )
 
   val muzzles: List<Pair<String, String>> = listOf(
     "standard_muzzle" to "Standard Flash Hider",
     "tactical_brake" to "Tactical Muzzle Brake",
-    "monolithic_suppressor" to "Monolithic Suppressor",
-    "heavy_compensator" to "Heavy Recoil Compensator",
+    "monolithic_suppressor" to "Monolithic Suppressor (+1 Dmg, Stealth)",
+    "heavy_compensator" to "Heavy Recoil Compensator (+1 Dmg)",
+    "cod_colossus_suppressor" to "Call of Duty Colossus Silencer (+Suppression, +2 Dmg)",
+    "gta_street_brake" to "GTA IV Street Combat Muzzle Brake (+Recoil Control)",
+    "arkham_baffled_choke" to "Batman WayneTech Baffled Acoustic Choke (+Stagger)",
+    "infamous_shock_choke" to "inFamous Conduit Lightning Choke (+Concussion Shock)",
+    "prototype_tendril_muzzle" to "Prototype Viral Tendril Muzzle (+Shield Siphon on Hit)",
+    "abyss_eldritch_muzzle" to "Abyss of Dungeons Eldritch Void Muzzle (+Dissolves Armor)",
   )
 
   val underbarrels: List<Pair<String, String>> = listOf(
@@ -1312,6 +1348,12 @@ object ProgressionCatalog {
     "foregrip_vertical" to "Vertical Foregrip",
     "ranger_grip" to "Ranger Stabilizer",
     "bipod_mount" to "Heavy Bipod Mount",
+    "arkham_grapnel_launcher" to "Batman Arkham Grapnel Underbarrel (+Tethers Hostiles)",
+    "cod_masterkey_shotgun" to "Call of Duty Underbarrel Masterkey (+Shotgun Secondary Spread)",
+    "infamous_kinetic_pulse" to "inFamous Cole McGrath Kinetic Concussion Pad (+60% Knockback)",
+    "prototype_whip_spool" to "Prototype Alex Mercer Biomass Whip Spool (+Shield Siphon)",
+    "superman_krypton_grip" to "Superman Sunstone Ergonomic Foregrip (+Stable Recoil)",
+    "abyss_skull_lantern" to "Abyss of Dungeons Soul Lantern (+Reveals Boss Weakspots)",
   )
 
   val magazines: List<Pair<String, String>> = listOf(
@@ -1319,24 +1361,81 @@ object ProgressionCatalog {
     "extended_mag_2" to "Extended Drum Mag (+Spread)",
     "fast_mag" to "Speed Reload Mag",
     "composite_mag" to "Composite Energy Cell",
+    "cod_60_drum" to "Call of Duty 60-Round Heavy Drum (+Spread & High Fire Rate)",
+    "gta_drum_extended" to "GTA IV Liberty City High-Capacity Drum (+2 Spread)",
+    "arkham_shock_mag" to "Batman Batarang Electric Battery (+Arc Voltage Discharge)",
+    "prototype_biomass_sack" to "Prototype Biomass Storage Reserve (+Max Shield Capacity)",
+    "superman_crystal_cell" to "Fortress of Solitude Sunstone Battery (+Rapid Cadence)",
+    "abyss_soul_well" to "Abyss of Dungeons Soul Well (+Shield Restoration on Kill)",
   )
 
   val stocks: List<Pair<String, String>> = listOf(
     "tactical_stock" to "Tactical Stock",
     "heavy_padded_stock" to "Heavy Padded Buffer",
     "lightweight_skeleton" to "Skeletonized Dash Stock",
+    "cod_no_stock" to "Call of Duty No Stock (+25% Sprint & Movement Velocity)",
+    "arkham_glide_stock" to "Batman Arkham Cape-Stabilized Tactical Stock (Zero Recoil)",
+    "infamous_conduit_pad" to "inFamous Conduit Grounding Buffer (Extra Electric Resist)",
+    "prototype_armored_stock" to "Prototype Biomass Armored Shield Stock (+30 Max Shield)",
+    "superman_redcape_stock" to "Superman Kryptonian Aerodynamic Stock (+High Speed)",
+    "abyss_crypt_stock" to "Abyss of Dungeons Crypt Bone Stock (+Dark Magic Stability)",
   )
 
   val rearGrips: List<Pair<String, String>> = listOf(
     "stippled_grip" to "Stippled Combat Grip",
     "rubberized_grip" to "Rubberized Recoil Grip",
     "tactical_tape" to "Tactical Friction Tape",
+    "cod_granulated_grip" to "Call of Duty Granulated Stippled Grip Tape",
+    "arkham_batarang_grip" to "Batman WayneTech Carbon Fiber Batarang Grip (+1 Pierce)",
+    "prototype_tendril_wrap" to "Prototype Biomass Tendril Wrap (+Shield Siphon)",
+    "infamous_grounding_grip" to "inFamous Conduit Rubberized Insulator Grip",
+    "superman_steel_grip" to "Superman Man of Steel Reinforced Grip (+Unshakable Aim)",
+    "abyss_nether_wrap" to "Abyss of Dungeons Nether-Cloth Wrap (+Cursed Damage)",
   )
 
   val lasers: List<Pair<String, String>> = listOf(
     "none_laser" to "No Laser",
     "tactical_laser_5mw" to "5mW Tactical Laser",
     "infrared_designator" to "IR Target Designator",
+    "cod_tac_laser" to "Call of Duty 5mW Green Tac Laser (+Spread Focus & Velocity)",
+    "arkham_sonar_laser" to "Batman Arkham Detective Sonar Laser (Reveals Hostiles)",
+    "infamous_arc_laser" to "inFamous Conduit Arc Tracer Laser (+Shock Arc)",
+    "prototype_viral_laser" to "Prototype Blacklight Crimson Tracer Laser (+Armor Pen)",
+    "superman_heat_beam_guide" to "Superman Kryptonian Heat-Vision Guide Laser (+2 Dmg)",
+    "abyss_spectral_laser" to "Abyss of Dungeons Spectral Nether Guide (+Pierces Walls)",
+  )
+
+  val wonderCores: List<Pair<String, String>> = listOf(
+    "core_standard_wonder" to "Standard Quantum Reactor",
+    "core_pap_mk2" to "Call of Duty Pack-a-Punch Infusion Core (+100% Wonder Splash & 2x Dmg)",
+    "core_elemental_prism" to "Origins Elemental Prism Matrix (Infuses Wonder with All Elements)",
+    "core_apotheicon_eye" to "Shadows of Evil Apothicon Rift Singularity (Gravitational Black Hole)",
+    "core_stargate_naquadah" to "Stargate Naquadah Reactor (Heavy Piercing Shockwave)",
+    "core_abyss_eldritch" to "Abyss of Dungeons Eldritch Heart (Siphons 15% Shield & +3 Pierce)",
+    "core_kryptonian_matrix" to "Superman Kryptonian Sunstone (Blinding Solar Flare & Plasma)",
+    "core_arkham_freeze" to "Batman Arkham Mr. Freeze Cryo Core (Instant Flash Freeze)",
+    "core_infamous_ray_core" to "inFamous Ray Sphere Core (+5 Chain Lightning Arcs)",
+    "core_prototype_hivemind" to "Prototype Hivemind Core (Vaporizes Waves into Biomass Bombs)",
+  )
+
+  val wonderLenses: List<Pair<String, String>> = listOf(
+    "lens_standard_wonder" to "Standard Focusing Ring",
+    "lens_diffraction_fan" to "Origins 4-Way Splitter Fan (+4 Projectiles in Wide Arc)",
+    "lens_collimated_beam" to "Treyarch Collimated Ray Beam (+50% Velocity & Infinite Pierce)",
+    "lens_vortex_chamber" to "Apothicon Singularity Vortex Emitter (Draws Enemies into Zone)",
+    "lens_cryo_subzero" to "Origins Glacial Sub-Zero Focusing Lens (Freezes All Surrounding)",
+    "lens_superman_heat_aperture" to "Superman Kryptonian Heat Aperture (Supercharged Solar Beam)",
+    "lens_abyss_void_choke" to "Abyss of Dungeons Nether Choke (Expands Void Radius by 80%)",
+  )
+
+  val wonderAmplifiers: List<Pair<String, String>> = listOf(
+    "amp_standard_wonder" to "Standard Battery Buffer",
+    "amp_chronos_overdrive" to "Chrono Multiverse Overdrive (+60% Wonder Active Duration)",
+    "amp_void_resonance" to "Abyss Void Resonator (Chain Lightning & Fire Explosions on Kill)",
+    "amp_superman_fortress" to "Superman Fortress Aegis (Invulnerability Shielding during Volley)",
+    "amp_arkham_disruptor" to "Batman Arkham Disruptor Amplifier (Staggers Boss Special Attacks)",
+    "amp_cod_wunder_grid" to "Call of Duty Wunderwaffe Power Grid (+4 Additional Arc Chains)",
+    "amp_prototype_tendril_harness" to "Prototype Tendril Harness (Restores Shield on Wonder Pickup)",
   )
 
   val ammoMods: List<Pair<String, String>> = listOf(

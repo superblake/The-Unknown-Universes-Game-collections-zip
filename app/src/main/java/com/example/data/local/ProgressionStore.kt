@@ -112,6 +112,12 @@ class ProgressionStore(
     save(next)
   }
 
+  fun updateWonderWeaponCustomization(transform: (com.example.data.model.WonderWeaponCustomization) -> com.example.data.model.WonderWeaponCustomization) {
+    val updated = transform(current.wonderCustom)
+    val next = current.copy(wonderCustom = updated)
+    save(next)
+  }
+
   fun toggleMultiWeaponEquip(weaponId: String): List<String> {
     val cur = current
     val curList = cur.effectiveWeaponList().toMutableList()
@@ -2141,6 +2147,12 @@ class ProgressionStore(
         put("ammoModId", next.weaponCustom.ammoModId)
         put("tracerColorHex", next.weaponCustom.tracerColorHex)
       })
+      put("wonderCustom", JSONObject().apply {
+        put("equippedWonderId", next.wonderCustom.equippedWonderId)
+        put("coreId", next.wonderCustom.coreId)
+        put("lensId", next.wonderCustom.lensId)
+        put("amplifierId", next.wonderCustom.amplifierId)
+      })
       put("characterCustom", JSONObject().apply {
         put("suitThemeId", next.characterCustom.suitThemeId)
         put("visorStyleId", next.characterCustom.visorStyleId)
@@ -2576,6 +2588,18 @@ class ProgressionStore(
           tracerColorHex = wcObj.optLong("tracerColorHex", 0xFF00E5FF),
         )
       } else fallback.weaponCustom
+    }
+
+    val wonC = safeParse(fallback.wonderCustom) {
+      val wonObj = root.optJSONObject("wonderCustom")
+      if (wonObj != null) {
+        com.example.data.model.WonderWeaponCustomization(
+          equippedWonderId = wonObj.optString("equippedWonderId", fallback.wonderCustom.equippedWonderId),
+          coreId = wonObj.optString("coreId", fallback.wonderCustom.coreId),
+          lensId = wonObj.optString("lensId", fallback.wonderCustom.lensId),
+          amplifierId = wonObj.optString("amplifierId", fallback.wonderCustom.amplifierId),
+        )
+      } else fallback.wonderCustom
     }
 
     val cc = safeParse(fallback.characterCustom) {
@@ -3049,6 +3073,7 @@ class ProgressionStore(
       areaStates = areaStates,
       vacuumBot = vacBot,
       weaponCustom = wc,
+      wonderCustom = wonC,
       characterCustom = cc,
       levelCustom = lc,
       lobbyConfig = lobbyCfg,

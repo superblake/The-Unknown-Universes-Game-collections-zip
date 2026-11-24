@@ -96,6 +96,7 @@ private val titleBadges: List<String> = listOf(
 fun WeaponCustomizationTab(
   progression: OperatorProgressionState,
   onUpdateWeaponCustom: ((WeaponCustomization) -> WeaponCustomization) -> Unit,
+  onUpdateWonderCustom: ((com.example.data.model.WonderWeaponCustomization) -> com.example.data.model.WonderWeaponCustomization) -> Unit = {},
   totalBlueEssence: Long = 0L,
   onUpgradeWeaponTier: (String) -> Unit = {},
   onUpgradeWeaponStar: (String) -> Unit = {},
@@ -374,7 +375,17 @@ fun WeaponCustomizationTab(
 
     item {
       CustomizationChipGroup(
-        title = "UNDERBARREL & MAGS",
+        title = "UNDERBARREL MOUNT",
+        options = ProgressionCatalog.underbarrels,
+        selectedId = wc.underbarrelId,
+        tagPrefix = "underbarrel",
+        onSelect = { id -> onUpdateWeaponCustom { it.copy(underbarrelId = id) } },
+      )
+    }
+
+    item {
+      CustomizationChipGroup(
+        title = "MAGAZINE CAPACITY & ENERGY CELLS",
         options = ProgressionCatalog.magazines,
         selectedId = wc.magazineId,
         tagPrefix = "mag",
@@ -384,11 +395,21 @@ fun WeaponCustomizationTab(
 
     item {
       CustomizationChipGroup(
-        title = "STOCK & GRIP",
+        title = "STOCK BUFFER & MANEUVER",
         options = ProgressionCatalog.stocks,
         selectedId = wc.stockId,
         tagPrefix = "stock",
         onSelect = { id -> onUpdateWeaponCustom { it.copy(stockId = id) } },
+      )
+    }
+
+    item {
+      CustomizationChipGroup(
+        title = "REAR GRIP TAPE & INSULATION",
+        options = ProgressionCatalog.rearGrips,
+        selectedId = wc.rearGripId,
+        tagPrefix = "reargrip",
+        onSelect = { id -> onUpdateWeaponCustom { it.copy(rearGripId = id) } },
       )
     }
 
@@ -486,7 +507,7 @@ fun WeaponCustomizationTab(
                   modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_wonder_star_${kind.id}"),
                 ) {
                   Text(
-                    text = if (wStar >= StarRankMeta.MAX_STARS) "10★" else "★+1 (${wStarCost}B)",
+                    text = if (wStar >= StarRankMeta.MAX_STARS) "15★" else "★+1 (${wStarCost}B)",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                   )
@@ -496,6 +517,36 @@ fun WeaponCustomizationTab(
           }
         }
       }
+    }
+
+    item {
+      CustomizationChipGroup(
+        title = "WONDER WEAPON ATTACHMENT CORE",
+        options = ProgressionCatalog.wonderCores,
+        selectedId = progression.wonderCustom.coreId,
+        tagPrefix = "wonder_core",
+        onSelect = { id -> onUpdateWonderCustom { it.copy(coreId = id) } },
+      )
+    }
+
+    item {
+      CustomizationChipGroup(
+        title = "WONDER WEAPON FOCUS LENS / APERTURE",
+        options = ProgressionCatalog.wonderLenses,
+        selectedId = progression.wonderCustom.lensId,
+        tagPrefix = "wonder_lens",
+        onSelect = { id -> onUpdateWonderCustom { it.copy(lensId = id) } },
+      )
+    }
+
+    item {
+      CustomizationChipGroup(
+        title = "WONDER WEAPON AMPLIFIER & POWER GRID",
+        options = ProgressionCatalog.wonderAmplifiers,
+        selectedId = progression.wonderCustom.amplifierId,
+        tagPrefix = "wonder_amp",
+        onSelect = { id -> onUpdateWonderCustom { it.copy(amplifierId = id) } },
+      )
     }
 
     item {

@@ -127,6 +127,7 @@ fun ArmoryScreen(
   activeAreaId: String = "area_empire_city",
   activeRig: RigAsset? = null,
   onUpdateWeaponCustom: ((WeaponCustomization) -> WeaponCustomization) -> Unit = {},
+  onUpdateWonderCustom: ((com.example.data.model.WonderWeaponCustomization) -> com.example.data.model.WonderWeaponCustomization) -> Unit = {},
   onUpdateCharacterCustom: ((CharacterCustomization) -> CharacterCustomization) -> Unit = {},
   onUpdateLevelCustom: ((LevelCustomization) -> LevelCustomization) -> Unit = {},
   onSelectOrUnlockPass: (BattlePassVersion) -> Unit = {},
@@ -498,6 +499,7 @@ fun ArmoryScreen(
         ArmorySection.WEAPONS -> WeaponCustomizationTab(
           progression = progression,
           onUpdateWeaponCustom = onUpdateWeaponCustom,
+          onUpdateWonderCustom = onUpdateWonderCustom,
           totalBlueEssence = totalEssence,
           onUpgradeWeaponTier = onUpgradeWeaponTier,
           onUpgradeWeaponStar = onUpgradeWeaponStar,

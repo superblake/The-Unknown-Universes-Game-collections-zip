@@ -638,6 +638,10 @@ class UniverseViewModel(
     progressionStore?.updateWeaponCustomization(transform)
   }
 
+  fun updateWonderWeaponCustomization(transform: (com.example.data.model.WonderWeaponCustomization) -> com.example.data.model.WonderWeaponCustomization) {
+    progressionStore?.updateWonderWeaponCustomization(transform)
+  }
+
   fun updateCharacterCustomization(transform: (CharacterCustomization) -> CharacterCustomization) {
     progressionStore?.updateCharacterCustomization(transform)
   }

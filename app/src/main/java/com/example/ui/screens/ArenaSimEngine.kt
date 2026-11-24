@@ -457,9 +457,74 @@ data class ArenaLoadoutStats(
         }
       } + (juggPerkRank * 45) + (blueCoreAbove * 15) + ((areaSt.powerGridTier - 1) * 15)
 
+      val barrelBonusDmg = when (wc.barrelId) {
+        "heavy_bore" -> 2
+        "gta4_sawed_heavy", "prototype_blade_barrel", "superman_solar_bore" -> 3
+        "cod_taskforce_barrel", "abyss_nether_barrel" -> 2
+        else -> 0
+      }
+      val muzzleBonusDmg = when (wc.muzzleId) {
+        "heavy_compensator", "monolithic_suppressor", "infamous_shock_choke", "prototype_tendril_muzzle" -> 1
+        "cod_colossus_suppressor" -> 2
+        else -> 0
+      }
+      val opticBonusDmg = when (wc.opticId) {
+        "arkham_detective_optic" -> 2
+        "cod_thermal_hybrid" -> 1
+        else -> 0
+      }
+      val underbarrelBonusDmg = when (wc.underbarrelId) {
+        "arkham_grapnel_launcher" -> 2
+        "superman_krypton_grip" -> 1
+        else -> 0
+      }
+      val laserBonusDmg = when (wc.laserId) {
+        "arkham_sonar_laser", "superman_heat_beam_guide" -> 2
+        else -> 0
+      }
+      val stockBonusDmg = if (wc.stockId == "arkham_glide_stock") 1 else 0
+      val rearGripBonusDmg = if (wc.rearGripId == "superman_steel_grip") 1 else 0
+
+      val attachmentTotalBonusDmg = barrelBonusDmg + muzzleBonusDmg + opticBonusDmg + underbarrelBonusDmg + laserBonusDmg + stockBonusDmg + rearGripBonusDmg
+
+      val attachmentExtraSpread = (if (wc.barrelId == "spread_choke") 1 else 0) +
+        (if (wc.barrelId == "gta4_sawed_heavy") 2 else 0) +
+        (if (wc.underbarrelId == "cod_masterkey_shotgun") 2 else 0) +
+        (if (wc.magazineId == "extended_mag_2" || wc.magazineId == "cod_60_drum") 1 else 0) +
+        (if (wc.magazineId == "gta_drum_extended") 2 else 0)
+
+      val attachmentExtraPierce = (if (wc.barrelId == "prototype_blade_barrel") 2 else 0) +
+        (if (wc.barrelId == "arkham_disruptor_barrel" || wc.opticId == "dungeon_abyss_lens" || wc.underbarrelId == "prototype_whip_spool" || wc.rearGripId == "arkham_batarang_grip") 1 else 0)
+
+      val attachmentSpeedMult = 1.0f +
+        (if (wc.barrelId == "overclocked_rifling") 0.22f else 0f) +
+        (if (wc.barrelId == "cod_taskforce_barrel") 0.45f else 0f) +
+        (if (wc.barrelId == "superman_solar_bore") 0.30f else 0f) +
+        (if (wc.opticId == "superman_telescopic") 0.40f else 0f) +
+        (if (wc.laserId == "cod_tac_laser") 0.15f else 0f) +
+        (if (wc.muzzleId == "cod_colossus_suppressor") 0.10f else 0f)
+
+      val attachmentCadenceReduction = (if (wc.magazineId == "superman_crystal_cell") 1.2f else 0f) +
+        (if (wc.magazineId == "cod_60_drum" || wc.stockId == "cod_no_stock") 0.6f else 0f) +
+        (if (wc.magazineId == "gta_drum_extended") 0.8f else 0f) +
+        (if (wc.underbarrelId == "superman_krypton_grip") 0.5f else 0f)
+
+      val attachmentMoveBonus = (if (wc.stockId == "cod_no_stock") 0.08f else 0f) +
+        (if (wc.stockId == "superman_redcape_stock") 0.06f else 0f)
+
+      val attachmentShieldBonus = (if (wc.stockId == "prototype_armored_stock") 30 else 0) +
+        (if (wc.magazineId == "prototype_biomass_sack") 20 else 0)
+
+      val attachmentCritBonus = (if (wc.opticId == "arkham_detective_optic") 0.35f else 0f) +
+        (if (wc.opticId == "cod_thermal_hybrid") 0.25f else 0f) +
+        (if (wc.underbarrelId == "abyss_skull_lantern") 0.10f else 0f) +
+        (if (wc.laserId == "cod_tac_laser") 0.10f else 0f)
+
+      val wonderCustomDurBonus = if (progression.wonderCustom.amplifierId == "amp_chronos_overdrive") 0.60f else 0f
+
       val levelShieldBonus = ((playerLvl - 1) / 3).coerceAtMost(240) + playerPrestige * 25
       val rawShield = 100 + juggBonus + levelShieldBonus + pass.bonusShield + chestShield + skillShield +
-        outfitShieldBonus + charTierShield + charStarShield + storyAreaShield
+        outfitShieldBonus + charTierShield + charStarShield + storyAreaShield + attachmentShieldBonus
       val maxShield = (rawShield * originPowerMult * resonance.shieldMult * areaStarMult * levelMilestoneMult).roundToInt().coerceAtLeast(100)
 
       val speedPerkCount = perks.sumOf { p ->
@@ -469,7 +534,7 @@ data class ArenaLoadoutStats(
       }
       val matchRules = progression.effectiveMatchRules()
       val bootsMoveBonus = (((boots?.level ?: 1) - 1) * 0.0035f) + ((boots?.tier ?: 1) - 1) * 0.02f + (bootsStarAbove * 0.025f)
-      val stockMoveBonus = if (wc.stockId == "lightweight_skeleton") 0.08f else 0f
+      val stockMoveBonus = (if (wc.stockId == "lightweight_skeleton") 0.08f else 0f) + attachmentMoveBonus
       val speedMutatorMult = if (matchRules.doubleSpeed) 1.45f else 1.0f
       val moveBoost = ((1f + speedPerkCount * 0.14f + (perks.size * 0.05f) + pass.moveSpeedBonus +
         skCd * 0.03f + bootsMoveBonus + stockMoveBonus + outfitMoveBonus + storyAreaMove +
@@ -504,27 +569,22 @@ data class ArenaLoadoutStats(
       val cHeal = (45 + ((primaryConsumable?.tier ?: 1L) * 18L) + ((primaryConsumable?.powerValue ?: 100L) / 15L) + consumableStarBonus).toInt().coerceAtMost(550)
       val cCdSec = ((primaryConsumable?.cooldownSec?.toFloat() ?: 12f) * pass.cooldownMultiplier * skillCdMult * customModeCdMult).coerceIn(2.0f, 35f)
 
-      val barrelBonusDmg = if (wc.barrelId == "heavy_bore") 2 else 0
-      val muzzleBonusDmg = if (wc.muzzleId == "heavy_compensator" || wc.muzzleId == "monolithic_suppressor") 1 else 0
-      val barrelExtraSpread = if (wc.barrelId == "spread_choke") 1 else 0
-      val barrelSpeedMult = if (wc.barrelId == "overclocked_rifling") 1.22f else 1.0f
-
       val levelDmgBonus = ((wpnLevel - 1) / 3) + (wpnPrestige * 2)
       val skillDmgBonus = skDmg1 * 2 + skDmg2 * 3 + outfitDmgBonus + charTierDmg + (doubleTapRank * 2) + (redCoreAbove * 2)
-      val rawTotalWpnDmg = ((weapon.baseDamage - 1).coerceAtLeast(0) + barrelBonusDmg + muzzleBonusDmg +
+      val rawTotalWpnDmg = ((weapon.baseDamage - 1).coerceAtLeast(0) + attachmentTotalBonusDmg +
         levelDmgBonus + skillDmgBonus) * originPowerMult * wpnTierMult * wpnStarMult * charStarMult * resonance.damageMult * era.damageMod * areaCycleMult * areaStarMult * storyAreaDmgMult * levelMilestoneMult * customModeDmgMult
 
       val glovesRateBonus = ((gloves?.level ?: 1) - 1) * 0.04f + ((gloves?.tier ?: 1) - 1) * 0.25f + (glovesStarAbove * 0.25f)
       val levelCadenceReduction = (((wpnLevel - 1) * 0.08f) + glovesRateBonus).coerceAtMost(4.5f)
       val mutatorRateMult = (if (matchRules.doubleSpeed) 1.75f else 1.0f) * (if (matchRules.infiniteAmmo) 1.25f else 1.0f)
       val totalRateMult = (pass.fireRateMultiplier + outfitRateBonus + (speedColaRank * 0.12f) + (yellowCoreAbove * 0.06f)) * resonance.fireRateMult * mutatorRateMult
-      val rawCadence = (weapon.baseCadenceTicks - speedPerkCount * 0.9f - levelCadenceReduction) / totalRateMult.coerceAtLeast(1f)
+      val rawCadence = (weapon.baseCadenceTicks - speedPerkCount * 0.9f - levelCadenceReduction - attachmentCadenceReduction) / totalRateMult.coerceAtLeast(1f)
       val fireCadence = rawCadence.coerceIn(1.8f, 15.0f)
 
       val wonderDropSkillMult = (1f + skWonder * 0.30f + ((areaSt.lootRichnessTier - 1) * 0.15f) + resonance.lootLuckBonus) *
         progression.clan.wonderPerkMultiplier * (if (matchRules.wonderSpawnBoost) 2.2f else 1.0f)
-      val wonderDurSkillMult = 1f + skWonder * 0.15f + (((backRig?.level ?: 1) - 1) * 0.01f) + ((backRig?.tier ?: 1) - 1) * 0.08f + (backRigStarAbove * 0.10f) + (purpleCoreAbove * 0.18f)
-      val critDmgGearBonus = 1f + (((helmet?.level ?: 1) - 1) * 0.02f) + ((helmet?.tier ?: 1) - 1) * 0.12f + (helmetStarAbove * 0.14f) + (redCoreAbove * 0.12f)
+      val wonderDurSkillMult = 1f + skWonder * 0.15f + (((backRig?.level ?: 1) - 1) * 0.01f) + ((backRig?.tier ?: 1) - 1) * 0.08f + (backRigStarAbove * 0.10f) + (purpleCoreAbove * 0.18f) + wonderCustomDurBonus
+      val critDmgGearBonus = 1f + (((helmet?.level ?: 1) - 1) * 0.02f) + ((helmet?.tier ?: 1) - 1) * 0.12f + (helmetStarAbove * 0.14f) + (redCoreAbove * 0.12f) + attachmentCritBonus
       val vacRadius = (progression.vacuumBot.vacuumRadius + greenCoreAbove * 0.018f).coerceAtMost(0.95f)
       val trapBonus = (electricCherryRank * 3) + (phdRank * 3) + (blueCoreAbove * 2) + ((areaSt.trapDensityTier - 1) * 2)
 
@@ -574,9 +634,9 @@ data class ArenaLoadoutStats(
         weaponTier = wpnTier,
         weaponTierMultiplier = wpnTierMult,
         weaponBonusDamage = weaponBonusDmg,
-        weaponExtraSpread = barrelExtraSpread,
-        weaponExtraPierce = weapon.basePierce + ((wpnLevel - 1) / 6) + (skDmg2 / 2) + ((wpnTier - 1) / 3) + (if (matchRules.infiniteAmmo) 1 else 0),
-        projectileSpeed = weapon.baseProjectileSpeed * barrelSpeedMult * (1f + ((wpnLevel - 1) * 0.008f).coerceAtMost(0.35f)),
+        weaponExtraSpread = attachmentExtraSpread,
+        weaponExtraPierce = weapon.basePierce + attachmentExtraPierce + ((wpnLevel - 1) / 6) + (skDmg2 / 2) + ((wpnTier - 1) / 3) + (if (matchRules.infiniteAmmo) 1 else 0),
+        projectileSpeed = weapon.baseProjectileSpeed * attachmentSpeedMult * (1f + ((wpnLevel - 1) * 0.008f).coerceAtMost(0.35f)),
         tracerColor = weaponBulletColor,
         ammoModId = wc.ammoModId,
         playerLevel = playerLvl,
@@ -1859,7 +1919,31 @@ class ArenaSimState(
       val wonderTierMult = ProgressionCatalog.tierMultiplier(progression.wonderTier(wonder.id))
       val wonderStarMult = StarRankMeta.forStars(progression.wonderStar(wonder.id)).multiplier
       val purpleBonus = 1f + (progression.blastCoreLevel(BlastCoreColor.PURPLE) * 0.10f)
-      val wonderDmg = ((wonder.baseDamage + packLevel * 2) * wonderTierMult * wonderStarMult * purpleBonus * critBoost * loadout.critDamageGearBonus * instagibBoost).roundToInt().coerceAtLeast(1)
+      val coreDmgMult = if (progression.wonderCustom.coreId == "core_pap_mk2") 1.50f else if (progression.wonderCustom.coreId == "core_stargate_naquadah") 1.30f else 1.0f
+      val wonderDmg = (((wonder.baseDamage + packLevel * 2) * coreDmgMult * wonderTierMult * wonderStarMult * purpleBonus * critBoost * loadout.critDamageGearBonus * instagibBoost)).roundToInt().coerceAtLeast(1)
+
+      if (progression.wonderCustom.amplifierId == "amp_superman_fortress") {
+        hudShield = (hudShield + 2).coerceAtMost(loadout.maxShield)
+      }
+      if (progression.wonderCustom.lensId == "lens_diffraction_fan") {
+        for (fanOffset in listOf(-0.25f, 0.25f)) {
+          val fa = baseAngle + fanOffset
+          bolts.add(
+            ArenaBolt(
+              x = playerX,
+              y = playerY,
+              vx = cos(fa) * 0.026f,
+              vy = sin(fa) * 0.026f,
+              life = 60f,
+              isSupercharged = true,
+              pierceLeft = 2,
+              damage = wonderDmg,
+              color = wonderCol,
+              damageType = shotDmgType,
+            )
+          )
+        }
+      }
       when (wonder) {
         WonderWeaponKind.STARBLADE_BOOMERANG -> {
           for (i in 0 until 6) {
@@ -2727,6 +2811,9 @@ class ArenaSimState(
     val durMult = (if (progression.activePassVersion == BattlePassVersion.CHRONO_MULTIVERSE) 1.30f else 1.0f) * loadout.wonderDurSkillMult
     activeWonderWeapon = kind
     wonderWeaponTicks = kind.durationTicks * durMult
+    if (progression.wonderCustom.amplifierId == "amp_prototype_tendril_harness") {
+      hudShield = loadout.maxShield
+    }
     hudActiveWonder = kind
     hudWonderSecLeft = (wonderWeaponTicks / 60f).roundToInt()
     hudWonderPickedCount++
@@ -3371,6 +3458,46 @@ class ArenaSimState(
             val siphon = loadout.activePassVersion.glorySiphonPerBossHit
             if (siphon > 0 && (h.isBoss || h.isElite)) {
               hudShield = (hudShield + siphon).coerceAtMost(loadout.maxShield)
+            }
+
+            // Authentic Weapon Attachments
+            val wc = progression.weaponCustom
+            if (wc.underbarrelId == "arkham_grapnel_launcher") {
+              h.hitStaggerTicks = maxOf(h.hitStaggerTicks, 35f)
+            }
+            if (wc.underbarrelId == "infamous_kinetic_pulse") {
+              h.knockVelX += (b.vx / bSpd) * 0.010f
+              h.knockVelY += (b.vy / bSpd) * 0.010f
+            }
+            if (wc.underbarrelId == "prototype_whip_spool" || wc.rearGripId == "prototype_tendril_wrap" || wc.muzzleId == "prototype_tendril_muzzle" || wc.opticId == "prototype_viral_sight") {
+              hudShield = (hudShield + 1).coerceAtMost(loadout.maxShield)
+            }
+            if (wc.barrelId == "arkham_disruptor_barrel" || wc.muzzleId == "abyss_eldritch_muzzle") {
+              if (h.armor > 0) h.armor = (h.armor - 2).coerceAtLeast(0)
+            }
+
+            // Authentic Wonder Weapon Attachments
+            val wonC = progression.wonderCustom
+            if (wonC.coreId == "core_abyss_eldritch") {
+              hudShield = (hudShield + 3).coerceAtMost(loadout.maxShield)
+            }
+            if (wonC.coreId == "core_arkham_freeze" || wonC.lensId == "lens_cryo_subzero") {
+              h.cryoSlowTicks = 160f
+            }
+            if (wonC.coreId == "core_infamous_ray_core" || wonC.amplifierId == "amp_cod_wunder_grid") {
+              var extraChains = 0
+              for (j in 0 until hostiles.size) {
+                if (extraChains >= 4) break
+                val other = hostiles[j]
+                if (other === h || other.hp <= 0) continue
+                val ox = other.x - h.x
+                val oy = other.y - h.y
+                if (ox * ox + oy * oy <= 0.28f * 0.28f) {
+                  applyDamageToHostile(other, 3, ArenaDamageType.ENERGY)
+                  arcs.add(ArenaArcLine(h.x, h.y, other.x, other.y, Color(0xFF00E5FF), 14f))
+                  extraChains++
+                }
+              }
             }
 
             if (loadout.ammoModId == "cryo_stasis" || activeWonderWeapon == WonderWeaponKind.CHRONO_ZAT || activeWonderWeapon == WonderWeaponKind.GATE_HORIZON_CANNON) {
