@@ -285,7 +285,7 @@ fun LobbyAndBotsDialog(
             )
           }
 
-          items(roster, key = { it.id }) { member ->
+          items(roster.distinctBy { it.id }, key = { it.id }) { member ->
             val badgeCol = Color(member.accentHex)
             Surface(
               shape = RoundedCornerShape(12.dp),

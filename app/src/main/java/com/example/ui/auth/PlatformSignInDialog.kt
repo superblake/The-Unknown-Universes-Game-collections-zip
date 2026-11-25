@@ -285,7 +285,7 @@ fun PlatformSignInDialog(
           }
         }
 
-        if (errorText != null) {
+        errorText?.let { err ->
           Surface(
             color = MaterialTheme.colorScheme.error.copy(alpha = 0.14f),
             shape = RoundedCornerShape(8.dp),
@@ -294,7 +294,7 @@ fun PlatformSignInDialog(
               .testTag("dialog_platform_error_banner"),
           ) {
             Text(
-              text = errorText!!,
+              text = err,
               style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.error,
               modifier = Modifier.padding(10.dp),

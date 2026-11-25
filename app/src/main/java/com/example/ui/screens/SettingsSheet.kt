@@ -697,6 +697,52 @@ fun SettingsDialog(
                   }
                 }
 
+                Text("RAM & Graphics Memory Profile", style = MaterialTheme.typography.titleMedium)
+                Text(
+                  text = settings.ramGraphicsMode.detailSummary,
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                  modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                  horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                  com.example.data.local.RamGraphicsMode.entries.forEach { ramMode ->
+                    FilterChip(
+                      selected = settings.ramGraphicsMode == ramMode,
+                      onClick = {
+                        onUpdateSettings {
+                          it.copy(
+                            ramGraphicsMode = ramMode,
+                            ramGraphicsBudgetMb = ramMode.defaultBudgetMb,
+                            ramShaderCacheEnabled = ramMode != com.example.data.local.RamGraphicsMode.LOW_RAM_BOOST,
+                          )
+                        }
+                      },
+                      label = { Text(ramMode.label) },
+                      modifier = Modifier.height(48.dp).testTag("chip_ram_mode_${ramMode.id}"),
+                    )
+                  }
+                }
+
+                SettingSliderRow(
+                  title = "RAM Graphics Budget (${settings.ramGraphicsBudgetMb} MB)",
+                  description = "Controls arena particle/arc/bolt pool size and cached gradient slots. Lower = lighter RAM & steadier FPS; higher = maximum visual richness.",
+                  value = settings.ramGraphicsBudgetMb.toFloat(),
+                  range = 64f..1024f,
+                  steps = 14,
+                  tag = "slider_ram_budget",
+                  onValueChange = { v -> onUpdateSettings { it.copy(ramGraphicsBudgetMb = v.roundToInt().coerceIn(64, 1024)) } },
+                )
+
+                SettingSwitchRow(
+                  title = "RAM Shader & Backdrop LRU Cache",
+                  description = "Caches compiled arena sky & floor gradient brushes in RAM (up to 16 slots) to avoid per-frame shader allocations.",
+                  checked = settings.ramShaderCacheEnabled,
+                  tag = "switch_ram_shader_cache",
+                  onCheckedChange = { v -> onUpdateSettings { it.copy(ramShaderCacheEnabled = v) } },
+                )
+
                 SettingSwitchRow(
                   title = "Full-Screen Immersive Arena",
                   description = "Hides Android system bars and OS navigation rail during active Arena missions for maximum battlefield visibility.",
@@ -853,9 +899,9 @@ fun SettingsDialog(
               keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
               modifier = Modifier.fillMaxWidth().testTag("pin_setup_input"),
             )
-            if (pinError != null) {
+            pinError?.let { err ->
               Text(
-                text = pinError!!,
+                text = err,
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
               )

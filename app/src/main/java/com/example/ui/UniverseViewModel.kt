@@ -37,6 +37,7 @@ import com.example.data.model.MultiverseMatchListing
 import com.example.data.model.NewGamePlusVersion
 import com.example.data.model.OperatorProfile
 import com.example.data.model.OperatorProgressionState
+import com.example.data.model.PowerTier
 import com.example.data.model.PrivateMatchRules
 import com.example.data.model.ProgressionCatalog
 import com.example.data.model.RigAsset
@@ -1170,7 +1171,25 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeAreaStar(areaId, currentBlueEssence), "Cannot upgrade Area Star") {
       val stars = progressionState.value.areaState(areaId).starLevel
-      "${progressionState.value.resolveAreaSpec(areaId).name} elevated to $stars★/10★!"
+      "${progressionState.value.resolveAreaSpec(areaId).name} elevated to $stars★/${StarRankMeta.MAX_STARS}★!"
+    }
+  }
+
+  fun upgradeModeTier(modeId: String, currentBlueEssence: Long) {
+    val store = progressionStore ?: return
+    runEssenceUpgrade(store.upgradeModeTier(modeId, currentBlueEssence), "Cannot upgrade Mode Tier") {
+      val nextTier = progressionState.value.modeTier(modeId)
+      val modeLabel = UniverseCatalog.modeById(modeId).label
+      "$modeLabel Mode Tier $nextTier/${PowerTier.MAX_TIER} (${ProgressionCatalog.tierMeta(nextTier).label})!"
+    }
+  }
+
+  fun upgradeModeStar(modeId: String, currentBlueEssence: Long) {
+    val store = progressionStore ?: return
+    runEssenceUpgrade(store.upgradeModeStar(modeId, currentBlueEssence), "Cannot upgrade Mode Star") {
+      val stars = progressionState.value.modeStar(modeId)
+      val modeLabel = UniverseCatalog.modeById(modeId).label
+      "$modeLabel Mode elevated to $stars★/${StarRankMeta.MAX_STARS}★ (${StarRankMeta.forStars(stars).label})!"
     }
   }
 

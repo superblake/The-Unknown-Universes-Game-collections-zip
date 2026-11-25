@@ -134,12 +134,13 @@ fun ArenaScreen(
   val activeAreaSpec = remember(progression.activeAreaId, progression.customGameMaps) { progression.activeAreaSpec() }
   val activeAreaState = remember(progression.activeAreaId, progression.areaStates) { progression.areaState() }
 
-  val loadout = remember(armory, activeAreaSpec.accentHex, progression, profile.totalEssence) {
+  val loadout = remember(armory, activeAreaSpec.accentHex, progression, profile.totalEssence, mode.id) {
     ArenaLoadoutStats.fromArmory(
       armory = armory,
       fallbackAccent = Color(activeAreaSpec.accentHex),
       progression = progression,
       blueEssence = profile.totalEssence,
+      activeModeId = mode.id,
     )
   }
   val hasConsumable = remember(armory) { armory.any { it.equipped && it.category == "consumable" } }
@@ -167,12 +168,12 @@ fun ArenaScreen(
     externalSimProvider?.invoke(simSessionKey, factory) ?: factory()
   }
 
-  LaunchedEffect(loadout) {
+  LaunchedEffect(loadout, mode.id) {
     val curWeaponId = sim.equippedWeaponIds.getOrElse(sim.activeWeaponIndex) { loadout.weaponSpec.id }
     sim.loadout = if (curWeaponId == loadout.weaponSpec.id) {
       loadout
     } else {
-      ArenaLoadoutStats.fromArmory(armory, Color(activeAreaSpec.accentHex), progression, profile.totalEssence, curWeaponId)
+      ArenaLoadoutStats.fromArmory(armory, Color(activeAreaSpec.accentHex), progression, profile.totalEssence, curWeaponId, activeModeId = mode.id)
     }
     sim.hudActiveWeaponName = sim.loadout.weaponSpec.name
   }
@@ -565,7 +566,7 @@ fun ArenaScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth().testTag("arena_places_strip"),
           ) {
-            items(places, key = { it.id }) { dest ->
+            items(places.distinctBy { it.id }, key = { it.id }) { dest ->
               val isHere = sim.hudCurrentPlaceName == dest.label
               Surface(
                 shape = RoundedCornerShape(10.dp),
@@ -607,7 +608,7 @@ fun ArenaScreen(
               .clip(RoundedCornerShape(4.dp))
               .background(Color(0xFF1C2742))
           ) {
-            val pct = (sim.hudShield.toFloat() / sim.loadout.maxShield.coerceAtLeast(1)).coerceIn(0f, 1f)
+            val pct = (sim.hudShield.toFloat() / sim.loadout.maxShield.coerceAtLeast(1)).let { if (it.isFinite()) it.coerceIn(0f, 1f) else 0f }
             Box(
               modifier = Modifier
                 .fillMaxWidth(pct)
@@ -722,12 +723,17 @@ fun ArenaScreen(
         val tick = sim.renderNonce
         val w = size.width
         val h = size.height
+        if (!w.isFinite() || !h.isFinite() || w <= 1f || h <= 1f) return@Canvas
         val camX = sim.cameraOriginX()
         val camY = sim.cameraOriginY()
-        val glowOn = settings.dynamicGlowEffects && settings.graphicsQuality != GraphicsQuality.LOW
+        if (!camX.isFinite() || !camY.isFinite()) return@Canvas
+        val glowOn = settings.dynamicGlowEffects &&
+          settings.graphicsQuality != GraphicsQuality.LOW &&
+          settings.ramGraphicsMode != com.example.data.local.RamGraphicsMode.LOW_RAM_BOOST
         val highContrast = settings.effectiveHighContrast
         val pulse = if (settings.reduceMotion || settings.reduceFlashes) 0.3f else (sin(sim.elapsedTicks * 0.12f) + 1f) * 0.5f
 
+        try {
         drawWorldArenaBackdrop(
           worldId = world.id,
           accentColor = palette.playerAccent,
@@ -751,6 +757,9 @@ fun ArenaScreen(
           camY = camY,
           areaAgeEra = activeAreaState.currentEra,
           areaId = activeAreaSpec.id,
+          ramGraphicsMode = settings.ramGraphicsMode,
+          ramGraphicsBudgetMb = settings.ramGraphicsBudgetMb,
+          ramShaderCacheEnabled = settings.ramShaderCacheEnabled,
         )
 
         drawSectionBiomesAndBorders(
@@ -775,12 +784,14 @@ fun ArenaScreen(
           val brC = worldToPerspectiveScreen(ARENA_CENTER, ARENA_CENTER, camX, camY, w, h)
           val brScale = perspectiveScaleForRelY(ARENA_CENTER - camY)
           val brR = sim.brRingRadius * minOf(w, h) * brScale
-          drawOval(
-            color = palette.dropHazard,
-            topLeft = Offset(brC.x - brR, brC.y - brR * 0.72f),
-            size = Size(brR * 2f, brR * 1.44f),
-            style = Stroke(width = if (highContrast) 6f else 4f),
-          )
+          if (brR.isFinite() && brR > 0f && brC.x.isFinite() && brC.y.isFinite()) {
+            drawOval(
+              color = palette.dropHazard,
+              topLeft = Offset(brC.x - brR, brC.y - brR * 0.72f),
+              size = Size(brR * 2f, brR * 1.44f),
+              style = Stroke(width = if (highContrast) 6f else 4f),
+            )
+          }
         }
 
         if (mode.id == "dmz") {
@@ -855,12 +866,14 @@ fun ArenaScreen(
         if (sim.pulseRingRadius > 0f && !settings.reduceFlashes) {
           val pCenter = worldToPerspectiveScreen(sim.playerX, sim.playerY, camX, camY, w, h)
           val pR = sim.pulseRingRadius * minOf(w, h) * 0.8f
-          drawOval(
-            color = palette.playerAccent.copy(alpha = 0.65f),
-            topLeft = Offset(pCenter.x - pR, pCenter.y - pR * 0.68f),
-            size = Size(pR * 2f, pR * 1.36f),
-            style = Stroke(width = 7f),
-          )
+          if (pR.isFinite() && pR > 0f && pCenter.x.isFinite() && pCenter.y.isFinite()) {
+            drawOval(
+              color = palette.playerAccent.copy(alpha = 0.65f),
+              topLeft = Offset(pCenter.x - pR, pCenter.y - pR * 0.68f),
+              size = Size(pR * 2f, pR * 1.36f),
+              style = Stroke(width = 7f),
+            )
+          }
         }
 
         // Arcs
@@ -905,6 +918,7 @@ fun ArenaScreen(
             val spPos = worldToPerspectiveScreen(sp.x, sp.y, camX, camY, w, h)
             val spScale = perspectiveScaleForRelY(sp.y - camY)
             val r = (sp.maxLife - sp.life).coerceAtLeast(3f) * 1.8f * spScale
+            if (!r.isFinite() || r <= 0f || !spPos.x.isFinite() || !spPos.y.isFinite()) continue
             drawCircle(
               color = sp.color.copy(alpha = (sp.life / sp.maxLife).coerceIn(0f, 1f)),
               radius = r,
@@ -1138,6 +1152,9 @@ fun ArenaScreen(
         if (sim.damageFlashTicks > 0f && !settings.reduceFlashes) {
           drawRect(color = palette.enemyShot.copy(alpha = 0.35f), topLeft = Offset.Zero, size = Size(w, h), style = Stroke(width = 22f))
         }
+        } catch (t: Throwable) {
+          android.util.Log.e("ArenaCanvas", "draw error", t)
+        }
       }
 
       // Boss Health Banner & Action Callouts
@@ -1166,10 +1183,12 @@ fun ArenaScreen(
                   )
                 }
               }
-              if (sim.hudBossArmorRatio > 0f) {
+              val bossArmor = if (sim.hudBossArmorRatio.isFinite()) sim.hudBossArmorRatio.coerceIn(0f, 1f) else 0f
+              val bossHp = if (sim.hudBossHpRatio.isFinite()) sim.hudBossHpRatio.coerceIn(0f, 1f) else 0f
+              if (bossArmor > 0f) {
                 Spacer(Modifier.height(3.dp))
                 LinearProgressIndicator(
-                  progress = { sim.hudBossArmorRatio },
+                  progress = { bossArmor },
                   color = Color(0xFFB0BEC5),
                   trackColor = Color(0xFF1A2538),
                   modifier = Modifier.width(190.dp).height(4.dp).clip(RoundedCornerShape(2.dp)),
@@ -1177,7 +1196,7 @@ fun ArenaScreen(
               }
               Spacer(Modifier.height(3.dp))
               LinearProgressIndicator(
-                progress = { sim.hudBossHpRatio },
+                progress = { bossHp },
                 color = palette.hostile,
                 trackColor = Color(0xFF2B121B),
                 modifier = Modifier.width(190.dp).height(6.dp).clip(RoundedCornerShape(3.dp)),
@@ -1657,7 +1676,7 @@ fun ArenaScreen(
               modifier = Modifier.weight(1f).fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp)).padding(8.dp),
               verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-              items(channelMessages.takeLast(25), key = { it.id }) { msg ->
+              items(channelMessages.takeLast(25).distinctBy { it.id }, key = { it.id }) { msg ->
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                   Text(
                     text = "${msg.senderClanTag?.let { "[$it] " } ?: ""}${msg.senderCallsign}: ${msg.content}",
@@ -1719,11 +1738,13 @@ fun ArenaScreen(
             if (onSelectMode != null) {
               Text("DEPLOYMENT MODE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
               LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(UniverseCatalog.modes, key = { it.id }) { m ->
+                items(UniverseCatalog.modes.distinctBy { it.id }, key = { it.id }) { m ->
+                  val mTier = progression.modeTier(m.id)
+                  val mStar = progression.modeStar(m.id)
                   FilterChip(
                     selected = mode.id == m.id,
                     onClick = { onSelectMode(m.id) },
-                    label = { Text("${m.shortTag} • ${m.label}", style = MaterialTheme.typography.labelSmall) },
+                    label = { Text("${m.shortTag} • ${m.label} (T$mTier/$mStar★)", style = MaterialTheme.typography.labelSmall) },
                     modifier = Modifier.heightIn(min = 48.dp).testTag("arena_quick_mode_${m.id}"),
                   )
                 }
@@ -1773,8 +1794,9 @@ fun ArenaScreen(
               modifier = Modifier.weight(1f).fillMaxWidth(),
               verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-              items(visibleAreas, key = { it.id }) { area ->
+              items(visibleAreas.distinctBy { it.id }, key = { it.id }) { area ->
                 val selected = area.id == progression.activeAreaId
+                val aSt = progression.areaState(area.id)
                 val accent = Color(area.accentHex)
                 Surface(
                   onClick = {
@@ -1790,7 +1812,7 @@ fun ArenaScreen(
                     .testTag("arena_quick_map_${area.id}"),
                 ) {
                   Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(area.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = accent)
+                    Text("${area.name} • Grid T${aSt.powerGridTier}/25 • ${aSt.starLevel}★", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = accent)
                     Text("${area.storyEraNote} • ${area.buildingNames.take(3).joinToString(" / ")}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                   }
                 }

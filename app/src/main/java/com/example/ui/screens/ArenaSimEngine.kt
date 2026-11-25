@@ -10,6 +10,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import com.example.data.local.AppSettings
 import com.example.data.local.ParticleDensity
+import com.example.data.local.RamGraphicsMode
 import com.example.data.model.ArmoryItem
 import com.example.data.model.BattlePassVersion
 import com.example.data.model.BlastCoreColor
@@ -345,6 +346,7 @@ data class ArenaLoadoutStats(
       progression: OperatorProgressionState = OperatorProgressionState(),
       blueEssence: Long? = null,
       weaponOverrideId: String? = null,
+      activeModeId: String = "survival",
     ): ArenaLoadoutStats {
       val equipped = armory.filter { it.equipped }
       val perks = equipped.filter { it.category == "perk" }
@@ -423,8 +425,11 @@ data class ArenaLoadoutStats(
         else -> 0f
       }
 
-      // Weapon Star Multiplier
+      // Weapon Star Multiplier & Deployment Mode Tier (1..25) / Star (1..15★)
       val wpnStarMult = StarRankMeta.forStars(progression.weaponStar(weapon.id)).multiplier
+      val modeTierAbove = (progression.modeTier(activeModeId) - 1).coerceAtLeast(0)
+      val modeTierMult = ProgressionCatalog.tierMultiplier(progression.modeTier(activeModeId))
+      val modeStarMult = StarRankMeta.forStars(progression.modeStar(activeModeId)).multiplier
 
       // Perk Cans & Bottles Ranks
       val juggPerkRank = progression.perkRank("perk_juggernog")
@@ -549,7 +554,7 @@ data class ArenaLoadoutStats(
 
       val levelShieldBonus = ((playerLvl - 1) / 3).coerceAtMost(240) + playerPrestige * 25
       val rawShield = 100 + juggBonus + levelShieldBonus + pass.bonusShield + chestShield + skillShield +
-        outfitShieldBonus + charTierShield + charStarShield + storyAreaShield + attachmentShieldBonus
+        outfitShieldBonus + charTierShield + charStarShield + storyAreaShield + attachmentShieldBonus + (modeTierAbove * 14)
       val maxShield = (rawShield * originPowerMult * resonance.shieldMult * areaStarMult * levelMilestoneMult).roundToInt().coerceAtLeast(100)
 
       val speedPerkCount = perks.sumOf { p ->
@@ -597,7 +602,7 @@ data class ArenaLoadoutStats(
       val levelDmgBonus = ((wpnLevel - 1) / 3) + (wpnPrestige * 2)
       val skillDmgBonus = skDmg1 * 2 + skDmg2 * 3 + outfitDmgBonus + charTierDmg + (doubleTapRank * 2) + (redCoreAbove * 2)
       val rawTotalWpnDmg = ((weapon.baseDamage - 1).coerceAtLeast(0) + attachmentTotalBonusDmg +
-        levelDmgBonus + skillDmgBonus) * originPowerMult * wpnTierMult * wpnStarMult * charStarMult * resonance.damageMult * era.damageMod * areaCycleMult * areaStarMult * storyAreaDmgMult * levelMilestoneMult * customModeDmgMult
+        levelDmgBonus + skillDmgBonus) * originPowerMult * wpnTierMult * wpnStarMult * charStarMult * modeTierMult * modeStarMult * resonance.damageMult * era.damageMod * areaCycleMult * areaStarMult * storyAreaDmgMult * levelMilestoneMult * customModeDmgMult
 
       val glovesRateBonus = ((gloves?.level ?: 1) - 1) * 0.04f + ((gloves?.tier ?: 1) - 1) * 0.25f + (glovesStarAbove * 0.25f)
       val levelCadenceReduction = (((wpnLevel - 1) * 0.08f) + glovesRateBonus).coerceAtMost(4.5f)
@@ -833,11 +838,13 @@ class ArenaSimState(
   val equippedLethalItem: com.example.data.model.EquipmentItemSpec
     get() = ProgressionCatalog.equipmentItems.firstOrNull { it.id == progression.equippedLethalIds.firstOrNull() }
       ?: ProgressionCatalog.equipmentItems.firstOrNull { it.id == progression.equipmentState("lethal").equippedItemId }
-      ?: ProgressionCatalog.equipmentItems[0]
+      ?: ProgressionCatalog.equipmentItems.firstOrNull { it.slotType == com.example.data.model.EquipmentSlotType.LETHAL }
+      ?: ProgressionCatalog.equipmentItems.first()
   val equippedTacticalItem: com.example.data.model.EquipmentItemSpec
     get() = ProgressionCatalog.equipmentItems.firstOrNull { it.id == progression.equippedTacticalIds.firstOrNull() }
       ?: ProgressionCatalog.equipmentItems.firstOrNull { it.id == progression.equipmentState("tactical").equippedItemId }
-      ?: ProgressionCatalog.equipmentItems[4]
+      ?: ProgressionCatalog.equipmentItems.firstOrNull { it.slotType == com.example.data.model.EquipmentSlotType.TACTICAL }
+      ?: ProgressionCatalog.equipmentItems.last()
   val hudLethalName: String
     get() = if (progression.equippedLethalIds.size > 1) "${equippedLethalItem.name.substringBefore(" ").uppercase()} +${progression.equippedLethalIds.size - 1}"
     else equippedLethalItem.name.substringBefore(" ").uppercase()
@@ -870,7 +877,8 @@ class ArenaSimState(
 
   val collectionDifficulty = progression.collectionDifficulty(world.id)
   val ngPlusSpec = progression.ngPlusSpec
-  val gameplayRewardMultiplier = progression.combinedGameplayRewardMultiplier(world.id)
+  val modeRewardMultiplier = 1f + ((progression.modeTier(modeId) - 1).coerceAtLeast(0) * 0.04f) + ((progression.modeStar(modeId) - 1).coerceAtLeast(0) * 0.08f)
+  val gameplayRewardMultiplier = progression.combinedGameplayRewardMultiplier(world.id) * modeRewardMultiplier
   var hudCurrentPlaceName by mutableStateOf(
     "${areaSpec.name.substringBefore(" (")} • ${areaSpec.buildingNames.firstOrNull() ?: world.mapSectors.firstOrNull() ?: "Central Sector"}"
   )
@@ -1222,7 +1230,7 @@ class ArenaSimState(
     camY = playerY - 0.5f
     dashInvulnTicks = maxOf(dashInvulnTicks, 30f)
     for (bi in 0 until arenaBots.size) {
-      val bot = arenaBots[bi]
+      val bot = arenaBots.getOrNull(bi) ?: continue
       if (bot.isAllied) {
         val ang = bi * 1.1f
         bot.x = (playerX + cos(ang) * 0.16f).coerceIn(0.25f, ARENA_WORLD_SIZE - 0.25f)
@@ -1479,6 +1487,7 @@ class ArenaSimState(
       progression = progression,
       blueEssence = initialBlueEssence,
       weaponOverrideId = nextId,
+      activeModeId = modeId,
     )
     hudActiveWeaponName = loadout.weaponSpec.name
     postCallout("SWAPPED WEAPON: ${loadout.weaponSpec.name.uppercase()}")
@@ -1538,7 +1547,7 @@ class ArenaSimState(
   fun interactNearestWorldObject(): Boolean {
     if (hudRunEnded) return false
     for (ci in 0 until catEasterEggs.size) {
-      val cat = catEasterEggs[ci]
+      val cat = catEasterEggs.getOrNull(ci) ?: continue
       if (!cat.found) {
         val dx = cat.x - playerX
         val dy = cat.y - playerY
@@ -1549,7 +1558,7 @@ class ArenaSimState(
       }
     }
     for (li in 0 until lootCrates.size) {
-      val crate = lootCrates[li]
+      val crate = lootCrates.getOrNull(li) ?: continue
       if (!crate.opened) {
         val dx = crate.x - playerX
         val dy = crate.y - playerY
@@ -1560,7 +1569,7 @@ class ArenaSimState(
       }
     }
     for (si in 0 until worldStations.size) {
-      val st = worldStations[si]
+      val st = worldStations.getOrNull(si) ?: continue
       val dx = st.x - playerX
       val dy = st.y - playerY
       if (dx * dx + dy * dy <= 0.17f * 0.17f) {
@@ -1595,7 +1604,7 @@ class ArenaSimState(
       }
     }
     for (ri in 0 until restCamps.size) {
-      val camp = restCamps[ri]
+      val camp = restCamps.getOrNull(ri) ?: continue
       val dx = camp.x - playerX
       val dy = camp.y - playerY
       if (dx * dx + dy * dy <= camp.radius * camp.radius) {
@@ -1615,7 +1624,7 @@ class ArenaSimState(
     val scoreMult = if (doubleEssenceTicks > 0f) 2L else 1L
     var totalHits = 0
     for (ti in 0 until traps.size) {
-      val t = traps[ti]
+      val t = traps.getOrNull(ti) ?: continue
       if (t.cooldownTicks <= 0f) {
         t.activeTicks = 240f
         t.cooldownTicks = 300f
@@ -1628,7 +1637,7 @@ class ArenaSimState(
           if (dx * dx + dy * dy <= rSq) {
             val trapDmgType = if (t.kind == ArenaTrapKind.ELECTRIC) ArenaDamageType.ENERGY else ArenaDamageType.THERMAL
             applyDamageToHostile(h, 6 + bonus, trapDmgType)
-            arcs.add(ArenaArcLine(t.x, t.y, h.x, h.y, t.kind.color, 20f))
+            addArcIfAllowed(t.x, t.y, h.x, h.y, t.kind.color, 20f)
             totalHits++
             if (h.hp <= 0) {
               iter.remove()
@@ -1708,13 +1717,49 @@ class ArenaSimState(
   )
 
   private fun addSparkIfAllowed(x: Float, y: Float, color: Color, life: Float) {
-    val cap = when {
-      liveSettings.particleDensity == ParticleDensity.OFF -> 0
-      liveSettings.reduceMotion || liveSettings.particleDensity == ParticleDensity.REDUCED -> 8
-      else -> 36
+    if (liveSettings.particleDensity == ParticleDensity.OFF) return
+    if (!x.isFinite() || !y.isFinite() || !life.isFinite()) return
+    val ramCap = when (liveSettings.ramGraphicsMode) {
+      RamGraphicsMode.LOW_RAM_BOOST -> 12
+      RamGraphicsMode.BALANCED -> 28
+      RamGraphicsMode.HIGH_RAM_DETAIL -> 48
+      RamGraphicsMode.MAX_RAM_ULTRA -> 72
     }
-    if (cap <= 0 || sparks.size >= cap) return
+    val cap = if (liveSettings.reduceMotion || liveSettings.particleDensity == ParticleDensity.REDUCED) {
+      (ramCap / 3).coerceAtLeast(6)
+    } else ramCap
+    if (sparks.size >= cap) return
     sparks.add(HitSpark(x, y, color, life))
+  }
+
+  private fun addArcIfAllowed(x1: Float, y1: Float, x2: Float, y2: Float, color: Color, life: Float) {
+    if (!x1.isFinite() || !y1.isFinite() || !x2.isFinite() || !y2.isFinite()) return
+    val ramCap = when (liveSettings.ramGraphicsMode) {
+      RamGraphicsMode.LOW_RAM_BOOST -> 10
+      RamGraphicsMode.BALANCED -> 24
+      RamGraphicsMode.HIGH_RAM_DETAIL -> 40
+      RamGraphicsMode.MAX_RAM_ULTRA -> 64
+    }
+    val cap = if (liveSettings.reduceMotion) (ramCap / 2).coerceAtLeast(6) else ramCap
+    if (arcs.size >= cap) return
+    arcs.add(ArenaArcLine(x1, y1, x2, y2, color, life))
+  }
+
+  private fun addBoltIfAllowed(bolt: ArenaBolt) {
+    if (!bolt.x.isFinite() || !bolt.y.isFinite() || !bolt.vx.isFinite() || !bolt.vy.isFinite()) return
+    val baseCap = when (liveSettings.ramGraphicsMode) {
+      RamGraphicsMode.LOW_RAM_BOOST -> 90
+      RamGraphicsMode.BALANCED -> 160
+      RamGraphicsMode.HIGH_RAM_DETAIL -> 220
+      RamGraphicsMode.MAX_RAM_ULTRA -> 300
+    }
+    val budgetBonus = ((liveSettings.ramGraphicsBudgetMb - 128) / 32).coerceIn(-16, 48)
+    val maxBolts = (baseCap + budgetBonus).coerceIn(72, 340)
+    if (bolts.size >= maxBolts) {
+      val idxOld = bolts.indexOfFirst { it.isEnemyShot == bolt.isEnemyShot }
+      if (idxOld >= 0) bolts.removeAt(idxOld) else if (bolts.isNotEmpty()) bolts.removeAt(0)
+    }
+    bolts.add(bolt)
   }
 
   fun spawnWave(w: Long) {
@@ -2033,7 +2078,7 @@ class ArenaSimState(
     var best: ArenaHostile? = null
     var bestDistSq = Float.MAX_VALUE
     for (i in 0 until hostiles.size) {
-      val h = hostiles[i]
+      val h = hostiles.getOrNull(i) ?: continue
       val dx = h.x - playerX
       val dy = h.y - playerY
       val dSq = dx * dx + dy * dy
@@ -2089,7 +2134,7 @@ class ArenaSimState(
         h.knockVelX += (dx / d) * 0.018f
         h.knockVelY += (dy / d) * 0.018f
         h.hitStaggerTicks = maxOf(h.hitStaggerTicks, 26f)
-        arcs.add(ArenaArcLine(playerX, playerY, h.x, h.y, strikeType.color, 18f))
+        addArcIfAllowed(playerX, playerY, h.x, h.y, strikeType.color, 18f)
         addSparkIfAllowed(h.x, h.y, strikeType.color, 18f)
         hitCount++
         if (h.hp <= 0) {
@@ -2174,7 +2219,7 @@ class ArenaSimState(
       if (progression.wonderCustom.lensId == "lens_diffraction_fan") {
         for (fanOffset in listOf(-0.25f, 0.25f)) {
           val fa = baseAngle + fanOffset
-          bolts.add(
+          addBoltIfAllowed(
             ArenaBolt(
               x = playerX,
               y = playerY,
@@ -2194,7 +2239,7 @@ class ArenaSimState(
         WonderWeaponKind.STARBLADE_BOOMERANG -> {
           for (i in 0 until 6) {
             val a = baseAngle + i * (2f * PI.toFloat() / 6f)
-            bolts.add(
+            addBoltIfAllowed(
               ArenaBolt(
                 x = playerX,
                 y = playerY,
@@ -2213,7 +2258,7 @@ class ArenaSimState(
         WonderWeaponKind.RAY_NOVA_MK3 -> {
           for (offset in listOf(-0.08f, 0.08f)) {
             val a = baseAngle + offset
-            bolts.add(
+            addBoltIfAllowed(
               ArenaBolt(
                 x = playerX,
                 y = playerY,
@@ -2230,7 +2275,7 @@ class ArenaSimState(
           }
         }
         WonderWeaponKind.CRUCIBLE_BFG -> {
-          bolts.add(
+          addBoltIfAllowed(
             ArenaBolt(
               x = playerX,
               y = playerY,
@@ -2246,7 +2291,7 @@ class ArenaSimState(
           )
         }
         WonderWeaponKind.BLACKLIGHT_WHIP -> {
-          bolts.add(
+          addBoltIfAllowed(
             ArenaBolt(
               x = playerX,
               y = playerY,
@@ -2262,7 +2307,7 @@ class ArenaSimState(
           )
         }
         WonderWeaponKind.LIBERTY_WUNDERWAFFE, WonderWeaponKind.CHRONO_ZAT -> {
-          bolts.add(
+          addBoltIfAllowed(
             ArenaBolt(
               x = playerX,
               y = playerY,
@@ -2280,7 +2325,7 @@ class ArenaSimState(
         WonderWeaponKind.RAY_SPHERE_OVERDRIVE -> {
           for (offset in listOf(-0.14f, 0f, 0.14f)) {
             val a = baseAngle + offset
-            bolts.add(
+            addBoltIfAllowed(
               ArenaBolt(
                 x = playerX,
                 y = playerY,
@@ -2299,7 +2344,7 @@ class ArenaSimState(
         WonderWeaponKind.MERCER_BIOCLAW_SWARM -> {
           for (offset in listOf(-0.22f, 0f, 0.22f)) {
             val a = baseAngle + offset
-            bolts.add(
+            addBoltIfAllowed(
               ArenaBolt(
                 x = playerX,
                 y = playerY,
@@ -2316,7 +2361,7 @@ class ArenaSimState(
           }
         }
         WonderWeaponKind.GATE_HORIZON_CANNON -> {
-          bolts.add(
+          addBoltIfAllowed(
             ArenaBolt(
               x = playerX,
               y = playerY,
@@ -2332,7 +2377,7 @@ class ArenaSimState(
           )
         }
         else -> {
-          bolts.add(
+          addBoltIfAllowed(
             ArenaBolt(
               x = playerX,
               y = playerY,
@@ -2373,9 +2418,10 @@ class ArenaSimState(
       "wpn_ship_phaser" -> Color(0xFFE040FB)
       else -> loadout.tracerColor
     }
+    val elemOverrideColor = selectedElementOverride?.color
     val boltColor = when {
       instaKillTicks > 0f -> Color(0xFFFF1744)
-      selectedElementOverride != null -> selectedElementOverride!!.color
+      elemOverrideColor != null -> elemOverrideColor
       critBoost > 1f -> Color(0xFFFFD700)
       packLevel >= 9 -> Color(0xFFFFFFFF)
       packLevel >= 7 -> Color(0xFF00E676)
@@ -2389,7 +2435,7 @@ class ArenaSimState(
     for (i in 0 until shots) {
       val offset = (i - (shots - 1) / 2f) * spread
       val a = baseAngle + offset
-      bolts.add(
+      addBoltIfAllowed(
         ArenaBolt(
           x = playerX,
           y = playerY,
@@ -2426,7 +2472,7 @@ class ArenaSimState(
       bolts.removeAll { it.isEnemyShot }
       for (i in 0 until 8) {
         val a = i * (2f * PI.toFloat() / 8f)
-        bolts.add(
+        addBoltIfAllowed(
           ArenaBolt(
             x = playerX,
             y = playerY,
@@ -2441,7 +2487,7 @@ class ArenaSimState(
         )
       }
       for (i in 0 until hostiles.size) {
-        val h = hostiles[i]
+        val h = hostiles.getOrNull(i) ?: continue
         val dx = h.x - playerX
         val dy = h.y - playerY
         val d = sqrt(dx * dx + dy * dy).coerceAtLeast(0.01f)
@@ -2456,11 +2502,11 @@ class ArenaSimState(
       var chained = 0
       for (i in 0 until hostiles.size) {
         if (chained >= 8) break
-        val h = hostiles[i]
+        val h = hostiles.getOrNull(i) ?: continue
         val dx = h.x - playerX
         val dy = h.y - playerY
         if (dx * dx + dy * dy <= 0.46f * 0.46f) {
-          arcs.add(ArenaArcLine(playerX, playerY, h.x, h.y, loadout.activePowerColor, 18f))
+          addArcIfAllowed(playerX, playerY, h.x, h.y, loadout.activePowerColor, 18f)
           chained++
         }
       }
@@ -2501,7 +2547,7 @@ class ArenaSimState(
       val angle = atan2(aimY, aimX)
       for (offset in listOf(-0.18f, 0f, 0.18f)) {
         val a = angle + offset
-        bolts.add(
+        addBoltIfAllowed(
           ArenaBolt(
             x = playerX,
             y = playerY,
@@ -2528,7 +2574,7 @@ class ArenaSimState(
         if (dx * dx + dy * dy <= 0.65f * 0.65f) {
           applyDamageToHostile(h, 6, ArenaDamageType.THERMAL)
           h.cryoSlowTicks = maxOf(h.cryoSlowTicks, 150f)
-          arcs.add(ArenaArcLine(playerX, playerY, h.x, h.y, Color(0xFFFF3D71), 20f))
+          addArcIfAllowed(playerX, playerY, h.x, h.y, Color(0xFFFF3D71), 20f)
           if (h.hp <= 0) {
             iter.remove()
             onHostileDefeated(h, scoreMult)
@@ -2562,7 +2608,7 @@ class ArenaSimState(
           while (iter.hasNext()) {
             val h = iter.next()
             h.hp -= if (h.isBoss) 6 else 99
-            arcs.add(ArenaArcLine(playerX, playerY, h.x, h.y, Color(0xFF00E5FF), 22f))
+            addArcIfAllowed(playerX, playerY, h.x, h.y, Color(0xFF00E5FF), 22f)
             if (h.hp <= 0) {
               iter.remove()
               onHostileDefeated(h, scoreMult)
@@ -2576,10 +2622,10 @@ class ArenaSimState(
       "blacklight_conduit" -> {
         val limit = minOf(8, hostiles.size)
         for (i in 0 until limit) {
-          val h = hostiles[i]
+          val h = hostiles.getOrNull(i) ?: continue
           h.hp -= 4
           h.hitStaggerTicks = 12f
-          arcs.add(ArenaArcLine(playerX, playerY, h.x, h.y, Color(0xFFFF3D71), 20f))
+          addArcIfAllowed(playerX, playerY, h.x, h.y, Color(0xFFFF3D71), 20f)
           addSparkIfAllowed(h.x, h.y, Color(0xFF7C4DFF), 22f)
         }
         val iter = hostiles.iterator()
@@ -2609,7 +2655,7 @@ class ArenaSimState(
             h.hitStaggerTicks = 40f
             h.knockVelX += (dx / d) * 0.012f
             h.knockVelY += (dy / d) * 0.012f
-            arcs.add(ArenaArcLine(playerX, playerY, h.x, h.y, Color(0xFFFFD54F), 18f))
+            addArcIfAllowed(playerX, playerY, h.x, h.y, Color(0xFFFFD54F), 18f)
             if (h.hp <= 0) {
               iter.remove()
               onHostileDefeated(h, scoreMult)
@@ -2622,11 +2668,11 @@ class ArenaSimState(
       "spiderverse_queens" -> {
         val limit = minOf(10, hostiles.size)
         for (i in 0 until limit) {
-          val h = hostiles[i]
+          val h = hostiles.getOrNull(i) ?: continue
           h.cryoSlowTicks = maxOf(h.cryoSlowTicks, 180f)
           h.hitStaggerTicks = 18f
           h.hp -= 3
-          arcs.add(ArenaArcLine(playerX, playerY, h.x, h.y, Color(0xFFE53935), 20f))
+          addArcIfAllowed(playerX, playerY, h.x, h.y, Color(0xFFE53935), 20f)
           addSparkIfAllowed(h.x, h.y, Color(0xFF2979FF), 18f)
         }
         val iter = hostiles.iterator()
@@ -2644,7 +2690,7 @@ class ArenaSimState(
         val angle = atan2(aimY, aimX)
         for (offset in listOf(-0.07f, 0f, 0.07f)) {
           val a = angle + offset
-          bolts.add(
+          addBoltIfAllowed(
             ArenaBolt(
               x = playerX,
               y = playerY,
@@ -2671,7 +2717,7 @@ class ArenaSimState(
           if (dx * dx + dy * dy <= 0.58f * 0.58f) {
             h.hp -= 5
             h.hitStaggerTicks = 15f
-            arcs.add(ArenaArcLine(playerX, playerY, h.x, h.y, Color(0xFF00E5FF), 20f))
+            addArcIfAllowed(playerX, playerY, h.x, h.y, Color(0xFF00E5FF), 20f)
             drained++
             if (h.hp <= 0) {
               iter.remove()
@@ -2685,7 +2731,7 @@ class ArenaSimState(
       "aegis_starblade" -> {
         bolts.removeAll { it.isEnemyShot }
         for (i in 0 until hostiles.size) {
-          val h = hostiles[i]
+          val h = hostiles.getOrNull(i) ?: continue
           val dx = h.x - playerX
           val dy = h.y - playerY
           val d = sqrt(dx * dx + dy * dy).coerceAtLeast(0.01f)
@@ -2710,7 +2756,7 @@ class ArenaSimState(
         bolts.removeAll { it.isEnemyShot }
         hudShield = (hudShield + 50).coerceAtMost(loadout.maxShield)
         for (i in 0 until hostiles.size) {
-          val h = hostiles[i]
+          val h = hostiles.getOrNull(i) ?: continue
           val dx = h.x - playerX
           val dy = h.y - playerY
           val d = sqrt(dx * dx + dy * dy).coerceAtLeast(0.01f)
@@ -2731,7 +2777,7 @@ class ArenaSimState(
           val dy = h.y - playerY
           if (dx * dx + dy * dy <= 0.50f * 0.50f) {
             h.hp -= 5
-            arcs.add(ArenaArcLine(playerX, playerY, h.x, h.y, Color(0xFFE040FB), 18f))
+            addArcIfAllowed(playerX, playerY, h.x, h.y, Color(0xFFE040FB), 18f)
             if (h.hp <= 0) {
               iter.remove()
               onHostileDefeated(h, scoreMult)
@@ -2797,10 +2843,10 @@ class ArenaSimState(
       val lethalDmg = (((spec.baseDamageOrEffect / 30f).toInt() + levelBonus / 4 + prestigeBonus) * eqTierMult * eqStarMult).roundToInt().coerceAtLeast(2)
       totalDmg += lethalDmg
 
-      arcs.add(ArenaArcLine(playerX, playerY, blastX, blastY, Color(spec.defaultColorHex), 20f))
+      addArcIfAllowed(playerX, playerY, blastX, blastY, Color(spec.defaultColorHex), 20f)
       for (i in 0 until 10) {
         val a = (i / 10f) * 2f * PI.toFloat()
-        sparks.add(HitSpark(blastX + cos(a) * 0.04f, blastY + sin(a) * 0.04f, Color(spec.defaultColorHex), 25f))
+        addSparkIfAllowed(blastX + cos(a) * 0.04f, blastY + sin(a) * 0.04f, Color(spec.defaultColorHex), 25f)
       }
 
       val lethalDmgType = when {
@@ -2864,7 +2910,7 @@ class ArenaSimState(
     val impulse = dashDist * 0.135f
     dashVelX = aimX * impulse
     dashVelY = aimY * impulse
-    arcs.add(ArenaArcLine(oldX, oldY, playerX, playerY, accentColor, 14f))
+    addArcIfAllowed(oldX, oldY, playerX, playerY, accentColor, 14f)
 
     val scoreMult = if (doubleEssenceTicks > 0f) 2L else 1L
     val outfitId = progression.equippedOutfitId
@@ -2888,7 +2934,7 @@ class ArenaSimState(
     } else if (outfitId.startsWith("batman") || world.id == "gotham_arkham") {
       // Original Grapnel Concussion Shock
       for (i in 0 until hostiles.size) {
-        val h = hostiles[i]
+        val h = hostiles.getOrNull(i) ?: continue
         val dx = h.x - playerX
         val dy = h.y - playerY
         val d = sqrt(dx * dx + dy * dy).coerceAtLeast(0.01f)
@@ -2902,7 +2948,7 @@ class ArenaSimState(
     } else if (outfitId.startsWith("spiderman") || world.id == "spiderverse_queens") {
       // Original Web-Snare Dodge
       for (i in 0 until hostiles.size) {
-        val h = hostiles[i]
+        val h = hostiles.getOrNull(i) ?: continue
         val dx = h.x - playerX
         val dy = h.y - playerY
         if (dx * dx + dy * dy <= 0.22f * 0.22f) {
@@ -2915,13 +2961,13 @@ class ArenaSimState(
       var arcHits = 0
       for (i in 0 until hostiles.size) {
         if (arcHits >= 2) break
-        val h = hostiles[i]
+        val h = hostiles.getOrNull(i) ?: continue
         val dx = h.x - playerX
         val dy = h.y - playerY
         if (dx * dx + dy * dy <= 0.24f * 0.24f) {
           h.hp -= 1
           h.hitStaggerTicks = maxOf(h.hitStaggerTicks, 12f)
-          arcs.add(ArenaArcLine(playerX, playerY, h.x, h.y, Color(0xFF00E5FF), 14f))
+          addArcIfAllowed(playerX, playerY, h.x, h.y, Color(0xFF00E5FF), 14f)
           arcHits++
         }
       }
@@ -3119,7 +3165,7 @@ class ArenaSimState(
     if (consumableCd > 0f) consumableCd = (consumableCd - cdRate).coerceAtLeast(0f)
     if (interactCd > 0f) interactCd = (interactCd - cdRate).coerceAtLeast(0f)
     for (si in 0 until worldStations.size) {
-      val st = worldStations[si]
+      val st = worldStations.getOrNull(si) ?: continue
       if (st.cooldownTicks > 0f) st.cooldownTicks = (st.cooldownTicks - dt).coerceAtLeast(0f)
     }
     if (lethalCd > 0f) {
@@ -3179,7 +3225,7 @@ class ArenaSimState(
     // Active Elemental Hazards (Ice, Fire, Toxic, Electric, Windy) + Safe Rest Camps
     var insideCamp = false
     for (ri in 0 until restCamps.size) {
-      val camp = restCamps[ri]
+      val camp = restCamps.getOrNull(ri) ?: continue
       val dx = playerX - camp.x
       val dy = playerY - camp.y
       if (dx * dx + dy * dy <= camp.radius * camp.radius) {
@@ -3191,7 +3237,7 @@ class ArenaSimState(
 
     var activeHaz: ArenaHazardZone? = null
     for (hi in 0 until hazards.size) {
-      val hz = hazards[hi]
+      val hz = hazards.getOrNull(hi) ?: continue
       val dx = playerX - hz.x
       val dy = playerY - hz.y
       if (dx * dx + dy * dy <= hz.radius * hz.radius) {
@@ -3216,7 +3262,7 @@ class ArenaSimState(
           val hazDmg = if (activeHaz.kind == ArenaHazardKind.ELECTRIC) 4 else 3
           hudShield = (hudShield - hazDmg).coerceAtLeast(1)
           if (activeHaz.kind == ArenaHazardKind.ELECTRIC) {
-            arcs.add(ArenaArcLine(activeHaz.x, activeHaz.y, playerX, playerY, activeHaz.kind.color, 12f))
+            addArcIfAllowed(activeHaz.x, activeHaz.y, playerX, playerY, activeHaz.kind.color, 12f)
           }
         }
       }
@@ -3357,7 +3403,7 @@ class ArenaSimState(
 
     // Auto-collect closely touched Cat Easter Eggs & Loot Crates + compute HUD Interact Prompt
     for (ci in 0 until catEasterEggs.size) {
-      val cat = catEasterEggs[ci]
+      val cat = catEasterEggs.getOrNull(ci) ?: continue
       if (!cat.found) {
         val dx = cat.x - playerX
         val dy = cat.y - playerY
@@ -3365,7 +3411,7 @@ class ArenaSimState(
       }
     }
     for (li in 0 until lootCrates.size) {
-      val crate = lootCrates[li]
+      val crate = lootCrates.getOrNull(li) ?: continue
       if (!crate.opened) {
         val dx = crate.x - playerX
         val dy = crate.y - playerY
@@ -3400,7 +3446,7 @@ class ArenaSimState(
     var insideBuilding: String? = null
     val areaTurretLvl = progression.areaState().defenseTurretTier
     for (bi in 0 until buildings.size) {
-      val b = buildings[bi]
+      val b = buildings.getOrNull(bi) ?: continue
       if (playerX in b.x..(b.x + b.width) && playerY in b.y..(b.y + b.height)) {
         insideBuilding = b.name
         if (!b.explored) {
@@ -3422,7 +3468,7 @@ class ArenaSimState(
           val dx = target.x - cx
           val dy = target.y - cy
           val d = sqrt(dx * dx + dy * dy).coerceAtLeast(0.001f)
-          bolts.add(ArenaBolt(cx, cy, (dx / d) * 0.022f, (dy / d) * 0.022f, 45f, true, false, 0, 2 + areaTurretLvl, b.accentColor))
+          addBoltIfAllowed(ArenaBolt(cx, cy, (dx / d) * 0.022f, (dy / d) * 0.022f, 45f, true, false, 0, 2 + areaTurretLvl, b.accentColor))
         }
       }
     }
@@ -3431,7 +3477,7 @@ class ArenaSimState(
     // Electric & Fire Traps automatic proximity trigger & shock/burn damage
     val scoreMultForTraps = if (doubleEssenceTicks > 0f) 2L else 1L
     for (ti in 0 until traps.size) {
-      val trap = traps[ti]
+      val trap = traps.getOrNull(ti) ?: continue
       if (trap.cooldownTicks > 0f) trap.cooldownTicks = (trap.cooldownTicks - dt).coerceAtLeast(0f)
       if (trap.activeTicks > 0f) trap.activeTicks = (trap.activeTicks - dt).coerceAtLeast(0f)
 
@@ -3447,7 +3493,7 @@ class ArenaSimState(
           if (elapsedTicks % 12L == 0L) {
             val tDmgType = if (trap.kind == ArenaTrapKind.ELECTRIC) ArenaDamageType.ENERGY else ArenaDamageType.THERMAL
             applyDamageToHostile(h, 2 + loadout.trapDamageBonus / 2, tDmgType)
-            arcs.add(ArenaArcLine(trap.x, trap.y, h.x, h.y, trap.kind.color, 12f))
+            addArcIfAllowed(trap.x, trap.y, h.x, h.y, trap.kind.color, 12f)
             if (h.hp <= 0) {
               hIterT.remove()
               trapKillsCount++
@@ -3477,14 +3523,14 @@ class ArenaSimState(
       val hardcoreBotScale = if (matchRules.friendlyFire) 1.35f else 1.0f
       val botDmgMult = botDiff.damageScale * (1f + (progression.botDamageBoostPct + progression.clan.botDamageBoost) / 100f) * hardcoreBotScale
       for (bi in 0 until arenaBots.size) {
-        val bot = arenaBots[bi]
+        val bot = arenaBots.getOrNull(bi) ?: continue
         bot.roamAngle = (bot.roamAngle + 0.015f * dt) % (2f * PI.toFloat())
         val targetX: Float
         val targetY: Float
         var nearestHostile: ArenaHostile? = null
         var bestDistSq = Float.MAX_VALUE
         for (hi in 0 until hostiles.size) {
-          val h = hostiles[hi]
+          val h = hostiles.getOrNull(hi) ?: continue
           val dx = h.x - bot.x
           val dy = h.y - bot.y
           val dSq = dx * dx + dy * dy
@@ -3511,7 +3557,7 @@ class ArenaSimState(
           val aimDx = nearestHostile.x - bot.x
           val aimDy = nearestHostile.y - bot.y
           val dist = sqrt(aimDx * aimDx + aimDy * aimDy).coerceAtLeast(0.001f)
-          bolts.add(
+          addBoltIfAllowed(
             ArenaBolt(
               x = bot.x,
               y = bot.y,
@@ -3767,7 +3813,7 @@ class ArenaSimState(
               val baseAng = atan2(dy, dx)
               for (angOff in listOf(-0.16f, 0f, 0.16f)) {
                 val a = baseAng + angOff
-                bolts.add(
+                addBoltIfAllowed(
                   ArenaBolt(
                     x = h.x,
                     y = h.y,
@@ -3782,7 +3828,7 @@ class ArenaSimState(
                 )
               }
             } else {
-              bolts.add(
+              addBoltIfAllowed(
                 ArenaBolt(
                   x = h.x,
                   y = h.y,
@@ -3874,13 +3920,13 @@ class ArenaSimState(
               var extraChains = 0
               for (j in 0 until hostiles.size) {
                 if (extraChains >= 4) break
-                val other = hostiles[j]
+                val other = hostiles.getOrNull(j) ?: continue
                 if (other === h || other.hp <= 0) continue
                 val ox = other.x - h.x
                 val oy = other.y - h.y
                 if (ox * ox + oy * oy <= 0.28f * 0.28f) {
                   applyDamageToHostile(other, 3, ArenaDamageType.ENERGY)
-                  arcs.add(ArenaArcLine(h.x, h.y, other.x, other.y, Color(0xFF00E5FF), 14f))
+                  addArcIfAllowed(h.x, h.y, other.x, other.y, Color(0xFF00E5FF), 14f)
                   extraChains++
                 }
               }
@@ -3910,7 +3956,7 @@ class ArenaSimState(
                 val oy = other.y - h.y
                 if (ox * ox + oy * oy <= 0.25f * 0.25f) {
                   applyDamageToHostile(other, 2, ArenaDamageType.ENERGY)
-                  arcs.add(ArenaArcLine(h.x, h.y, other.x, other.y, Color(activeWonderWeapon?.accentHex ?: 0xFF00E5FFL), 14f))
+                  addArcIfAllowed(h.x, h.y, other.x, other.y, Color(activeWonderWeapon?.accentHex ?: 0xFF00E5FFL), 14f)
                   chains++
                 }
               }

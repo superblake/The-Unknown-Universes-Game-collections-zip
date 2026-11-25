@@ -878,7 +878,7 @@ fun AreasAndAgingTab(
       }
     }
 
-    items(progression.allPlayableAreas(), key = { it.id }) { spec ->
+    items(progression.allPlayableAreas().distinctBy { it.id }, key = { it.id }) { spec ->
       val area = progression.areaState(spec.id)
       val isSelected = progression.activeAreaId == spec.id
       val accent = Color(spec.accentHex)
@@ -951,11 +951,11 @@ fun AreasAndAgingTab(
             }
             OutlinedButton(
               onClick = { onUpgradeAreaStar(spec.id) },
-              enabled = area.starLevel < StarRankMeta.MAX_STARS && totalBlueEssence >= starCost,
+              enabled = area.starLevel < StarRankMeta.MAX_STARS,
               shape = RoundedCornerShape(10.dp),
               modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_area_star_${spec.id}"),
             ) {
-              Text(if (area.starLevel >= StarRankMeta.MAX_STARS) "10★" else "★+1 ($starCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+              Text(if (area.starLevel >= StarRankMeta.MAX_STARS) "${StarRankMeta.MAX_STARS}★ MAX" else "★+1 ($starCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             }
           }
 
@@ -990,7 +990,7 @@ private fun androidx.compose.foundation.layout.RowScope.AreaUpgradeButton(
   val cost = UpgradeCosts.areaFeatureTier(tier)
   OutlinedButton(
     onClick = onClick,
-    enabled = tier < 25 && totalBlueEssence >= cost,
+    enabled = tier < 25,
     shape = RoundedCornerShape(8.dp),
     contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
     modifier = Modifier.weight(1f).height(48.dp).testTag(tag),

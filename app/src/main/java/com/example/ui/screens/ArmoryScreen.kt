@@ -479,7 +479,7 @@ fun ArmoryScreen(
               }
             }
 
-            items(filtered, key = { it.id }) { item ->
+            items(filtered.distinctBy { it.id }, key = { it.id }) { item ->
               ArmoryModuleCard(
                 item = item,
                 totalEssence = totalEssence,
@@ -773,7 +773,7 @@ fun ArmoryScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.testTag("bo3_maps_row"),
                   ) {
-                    items(com.example.export.Bo3ModToolsImporter.bo3CustomMaps, key = { it.areaId }) { mapSpec ->
+                    items(com.example.export.Bo3ModToolsImporter.bo3CustomMaps.distinctBy { it.areaId }, key = { it.areaId }) { mapSpec ->
                       val isSelected = activeAreaId == mapSpec.areaId
                       Surface(
                         shape = RoundedCornerShape(12.dp),
@@ -1034,7 +1034,7 @@ fun ArmoryScreen(
                       horizontalArrangement = Arrangement.spacedBy(8.dp),
                       modifier = Modifier.testTag("custom_game_weapons_row"),
                     ) {
-                      items(progression.customWeapons, key = { it.id }) { wpn: UserCustomWeaponSpec ->
+                      items(progression.customWeapons.distinctBy { it.id }, key = { it.id }) { wpn: UserCustomWeaponSpec ->
                         val isEquippedWpn = progression.weaponCustom.equippedWeaponId == wpn.id
                         val wAccent = Color(wpn.defaultTracerHex)
                         Surface(
@@ -1119,7 +1119,7 @@ fun ArmoryScreen(
                 }
               }
             } else {
-              items(workshopItems, key = { it.id }) { item ->
+              items(workshopItems.distinctBy { it.id }, key = { it.id }) { item ->
                 ArmoryModuleCard(
                   item = item,
                   totalEssence = totalEssence,

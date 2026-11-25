@@ -1026,6 +1026,8 @@ data class OperatorProgressionState(
   val customEquipment: List<UserCustomEquipmentSpec> = emptyList(),
   val blastShardTier: Int = 1,
   val companionBuffTier: Int = 1,
+  val modeTierMap: Map<String, Int> = emptyMap(),
+  val modeStarMap: Map<String, Int> = emptyMap(),
 ) {
   val playerLevel: Int
     get() = ProgressionCatalog.levelForXp(playerXp)
@@ -1061,6 +1063,10 @@ data class OperatorProgressionState(
   fun wonderStar(wonderId: String): Int = (wonderStarMap[wonderId] ?: 1).coerceIn(1, StarRankMeta.MAX_STARS)
 
   fun armoryItemStar(itemId: String): Int = (armoryItemStarMap[itemId] ?: 1).coerceIn(1, StarRankMeta.MAX_STARS)
+
+  fun modeTier(modeId: String): Int = (modeTierMap[modeId] ?: 1).coerceIn(1, PowerTier.MAX_TIER)
+
+  fun modeStar(modeId: String): Int = (modeStarMap[modeId] ?: 1).coerceIn(1, StarRankMeta.MAX_STARS)
 
   fun equipmentState(slotId: String): EquipmentState =
     equipmentMap[slotId] ?: EquipmentState(slotId, if (slotId == "lethal") "lethal_frag" else "tactical_stim", 1, 0, 0L, "standard", 1, 1)
@@ -2229,6 +2235,8 @@ object UpgradeCosts {
   fun skillStar(stars: Int): Long = stars * 400L
   fun areaFeatureTier(tier: Int): Long = tier * 300L
   fun areaStar(stars: Int): Long = stars * 450L
+  fun modeTier(tier: Int): Long = tier * 350L
+  fun modeStar(stars: Int): Long = stars * 450L
   fun perkDrink(rank: Int): Long = 250L + (rank * 200L)
   fun perkStar(stars: Int): Long = stars * 380L
   fun protectionRank(rank: Int): Long = 260L + (rank * 200L)

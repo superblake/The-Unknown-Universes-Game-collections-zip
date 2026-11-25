@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import com.example.data.local.RamGraphicsMode
 import com.example.data.model.AreaAgeEra
 import kotlin.math.PI
 import kotlin.math.cos
@@ -63,11 +64,66 @@ fun screenToWorldCoords(
 }
 
 class ArenaBackdropCache {
-  private var cachedWorldId: String = ""
-  private var cachedW: Float = -1f
-  private var cachedH: Float = -1f
-  private var cachedBrush: Brush? = null
-  private var cachedSkyBrush: Brush? = null
+  private data class CachedEntry(
+    val bgBrush: Brush,
+    val skyBrush: Brush,
+  )
+
+  private val lruCache = object : LinkedHashMap<String, CachedEntry>(16, 0.75f, true) {}
+  private var maxCacheEntries: Int = 4
+
+  fun configure(ramShaderCacheEnabled: Boolean, ramBudgetMb: Int) {
+    val target = when {
+      !ramShaderCacheEnabled -> 0
+      ramBudgetMb >= 768 -> 16
+      ramBudgetMb >= 512 -> 8
+      ramBudgetMb >= 256 -> 4
+      else -> 2
+    }
+    maxCacheEntries = target
+    while (lruCache.size > maxCacheEntries && lruCache.isNotEmpty()) {
+      val firstKey = lruCache.keys.firstOrNull() ?: break
+      lruCache.remove(firstKey)
+    }
+  }
+
+  private fun getOrBuild(
+    worldId: String,
+    skyThemeId: String,
+    areaAgeEra: AreaAgeEra,
+    w: Float,
+    h: Float,
+    areaId: String,
+    floorAccentHex: Long,
+  ): CachedEntry {
+    val safeW = if (w.isFinite()) w.coerceAtLeast(1f) else 1f
+    val safeH = if (h.isFinite()) h.coerceAtLeast(1f) else 1f
+    val key = "$worldId|$areaId|$skyThemeId|${areaAgeEra.name}|$floorAccentHex|${safeW.toInt()}x${safeH.toInt()}"
+    if (maxCacheEntries > 0) {
+      lruCache[key]?.let { return it }
+    }
+    val bgTop = topTintFor(worldId, skyThemeId, areaAgeEra)
+    val bgBrush = Brush.radialGradient(
+      colors = listOf(bgTop, Color(0xFF04060D)),
+      center = Offset(safeW * 0.5f, safeH * 0.54f),
+      radius = maxOf(safeW, safeH).coerceAtLeast(1f) * 0.86f,
+    )
+    val horizonCol = bgTop.copy(alpha = 0.92f)
+    val skyBrush = Brush.verticalGradient(
+      colors = listOf(Color(0xFF02040A), horizonCol, Color(0xFF0C1426)),
+      startY = 0f,
+      endY = (safeH * HORIZON_RATIO).coerceAtLeast(10f),
+    )
+    val entry = CachedEntry(bgBrush, skyBrush)
+    if (maxCacheEntries > 0) {
+      lruCache[key] = entry
+      while (lruCache.size > maxCacheEntries && lruCache.isNotEmpty()) {
+        val firstKey = lruCache.keys.firstOrNull() ?: break
+        lruCache.remove(firstKey)
+      }
+    }
+    return entry
+  }
 
   fun brushFor(
     worldId: String,
@@ -77,30 +133,7 @@ class ArenaBackdropCache {
     h: Float,
     areaId: String = "",
     floorAccentHex: Long = 0L,
-  ): Brush {
-    val key = "$worldId|$areaId|$skyThemeId|${areaAgeEra.name}|$floorAccentHex"
-    val existing = cachedBrush
-    if (existing != null && cachedWorldId == key && cachedW == w && cachedH == h) {
-      return existing
-    }
-    val bgTop = topTintFor(worldId, skyThemeId, areaAgeEra)
-    val created = Brush.radialGradient(
-      colors = listOf(bgTop, Color(0xFF04060D)),
-      center = Offset(w * 0.5f, h * 0.54f),
-      radius = maxOf(w, h).coerceAtLeast(1f) * 0.86f,
-    )
-    val horizonCol = bgTop.copy(alpha = 0.92f)
-    cachedSkyBrush = Brush.verticalGradient(
-      colors = listOf(Color(0xFF02040A), horizonCol, Color(0xFF0C1426)),
-      startY = 0f,
-      endY = (h * HORIZON_RATIO).coerceAtLeast(10f),
-    )
-    cachedWorldId = key
-    cachedW = w
-    cachedH = h
-    cachedBrush = created
-    return created
-  }
+  ): Brush = getOrBuild(worldId, skyThemeId, areaAgeEra, w, h, areaId, floorAccentHex).bgBrush
 
   fun skyBrushFor(
     worldId: String,
@@ -110,10 +143,7 @@ class ArenaBackdropCache {
     h: Float,
     areaId: String = "",
     floorAccentHex: Long = 0L,
-  ): Brush {
-    brushFor(worldId, skyThemeId, areaAgeEra, w, h, areaId, floorAccentHex)
-    return cachedSkyBrush ?: Brush.verticalGradient(listOf(Color(0xFF02040A), Color(0xFF0C1426)))
-  }
+  ): Brush = getOrBuild(worldId, skyThemeId, areaAgeEra, w, h, areaId, floorAccentHex).skyBrush
 
   private fun topTintFor(worldId: String, skyThemeId: String, areaAgeEra: AreaAgeEra): Color = when (skyThemeId) {
     "blood_moon" -> Color(0xFF2B0712)
@@ -162,9 +192,14 @@ fun DrawScope.drawWorldArenaBackdrop(
   camY: Float = ARENA_CENTER - 0.5f,
   areaAgeEra: AreaAgeEra = AreaAgeEra.YOUNG,
   areaId: String = "",
+  ramGraphicsMode: RamGraphicsMode = RamGraphicsMode.BALANCED,
+  ramGraphicsBudgetMb: Int = 256,
+  ramShaderCacheEnabled: Boolean = true,
 ) {
   val w = size.width
   val h = size.height
+  if (!w.isFinite() || !h.isFinite() || w <= 1f || h <= 1f) return
+  backdropCache?.configure(ramShaderCacheEnabled, ramGraphicsBudgetMb)
   val horizonY = h * HORIZON_RATIO
   val pulse = if (reduceMotion || reduceFlashes) 0.35f else (sin(elapsedTicks * 0.06f) + 1f) * 0.5f
   val effAccent = floorAccentOverride ?: accentColor
@@ -190,7 +225,13 @@ fun DrawScope.drawWorldArenaBackdrop(
       val parallaxShift = ((camX * 28f) % w)
       val silColor = Color(0xFF050812)
       val rimColor = (if (outerFrontier) Color(0xFFE040FB) else effAccent).copy(alpha = 0.38f)
-      for (tIdx in 0 until 14) {
+      val towerCount = when (ramGraphicsMode) {
+        RamGraphicsMode.LOW_RAM_BOOST -> 6
+        RamGraphicsMode.BALANCED -> 14
+        RamGraphicsMode.HIGH_RAM_DETAIL -> 18
+        RamGraphicsMode.MAX_RAM_ULTRA -> 22
+      }
+      for (tIdx in 0 until towerCount) {
         val bx = ((tIdx * (w / 10f) - parallaxShift + w * 2f) % (w * 1.4f)) - w * 0.2f
         val towerW = (w * 0.06f) + ((tIdx % 3) * w * 0.025f)
         val towerH = horizonY * (0.28f + ((tIdx * 37) % 55) / 100f)
@@ -198,7 +239,10 @@ fun DrawScope.drawWorldArenaBackdrop(
         drawRect(rimColor, topLeft = Offset(bx, horizonY - towerH), size = Size(towerW, 2.5f))
       }
       // Horizon moon/rift glow
-      val sunX = (w * 0.72f - (camX * 8f)) .coerceIn(w * 0.15f, w * 0.85f)
+      val sunX = (w * 0.72f - (camX * 8f)).coerceIn(w * 0.15f, w * 0.85f)
+      if (ramGraphicsMode == RamGraphicsMode.HIGH_RAM_DETAIL || ramGraphicsMode == RamGraphicsMode.MAX_RAM_ULTRA) {
+        drawCircle(effAccent.copy(alpha = 0.10f + pulse * 0.06f), radius = horizonY * 0.65f, center = Offset(sunX, horizonY * 0.52f))
+      }
       drawCircle(effAccent.copy(alpha = 0.18f + pulse * 0.08f), radius = horizonY * 0.42f, center = Offset(sunX, horizonY * 0.52f))
     }
     drawLine(effAccent.copy(alpha = 0.55f), Offset(0f, horizonY), Offset(w, horizonY), strokeWidth = 2.5f)
@@ -262,7 +306,12 @@ fun DrawScope.drawWorldArenaBackdrop(
 
   // Foreshortened Perspective Tactical Sector Grid
   if (showTacticalGrid && gridStyleId != "minimal_clean") {
-    val stepWorld = if (lowGraphics || gridStyleId == "hex_vault") 0.22f else 0.14f
+    val stepWorld = when {
+      lowGraphics || ramGraphicsMode == RamGraphicsMode.LOW_RAM_BOOST -> 0.28f
+      gridStyleId == "hex_vault" -> 0.22f
+      ramGraphicsMode == RamGraphicsMode.MAX_RAM_ULTRA -> 0.12f
+      else -> 0.14f
+    }
     val gridAlpha = if (overdriveActive && !reduceFlashes) 0.22f else 0.12f
     val gridColor = (if (outerFrontier) Color(0xFFE040FB) else effAccent).copy(alpha = gridAlpha)
     val startWX = ((camX - 0.35f) / stepWorld).toInt() * stepWorld
@@ -447,6 +496,7 @@ fun DrawScope.drawSectionBiomesAndBorders(
 ) {
   val w = size.width
   val h = size.height
+  if (!w.isFinite() || !h.isFinite() || w <= 1f || h <= 1f) return
   val horizonY = h * HORIZON_RATIO
 
   // 1. Render distinct 8x8 Section Biomes & Unique Floor Geometry
@@ -565,6 +615,7 @@ fun DrawScope.drawBuildingsAndTraps(
 ) {
   val w = size.width
   val h = size.height
+  if (!w.isFinite() || !h.isFinite() || w <= 1f || h <= 1f) return
 
   // 1. Elemental Hazard Zones (Ice, Fire, Toxic, Electric, Windy)
   for (i in 0 until sim.hazards.size) {
@@ -795,6 +846,7 @@ fun DrawScope.drawVacuumAndCollectibles(
 ) {
   val w = size.width
   val h = size.height
+  if (!w.isFinite() || !h.isFinite() || w <= 1f || h <= 1f) return
 
   // Collectibles (Orbs, Blast Shards, Perk Drinks, Blast Cores, Character Shards, Cat Easter Eggs)
   for (i in 0 until sim.collectibles.size) {

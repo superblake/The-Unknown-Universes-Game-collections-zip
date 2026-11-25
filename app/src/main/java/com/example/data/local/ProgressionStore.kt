@@ -15,6 +15,7 @@ import com.example.data.model.CollectionCustomModeConfig
 import com.example.data.model.CollectionCustomScope
 import com.example.data.model.CollectionDifficulty
 import com.example.data.model.CustomAreaState
+import com.example.data.model.CuratedCustomMapsCatalog
 import com.example.data.model.CustomMapGameCategory
 import com.example.data.model.EquipmentSlotType
 import com.example.data.model.EquipmentState
@@ -978,6 +979,44 @@ class ProgressionStore(
     return Result.success(cost)
   }
 
+  fun upgradeModeTier(modeId: String, currentBlueEssence: Long): Result<Long> {
+    val cur = current
+    val curTier = cur.modeTier(modeId)
+    if (curTier >= PowerTier.MAX_TIER) {
+      return Result.failure(IllegalStateException("Mode already at max Tier ${PowerTier.MAX_TIER}"))
+    }
+    val cost = UpgradeCosts.modeTier(curTier)
+    if (currentBlueEssence < cost) {
+      return Result.failure(IllegalStateException("Need $cost Blue Essence"))
+    }
+    save(
+      cur.copy(
+        modeTierMap = cur.modeTierMap + (modeId to (curTier + 1)),
+        totalBlueEssenceSpent = cur.totalBlueEssenceSpent + cost,
+      )
+    )
+    return Result.success(cost)
+  }
+
+  fun upgradeModeStar(modeId: String, currentBlueEssence: Long): Result<Long> {
+    val cur = current
+    val curStars = cur.modeStar(modeId)
+    if (curStars >= StarRankMeta.MAX_STARS) {
+      return Result.failure(IllegalStateException("Mode already at max ${StarRankMeta.MAX_STARS}★"))
+    }
+    val cost = UpgradeCosts.modeStar(curStars)
+    if (currentBlueEssence < cost) {
+      return Result.failure(IllegalStateException("Need $cost Blue Essence"))
+    }
+    save(
+      cur.copy(
+        modeStarMap = cur.modeStarMap + (modeId to (curStars + 1)),
+        totalBlueEssenceSpent = cur.totalBlueEssenceSpent + cost,
+      )
+    )
+    return Result.success(cost)
+  }
+
   fun advanceAreaAge(areaId: String, yearsDelta: Int = 18): CustomAreaState {
     val cur = current
     val area = cur.areaState(areaId)
@@ -1786,6 +1825,20 @@ class ProgressionStore(
     val nextCustomGear = cur.customGear.map { it.copy(tier = (it.tier + delta).coerceIn(1, it.maxTier)) }
     val nextCustomEq = cur.customEquipment.map { it.copy(tier = (it.tier + delta).coerceIn(1, it.maxTier)) }
     val nextCores = cur.blastCoreLevels.mapValues { (_, l) -> (l + delta).coerceIn(1, 20) }
+    val allAreaIds = (cur.allPlayableAreas().map { it.id } + cur.areaStates.keys).distinct()
+    val nextAreas = allAreaIds.associateWith { areaId ->
+      val a = cur.areaState(areaId)
+      a.copy(
+        powerGridTier = (a.powerGridTier + delta).coerceIn(1, PowerTier.MAX_TIER),
+        defenseTurretTier = (a.defenseTurretTier + delta).coerceIn(1, PowerTier.MAX_TIER),
+        trapDensityTier = (a.trapDensityTier + delta).coerceIn(1, PowerTier.MAX_TIER),
+        lootRichnessTier = (a.lootRichnessTier + delta).coerceIn(1, PowerTier.MAX_TIER),
+      )
+    }
+    val allModeIds = (UniverseCatalog.modes.map { it.id } + cur.modeTierMap.keys + cur.modeStarMap.keys).distinct()
+    val nextModeTiers = allModeIds.associateWith { modeId ->
+      (cur.modeTier(modeId) + delta).coerceIn(1, PowerTier.MAX_TIER)
+    }
     save(
       cur.copy(
         characterTier = targetCharTier,
@@ -1802,6 +1855,8 @@ class ProgressionStore(
         blastShardTier = (cur.blastShardTier + delta).coerceIn(1, 25),
         companionBuffTier = (cur.companionBuffTier + delta).coerceIn(1, 25),
         blastCoreLevels = nextCores,
+        areaStates = nextAreas,
+        modeTierMap = nextModeTiers,
       )
     )
     return delta
@@ -1821,6 +1876,17 @@ class ProgressionStore(
     val nextCustomGear = cur.customGear.map { it.copy(tier = minOf(clamped, it.maxTier)) }
     val nextCustomEq = cur.customEquipment.map { it.copy(tier = minOf(clamped, it.maxTier)) }
     val nextCores = cur.blastCoreLevels.mapValues { _ -> minOf(clamped, 20) }
+    val allAreaIds = (cur.allPlayableAreas().map { it.id } + cur.areaStates.keys).distinct()
+    val nextAreas = allAreaIds.associateWith { areaId ->
+      cur.areaState(areaId).copy(
+        powerGridTier = clamped,
+        defenseTurretTier = clamped,
+        trapDensityTier = clamped,
+        lootRichnessTier = clamped,
+      )
+    }
+    val allModeIds = (UniverseCatalog.modes.map { it.id } + cur.modeTierMap.keys + cur.modeStarMap.keys).distinct()
+    val nextModeTiers = allModeIds.associateWith { clamped }
     save(
       cur.copy(
         characterTier = clamped,
@@ -1837,6 +1903,8 @@ class ProgressionStore(
         blastShardTier = clamped,
         companionBuffTier = clamped,
         blastCoreLevels = nextCores,
+        areaStates = nextAreas,
+        modeTierMap = nextModeTiers,
       )
     )
     return clamped
@@ -1856,6 +1924,12 @@ class ProgressionStore(
     val nextCustomPerks = cur.customPerks.map { it.copy(starLevel = clamped) }
     val nextCustomGear = cur.customGear.map { it.copy(starLevel = clamped) }
     val nextCustomEq = cur.customEquipment.map { it.copy(starLevel = clamped) }
+    val allAreaIds = (cur.allPlayableAreas().map { it.id } + cur.areaStates.keys).distinct()
+    val nextAreas = allAreaIds.associateWith { areaId ->
+      cur.areaState(areaId).copy(starLevel = clamped)
+    }
+    val allModeIds = (UniverseCatalog.modes.map { it.id } + cur.modeTierMap.keys + cur.modeStarMap.keys).distinct()
+    val nextModeStars = allModeIds.associateWith { clamped }
     save(
       cur.copy(
         characterStarLevel = clamped,
@@ -1870,6 +1944,8 @@ class ProgressionStore(
         customPerks = nextCustomPerks,
         customGear = nextCustomGear,
         customEquipment = nextCustomEq,
+        areaStates = nextAreas,
+        modeStarMap = nextModeStars,
       )
     )
     return clamped
@@ -2521,6 +2597,12 @@ class ProgressionStore(
       })
       put("armoryItemStarMap", JSONObject().apply {
         next.armoryItemStarMap.forEach { (k, v) -> put(k, v) }
+      })
+      put("modeTierMap", JSONObject().apply {
+        next.modeTierMap.forEach { (k, v) -> put(k, v) }
+      })
+      put("modeStarMap", JSONObject().apply {
+        next.modeStarMap.forEach { (k, v) -> put(k, v) }
       })
       put("challengeProgress", JSONObject().apply {
         next.challengeProgress.forEach { (k, v) -> put(k, v) }
@@ -3261,9 +3343,9 @@ class ProgressionStore(
     }
 
     val areaStates = safeParse(fallback.areaStates) {
-      val map = MultiverseArsenalCatalog.customAreas.associate {
-        it.id to CustomAreaState(it.id)
-      }.toMutableMap()
+      val seedAreaIds = (CuratedCustomMapsCatalog.allPlayableAreas().map { it.id } +
+        MultiverseArsenalCatalog.customAreas.map { it.id }).distinct()
+      val map = seedAreaIds.associateWith { id -> CustomAreaState(id) }.toMutableMap()
       root.optJSONObject("areaStates")?.let { obj ->
         obj.keys().forEach { k ->
           val aObj = obj.optJSONObject(k)
@@ -3707,6 +3789,21 @@ class ProgressionStore(
       } else fallback.customEquipment
     }
 
+    val parsedModeTierMap = safeParse(fallback.modeTierMap) {
+      val map = mutableMapOf<String, Int>()
+      root.optJSONObject("modeTierMap")?.let { obj ->
+        obj.keys().forEach { k -> map[k] = obj.optInt(k, 1).coerceIn(1, PowerTier.MAX_TIER) }
+      }
+      map
+    }
+    val parsedModeStarMap = safeParse(fallback.modeStarMap) {
+      val map = mutableMapOf<String, Int>()
+      root.optJSONObject("modeStarMap")?.let { obj ->
+        obj.keys().forEach { k -> map[k] = obj.optInt(k, 1).coerceIn(1, StarRankMeta.MAX_STARS) }
+      }
+      map
+    }
+
     return OperatorProgressionState(
       playerXp = root.optLong("playerXp", fallback.playerXp).coerceAtLeast(0L),
       playerPrestige = root.optInt("playerPrestige", fallback.playerPrestige).coerceAtLeast(0),
@@ -3719,6 +3816,8 @@ class ProgressionStore(
       wonderTierMap = wonderTierMap,
       wonderStarMap = wonderStarMap,
       armoryItemStarMap = armoryStarMap,
+      modeTierMap = parsedModeTierMap,
+      modeStarMap = parsedModeStarMap,
       gearMap = gearMap,
       gearPrestige = root.optInt("gearPrestige", fallback.gearPrestige).coerceAtLeast(0),
       equipmentMap = equipmentMap,
@@ -3905,6 +4004,8 @@ class ProgressionStore(
       wonderTierMap = mergeIntMap(base.wonderTierMap, incoming.wonderTierMap, 1),
       wonderStarMap = mergeIntMap(base.wonderStarMap, incoming.wonderStarMap, 1),
       armoryItemStarMap = mergeIntMap(base.armoryItemStarMap, incoming.armoryItemStarMap, 1),
+      modeTierMap = mergeIntMap(base.modeTierMap, incoming.modeTierMap, 1),
+      modeStarMap = mergeIntMap(base.modeStarMap, incoming.modeStarMap, 1),
       gearMap = mergedGear,
       gearPrestige = maxOf(base.gearPrestige, incoming.gearPrestige),
       equipmentMap = mergedEquip,

@@ -24,6 +24,43 @@ enum class GraphicsQuality(val label: String) {
   ULTRA("Ultra"),
 }
 
+enum class RamGraphicsMode(
+  val id: String,
+  val label: String,
+  val defaultBudgetMb: Int,
+  val detailSummary: String,
+) {
+  LOW_RAM_BOOST(
+    id = "low_ram_boost",
+    label = "Low-RAM Boost (Max FPS)",
+    defaultBudgetMb = 128,
+    detailSummary = "128 MB cap • Minimal brush cache, particles & towers for max FPS",
+  ),
+  BALANCED(
+    id = "balanced",
+    label = "Balanced RAM",
+    defaultBudgetMb = 256,
+    detailSummary = "256 MB cap • Standard LRU brush cache & crisp visuals",
+  ),
+  HIGH_RAM_DETAIL(
+    id = "high_ram_detail",
+    label = "High-RAM Detail",
+    defaultBudgetMb = 512,
+    detailSummary = "512 MB cap • Expanded shader cache, 18-tower skyline & rich arcs",
+  ),
+  MAX_RAM_ULTRA(
+    id = "max_ram_ultra",
+    label = "Max-RAM Ultra",
+    defaultBudgetMb = 1024,
+    detailSummary = "1024 MB cap • Full 16-slot LRU shader cache, 22 towers & ultra bloom",
+  );
+
+  companion object {
+    fun fromId(id: String): RamGraphicsMode =
+      entries.firstOrNull { it.id == id } ?: BALANCED
+  }
+}
+
 enum class ThemeVisualMode(val label: String) {
   DARK("Obsidian Dark"),
   HIGH_CONTRAST_DARK("High Contrast Dark"),
@@ -58,6 +95,9 @@ data class AppSettings(
 
   // 3. Graphics & Visual
   val graphicsQuality: GraphicsQuality = GraphicsQuality.ULTRA,
+  val ramGraphicsMode: RamGraphicsMode = RamGraphicsMode.BALANCED,
+  val ramGraphicsBudgetMb: Int = 256,
+  val ramShaderCacheEnabled: Boolean = true,
   val themeMode: ThemeVisualMode = ThemeVisualMode.DARK,
   val dynamicGlowEffects: Boolean = true,
   val hudOpacity: Float = 0.92f,
@@ -148,6 +188,9 @@ object AppSettingsPresets {
     targetFpsCap = 30,
     particleDensity = ParticleDensity.OFF,
     graphicsQuality = GraphicsQuality.LOW,
+    ramGraphicsMode = RamGraphicsMode.LOW_RAM_BOOST,
+    ramGraphicsBudgetMb = 128,
+    ramShaderCacheEnabled = false,
     dynamicGlowEffects = false,
     showTacticalGrid = false,
     showMiniRadar = true,
@@ -311,6 +354,7 @@ class AppSettingsStore(context: Context) {
       s.targetFpsCap >= 120 -> 120
       else -> 60
     },
+    ramGraphicsBudgetMb = s.ramGraphicsBudgetMb.coerceIn(64, 1024),
     hudOpacity = s.hudOpacity.coerceIn(0.6f, 1.0f),
     screenMarginDp = s.screenMarginDp.coerceIn(0, 16),
     textScale = s.textScale.coerceIn(1.0f, 1.4f),
@@ -342,6 +386,11 @@ class AppSettingsStore(context: Context) {
         graphicsQuality = runCatching {
           GraphicsQuality.valueOf(prefs.getString("gfx_quality", d.graphicsQuality.name) ?: d.graphicsQuality.name)
         }.getOrDefault(d.graphicsQuality),
+        ramGraphicsMode = runCatching {
+          RamGraphicsMode.fromId(prefs.getString("ram_gfx_mode", d.ramGraphicsMode.id) ?: d.ramGraphicsMode.id)
+        }.getOrDefault(d.ramGraphicsMode),
+        ramGraphicsBudgetMb = prefs.getInt("ram_gfx_budget_mb", d.ramGraphicsBudgetMb),
+        ramShaderCacheEnabled = prefs.getBoolean("ram_shader_cache", d.ramShaderCacheEnabled),
         themeMode = runCatching {
           ThemeVisualMode.valueOf(prefs.getString("theme_mode", d.themeMode.name) ?: d.themeMode.name)
         }.getOrDefault(d.themeMode),
@@ -389,6 +438,9 @@ class AppSettingsStore(context: Context) {
       putBoolean("mini_radar", s.showMiniRadar)
       putBoolean("fps_counter", s.showFpsCounter)
       putString("gfx_quality", s.graphicsQuality.name)
+      putString("ram_gfx_mode", s.ramGraphicsMode.id)
+      putInt("ram_gfx_budget_mb", s.ramGraphicsBudgetMb)
+      putBoolean("ram_shader_cache", s.ramShaderCacheEnabled)
       putString("theme_mode", s.themeMode.name)
       putBoolean("dynamic_glow", s.dynamicGlowEffects)
       putFloat("hud_opacity", s.hudOpacity)

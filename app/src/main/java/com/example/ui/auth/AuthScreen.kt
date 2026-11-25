@@ -307,7 +307,9 @@ fun AuthScreen(
               }
             }
 
-            if (validationError != null) {
+            val vErr = validationError
+            val notice = authNotice
+            if (vErr != null) {
               Surface(
                 color = MaterialTheme.colorScheme.error.copy(alpha = 0.14f),
                 shape = RoundedCornerShape(10.dp),
@@ -317,13 +319,13 @@ fun AuthScreen(
                   .testTag("auth_error_banner"),
               ) {
                 Text(
-                  text = validationError!!,
+                  text = vErr,
                   style = MaterialTheme.typography.bodyMedium,
                   color = MaterialTheme.colorScheme.error,
                   modifier = Modifier.padding(12.dp),
                 )
               }
-            } else if (authNotice != null) {
+            } else if (notice != null) {
               Surface(
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
                 shape = RoundedCornerShape(10.dp),
@@ -333,7 +335,7 @@ fun AuthScreen(
                   .testTag("auth_notice_banner"),
               ) {
                 Text(
-                  text = authNotice!!,
+                  text = notice,
                   style = MaterialTheme.typography.bodyMedium,
                   color = MaterialTheme.colorScheme.onSurface,
                   modifier = Modifier.padding(12.dp),
@@ -484,9 +486,9 @@ fun AppPinUnlockScreen(
           keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
           modifier = Modifier.fillMaxWidth().testTag("app_pin_unlock_input"),
         )
-        if (errorMsg != null) {
+        errorMsg?.let { err ->
           Text(
-            text = errorMsg!!,
+            text = err,
             color = MaterialTheme.colorScheme.error,
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.testTag("app_pin_error_text"),

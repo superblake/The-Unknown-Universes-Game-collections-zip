@@ -335,7 +335,7 @@ fun MatchBrowserDialog(
                   contentPadding = PaddingValues(16.dp),
                   verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                  items(filteredMatches, key = { it.id }) { match ->
+                  items(filteredMatches.distinctBy { it.id }, key = { it.id }) { match ->
                     MatchListingCard(
                       match = match,
                       isJoined = progression.joinedMatch?.id == match.id,
@@ -418,8 +418,7 @@ fun MatchBrowserDialog(
   }
 
   // Passcode entry dialog for locked matches
-  if (matchPendingPasscode != null) {
-    val pending = matchPendingPasscode!!
+  matchPendingPasscode?.let { pending ->
     AlertDialog(
       onDismissRequest = { matchPendingPasscode = null },
       title = { Text("Private Match Passcode") },
@@ -678,7 +677,7 @@ private fun HostPrivateMatchTab(
       }
       Spacer(Modifier.height(6.dp))
       LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(regionServers, key = { it.id }) { srv ->
+        items(regionServers.distinctBy { it.id }, key = { it.id }) { srv ->
           FilterChip(
             selected = activeServer.id == srv.id,
             onClick = { onSelectRegionServer?.invoke(srv.region.id, srv.id) },
@@ -770,7 +769,7 @@ private fun HostPrivateMatchTab(
       Spacer(Modifier.height(8.dp))
       Text("CUSTOM AREA LANDMARK (${playableAreas.size} MAPS)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
       LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(playableAreas, key = { it.id }) { area ->
+        items(playableAreas.distinctBy { it.id }, key = { it.id }) { area ->
           FilterChip(
             selected = customRules.areaId == area.id,
             onClick = {

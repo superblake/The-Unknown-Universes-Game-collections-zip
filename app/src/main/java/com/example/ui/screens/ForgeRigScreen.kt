@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import com.example.R
 import com.example.data.local.AppSettings
 import com.example.data.local.GraphicsQuality
+import com.example.data.local.RamGraphicsMode
 import com.example.data.model.OperatorProgressionState
 import com.example.data.model.ProgressionCatalog
 import com.example.data.model.RigAsset
@@ -213,7 +214,7 @@ fun ForgeRigScreen(
     // Rig Library Switcher
     item {
       LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        items(rigs, key = { it.id }) { rig ->
+        items(rigs.distinctBy { it.id }, key = { it.id }) { rig ->
           FilterChip(
             selected = rig.id == currentRig?.id,
             onClick = { onSelectRig(rig.id) },
@@ -326,16 +327,28 @@ fun ForgeRigScreen(
               val safeRigScale = if (rigScale.isFinite()) rigScale.coerceIn(0.7f, 1.4f) else 1.0f
               val groundY = h * 0.56f + (h * 0.42f * safeRigScale) * 0.56f
 
-              // Blender 3D perspective floor grid
-              for (i in -8..8) {
+              val ramRange = when (settings.ramGraphicsMode) {
+                RamGraphicsMode.LOW_RAM_BOOST -> 4
+                RamGraphicsMode.BALANCED -> 6
+                RamGraphicsMode.HIGH_RAM_DETAIL -> 8
+                RamGraphicsMode.MAX_RAM_ULTRA -> 10
+              }
+              val ramRows = when (settings.ramGraphicsMode) {
+                RamGraphicsMode.LOW_RAM_BOOST -> 4
+                RamGraphicsMode.BALANCED -> 6
+                RamGraphicsMode.HIGH_RAM_DETAIL -> 8
+                RamGraphicsMode.MAX_RAM_ULTRA -> 10
+              }
+              // Blender 3D perspective floor grid (scaled by RAM graphics mode)
+              for (i in -ramRange..ramRange) {
                 val bx = vanishX + i * (w * 0.085f)
                 val tx = vanishX + i * (w * 0.025f)
                 if (bx.isFinite() && tx.isFinite() && horizonY.isFinite()) {
                   drawLine(Color(0xFF282E3A), Offset(tx, horizonY), Offset(bx, h), strokeWidth = 1f)
                 }
               }
-              for (r in 0..7) {
-                val t = r / 7f
+              for (r in 0..ramRows) {
+                val t = r / ramRows.toFloat()
                 val ry = horizonY + (h - horizonY) * (t * t)
                 if (ry.isFinite()) {
                   drawLine(Color(0xFF282E3A), Offset(0f, ry), Offset(w, ry), strokeWidth = 1f)
@@ -370,7 +383,9 @@ fun ForgeRigScreen(
                 selectedBoneId = selectedBoneId,
                 capePathScratch = capePathScratch,
                 torsoPathScratch = torsoPathScratch,
-                dynamicGlow = settings.dynamicGlowEffects && settings.graphicsQuality != GraphicsQuality.LOW,
+                dynamicGlow = settings.dynamicGlowEffects &&
+                  settings.graphicsQuality != GraphicsQuality.LOW &&
+                  settings.ramGraphicsMode != RamGraphicsMode.LOW_RAM_BOOST,
                 highContrast = settings.effectiveHighContrast,
                 cloakOverride = progression.characterCustom.cloakEnabled,
                 visorColorOverride = Color(visorHex),

@@ -436,7 +436,7 @@ private fun FriendsListTab(
         }
       }
     } else {
-      items(friends, key = { it.id }) { friend ->
+      items(friends.distinctBy { it.id }, key = { it.id }) { friend ->
         FriendItemCard(
           friend = friend,
           onRemove = { onRemoveFriend(friend.id) },
@@ -564,7 +564,7 @@ private fun ChatStreamTab(
       reverseLayout = false,
       verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-      items(messages, key = { it.id }) { msg ->
+      items(messages.distinctBy { it.id }, key = { it.id }) { msg ->
         ChatMessageBubble(msg = msg)
       }
     }
@@ -635,7 +635,7 @@ private fun LiveTacticalChatTab(
       modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
       verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-      items(messages, key = { it.id }) { msg ->
+      items(messages.distinctBy { it.id }, key = { it.id }) { msg ->
         ChatMessageBubble(msg = msg)
       }
     }
@@ -690,7 +690,7 @@ private fun WhisperChatTab(
       Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text("SELECT FRIEND TO WHISPER", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-          items(friends, key = { it.id }) { friend ->
+          items(friends.distinctBy { it.id }, key = { it.id }) { friend ->
             FilterChip(
               selected = selectedFriend?.id == friend.id,
               onClick = { onSelectFriend(friend) },
@@ -711,7 +711,7 @@ private fun WhisperChatTab(
         modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
       ) {
-        items(messages, key = { it.id }) { msg ->
+        items(messages.distinctBy { it.id }, key = { it.id }) { msg ->
           ChatMessageBubble(msg = msg)
         }
       }
@@ -918,7 +918,7 @@ private fun ClanAndCommsTab(
       modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
       verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-      items(clanMessages, key = { it.id }) { msg ->
+      items(clanMessages.distinctBy { it.id }, key = { it.id }) { msg ->
         ChatMessageBubble(msg = msg)
       }
     }

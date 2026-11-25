@@ -1117,7 +1117,6 @@ fun LevelCustomizationTab(
                   .heightIn(min = 48.dp)
                   .clip(RoundedCornerShape(12.dp))
                   .combinedClickable(
-                    enabled = unlocked,
                     onClick = { onSelectNgPlusTier(ver.tier) },
                     onLongClick = {
                       haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -1449,7 +1448,7 @@ fun EquipmentCustomizationTab(
             }
             OutlinedButton(
               onClick = { onUpgradeEquipmentTier(slotType.id) },
-              enabled = eqState.tier < 25 && totalBlueEssence >= eqTierCost,
+              enabled = eqState.tier < 25,
               shape = RoundedCornerShape(10.dp),
               modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_eq_tier_${slotType.id}"),
             ) {
@@ -1461,12 +1460,12 @@ fun EquipmentCustomizationTab(
             }
             OutlinedButton(
               onClick = { onUpgradeEquipmentStar(slotType.id) },
-              enabled = eqState.starLevel < 10 && totalBlueEssence >= eqStarCost,
+              enabled = eqState.starLevel < StarRankMeta.MAX_STARS,
               shape = RoundedCornerShape(10.dp),
               modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_eq_star_${slotType.id}"),
             ) {
               Text(
-                text = if (eqState.starLevel >= 10) "10★ MAX" else "Star +1 ($eqStarCost B)",
+                text = if (eqState.starLevel >= StarRankMeta.MAX_STARS) "${StarRankMeta.MAX_STARS}★ MAX" else "Star +1 ($eqStarCost B)",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
               )
@@ -1508,7 +1507,7 @@ fun EquipmentCustomizationTab(
       item {
         Text("FORGED CUSTOM EQUIPMENT (${progression.customEquipment.size})", style = MaterialTheme.typography.titleMedium, color = Color(0xFFFF6D00))
       }
-      items(progression.customEquipment, key = { it.id }) { cEq ->
+      items(progression.customEquipment.distinctBy { it.id }, key = { it.id }) { cEq ->
         val accent = Color(cEq.accentHex)
         val tierCost = UpgradeCosts.equipmentTier(cEq.tier)
         val starCost = UpgradeCosts.equipmentStar(cEq.starLevel)
@@ -1547,7 +1546,7 @@ fun EquipmentCustomizationTab(
               }
               OutlinedButton(
                 onClick = { onUpgradeCustomEquipmentTier(cEq.id) },
-                enabled = cEq.tier < cEq.maxTier && totalBlueEssence >= tierCost,
+                enabled = cEq.tier < cEq.maxTier,
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_ceq_tier_${cEq.id}"),
               ) {
@@ -1555,11 +1554,11 @@ fun EquipmentCustomizationTab(
               }
               OutlinedButton(
                 onClick = { onUpgradeCustomEquipmentStar(cEq.id) },
-                enabled = cEq.starLevel < 10 && totalBlueEssence >= starCost,
+                enabled = cEq.starLevel < StarRankMeta.MAX_STARS,
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_ceq_star_${cEq.id}"),
               ) {
-                Text(if (cEq.starLevel >= 10) "10★ MAX" else "Star +1 ($starCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                Text(if (cEq.starLevel >= StarRankMeta.MAX_STARS) "${StarRankMeta.MAX_STARS}★ MAX" else "Star +1 ($starCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
               }
             }
           }
@@ -1739,7 +1738,7 @@ fun GearCustomizationTab(
             }
             OutlinedButton(
               onClick = { onUpgradeGearTier(slot) },
-              enabled = gear.tier < 25 && totalBlueEssence >= gearTierCost,
+              enabled = gear.tier < 25,
               shape = RoundedCornerShape(10.dp),
               modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_gear_tier_${slot.id}"),
             ) {
@@ -1751,12 +1750,12 @@ fun GearCustomizationTab(
             }
             OutlinedButton(
               onClick = { onUpgradeGearStar(slot) },
-              enabled = gear.starLevel < 10 && totalBlueEssence >= gearStarCost,
+              enabled = gear.starLevel < StarRankMeta.MAX_STARS,
               shape = RoundedCornerShape(10.dp),
               modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_gear_star_${slot.id}"),
             ) {
               Text(
-                text = if (gear.starLevel >= 10) "10★ MAX" else "Star +1 ($gearStarCost B)",
+                text = if (gear.starLevel >= StarRankMeta.MAX_STARS) "${StarRankMeta.MAX_STARS}★ MAX" else "Star +1 ($gearStarCost B)",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
               )
@@ -1770,7 +1769,7 @@ fun GearCustomizationTab(
       item {
         Text("FORGED CUSTOM GEAR MODULES (${progression.customGear.size})", style = MaterialTheme.typography.titleMedium, color = Color(0xFF00E5FF))
       }
-      items(progression.customGear, key = { it.id }) { cGear ->
+      items(progression.customGear.distinctBy { it.id }, key = { it.id }) { cGear ->
         val accent = Color(cGear.accentHex)
         val tierCost = UpgradeCosts.gearTier(cGear.tier)
         val starCost = UpgradeCosts.gearStar(cGear.starLevel)
@@ -1810,7 +1809,7 @@ fun GearCustomizationTab(
               }
               OutlinedButton(
                 onClick = { onUpgradeCustomGearTier(cGear.id) },
-                enabled = cGear.tier < cGear.maxTier && totalBlueEssence >= tierCost,
+                enabled = cGear.tier < cGear.maxTier,
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_cgear_tier_${cGear.id}"),
               ) {
@@ -1818,11 +1817,11 @@ fun GearCustomizationTab(
               }
               OutlinedButton(
                 onClick = { onUpgradeCustomGearStar(cGear.id) },
-                enabled = cGear.starLevel < 10 && totalBlueEssence >= starCost,
+                enabled = cGear.starLevel < StarRankMeta.MAX_STARS,
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_cgear_star_${cGear.id}"),
               ) {
-                Text(if (cGear.starLevel >= 10) "10★ MAX" else "Star +1 ($starCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                Text(if (cGear.starLevel >= StarRankMeta.MAX_STARS) "${StarRankMeta.MAX_STARS}★ MAX" else "Star +1 ($starCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
               }
             }
           }
@@ -1894,7 +1893,7 @@ fun SkillTreeTab(
       }
     }
 
-    items(filtered, key = { it.id }) { node ->
+    items(filtered.distinctBy { it.id }, key = { it.id }) { node ->
       val accent = when (node.category) {
         "COMBAT" -> Color(0xFFFF5252)
         "SURVIVAL" -> Color(0xFF00E5FF)
@@ -1951,13 +1950,10 @@ fun SkillTreeTab(
                 .heightIn(min = 48.dp)
                 .clip(RoundedCornerShape(10.dp))
                 .combinedClickable(
-                  enabled = canAfford,
                   onClick = { onUnlockSkill(node.id) },
                   onLongClick = {
-                    if (canAfford) {
-                      haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                      onUnlockSkill(node.id)
-                    }
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onUnlockSkill(node.id)
                   },
                 )
                 .testTag("unlock_skill_${node.id}"),
@@ -1988,12 +1984,12 @@ fun SkillTreeTab(
           if (node.unlocked) {
             OutlinedButton(
               onClick = { onUpgradeSkillStar(node.id) },
-              enabled = node.starLevel < 10 && totalEssence >= skillStarCost,
+              enabled = node.starLevel < StarRankMeta.MAX_STARS,
               shape = RoundedCornerShape(10.dp),
               modifier = Modifier.fillMaxWidth().height(48.dp).testTag("upgrade_skill_star_${node.id}"),
             ) {
               Text(
-                text = if (node.starLevel >= 10) "10★ MAX" else "Skill Star +1 (${node.starLevel}★ -> ${node.starLevel + 1}★, $skillStarCost B)",
+                text = if (node.starLevel >= StarRankMeta.MAX_STARS) "${StarRankMeta.MAX_STARS}★ MAX" else "Skill Star +1 (${node.starLevel}★ -> ${node.starLevel + 1}★, $skillStarCost B)",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
               )

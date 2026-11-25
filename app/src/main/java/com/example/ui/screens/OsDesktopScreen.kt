@@ -140,6 +140,10 @@ fun OsDesktopScreen(
   onGrantEssenceBonus: () -> Unit = {},
   onImportBo3Preset: () -> Unit = {},
   onDeployArea: (String) -> Unit = { areaId -> onSelectArea(areaId); onLaunchArena() },
+  onUpgradeAreaFeature: (String, String) -> Unit = { _, _ -> },
+  onUpgradeAreaStar: (String) -> Unit = {},
+  onUpgradeModeTier: (String) -> Unit = {},
+  onUpgradeModeStar: (String) -> Unit = {},
   onUpdateCollectionCustomMode: ((CollectionCustomModeConfig) -> CollectionCustomModeConfig) -> Unit = {},
   onDeployCollectionCustomMode: () -> Unit = {},
   activeLanguage: AppLanguage = AppLanguage.ENGLISH,
@@ -677,7 +681,7 @@ fun OsDesktopScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.testTag("os_chars_row"),
           ) {
-            items(heroList, key = { it.id }) { spec ->
+            items(heroList.distinctBy { it.id }, key = { it.id }) { spec ->
               val isSelected = progression.equippedOutfitId == spec.id
               val rarity = progression.outfitRarity(spec.id)
               val accent = Color(spec.secondaryHex)
@@ -1192,15 +1196,12 @@ fun OsDesktopScreen(
                   .heightIn(min = 48.dp)
                   .clip(RoundedCornerShape(12.dp))
                   .combinedClickable(
-                    enabled = unlocked,
                     onClick = {
                       onSelectNgPlusTier(ver.tier)
-                      onStatusMessage("Activated ${ver.label}")
                     },
                     onLongClick = {
                       haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                       onSelectNgPlusTier(ver.tier)
-                      onStatusMessage("Held & Activated ${ver.label}")
                     },
                   )
                   .border(
@@ -1319,8 +1320,12 @@ fun OsDesktopScreen(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier.testTag("os_modes_row"),
       ) {
-        items(UniverseCatalog.modes, key = { it.id }) { mode ->
+        items(UniverseCatalog.modes.distinctBy { it.id }, key = { it.id }) { mode ->
           val isSelected = mode.id == profile.activeMode
+          val modeTier = progression.modeTier(mode.id)
+          val modeStar = progression.modeStar(mode.id)
+          val modeTierCost = com.example.data.model.UpgradeCosts.modeTier(modeTier)
+          val modeStarCost = com.example.data.model.UpgradeCosts.modeStar(modeStar)
           Surface(
             shape = RoundedCornerShape(14.dp),
             color = if (isSelected) Color(mode.accentHex).copy(alpha = 0.25f) else MaterialTheme.colorScheme.surface,
@@ -1346,7 +1351,7 @@ fun OsDesktopScreen(
               )
               .testTag("mode_chip_${mode.id}"),
           ) {
-            Column(modifier = Modifier.width(196.dp).padding(12.dp)) {
+            Column(modifier = Modifier.width(220.dp).padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
               Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1387,14 +1392,53 @@ fun OsDesktopScreen(
                   }
                 }
               }
-              Spacer(Modifier.height(4.dp))
               Text(
-                text = "${mode.shortTag} • ${mode.summary}",
+                text = "T$modeTier/25 • $modeStar★ • ${mode.shortTag}",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color(mode.accentHex),
+                maxLines = 1,
+              )
+              Text(
+                text = mode.summary,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
               )
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+              ) {
+                OutlinedButton(
+                  onClick = { onUpgradeModeTier(mode.id) },
+                  enabled = modeTier < 25,
+                  shape = RoundedCornerShape(8.dp),
+                  contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                  modifier = Modifier.weight(1f).height(48.dp).testTag("mode_up_tier_${mode.id}"),
+                ) {
+                  Text(
+                    text = if (modeTier >= 25) "T25" else "+Tier (${modeTierCost}B)",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                  )
+                }
+                OutlinedButton(
+                  onClick = { onUpgradeModeStar(mode.id) },
+                  enabled = modeStar < com.example.data.model.StarRankMeta.MAX_STARS,
+                  shape = RoundedCornerShape(8.dp),
+                  contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                  modifier = Modifier.weight(1f).height(48.dp).testTag("mode_up_star_${mode.id}"),
+                ) {
+                  Text(
+                    text = if (modeStar >= com.example.data.model.StarRankMeta.MAX_STARS) "${com.example.data.model.StarRankMeta.MAX_STARS}★" else "+★ (${modeStarCost}B)",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                  )
+                }
+              }
             }
           }
         }
@@ -1441,16 +1485,18 @@ fun OsDesktopScreen(
           horizontalArrangement = Arrangement.spacedBy(10.dp),
           modifier = Modifier.testTag("os_arenas_row"),
         ) {
-          items(worldScopedAreas, key = { it.id }) { area ->
+          items(worldScopedAreas.distinctBy { it.id }, key = { it.id }) { area ->
           val isSelected = area.id == progression.activeAreaId
           val areaSt = progression.areaState(area.id)
           val accent = Color(area.accentHex)
           val linkedWorld = UniverseCatalog.worldById(area.linkedWorldId)
+          val gridCost = com.example.data.model.UpgradeCosts.areaFeatureTier(areaSt.powerGridTier)
+          val starCost = com.example.data.model.UpgradeCosts.areaStar(areaSt.starLevel)
           Surface(
             shape = RoundedCornerShape(16.dp),
             color = if (isSelected) accent.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surface,
             modifier = Modifier
-              .width(232.dp)
+              .width(248.dp)
               .heightIn(min = 64.dp)
               .clip(RoundedCornerShape(16.dp))
               .combinedClickable(
@@ -1499,12 +1545,52 @@ fun OsDesktopScreen(
                 overflow = TextOverflow.Ellipsis,
               )
               Text(
+                text = "Grid T${areaSt.powerGridTier}/25 • ${areaSt.starLevel}★",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF00E5FF),
+                maxLines = 1,
+              )
+              Text(
                 text = area.description,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
               )
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+              ) {
+                OutlinedButton(
+                  onClick = { onUpgradeAreaFeature(area.id, "power_grid") },
+                  enabled = areaSt.powerGridTier < 25,
+                  shape = RoundedCornerShape(8.dp),
+                  contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                  modifier = Modifier.weight(1f).height(48.dp).testTag("os_arena_up_tier_${area.id}"),
+                ) {
+                  Text(
+                    text = if (areaSt.powerGridTier >= 25) "T25" else "+Grid (${gridCost}B)",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                  )
+                }
+                OutlinedButton(
+                  onClick = { onUpgradeAreaStar(area.id) },
+                  enabled = areaSt.starLevel < com.example.data.model.StarRankMeta.MAX_STARS,
+                  shape = RoundedCornerShape(8.dp),
+                  contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                  modifier = Modifier.weight(1f).height(48.dp).testTag("os_arena_up_star_${area.id}"),
+                ) {
+                  Text(
+                    text = if (areaSt.starLevel >= com.example.data.model.StarRankMeta.MAX_STARS) "${com.example.data.model.StarRankMeta.MAX_STARS}★" else "+★ (${starCost}B)",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                  )
+                }
+              }
             }
           }
         }
