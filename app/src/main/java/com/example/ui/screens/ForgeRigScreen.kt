@@ -109,15 +109,25 @@ fun ForgeRigScreen(
   var archetype by remember(currentRig?.id) { mutableStateOf(currentRig?.archetype ?: "operator") }
   var activeClip by remember(currentRig?.id) { mutableStateOf(currentRig?.activeClip ?: "idle") }
   var ikEnabled by remember(currentRig?.id) { mutableStateOf(currentRig?.ikEnabled ?: true) }
-  var rigScale by remember(currentRig?.id) { mutableFloatStateOf((currentRig?.rigScale ?: 1.0).toFloat()) }
-  var playbackSpeed by remember(currentRig?.id) { mutableFloatStateOf((currentRig?.playbackSpeed ?: 1.0).toFloat()) }
+  var rigScale by remember(currentRig?.id) {
+    val s = (currentRig?.rigScale ?: 1.0).toFloat()
+    mutableFloatStateOf(if (s.isFinite()) s.coerceIn(0.7f, 1.4f) else 1.0f)
+  }
+  var playbackSpeed by remember(currentRig?.id) {
+    val sp = (currentRig?.playbackSpeed ?: 1.0).toFloat()
+    mutableFloatStateOf(if (sp.isFinite()) sp.coerceIn(0.3f, 2.5f) else 1.0f)
+  }
   var keyframes by remember(currentRig?.id) {
-    mutableStateOf(currentRig?.keyframeFrames ?: listOf(0L, 15L, 30L, 45L, 60L))
+    mutableStateOf(currentRig?.keyframeFrames?.filter { it in 0L..60L }?.ifEmpty { null } ?: listOf(0L, 15L, 30L, 45L, 60L))
   }
   val poseMap = remember(currentRig?.id) {
     mutableStateMapOf<String, Double>().apply {
       putAll(UniverseCatalog.defaultPoseMap())
-      currentRig?.poseAngles?.let { putAll(it) }
+      currentRig?.poseAngles?.forEach { (k, v) ->
+        if (v.isFinite()) {
+          put(k, v)
+        }
+      }
     }
   }
 
@@ -149,18 +159,24 @@ fun ForgeRigScreen(
 
   LaunchedEffect(isPlaying, playbackSpeed, settings.targetFpsCap) {
     if (!isPlaying) return@LaunchedEffect
-    var lastNanos = withFrameNanos { it }
-    var accumNanos = 0L
-    val minStepNanos = if (settings.targetFpsCap <= 30) 30_000_000L else 14_000_000L
-    while (isPlaying) {
-      val now = withFrameNanos { it }
-      accumNanos += (now - lastNanos).coerceAtLeast(1_000_000L)
-      lastNanos = now
-      if (accumNanos >= minStepNanos) {
-        val dtSec = (accumNanos / 1_000_000_000f).coerceIn(0.001f, 0.06f)
-        accumNanos = 0L
-        currentFrame = (currentFrame + playbackSpeed * 54f * dtSec) % 60f
+    try {
+      var lastNanos = withFrameNanos { it }
+      var accumNanos = 0L
+      val minStepNanos = if (settings.targetFpsCap <= 30) 30_000_000L else 14_000_000L
+      val safeSpeed = if (playbackSpeed.isFinite() && playbackSpeed > 0f) playbackSpeed else 1.0f
+      while (isPlaying) {
+        val now = withFrameNanos { it }
+        accumNanos += (now - lastNanos).coerceAtLeast(1_000_000L)
+        lastNanos = now
+        if (accumNanos >= minStepNanos) {
+          val dtSec = (accumNanos / 1_000_000_000f).coerceIn(0.001f, 0.06f)
+          accumNanos = 0L
+          val nextFrame = (currentFrame + safeSpeed * 54f * dtSec) % 60f
+          currentFrame = if (nextFrame.isFinite()) nextFrame else 0f
+        }
       }
+    } catch (e: Throwable) {
+      android.util.Log.e("ForgeRig", "Animation loop interrupted", e)
     }
   }
 
@@ -222,128 +238,179 @@ fun ForgeRigScreen(
             modifier = Modifier.fillMaxSize().pointerInput(currentRig?.id, rigScale, ikEnabled, activeClip) {
               detectDragGestures(
                 onDragStart = { start ->
-                  val origin = Offset(size.width * 0.5f, size.height * 0.56f)
-                  val skel = RigEvaluator.evaluate(
-                    origin = origin,
-                    scalePx = size.height * 0.42f * rigScale,
-                    poseAngles = poseMap,
-                    clip = activeClip,
-                    frame = currentFrame,
-                    ikEnabled = ikEnabled,
-                  )
-                  val nearest = skel.handleMap().minByOrNull { (_, pt) ->
-                    hypot(pt.x - start.x, pt.y - start.y)
-                  }
-                  if (nearest != null) {
-                    selectedBoneId = nearest.key
-                    isPlaying = false
+                  try {
+                    if (size.width > 0 && size.height > 0 && start.x.isFinite() && start.y.isFinite()) {
+                      val origin = Offset(size.width * 0.5f, size.height * 0.56f)
+                      val safeScale = (size.height * 0.42f * (if (rigScale.isFinite()) rigScale else 1f)).takeIf { it.isFinite() && it > 0f } ?: 120f
+                      val safeCurFrame = if (currentFrame.isFinite()) currentFrame else 0f
+                      val skel = RigEvaluator.evaluate(
+                        origin = origin,
+                        scalePx = safeScale,
+                        poseAngles = poseMap,
+                        clip = activeClip,
+                        frame = safeCurFrame,
+                        ikEnabled = ikEnabled,
+                      )
+                      val nearest = skel.handleMap().minByOrNull { (_, pt) ->
+                        if (pt.x.isFinite() && pt.y.isFinite()) hypot(pt.x - start.x, pt.y - start.y) else Float.MAX_VALUE
+                      }
+                      if (nearest != null) {
+                        selectedBoneId = nearest.key
+                        isPlaying = false
+                      }
+                    }
+                  } catch (t: Throwable) {
+                    android.util.Log.e("ForgeRig", "onDragStart error", t)
                   }
                 },
                 onDrag = { change, _ ->
-                  change.consume()
-                  val origin = Offset(size.width * 0.5f, size.height * 0.56f)
-                  val skel = RigEvaluator.evaluate(
-                    origin = origin,
-                    scalePx = size.height * 0.42f * rigScale,
-                    poseAngles = poseMap,
-                    clip = activeClip,
-                    frame = currentFrame,
-                    ikEnabled = ikEnabled,
-                  )
-                  val pivot = when (selectedBoneId) {
-                    "torso" -> skel.pelvis
-                    "head" -> skel.chest
-                    "lUpperArm" -> skel.lShoulder
-                    "lForearm" -> skel.lElbow
-                    "rUpperArm" -> skel.rShoulder
-                    "rForearm" -> skel.rElbow
-                    "lThigh" -> skel.lHip
-                    "lShin" -> skel.lKnee
-                    "rThigh" -> skel.rHip
-                    "rShin" -> skel.rKnee
-                    else -> skel.rHand
+                  try {
+                    change.consume()
+                    if (size.width > 0 && size.height > 0 && change.position.x.isFinite() && change.position.y.isFinite()) {
+                      val origin = Offset(size.width * 0.5f, size.height * 0.56f)
+                      val safeScale = (size.height * 0.42f * (if (rigScale.isFinite()) rigScale else 1f)).takeIf { it.isFinite() && it > 0f } ?: 120f
+                      val safeCurFrame = if (currentFrame.isFinite()) currentFrame else 0f
+                      val skel = RigEvaluator.evaluate(
+                        origin = origin,
+                        scalePx = safeScale,
+                        poseAngles = poseMap,
+                        clip = activeClip,
+                        frame = safeCurFrame,
+                        ikEnabled = ikEnabled,
+                      )
+                      val pivot = when (selectedBoneId) {
+                        "torso" -> skel.pelvis
+                        "head" -> skel.chest
+                        "lUpperArm" -> skel.lShoulder
+                        "lForearm" -> skel.lElbow
+                        "rUpperArm" -> skel.rShoulder
+                        "rForearm" -> skel.rElbow
+                        "lThigh" -> skel.lHip
+                        "lShin" -> skel.lKnee
+                        "rThigh" -> skel.rHip
+                        "rShin" -> skel.rKnee
+                        else -> skel.rHand
+                      }
+                      if (pivot.x.isFinite() && pivot.y.isFinite()) {
+                        val dx = change.position.x - pivot.x
+                        val dy = change.position.y - pivot.y
+                        if (dx != 0f || dy != 0f) {
+                          val rawDeg = atan2(dy, dx) * (180f / PI.toFloat())
+                          if (rawDeg.isFinite()) {
+                            val spec = UniverseCatalog.rigBones.firstOrNull { it.id == selectedBoneId }
+                            val clamped = if (spec != null) {
+                              rawDeg.coerceIn(spec.minAngle, spec.maxAngle)
+                            } else {
+                              rawDeg.coerceIn(-120f, 120f)
+                            }
+                            if (clamped.isFinite()) {
+                              poseMap[selectedBoneId] = clamped.toDouble()
+                            }
+                          }
+                        }
+                      }
+                    }
+                  } catch (t: Throwable) {
+                    android.util.Log.e("ForgeRig", "onDrag error", t)
                   }
-                  val dx = change.position.x - pivot.x
-                  val dy = change.position.y - pivot.y
-                  val rawDeg = atan2(dy, dx) * (180f / PI.toFloat())
-                  val spec = UniverseCatalog.rigBones.firstOrNull { it.id == selectedBoneId }
-                  val clamped = if (spec != null) {
-                    rawDeg.coerceIn(spec.minAngle, spec.maxAngle)
-                  } else {
-                    rawDeg.coerceIn(-120f, 120f)
-                  }
-                  poseMap[selectedBoneId] = clamped.toDouble()
                 },
               )
             }
           ) {
-            val w = size.width
-            val h = size.height
-            val horizonY = h * 0.34f
-            val vanishX = w * 0.5f
-            val groundY = h * 0.56f + (h * 0.42f * rigScale) * 0.56f
+            try {
+              val w = size.width
+              val h = size.height
+              if (w <= 0f || h <= 0f || !w.isFinite() || !h.isFinite()) return@Canvas
+              val horizonY = h * 0.34f
+              val vanishX = w * 0.5f
+              val safeRigScale = if (rigScale.isFinite()) rigScale.coerceIn(0.7f, 1.4f) else 1.0f
+              val groundY = h * 0.56f + (h * 0.42f * safeRigScale) * 0.56f
 
-            // Blender 3D perspective floor grid
-            for (i in -8..8) {
-              val bx = vanishX + i * (w * 0.085f)
-              val tx = vanishX + i * (w * 0.025f)
-              drawLine(Color(0xFF282E3A), Offset(tx, horizonY), Offset(bx, h), strokeWidth = 1f)
+              // Blender 3D perspective floor grid
+              for (i in -8..8) {
+                val bx = vanishX + i * (w * 0.085f)
+                val tx = vanishX + i * (w * 0.025f)
+                if (bx.isFinite() && tx.isFinite() && horizonY.isFinite()) {
+                  drawLine(Color(0xFF282E3A), Offset(tx, horizonY), Offset(bx, h), strokeWidth = 1f)
+                }
+              }
+              for (r in 0..7) {
+                val t = r / 7f
+                val ry = horizonY + (h - horizonY) * (t * t)
+                if (ry.isFinite()) {
+                  drawLine(Color(0xFF282E3A), Offset(0f, ry), Offset(w, ry), strokeWidth = 1f)
+                }
+              }
+              // Blender World Axes (X Crimson, Y Green, Z Blue)
+              if (groundY.isFinite() && vanishX.isFinite() && horizonY.isFinite()) {
+                drawLine(Color(0xAAFF4060), Offset(0f, groundY), Offset(w, groundY), strokeWidth = 2f)
+                drawLine(Color(0x8838E54D), Offset(vanishX, horizonY), Offset(vanishX, h), strokeWidth = 1.6f)
+                drawLine(Color(0x6640A9FF), Offset(vanishX, 16f), Offset(vanishX, groundY), strokeWidth = 1.4f)
+              }
+
+              val origin = Offset(vanishX, h * 0.56f)
+              val safeCurFrame = if (currentFrame.isFinite()) currentFrame else 0f
+              val skel = RigEvaluator.evaluate(
+                origin = origin,
+                scalePx = h * 0.42f * safeRigScale,
+                poseAngles = poseMap,
+                clip = activeClip,
+                frame = safeCurFrame,
+                ikEnabled = ikEnabled,
+              )
+              val visorHex = ProgressionCatalog.visorStyles
+                .firstOrNull { it.first == progression.characterCustom.visorStyleId }
+                ?.second ?: progression.characterCustom.accentArmorHex
+              drawRigCharacter(
+                skeleton = skel,
+                archetype = archetype,
+                primaryColor = Color(progression.characterCustom.primaryArmorHex),
+                secondaryColor = Color(progression.characterCustom.accentArmorHex),
+                showBonesOverlay = showBonesOverlay,
+                selectedBoneId = selectedBoneId,
+                capePathScratch = capePathScratch,
+                torsoPathScratch = torsoPathScratch,
+                dynamicGlow = settings.dynamicGlowEffects && settings.graphicsQuality != GraphicsQuality.LOW,
+                highContrast = settings.effectiveHighContrast,
+                cloakOverride = progression.characterCustom.cloakEnabled,
+                visorColorOverride = Color(visorHex),
+                auraTrailId = progression.characterCustom.auraTrailId,
+                outfitId = progression.equippedOutfitId,
+              )
+
+              // Blender-style Top-Right XYZ Orientation Gizmo
+              if (w >= 72f) {
+                val gCenter = Offset(w - 36f, 36f)
+                drawCircle(Color(0x6610141D), radius = 22f, center = gCenter)
+                drawLine(Color(0xFFFF4060), gCenter, Offset(gCenter.x + 16f, gCenter.y + 4f), strokeWidth = 2.5f)
+                drawLine(Color(0xFF38E54D), gCenter, Offset(gCenter.x - 12f, gCenter.y + 9f), strokeWidth = 2.5f)
+                drawLine(Color(0xFF40A9FF), gCenter, Offset(gCenter.x, gCenter.y - 16f), strokeWidth = 2.5f)
+              }
+
+              // Subtle Dope-Sheet Keyframe Strip at bottom edge
+              val barY = h - 10f
+              if (w >= 140f && barY.isFinite()) {
+                drawLine(Color(0xFF343B4A), Offset(16f, barY), Offset(w - 110f, barY), strokeWidth = 2f)
+                keyframes.forEach { kf ->
+                  val kfRatio = (kf.toFloat() / 60f).coerceIn(0f, 1f)
+                  if (kfRatio.isFinite()) {
+                    val kx = 16f + (w - 126f) * kfRatio
+                    if (kx.isFinite()) {
+                      drawCircle(Color(0xFFFFB300), radius = 4.5f, center = Offset(kx, barY))
+                    }
+                  }
+                }
+                val curRatio = (safeCurFrame / 60f).coerceIn(0f, 1f)
+                if (curRatio.isFinite()) {
+                  val curX = 16f + (w - 126f) * curRatio
+                  if (curX.isFinite()) {
+                    drawLine(Color(0xFF00E5FF), Offset(curX, barY - 8f), Offset(curX, barY + 6f), strokeWidth = 2.5f)
+                  }
+                }
+              }
+            } catch (t: Throwable) {
+              android.util.Log.e("ForgeRig", "Canvas draw error", t)
             }
-            for (r in 0..7) {
-              val t = r / 7f
-              val ry = horizonY + (h - horizonY) * (t * t)
-              drawLine(Color(0xFF282E3A), Offset(0f, ry), Offset(w, ry), strokeWidth = 1f)
-            }
-            // Blender World Axes (X Crimson, Y Green, Z Blue)
-            drawLine(Color(0xAAFF4060), Offset(0f, groundY), Offset(w, groundY), strokeWidth = 2f)
-            drawLine(Color(0x8838E54D), Offset(vanishX, horizonY), Offset(vanishX, h), strokeWidth = 1.6f)
-            drawLine(Color(0x6640A9FF), Offset(vanishX, 16f), Offset(vanishX, groundY), strokeWidth = 1.4f)
-
-            val origin = Offset(vanishX, h * 0.56f)
-            val skel = RigEvaluator.evaluate(
-              origin = origin,
-              scalePx = h * 0.42f * rigScale,
-              poseAngles = poseMap,
-              clip = activeClip,
-              frame = currentFrame,
-              ikEnabled = ikEnabled,
-            )
-            val visorHex = ProgressionCatalog.visorStyles
-              .firstOrNull { it.first == progression.characterCustom.visorStyleId }
-              ?.second ?: progression.characterCustom.accentArmorHex
-            drawRigCharacter(
-              skeleton = skel,
-              archetype = archetype,
-              primaryColor = Color(progression.characterCustom.primaryArmorHex),
-              secondaryColor = Color(progression.characterCustom.accentArmorHex),
-              showBonesOverlay = showBonesOverlay,
-              selectedBoneId = selectedBoneId,
-              capePathScratch = capePathScratch,
-              torsoPathScratch = torsoPathScratch,
-              dynamicGlow = settings.dynamicGlowEffects && settings.graphicsQuality != GraphicsQuality.LOW,
-              highContrast = settings.effectiveHighContrast,
-              cloakOverride = progression.characterCustom.cloakEnabled,
-              visorColorOverride = Color(visorHex),
-              auraTrailId = progression.characterCustom.auraTrailId,
-              outfitId = progression.equippedOutfitId,
-            )
-
-            // Blender-style Top-Right XYZ Orientation Gizmo
-            val gCenter = Offset(w - 36f, 36f)
-            drawCircle(Color(0x6610141D), radius = 22f, center = gCenter)
-            drawLine(Color(0xFFFF4060), gCenter, Offset(gCenter.x + 16f, gCenter.y + 4f), strokeWidth = 2.5f)
-            drawLine(Color(0xFF38E54D), gCenter, Offset(gCenter.x - 12f, gCenter.y + 9f), strokeWidth = 2.5f)
-            drawLine(Color(0xFF40A9FF), gCenter, Offset(gCenter.x, gCenter.y - 16f), strokeWidth = 2.5f)
-
-            // Subtle Dope-Sheet Keyframe Strip at bottom edge
-            val barY = h - 10f
-            drawLine(Color(0xFF343B4A), Offset(16f, barY), Offset(w - 110f, barY), strokeWidth = 2f)
-            keyframes.forEach { kf ->
-              val kx = 16f + (w - 126f) * (kf.toFloat() / 60f).coerceIn(0f, 1f)
-              drawCircle(Color(0xFFFFB300), radius = 4.5f, center = Offset(kx, barY))
-            }
-            val curX = 16f + (w - 126f) * (currentFrame / 60f).coerceIn(0f, 1f)
-            drawLine(Color(0xFF00E5FF), Offset(curX, barY - 8f), Offset(curX, barY + 6f), strokeWidth = 2.5f)
           }
 
           // Viewport HUD Overlay (isolated recomposition scope via integer frame derivedStateOf)
@@ -428,10 +495,12 @@ fun ForgeRigScreen(
             }
           }
           Slider(
-            value = currentFrame,
+            value = if (currentFrame.isFinite()) currentFrame.coerceIn(0f, 60f) else 0f,
             onValueChange = {
-              isPlaying = false
-              currentFrame = it
+              if (it.isFinite()) {
+                isPlaying = false
+                currentFrame = it.coerceIn(0f, 60f)
+              }
             },
             valueRange = 0f..60f,
             modifier = Modifier.fillMaxWidth().testTag("rig_timeline_slider"),
@@ -486,15 +555,21 @@ fun ForgeRigScreen(
           // Selected Bone Angle Slider
           val boneSpec = UniverseCatalog.rigBones.firstOrNull { it.id == selectedBoneId }
           if (boneSpec != null) {
-            val valDeg = (poseMap[selectedBoneId] ?: boneSpec.defaultAngle.toDouble()).toFloat()
+            val rawVal = poseMap[selectedBoneId]
+            val valDeg = (if (rawVal != null && rawVal.isFinite()) rawVal.toFloat() else boneSpec.defaultAngle)
+              .coerceIn(boneSpec.minAngle, boneSpec.maxAngle)
             Text(
               text = "${boneSpec.label}: ${valDeg.toInt()}°",
               style = MaterialTheme.typography.labelLarge,
               color = MaterialTheme.colorScheme.primary,
             )
             Slider(
-              value = valDeg.coerceIn(boneSpec.minAngle, boneSpec.maxAngle),
-              onValueChange = { poseMap[selectedBoneId] = it.toDouble() },
+              value = valDeg,
+              onValueChange = {
+                if (it.isFinite()) {
+                  poseMap[selectedBoneId] = it.coerceIn(boneSpec.minAngle, boneSpec.maxAngle).toDouble()
+                }
+              },
               valueRange = boneSpec.minAngle..boneSpec.maxAngle,
             )
           }
@@ -516,26 +591,44 @@ fun ForgeRigScreen(
             Switch(checked = showBonesOverlay, onCheckedChange = { showBonesOverlay = it })
           }
 
-          Text("Playback Speed: ${String.format(Locale.US, "%.2fx", playbackSpeed)}", style = MaterialTheme.typography.labelMedium)
-          Slider(value = playbackSpeed, onValueChange = { playbackSpeed = it }, valueRange = 0.3f..2.5f)
+          val safeSpeedDisp = if (playbackSpeed.isFinite()) playbackSpeed.coerceIn(0.3f, 2.5f) else 1.0f
+          Text("Playback Speed: ${String.format(Locale.US, "%.2fx", safeSpeedDisp)}", style = MaterialTheme.typography.labelMedium)
+          Slider(
+            value = safeSpeedDisp,
+            onValueChange = { if (it.isFinite()) playbackSpeed = it.coerceIn(0.3f, 2.5f) },
+            valueRange = 0.3f..2.5f,
+          )
 
-          Text("Rig Scale: ${String.format(Locale.US, "%.2fx", rigScale)}", style = MaterialTheme.typography.labelMedium)
-          Slider(value = rigScale, onValueChange = { rigScale = it }, valueRange = 0.7f..1.4f)
+          val safeScaleDisp = if (rigScale.isFinite()) rigScale.coerceIn(0.7f, 1.4f) else 1.0f
+          Text("Rig Scale: ${String.format(Locale.US, "%.2fx", safeScaleDisp)}", style = MaterialTheme.typography.labelMedium)
+          Slider(
+            value = safeScaleDisp,
+            onValueChange = { if (it.isFinite()) rigScale = it.coerceIn(0.7f, 1.4f) },
+            valueRange = 0.7f..1.4f,
+          )
 
           Button(
             onClick = {
-              onSaveRig(
-                currentRig?.id,
-                rigName,
-                archetype,
-                activeClip,
-                ikEnabled,
-                rigScale.toDouble(),
-                playbackSpeed.toDouble(),
-                poseMap.toMap(),
-                keyframes,
-                true,
-              )
+              try {
+                val safeAngles = poseMap.filter { it.value.isFinite() }.toMap()
+                val safeFrames = keyframes.filter { it in 0L..60L }.distinct().sorted()
+                val safeSc = if (rigScale.isFinite()) rigScale.coerceIn(0.7f, 1.4f).toDouble() else 1.0
+                val safeSp = if (playbackSpeed.isFinite()) playbackSpeed.coerceIn(0.3f, 2.5f).toDouble() else 1.0
+                onSaveRig(
+                  currentRig?.id,
+                  rigName.trim().ifBlank { "Custom Rig" },
+                  archetype,
+                  activeClip,
+                  ikEnabled,
+                  safeSc,
+                  safeSp,
+                  safeAngles,
+                  safeFrames,
+                  true,
+                )
+              } catch (e: Throwable) {
+                onStatusMessage("Failed to save rig: ${e.localizedMessage}")
+              }
             },
             shape = RoundedCornerShape(14.dp),
             modifier = Modifier.fillMaxWidth().height(50.dp).testTag("save_rig_button"),
@@ -563,14 +656,14 @@ fun ForgeRigScreen(
     val snapshotRig = RigAsset(
       id = currentRig?.id ?: "draft_rig",
       userId = currentRig?.userId.orEmpty(),
-      name = rigName,
+      name = rigName.trim().ifBlank { "Custom Rig" },
       archetype = archetype,
       activeClip = activeClip,
       ikEnabled = ikEnabled,
-      rigScale = rigScale.toDouble(),
-      playbackSpeed = playbackSpeed.toDouble(),
-      poseAngles = poseMap.toMap(),
-      keyframeFrames = keyframes,
+      rigScale = if (rigScale.isFinite()) rigScale.coerceIn(0.7f, 1.4f).toDouble() else 1.0,
+      playbackSpeed = if (playbackSpeed.isFinite()) playbackSpeed.coerceIn(0.3f, 2.5f).toDouble() else 1.0,
+      poseAngles = poseMap.filter { it.value.isFinite() }.toMap(),
+      keyframeFrames = keyframes.filter { it in 0L..60L }.distinct().sorted(),
       isCompleted = true,
     )
     val slug = Bo3ModToolsExporter.sanitizeAssetSlug(snapshotRig.name)
@@ -600,38 +693,54 @@ fun ForgeRigScreen(
           }
           Button(
             onClick = {
-              pendingRigExportText = Bo3ModToolsExporter.generateXModelExport(snapshotRig, bo3Opts)
-              showRigExportDialog = false
-              rigExportLauncher.launch("${slug}_rig.xmodel_export")
+              try {
+                pendingRigExportText = Bo3ModToolsExporter.generateXModelExport(snapshotRig, bo3Opts)
+                showRigExportDialog = false
+                rigExportLauncher.launch("${slug}_rig.xmodel_export")
+              } catch (e: Exception) {
+                onStatusMessage("Export error: ${e.localizedMessage}")
+              }
             },
             modifier = Modifier.fillMaxWidth().height(48.dp).testTag("dialog_export_xmodel_btn"),
           ) { Text(".XMODEL_EXPORT (BO3 Rig & Mesh)") }
           OutlinedButton(
             onClick = {
-              pendingRigExportText = Bo3ModToolsExporter.generateXAnimExport(snapshotRig, bo3Opts)
-              showRigExportDialog = false
-              rigExportLauncher.launch("${slug}_${clipSlug}.xanim_export")
+              try {
+                pendingRigExportText = Bo3ModToolsExporter.generateXAnimExport(snapshotRig, bo3Opts)
+                showRigExportDialog = false
+                rigExportLauncher.launch("${slug}_${clipSlug}.xanim_export")
+              } catch (e: Exception) {
+                onStatusMessage("Export error: ${e.localizedMessage}")
+              }
             },
             modifier = Modifier.fillMaxWidth().height(48.dp).testTag("dialog_export_xanim_btn"),
           ) { Text(".XANIM_EXPORT (BO3 Animation)") }
           OutlinedButton(
             onClick = {
-              pendingRigExportText = Bo3ModToolsExporter.generateCoDBlenderBo3Script(snapshotRig, bo3Opts)
-              showRigExportDialog = false
-              rigExportLauncher.launch("${slug}_bo3_blender.py")
+              try {
+                pendingRigExportText = Bo3ModToolsExporter.generateCoDBlenderBo3Script(snapshotRig, bo3Opts)
+                showRigExportDialog = false
+                rigExportLauncher.launch("${slug}_bo3_blender.py")
+              } catch (e: Exception) {
+                onStatusMessage("Export error: ${e.localizedMessage}")
+              }
             },
             modifier = Modifier.fillMaxWidth().height(48.dp).testTag("dialog_export_cod_blender_btn"),
           ) { Text("CoD-Blender BO3 Script (.PY)") }
           OutlinedButton(
             onClick = {
-              val text = PortablePackageGenerator.generateBlenderRigScript(snapshotRig)
-              val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_SUBJECT, "${snapshotRig.name} — UnknownBlend Rig")
-                putExtra(Intent.EXTRA_TEXT, text)
+              try {
+                val text = PortablePackageGenerator.generateBlenderRigScript(snapshotRig)
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                  type = "text/plain"
+                  putExtra(Intent.EXTRA_SUBJECT, "${snapshotRig.name} — UnknownBlend Rig")
+                  putExtra(Intent.EXTRA_TEXT, text)
+                }
+                showRigExportDialog = false
+                context.startActivity(Intent.createChooser(shareIntent, "Share Blender .PY Script"))
+              } catch (e: Exception) {
+                onStatusMessage("Share not available: ${e.localizedMessage}")
               }
-              showRigExportDialog = false
-              context.startActivity(Intent.createChooser(shareIntent, "Share Blender .PY Script"))
             },
             modifier = Modifier.fillMaxWidth().height(48.dp).testTag("dialog_share_blender_py_btn"),
           ) { Text("Share Standard Blender .PY") }

@@ -239,7 +239,7 @@ fun OsDesktopScreen(
                   )
                 }
               }
-              val activeWeapon = ProgressionCatalog.weaponById(progression.weaponCustom.equippedWeaponId)
+              val activeWeapon = ProgressionCatalog.weaponById(progression.weaponCustom.equippedWeaponId, progression.customWeapons)
               val activeOutfit = progression.activeOutfitSpec()
               val activeAreaSpec = progression.activeAreaSpec()
               val activeAreaState = progression.areaState(activeAreaSpec.id)

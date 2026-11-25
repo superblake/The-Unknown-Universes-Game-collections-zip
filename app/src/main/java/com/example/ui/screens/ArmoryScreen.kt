@@ -236,6 +236,13 @@ fun ArmoryScreen(
     equipNow: Boolean,
   ) -> Unit = { _, _, _, _, _, _, _, _, _, _, _ -> },
   onDeleteCustomWeapon: (String) -> Unit = {},
+  onUpgradeCustomPerkTier: (String) -> Unit = {},
+  onUpgradeCustomPerkStar: (String) -> Unit = {},
+  onUpgradeCustomGearTier: (String) -> Unit = {},
+  onUpgradeCustomGearStar: (String) -> Unit = {},
+  onEquipCustomGear: (GearSlot, String) -> Unit = { _, _ -> },
+  onUpgradeCustomEquipmentTier: (String) -> Unit = {},
+  onUpgradeCustomEquipmentStar: (String) -> Unit = {},
   settings: AppSettings = AppSettings(),
   persistedSectionTag: String? = null,
   onPersistSectionTag: ((String) -> Unit)? = null,
@@ -545,6 +552,8 @@ fun ArmoryScreen(
           onUpgradePerkDrink = onUpgradePerkDrink,
           onUpgradeBlastCore = onUpgradeBlastCore,
           onUpgradeVacuumBotStar = onUpgradeVacuumBotStar,
+          onUpgradeCustomPerkTier = onUpgradeCustomPerkTier,
+          onUpgradeCustomPerkStar = onUpgradeCustomPerkStar,
           armoryItems = armory,
           region = settings.activeRegion,
           server = settings.activeServer,
@@ -613,6 +622,9 @@ fun ArmoryScreen(
           totalBlueEssence = totalEssence,
           onUpgradeGearTier = onUpgradeGearTier,
           onUpgradeGearStar = onUpgradeGearStar,
+          onUpgradeCustomGearTier = onUpgradeCustomGearTier,
+          onUpgradeCustomGearStar = onUpgradeCustomGearStar,
+          onEquipCustomGear = onEquipCustomGear,
         )
 
         ArmorySection.EQUIPMENT -> EquipmentCustomizationTab(
@@ -624,6 +636,8 @@ fun ArmoryScreen(
           onUpgradeEquipmentTier = onUpgradeEquipmentTier,
           onToggleMultiEquipmentEquip = onToggleMultiEquipmentEquip,
           onUpgradeEquipmentStar = onUpgradeEquipmentStar,
+          onUpgradeCustomEquipmentTier = onUpgradeCustomEquipmentTier,
+          onUpgradeCustomEquipmentStar = onUpgradeCustomEquipmentStar,
         )
 
         ArmorySection.SKILLS -> SkillTreeTab(

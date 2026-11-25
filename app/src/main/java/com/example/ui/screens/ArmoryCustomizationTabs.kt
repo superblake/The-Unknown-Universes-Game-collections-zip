@@ -1321,6 +1321,8 @@ fun EquipmentCustomizationTab(
   onUpgradeEquipmentTier: (String) -> Unit = {},
   onToggleMultiEquipmentEquip: (com.example.data.model.EquipmentSlotType, String) -> Unit = { _, _ -> },
   onUpgradeEquipmentStar: (String) -> Unit = {},
+  onUpgradeCustomEquipmentTier: (String) -> Unit = {},
+  onUpgradeCustomEquipmentStar: (String) -> Unit = {},
 ) {
   val haptic = LocalHapticFeedback.current
   LazyColumn(
@@ -1335,8 +1337,10 @@ fun EquipmentCustomizationTab(
 
     items(com.example.data.model.EquipmentSlotType.entries, key = { it.id }) { slotType ->
       val eqState = progression.equipmentState(slotType.id)
-      val itemsForSlot = ProgressionCatalog.equipmentItems.filter { it.slotType == slotType }
-      val equippedItem = itemsForSlot.firstOrNull { it.id == eqState.equippedItemId } ?: itemsForSlot.first()
+      val itemsForSlot = ProgressionCatalog.allEquipmentItems(progression.customEquipment).filter { it.slotType == slotType }
+      val equippedItem = itemsForSlot.firstOrNull { it.id == eqState.equippedItemId }
+        ?: itemsForSlot.firstOrNull()
+        ?: ProgressionCatalog.equipmentItems.first { it.slotType == slotType }
       val multiList = if (slotType == com.example.data.model.EquipmentSlotType.LETHAL) {
         progression.equippedLethalIds.ifEmpty { listOf(eqState.equippedItemId) }
       } else {
@@ -1499,6 +1503,69 @@ fun EquipmentCustomizationTab(
         }
       }
     }
+
+    if (progression.customEquipment.isNotEmpty()) {
+      item {
+        Text("FORGED CUSTOM EQUIPMENT (${progression.customEquipment.size})", style = MaterialTheme.typography.titleMedium, color = Color(0xFFFF6D00))
+      }
+      items(progression.customEquipment, key = { it.id }) { cEq ->
+        val accent = Color(cEq.accentHex)
+        val tierCost = UpgradeCosts.equipmentTier(cEq.tier)
+        val starCost = UpgradeCosts.equipmentStar(cEq.starLevel)
+        Surface(
+          shape = RoundedCornerShape(14.dp),
+          color = MaterialTheme.colorScheme.surface,
+          modifier = Modifier.fillMaxWidth().border(1.2.dp, accent.copy(alpha = 0.7f), RoundedCornerShape(14.dp)),
+        ) {
+          Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Column(modifier = Modifier.weight(1f)) {
+                Text("${cEq.slotType.displayName}: ${cEq.name}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = accent)
+                Text(cEq.description.ifBlank { "Forged ${cEq.slotType.displayName} • ${cEq.damageTypeId.uppercase()}" }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+              }
+              Surface(shape = RoundedCornerShape(8.dp), color = accent.copy(alpha = 0.2f)) {
+                Text(
+                  text = "T${cEq.tier}/${cEq.maxTier} • ${cEq.starLevel}★",
+                  style = MaterialTheme.typography.labelSmall,
+                  fontWeight = FontWeight.Bold,
+                  color = accent,
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+              }
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+              Button(
+                onClick = { onEquipEquipment(cEq.slotType.id, cEq.id) },
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.weight(1f).height(48.dp).testTag("equip_ceq_${cEq.id}"),
+              ) {
+                Text("Equip", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+              }
+              OutlinedButton(
+                onClick = { onUpgradeCustomEquipmentTier(cEq.id) },
+                enabled = cEq.tier < cEq.maxTier && totalBlueEssence >= tierCost,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_ceq_tier_${cEq.id}"),
+              ) {
+                Text(if (cEq.tier >= cEq.maxTier) "T${cEq.maxTier} MAX" else "Tier +1 ($tierCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+              }
+              OutlinedButton(
+                onClick = { onUpgradeCustomEquipmentStar(cEq.id) },
+                enabled = cEq.starLevel < 10 && totalBlueEssence >= starCost,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_ceq_star_${cEq.id}"),
+              ) {
+                Text(if (cEq.starLevel >= 10) "10★ MAX" else "Star +1 ($starCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+              }
+            }
+          }
+        }
+      }
+    }
   }
 }
 
@@ -1511,6 +1578,9 @@ fun GearCustomizationTab(
   totalBlueEssence: Long = 0L,
   onUpgradeGearTier: (GearSlot) -> Unit = {},
   onUpgradeGearStar: (GearSlot) -> Unit = {},
+  onUpgradeCustomGearTier: (String) -> Unit = {},
+  onUpgradeCustomGearStar: (String) -> Unit = {},
+  onEquipCustomGear: (GearSlot, String) -> Unit = { _, _ -> },
 ) {
   val haptic = LocalHapticFeedback.current
   LazyColumn(
@@ -1690,6 +1760,70 @@ fun GearCustomizationTab(
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
               )
+            }
+          }
+        }
+      }
+    }
+
+    if (progression.customGear.isNotEmpty()) {
+      item {
+        Text("FORGED CUSTOM GEAR MODULES (${progression.customGear.size})", style = MaterialTheme.typography.titleMedium, color = Color(0xFF00E5FF))
+      }
+      items(progression.customGear, key = { it.id }) { cGear ->
+        val accent = Color(cGear.accentHex)
+        val tierCost = UpgradeCosts.gearTier(cGear.tier)
+        val starCost = UpgradeCosts.gearStar(cGear.starLevel)
+        val isEquipped = progression.gearMap[cGear.slot.id]?.colorHex == cGear.accentHex
+        Surface(
+          shape = RoundedCornerShape(14.dp),
+          color = MaterialTheme.colorScheme.surface,
+          modifier = Modifier.fillMaxWidth().border(1.2.dp, accent.copy(alpha = 0.7f), RoundedCornerShape(14.dp)),
+        ) {
+          Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Column(modifier = Modifier.weight(1f)) {
+                Text("${cGear.slot.displayName}: ${cGear.name}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = accent)
+                Text(cGear.description.ifBlank { "Forged ${cGear.slot.displayName} • +${cGear.bonusShield} Shield • +${cGear.bonusDamagePct}% DMG" }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+              }
+              Surface(shape = RoundedCornerShape(8.dp), color = accent.copy(alpha = 0.2f)) {
+                Text(
+                  text = "T${cGear.tier}/${cGear.maxTier} • ${cGear.starLevel}★",
+                  style = MaterialTheme.typography.labelSmall,
+                  fontWeight = FontWeight.Bold,
+                  color = accent,
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+              }
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+              Button(
+                onClick = { onEquipCustomGear(cGear.slot, cGear.id) },
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.weight(1f).height(48.dp).testTag("equip_cgear_${cGear.id}"),
+              ) {
+                Text("Equip", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+              }
+              OutlinedButton(
+                onClick = { onUpgradeCustomGearTier(cGear.id) },
+                enabled = cGear.tier < cGear.maxTier && totalBlueEssence >= tierCost,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_cgear_tier_${cGear.id}"),
+              ) {
+                Text(if (cGear.tier >= cGear.maxTier) "T${cGear.maxTier} MAX" else "Tier +1 ($tierCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+              }
+              OutlinedButton(
+                onClick = { onUpgradeCustomGearStar(cGear.id) },
+                enabled = cGear.starLevel < 10 && totalBlueEssence >= starCost,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_cgear_star_${cGear.id}"),
+              ) {
+                Text(if (cGear.starLevel >= 10) "10★ MAX" else "Star +1 ($starCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+              }
             }
           }
         }

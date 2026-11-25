@@ -474,6 +474,8 @@ fun ShardsPerksAndCoresTab(
   onUpgradePerkDrink: (String) -> Unit,
   onUpgradeBlastCore: (BlastCoreColor) -> Unit,
   onUpgradeVacuumBotStar: () -> Unit = {},
+  onUpgradeCustomPerkTier: (String) -> Unit = {},
+  onUpgradeCustomPerkStar: (String) -> Unit = {},
   armoryItems: List<ArmoryItem> = emptyList(),
   region: WorldRegion = WorldRegion.NA_EAST,
   server: RegionalServerSpec? = null,
@@ -679,6 +681,62 @@ fun ShardsPerksAndCoresTab(
             modifier = Modifier.height(48.dp).testTag("upgrade_perk_${perk.id}"),
           ) {
             Text(if (rank >= perk.maxRank) "MAX" else "$cost B", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+          }
+        }
+      }
+    }
+
+    if (progression.customPerks.isNotEmpty()) {
+      item {
+        Text("FORGED CUSTOM PERKS (${progression.customPerks.size})", style = MaterialTheme.typography.titleMedium, color = Color(0xFF00E676))
+      }
+      items(progression.customPerks, key = { it.id }) { cPerk ->
+        val accent = Color(cPerk.accentHex)
+        val tierCost = UpgradeCosts.gearTier(cPerk.tier)
+        val starCost = UpgradeCosts.gearStar(cPerk.starLevel)
+        Surface(
+          shape = RoundedCornerShape(14.dp),
+          color = MaterialTheme.colorScheme.surface,
+          modifier = Modifier.fillMaxWidth().border(1.2.dp, accent.copy(alpha = 0.7f), RoundedCornerShape(14.dp)),
+        ) {
+          Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically,
+            ) {
+              Column(modifier = Modifier.weight(1f)) {
+                Text(cPerk.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = accent)
+                Text(cPerk.description.ifBlank { "Forged Perk • Tier ${cPerk.tier}/${cPerk.maxTier} • ${cPerk.starLevel}★" }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+              }
+              Surface(shape = RoundedCornerShape(8.dp), color = accent.copy(alpha = 0.2f)) {
+                Text(
+                  text = "T${cPerk.tier}/${cPerk.maxTier} • ${cPerk.starLevel}★",
+                  style = MaterialTheme.typography.labelSmall,
+                  fontWeight = FontWeight.Bold,
+                  color = accent,
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+              }
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+              OutlinedButton(
+                onClick = { onUpgradeCustomPerkTier(cPerk.id) },
+                enabled = cPerk.tier < cPerk.maxTier && totalBlueEssence >= tierCost,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_cperk_tier_${cPerk.id}"),
+              ) {
+                Text(if (cPerk.tier >= cPerk.maxTier) "T${cPerk.maxTier} MAX" else "Tier +1 ($tierCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+              }
+              OutlinedButton(
+                onClick = { onUpgradeCustomPerkStar(cPerk.id) },
+                enabled = cPerk.starLevel < 10 && totalBlueEssence >= starCost,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.weight(1f).height(48.dp).testTag("upgrade_cperk_star_${cPerk.id}"),
+              ) {
+                Text(if (cPerk.starLevel >= 10) "10★ MAX" else "Star +1 ($starCost B)", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+              }
+            }
           }
         }
       }

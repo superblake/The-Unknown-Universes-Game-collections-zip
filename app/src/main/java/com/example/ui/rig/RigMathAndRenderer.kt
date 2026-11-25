@@ -54,7 +54,11 @@ object RigEvaluator {
     ikEnabled: Boolean,
     animationSpeedMultiplier: Float = 1.0f,
   ): EvaluatedSkeleton {
-    val t = (frame / 60f) * (2f * PI.toFloat()) * animationSpeedMultiplier.coerceIn(0.5f, 2.0f)
+    val safeOrigin = if (origin.x.isFinite() && origin.y.isFinite()) origin else Offset(160f, 160f)
+    val safeScale = if (scalePx.isFinite() && scalePx > 10f) scalePx else 120f
+    val safeFrame = if (frame.isFinite()) (frame % 60f + 60f) % 60f else 0f
+    val safeSpeed = if (animationSpeedMultiplier.isFinite()) animationSpeedMultiplier.coerceIn(0.2f, 3.0f) else 1.0f
+    val t = (safeFrame / 60f) * (2f * PI.toFloat()) * safeSpeed
 
     var bobYOff = 0f
     var torsoOff = 0f
@@ -139,70 +143,86 @@ object RigEvaluator {
       }
     }
 
-    fun baseAngle(id: String): Float = poseAngles[id]?.toFloat() ?: 0f
-
-    val pelvis = Offset(origin.x, origin.y + bobYOff * scalePx)
-
-    val torsoDeg = baseAngle("torso") + torsoOff
-    val chest = step(pelvis, -90f + torsoDeg, 0.34f * scalePx)
-    val head = step(chest, -90f + torsoDeg + (baseAngle("head") + headOff) * 0.6f, 0.19f * scalePx)
-
-    val lShoulder = Offset(chest.x - 0.14f * scalePx, chest.y + 0.03f * scalePx)
-    val rShoulder = Offset(chest.x + 0.14f * scalePx, chest.y + 0.03f * scalePx)
-
-    val lUpperDeg = 110f + torsoDeg * 0.4f + baseAngle("lUpperArm") + lUpperOff
-    val lElbow = step(lShoulder, lUpperDeg, 0.22f * scalePx)
-    val lForeDeg = lUpperDeg + (baseAngle("lForearm") + lForeOff) * 0.65f
-    val lHand = step(lElbow, lForeDeg, 0.21f * scalePx)
-
-    val rUpperDeg = 70f + torsoDeg * 0.4f + baseAngle("rUpperArm") + rUpperOff
-    val rElbow = step(rShoulder, rUpperDeg, 0.22f * scalePx)
-    val rForeDeg = rUpperDeg + (baseAngle("rForearm") + rForeOff) * 0.65f
-    val rHand = step(rElbow, rForeDeg, 0.21f * scalePx)
-    val weaponTip = step(rHand, rForeDeg - 25f + baseAngle("weaponAngle") + weaponOff, 0.28f * scalePx)
-
-    val lHip = Offset(pelvis.x - 0.09f * scalePx, pelvis.y + 0.03f * scalePx)
-    val rHip = Offset(pelvis.x + 0.09f * scalePx, pelvis.y + 0.03f * scalePx)
-
-    val lThighDeg = 95f + baseAngle("lThigh") + lThighOff
-    val lKnee = step(lHip, lThighDeg, 0.26f * scalePx)
-    val lShinDeg = lThighDeg + (baseAngle("lShin") + lShinOff) * 0.6f
-    var lFoot = step(lKnee, lShinDeg, 0.26f * scalePx)
-
-    val rThighDeg = 85f + baseAngle("rThigh") + rThighOff
-    val rKnee = step(rHip, rThighDeg, 0.26f * scalePx)
-    val rShinDeg = rThighDeg + (baseAngle("rShin") + rShinOff) * 0.6f
-    var rFoot = step(rKnee, rShinDeg, 0.26f * scalePx)
-
-    if (ikEnabled) {
-      val groundY = origin.y + 0.56f * scalePx
-      if (lFoot.y > groundY) lFoot = Offset(lFoot.x, groundY)
-      if (rFoot.y > groundY) rFoot = Offset(rFoot.x, groundY)
+    fun baseAngle(id: String): Float {
+      val v = poseAngles[id]
+      return if (v != null && v.isFinite()) v.toFloat() else 0f
     }
 
+    val pelvis = Offset(safeOrigin.x, safeOrigin.y + (if (bobYOff.isFinite()) bobYOff else 0f) * safeScale)
+
+    val torsoDeg = baseAngle("torso") + torsoOff
+    val chest = step(pelvis, -90f + torsoDeg, 0.34f * safeScale)
+    val head = step(chest, -90f + torsoDeg + (baseAngle("head") + headOff) * 0.6f, 0.19f * safeScale)
+
+    val lShoulder = Offset(chest.x - 0.14f * safeScale, chest.y + 0.03f * safeScale)
+    val rShoulder = Offset(chest.x + 0.14f * safeScale, chest.y + 0.03f * safeScale)
+
+    val lUpperDeg = 110f + torsoDeg * 0.4f + baseAngle("lUpperArm") + lUpperOff
+    val lElbow = step(lShoulder, lUpperDeg, 0.22f * safeScale)
+    val lForeDeg = lUpperDeg + (baseAngle("lForearm") + lForeOff) * 0.65f
+    val lHand = step(lElbow, lForeDeg, 0.21f * safeScale)
+
+    val rUpperDeg = 70f + torsoDeg * 0.4f + baseAngle("rUpperArm") + rUpperOff
+    val rElbow = step(rShoulder, rUpperDeg, 0.22f * safeScale)
+    val rForeDeg = rUpperDeg + (baseAngle("rForearm") + rForeOff) * 0.65f
+    val rHand = step(rElbow, rForeDeg, 0.21f * safeScale)
+    val weaponTip = step(rHand, rForeDeg - 25f + baseAngle("weaponAngle") + weaponOff, 0.28f * safeScale)
+
+    val lHip = Offset(pelvis.x - 0.09f * safeScale, pelvis.y + 0.03f * safeScale)
+    val rHip = Offset(pelvis.x + 0.09f * safeScale, pelvis.y + 0.03f * safeScale)
+
+    val lThighDeg = 95f + baseAngle("lThigh") + lThighOff
+    val lKnee = step(lHip, lThighDeg, 0.26f * safeScale)
+    val lShinDeg = lThighDeg + (baseAngle("lShin") + lShinOff) * 0.6f
+    var lFoot = step(lKnee, lShinDeg, 0.26f * safeScale)
+
+    val rThighDeg = 85f + baseAngle("rThigh") + rThighOff
+    val rKnee = step(rHip, rThighDeg, 0.26f * safeScale)
+    val rShinDeg = rThighDeg + (baseAngle("rShin") + rShinOff) * 0.6f
+    var rFoot = step(rKnee, rShinDeg, 0.26f * safeScale)
+
+    if (ikEnabled) {
+      val groundY = safeOrigin.y + 0.56f * safeScale
+      if (groundY.isFinite()) {
+        if (lFoot.y > groundY) lFoot = Offset(lFoot.x, groundY)
+        if (rFoot.y > groundY) rFoot = Offset(rFoot.x, groundY)
+      }
+    }
+
+    fun safePt(pt: Offset): Offset = if (pt.x.isFinite() && pt.y.isFinite()) pt else safeOrigin
+
     return EvaluatedSkeleton(
-      pelvis = pelvis,
-      chest = chest,
-      head = head,
-      lShoulder = lShoulder,
-      lElbow = lElbow,
-      lHand = lHand,
-      rShoulder = rShoulder,
-      rElbow = rElbow,
-      rHand = rHand,
-      weaponTip = weaponTip,
-      lHip = lHip,
-      lKnee = lKnee,
-      lFoot = lFoot,
-      rHip = rHip,
-      rKnee = rKnee,
-      rFoot = rFoot,
+      pelvis = safePt(pelvis),
+      chest = safePt(chest),
+      head = safePt(head),
+      lShoulder = safePt(lShoulder),
+      lElbow = safePt(lElbow),
+      lHand = safePt(lHand),
+      rShoulder = safePt(rShoulder),
+      rElbow = safePt(rElbow),
+      rHand = safePt(rHand),
+      weaponTip = safePt(weaponTip),
+      lHip = safePt(lHip),
+      lKnee = safePt(lKnee),
+      lFoot = safePt(lFoot),
+      rHip = safePt(rHip),
+      rKnee = safePt(rKnee),
+      rFoot = safePt(rFoot),
     )
   }
 
   private fun step(from: Offset, angleDeg: Float, length: Float): Offset {
-    val rad = angleDeg * (PI.toFloat() / 180f)
-    return Offset(from.x + cos(rad) * length, from.y + sin(rad) * length)
+    val safeDeg = if (angleDeg.isFinite()) angleDeg else 0f
+    val safeLen = if (length.isFinite()) length else 0f
+    val safeFromX = if (from.x.isFinite()) from.x else 0f
+    val safeFromY = if (from.y.isFinite()) from.y else 0f
+    val rad = safeDeg * (PI.toFloat() / 180f)
+    val nx = safeFromX + cos(rad) * safeLen
+    val ny = safeFromY + sin(rad) * safeLen
+    return Offset(
+      if (nx.isFinite()) nx else safeFromX,
+      if (ny.isFinite()) ny else safeFromY,
+    )
   }
 }
 
@@ -224,33 +244,39 @@ fun DrawScope.drawRigCharacter(
   auraTrailId: String = "none",
   outfitId: String = "",
 ) {
-  val isBatman = outfitId.startsWith("batman") || outfitId == "nightwing_v3" || archetype == "batman"
-  val isNightwing = outfitId == "nightwing_v1" || outfitId == "nightwing_v2"
-  val isSpiderMan = outfitId.startsWith("spiderman") || archetype == "spiderman"
-  val isIronMan = outfitId.startsWith("ironman")
-  val isIronSpider = outfitId == "spiderman_v3"
-  val isSuperman = outfitId.startsWith("superman") || outfitId.startsWith("krypton")
-  val isFlash = outfitId.startsWith("flash")
-  val isGreenLantern = outfitId.startsWith("green_lantern")
-  val isAbyss = outfitId.startsWith("abyss")
-  val isCodGhost = outfitId.startsWith("cod_ghost")
-  val isNiko = outfitId.startsWith("niko")
-  val isHeller = outfitId.startsWith("heller")
-  val isDelsin = outfitId.startsWith("delsin")
-  val bodyStroke = if (highContrast) 13f else 11f
-  val armorColor =
-    if (visorColorOverride != null || cloakOverride != null) primaryColor
-    else when (archetype) {
-      "biomorph" -> Color(0xFF9C27B0)
-      "infernal" -> Color(0xFFFF5252)
-      "chrono" -> Color(0xFFFFD54F)
-      "starblade" -> Color(0xFF00E5FF)
-      else -> primaryColor
+  try {
+    if (!skeleton.pelvis.x.isFinite() || !skeleton.pelvis.y.isFinite() ||
+        !skeleton.chest.x.isFinite() || !skeleton.chest.y.isFinite() ||
+        !skeleton.head.x.isFinite() || !skeleton.head.y.isFinite()) {
+      return
     }
-  val underSuit = if (highContrast) Color(0xFF050810) else Color(0xFF131B2E)
+    val isBatman = outfitId.startsWith("batman") || outfitId == "nightwing_v3" || archetype == "batman"
+    val isNightwing = outfitId == "nightwing_v1" || outfitId == "nightwing_v2"
+    val isSpiderMan = outfitId.startsWith("spiderman") || archetype == "spiderman"
+    val isIronMan = outfitId.startsWith("ironman")
+    val isIronSpider = outfitId == "spiderman_v3"
+    val isSuperman = outfitId.startsWith("superman") || outfitId.startsWith("krypton")
+    val isFlash = outfitId.startsWith("flash")
+    val isGreenLantern = outfitId.startsWith("green_lantern")
+    val isAbyss = outfitId.startsWith("abyss")
+    val isCodGhost = outfitId.startsWith("cod_ghost")
+    val isNiko = outfitId.startsWith("niko")
+    val isHeller = outfitId.startsWith("heller")
+    val isDelsin = outfitId.startsWith("delsin")
+    val bodyStroke = if (highContrast) 13f else 11f
+    val armorColor =
+      if (visorColorOverride != null || cloakOverride != null) primaryColor
+      else when (archetype) {
+        "biomorph" -> Color(0xFF9C27B0)
+        "infernal" -> Color(0xFFFF5252)
+        "chrono" -> Color(0xFFFFD54F)
+        "starblade" -> Color(0xFF00E5FF)
+        else -> primaryColor
+      }
+    val underSuit = if (highContrast) Color(0xFF050810) else Color(0xFF131B2E)
 
-  // Ground shadow + aura ring + Character Aura Trail
-  val footY = maxOf(skeleton.lFoot.y, skeleton.rFoot.y)
+    // Ground shadow + aura ring + Character Aura Trail
+    val footY = (if (skeleton.lFoot.y.isFinite() && skeleton.rFoot.y.isFinite()) maxOf(skeleton.lFoot.y, skeleton.rFoot.y) else skeleton.pelvis.y + 60f)
   drawOval(
     color = Color.Black.copy(alpha = 0.52f),
     topLeft = Offset(skeleton.pelvis.x - 46f, footY - 7f),
@@ -622,6 +648,9 @@ fun DrawScope.drawRigCharacter(
     drawHandle("rShin", skeleton.rFoot)
     drawHandle("weaponAngle", skeleton.weaponTip)
   }
+  } catch (t: Throwable) {
+    android.util.Log.e("RigRenderer", "Error drawing rig character", t)
+  }
 }
 
 fun DrawScope.drawArenaHostile(
@@ -643,14 +672,16 @@ fun DrawScope.drawArenaHostile(
   maxArmor: Int = 0,
   immuneColors: List<Color> = emptyList(),
 ) {
-  val effScale = scale.coerceIn(0.55f, 1.85f)
-  val baseRadius = when {
-    isBoss -> 46f
-    archetype == "mech" || archetype == "clockwork_automaton" || archetype == "ultron_sentry" || archetype == "blackgate_enforcer" -> 34f
-    isElite -> 31f
-    archetype == "rusher" || archetype == "water_hive_swarm" -> 20f
-    else -> 24f
-  } * effScale
+  try {
+    if (!center.x.isFinite() || !center.y.isFinite()) return
+    val effScale = if (scale.isFinite()) scale.coerceIn(0.55f, 1.85f) else 1.0f
+    val baseRadius = when {
+      isBoss -> 46f
+      archetype == "mech" || archetype == "clockwork_automaton" || archetype == "ultron_sentry" || archetype == "blackgate_enforcer" -> 34f
+      isElite -> 31f
+      archetype == "rusher" || archetype == "water_hive_swarm" -> 20f
+      else -> 24f
+    } * effScale
   val primary = when {
     stasisActive -> Color(0xFFFFD54F)
     overrideColor != null -> overrideColor
@@ -846,5 +877,8 @@ fun DrawScope.drawArenaHostile(
       drawCircle(Color.Black, radius = 4.6f * effScale, center = Offset(pipX, pipY))
       drawCircle(immCol, radius = 3.2f * effScale, center = Offset(pipX, pipY))
     }
+  }
+  } catch (t: Throwable) {
+    android.util.Log.e("ArenaHostile", "Error drawing hostile", t)
   }
 }

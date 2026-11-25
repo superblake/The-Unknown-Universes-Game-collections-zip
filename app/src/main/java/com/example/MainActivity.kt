@@ -828,9 +828,17 @@ fun UnknownOsShell(
                   onImportBo3Preset = viewModel::importBo3ModToolsCuratedPack,
                   onDeployArea = viewModel::deployToAreaAndPlay,
                   onUpdateCollectionCustomMode = viewModel::updateCollectionCustomMode,
-                  onDeployCollectionCustomMode = viewModel::deployCollectionCustomMode,
                   onForgeCustomMap = viewModel::createCustomGameMap,
                   onDeleteCustomMap = viewModel::deleteCustomGameMap,
+                  onForgeCustomWeapon = viewModel::createCustomWeapon,
+                  onDeleteCustomWeapon = viewModel::deleteCustomWeapon,
+                  onUpgradeCustomPerkTier = { perkId -> viewModel.upgradeCustomPerkTier(perkId, state.profile.totalEssence) },
+                  onUpgradeCustomPerkStar = { perkId -> viewModel.upgradeCustomPerkStar(perkId, state.profile.totalEssence) },
+                  onUpgradeCustomGearTier = { gearId -> viewModel.upgradeCustomGearTier(gearId, state.profile.totalEssence) },
+                  onUpgradeCustomGearStar = { gearId -> viewModel.upgradeCustomGearStar(gearId, state.profile.totalEssence) },
+                  onEquipCustomGear = viewModel::equipCustomGear,
+                  onUpgradeCustomEquipmentTier = { itemId -> viewModel.upgradeCustomEquipmentTier(itemId, state.profile.totalEssence) },
+                  onUpgradeCustomEquipmentStar = { itemId -> viewModel.upgradeCustomEquipmentStar(itemId, state.profile.totalEssence) },
                 )
 
                 OsWorkspaceTab.MEDIA_VAULT -> MediaVaultScreen(

@@ -354,7 +354,7 @@ data class ArenaLoadoutStats(
 
       val pass = progression.activePassVersion
       val targetWpnId = weaponOverrideId ?: progression.weaponCustom.equippedWeaponId
-      val weapon = ProgressionCatalog.weaponById(targetWpnId)
+      val weapon = ProgressionCatalog.weaponById(targetWpnId, progression.customWeapons)
       val wpnLevel = progression.weaponLevel(weapon.id)
       val wpnPrestige = progression.weaponPrestige(weapon.id)
       val wpnTier = progression.weaponTier(weapon.id)
