@@ -1,0 +1,34 @@
+<resources>
+    <string name="app_name">The Unknown Universes</string>
+    <string name="os_boot_tag">UNKNOWNOS v2.4 // واجهة الأكوان المتعددة</string>
+    <string name="auth_title">تشغيل UnknownOS (ملف محلي)</string>
+    <string name="auth_subtitle">احفظ المهارات والقوى وهياكل Blender والرسوم المتحركة ونتائج الأكوان المتعددة محلياً على جهازك.</string>
+    <string name="boot_unknownos">تشغيل UnknownOS</string>
+    <string name="cd_hero_banner">شعار مركز قيادة The Unknown Universes</string>
+    <string name="cd_world_banner">لافتة العالم</string>
+    <string name="cd_sign_out">قفل جلسة UnknownOS</string>
+    <string name="launch_arena">الانتشار في الساحة</string>
+    <string name="forge_custom_module">صنع وحدة مخصصة</string>
+    <string name="save_rig_cloud">حفظ وإكمال الهيكل</string>
+    <string name="export_html_btn">تنزيل لعبة .HTML (iOS / أجهزة / PC)</string>
+    <string name="export_blender_btn">تنزيل سكربت Blender (.PY)</string>
+    <string name="sync_now_btn">مزامنة الآن</string>
+    <string name="export_save_btn">حفظ البيانات (.JSON)</string>
+    <string name="share_save_btn">مشاركة الحفظ</string>
+    <string name="import_save_btn">استيراد (.JSON)</string>
+    <string name="paste_save_btn">لصق JSON</string>
+    <string name="export_bo3_xmodel_btn">تصدير .XMODEL_EXPORT (BO3)</string>
+    <string name="export_bo3_xanim_btn">تصدير .XANIM_EXPORT (BO3)</string>
+    <string name="export_bo3_gdt_btn">تصدير تعريف BO3 .GDT</string>
+    <string name="export_bo3_blender_btn">تصدير سكربت CoD-Blender BO3 (.PY)</string>
+    <string name="steam_workshop_title">STEAM WORKSHOP ومحمل التعديلات</string>
+    <string name="steam_workshop_fetch_btn">جلب عنصر Steam Workshop</string>
+    <string name="steam_workshop_import_file_btn">استيراد .VDF / .JSON</string>
+    <string name="steam_workshop_paste_btn">لصق رمز الورشة</string>
+    <string name="steam_workshop_export_vdf_btn">تصدير SteamCMD .VDF</string>
+    <string name="steam_workshop_export_json_btn">تصدير Workshop .JSON</string>
+    <string name="steam_workshop_share_btn">مشاركة حزمة Steam Workshop</string>
+    <string name="cd_open_settings">فتح إعدادات اللغة والتحكم والأداء والوصول</string>
+    <string name="settings_title">الإعدادات وإمكانية الوصول</string>
+    <string name="settings_subtitle">اللغة، التحكم، الأداء، المرئيات والدعم الصحي</string>
+</resources>

@@ -141,7 +141,7 @@ enum class WonderWeaponKind(
     id = "staff_kinetic",
     displayName = "Rock Staff",
     shortTag = "ROCK-STF",
-    description = "Launch heavy tectonic rock projectiles that crush and stagger hostiles with Kinetic damage.",
+    description = "Launch heavy tectonic rock boulders that crush armor and stagger hostiles with Rock damage.",
     accentHex = 0xFFFFD54F,
     durationTicks = 1260f,
     baseDamage = 6,
@@ -657,7 +657,7 @@ data class SkillNode(
   val id: String,
   val title: String,
   val description: String,
-  val category: String, // COMBAT, SURVIVAL, ENGINEERING, WONDER
+  val category: String, // COMBAT, SURVIVAL, ENGINEERING, WONDER, PROTECTION
   val costEssence: Long,
   val unlocked: Boolean = false,
   val tier: Int = 1,
@@ -665,6 +665,91 @@ data class SkillNode(
   val starLevel: Int = 1,
 ) {
   fun nextUpgradeCost(): Long = costEssence + (tier * 250L)
+}
+
+@Immutable
+data class ProtectionUpgradeSpec(
+  val id: String,
+  val title: String,
+  val subtitle: String,
+  val effectTag: String,
+  val baseCostEssence: Long,
+  val maxRank: Int = 25,
+  val colorHex: Long,
+) {
+  fun nextCost(currentRank: Int): Long = baseCostEssence + (currentRank.coerceAtLeast(0) * 180L)
+}
+
+@Immutable
+data class UserCustomPerkSpec(
+  val id: String,
+  val name: String,
+  val description: String,
+  val accentHex: Long = 0xFF00E676L,
+  val shieldBonusPerRank: Int = 25,
+  val damagePctPerRank: Int = 6,
+  val fireRatePctPerRank: Int = 6,
+  val cooldownHastePctPerRank: Int = 8,
+  val moveSpeedPctPerRank: Int = 3,
+  val regenPerSecPerRank: Float = 1.0f,
+  val siphonPerKillPerRank: Int = 1,
+  val tier: Int = 1,
+  val maxTier: Int = 25,
+  val starLevel: Int = 1,
+)
+
+@Immutable
+data class GearSlotCustomization(
+  val slotId: String,
+  val customTitle: String = "",
+  val alloyId: String = "titanium",
+  val focusId: String = "balanced",
+  val elementAffinityId: String = "kinetic",
+  val accentHex: Long = 0xFF00E5FFL,
+)
+
+@Immutable
+data class UserCustomGearSpec(
+  val id: String,
+  val slot: GearSlot,
+  val name: String,
+  val description: String = "",
+  val elementAffinityId: String = "kinetic",
+  val accentHex: Long = 0xFF00E5FFL,
+  val bonusShield: Int = 30,
+  val bonusDamagePct: Int = 8,
+  val bonusRatePct: Int = 6,
+  val bonusCooldownHastePct: Int = 10,
+  val bonusProtectionPct: Int = 4,
+  val tier: Int = 1,
+  val maxTier: Int = 25,
+  val starLevel: Int = 1,
+)
+
+@Immutable
+data class UserCustomEquipmentSpec(
+  val id: String,
+  val slotType: EquipmentSlotType,
+  val name: String,
+  val description: String = "",
+  val damageTypeId: String = "explosive",
+  val baseDamageOrEffect: Float = 200f,
+  val cooldownSeconds: Float = 5.5f,
+  val cooldownHastePct: Int = 6,
+  val accentHex: Long = 0xFFFF6D00L,
+  val tier: Int = 1,
+  val maxTier: Int = 25,
+  val starLevel: Int = 1,
+) {
+  fun toEquipmentItemSpec(): EquipmentItemSpec = EquipmentItemSpec(
+    id = id,
+    name = name,
+    slotType = slotType,
+    description = description.ifBlank { "${damageTypeId.uppercase()} Custom ${slotType.displayName} • +${cooldownHastePct * tier}% Haste" },
+    baseDamageOrEffect = baseDamageOrEffect,
+    cooldownSeconds = cooldownSeconds.coerceIn(1.5f, 25f),
+    defaultColorHex = accentHex,
+  )
 }
 
 enum class BattlePassVersion(
@@ -930,6 +1015,17 @@ data class OperatorProgressionState(
   val collectionCustomMode: CollectionCustomModeConfig = CollectionCustomModeConfig(),
   val customGameMaps: List<UserCustomGameMapSpec> = emptyList(),
   val customWeapons: List<UserCustomWeaponSpec> = emptyList(),
+  val protectionRanks: Map<String, Int> = emptyMap(),
+  val protectionStarMap: Map<String, Int> = emptyMap(),
+  val perkStarMap: Map<String, Int> = emptyMap(),
+  val customPerks: List<UserCustomPerkSpec> = emptyList(),
+  val equippedCustomPerkIds: Set<String> = emptySet(),
+  val gearCustomizations: Map<String, GearSlotCustomization> = emptyMap(),
+  val customGear: List<UserCustomGearSpec> = emptyList(),
+  val equippedCustomGearMap: Map<String, String> = emptyMap(),
+  val customEquipment: List<UserCustomEquipmentSpec> = emptyList(),
+  val blastShardTier: Int = 1,
+  val companionBuffTier: Int = 1,
 ) {
   val playerLevel: Int
     get() = ProgressionCatalog.levelForXp(playerXp)
@@ -1070,6 +1166,26 @@ data class OperatorProgressionState(
 
   fun perkRank(perkId: String): Int = (perkRanks[perkId] ?: 0).coerceIn(0, 25)
 
+  fun perkStar(perkId: String): Int = (perkStarMap[perkId] ?: 1).coerceIn(1, StarRankMeta.MAX_STARS)
+
+  fun protectionRank(protId: String): Int = (protectionRanks[protId] ?: 0).coerceIn(0, 25)
+
+  fun protectionStar(protId: String): Int = (protectionStarMap[protId] ?: 1).coerceIn(1, StarRankMeta.MAX_STARS)
+
+  fun gearCustomization(slot: GearSlot): GearSlotCustomization =
+    gearCustomizations[slot.id] ?: GearSlotCustomization(slot.id)
+
+  fun equippedCustomGear(slot: GearSlot): UserCustomGearSpec? {
+    val id = equippedCustomGearMap[slot.id] ?: return null
+    return customGear.firstOrNull { it.id == id }
+  }
+
+  fun resolveEquipmentSpec(itemId: String): EquipmentItemSpec =
+    ProgressionCatalog.resolveEquipmentItem(itemId, customEquipment)
+
+  fun customEquipmentById(itemId: String): UserCustomEquipmentSpec? =
+    customEquipment.firstOrNull { it.id == itemId }
+
   fun blastCoreCount(color: BlastCoreColor): Long = (blastCoreInventory[color.id] ?: 0L).coerceAtLeast(0L)
 
   fun blastCoreLevel(color: BlastCoreColor): Int = (blastCoreLevels[color.id] ?: 1).coerceIn(1, 20)
@@ -1089,6 +1205,10 @@ data class OperatorProgressionState(
     val srvRate = activeRegionBonus.fireRateBonusMult * (server?.bonusRateMult ?: 1.0f)
     val activeOutfit = outfitState(equippedOutfitId)
     val activeRarity = outfitRarity(equippedOutfitId)
+    val customBuffTiers = customPerks.sumOf { (it.tier - 1) + (it.starLevel - 1) } +
+      customGear.sumOf { (it.tier - 1) + (it.starLevel - 1) } +
+      customEquipment.sumOf { (it.tier - 1) + (it.starLevel - 1) } +
+      gearCustomizations.size
     return EssenceResonanceBonuses.computeComprehensive(
       blueEssence = blueEssence,
       blueEssenceSpent = totalBlueEssenceSpent,
@@ -1116,6 +1236,11 @@ data class OperatorProgressionState(
       blastCoreLevelSum = blastCoreLevels.values.sumOf { (it - 1).coerceAtLeast(0) },
       clanLevel = clan.level,
       ngPlusTier = activeNgPlusTier,
+      protectionRankSum = protectionRanks.values.sum() + protectionStarMap.values.sumOf { (it - 1).coerceAtLeast(0) },
+      perkStarSum = perkStarMap.values.sumOf { (it - 1).coerceAtLeast(0) },
+      customBuffTierSum = customBuffTiers,
+      blastShardTier = blastShardTier,
+      companionBuffTier = companionBuffTier,
       serverDamageMult = srvDmg,
       serverShieldMult = srvShd,
       serverFireRateMult = srvRate,
@@ -1458,6 +1583,9 @@ object ProgressionCatalog {
     "plasma_scorched" to "Scorched Plasma Incendiary (Thermal/Fire)",
     "sand_abrasive" to "Quicksand Abrasive Dust Rounds (Sand)",
     "desert_glass" to "Desert Glass Tungsten-Sand Composite (Sand)",
+    "explosive_he" to "High-Explosive Frag Core (Explosive AoE)",
+    "cod_explosive_shells" to "CoD Explosive Breacher Rounds (Explosive AoE)",
+    "tectonic_rock" to "Tectonic Boulder Rounds (Rock Armor Shatter)",
     "void_singularity" to "Dark Matter Singularity Shards (Void)",
   )
 
@@ -1504,9 +1632,92 @@ object ProgressionCatalog {
     SkillNode("sk_shield_2", "Reinforced Chassis II", "+35 Max Shield & +1 Regen/sec per Tier (up to T25).", "SURVIVAL", 600L, false, 1, 25),
     SkillNode("sk_damage_1", "Ballistic Lethality I", "+2 Bolt Damage per Tier (up to T25: +50 DMG).", "COMBAT", 350L, false, 1, 25),
     SkillNode("sk_damage_2", "Ballistic Lethality II", "+3 Bolt Damage & +1 Pierce every 2 Tiers (T1-T25).", "COMBAT", 750L, false, 1, 25),
-    SkillNode("sk_cooldown_1", "Overdrive Capacitor", "-6% Cooldowns & +3% Move Speed per Tier (up to T25).", "ENGINEERING", 450L, false, 1, 25),
+    SkillNode("sk_cooldown_1", "Overdrive Capacitor", "+12% Cooldown Haste & +3% Move Speed per Tier (uncapped).", "ENGINEERING", 450L, false, 1, 25),
+    SkillNode("sk_cooldown_2", "Temporal Flux Relay", "+14% Cooldown Haste & +5% Fire Rate per Tier (uncapped).", "ENGINEERING", 650L, false, 1, 25),
     SkillNode("sk_wonder_1", "Mystery Crate Attractor", "+30% Wonder Drop Rate & +15% Wonder Duration per Tier (T1-T25).", "WONDER", 550L, false, 1, 25),
+    SkillNode("sk_protection_1", "Titanium Reactive Plate", "+3.5% Incoming Damage Protection & +20 Shield per Tier.", "PROTECTION", 400L, false, 1, 25),
+    SkillNode("sk_protection_2", "Multiverse Aegis Ward", "+4% Elemental/Explosive/Rock/Sand Protection & +1.5 Siphon/Tier.", "PROTECTION", 650L, false, 1, 25),
+    SkillNode("sk_explosive_1", "Ordnance & Seismic Mastery", "+12% Explosive, Rock & Sand Damage + Blast Splash per Tier.", "COMBAT", 500L, false, 1, 25),
+    SkillNode("sk_perk_amp_1", "Global Perk Overcharger", "+8% Effectiveness to ALL Perks & Custom Perks per Tier.", "SURVIVAL", 550L, false, 1, 25),
+    SkillNode("sk_buff_mastery_1", "Omniverse Buff Resonance", "+6% Power to ALL Buffs, Cores, Shards & Companions per Tier.", "WONDER", 600L, false, 1, 25),
+    SkillNode("sk_sand_rock_1", "Tectonic Dune Shredder", "+3 Armor Shred & +8% Stagger/Knockback per Tier.", "COMBAT", 480L, false, 1, 25),
+    SkillNode("sk_siphon_1", "Blacklight Shield Siphon", "+3 Kill Shield Siphon & +1.2/sec Regen per Tier.", "PROTECTION", 520L, false, 1, 25),
   ).associateBy { it.id }
+
+  val protectionUpgrades: List<ProtectionUpgradeSpec> = listOf(
+    ProtectionUpgradeSpec(
+      id = "prot_armor_weave",
+      title = "Ballistic Armor Weave",
+      subtitle = "+3% All Incoming Damage Reduction & +18 Max Shield per Rank (R0-R25)",
+      effectTag = "ARMOR DR",
+      baseCostEssence = 300L,
+      colorHex = 0xFF00E5FFL,
+    ),
+    ProtectionUpgradeSpec(
+      id = "prot_elemental_ward",
+      title = "Elemental & Explosive Ward",
+      subtitle = "+4% Protection vs Explosive, Rock, Sand, Fire, Void & Cryo per Rank",
+      effectTag = "ELEM WARD",
+      baseCostEssence = 350L,
+      colorHex = 0xFFFFAB40L,
+    ),
+    ProtectionUpgradeSpec(
+      id = "prot_aegis_siphon",
+      title = "Aegis Shield Siphon",
+      subtitle = "+2 Shield on Kill, +25 Max Shield & +0.8/s Shield Regen per Rank",
+      effectTag = "SIPHON",
+      baseCostEssence = 400L,
+      colorHex = 0xFF00E676L,
+    ),
+    ProtectionUpgradeSpec(
+      id = "prot_cover_fortress",
+      title = "Parkour Bastion Plate",
+      subtitle = "+2.5% Damage Reduction & +3% Sprint/Dodge Speed per Rank",
+      effectTag = "MOBILITY DR",
+      baseCostEssence = 320L,
+      colorHex = 0xFF448AFFL,
+    ),
+    ProtectionUpgradeSpec(
+      id = "prot_emergency_dome",
+      title = "Chrono Overclock Dome",
+      subtitle = "+8% Cooldown Haste & +1.5/sec Emergency Regen per Rank",
+      effectTag = "HASTE + REGEN",
+      baseCostEssence = 450L,
+      colorHex = 0xFFE040FBL,
+    ),
+    ProtectionUpgradeSpec(
+      id = "prot_titan_guard",
+      title = "Titan Boss Bulwark",
+      subtitle = "+40 Max Shield & +2.5% Boss/Elite Impact Protection per Rank",
+      effectTag = "BOSS GUARD",
+      baseCostEssence = 480L,
+      colorHex = 0xFFFF3D71L,
+    ),
+  )
+
+  val gearAlloys: List<Pair<String, String>> = listOf(
+    "titanium" to "Titanium Weave (+Armor & Shield)",
+    "promethium" to "Promethium Core (+Fire/Explosive DMG)",
+    "blacklight" to "Blacklight Alloy (+Siphon & Rate)",
+    "chronosteel" to "Chrono-Steel (+Cooldown Haste)",
+    "tectonic" to "Tectonic Obsidian (+Rock & Sand)",
+  )
+
+  val gearFocuses: List<Pair<String, String>> = listOf(
+    "balanced" to "Balanced Tactical",
+    "haste" to "Cooldown Haste (+12% CDR)",
+    "fortress" to "Protection Bulwark (+8% DR)",
+    "lethality" to "Damage Overclock (+12% DMG)",
+    "velocity" to "Conduit Mobility (+10% Move & Rate)",
+  )
+
+  val equipmentVariants: List<Pair<String, String>> = listOf(
+    "standard" to "Standard Calibration",
+    "overclocked" to "Overclocked (+25% Cooldown Haste)",
+    "explosive" to "Explosive Breacher Payload",
+    "rock" to "Rock Tectonic Crush Payload",
+    "sand" to "Sand Abrasive Storm Payload",
+  )
 
   val challenges: List<ChallengeSpec> = listOf(
     ChallengeSpec(
@@ -1899,15 +2110,27 @@ object ProgressionCatalog {
   }
 
   val equipmentItems: List<EquipmentItemSpec> = listOf(
-    EquipmentItemSpec("lethal_frag", "Frag Grenade", EquipmentSlotType.LETHAL, "High explosive shrapnel grenade with wide blast radius.", 160f, 6.0f, 0xFFFF5722),
-    EquipmentItemSpec("lethal_molotov", "Napalm Molotov", EquipmentSlotType.LETHAL, "Deploys a fiery hazard zone burning hordes over time.", 120f, 8.0f, 0xFFFF9800),
-    EquipmentItemSpec("lethal_c4", "Remote C4 Satchel", EquipmentSlotType.LETHAL, "Detonated manually for heavy explosive breaching damage.", 240f, 12.0f, 0xFFE53935),
-    EquipmentItemSpec("lethal_cluster", "Arc Cluster Mine", EquipmentSlotType.LETHAL, "Deploys homing arc sub-munitions seeking elite targets.", 190f, 10.0f, 0xFF7C4DFF),
-    EquipmentItemSpec("tactical_stim", "Nano-Stim Injector", EquipmentSlotType.TACTICAL, "Restores 60 shield instantly and boosts movement speed.", 60f, 5.0f, 0xFF00E5FF),
-    EquipmentItemSpec("tactical_emp", "EMP Shockwave", EquipmentSlotType.TACTICAL, "Disables enemy energy barriers and stuns nearby targets.", 90f, 9.0f, 0xFF00B0FF),
+    EquipmentItemSpec("lethal_frag", "Frag Grenade", EquipmentSlotType.LETHAL, "High explosive shrapnel grenade with wide blast radius (Explosive).", 160f, 6.0f, 0xFFFF5722),
+    EquipmentItemSpec("lethal_molotov", "Napalm Molotov", EquipmentSlotType.LETHAL, "Deploys a fiery hazard zone burning hordes over time (Thermal).", 120f, 8.0f, 0xFFFF9800),
+    EquipmentItemSpec("lethal_c4", "Remote C4 Satchel", EquipmentSlotType.LETHAL, "Detonated manually for heavy explosive breaching damage (Explosive).", 240f, 12.0f, 0xFFE53935),
+    EquipmentItemSpec("lethal_cluster", "Arc Cluster Mine", EquipmentSlotType.LETHAL, "Deploys homing arc sub-munitions seeking elite targets (Energy).", 190f, 10.0f, 0xFF7C4DFF),
+    EquipmentItemSpec("lethal_rock_tremor", "Tectonic Quake Charge", EquipmentSlotType.LETHAL, "Detonates seismic rock spikes shattering enemy armor (Rock).", 220f, 7.5f, 0xFFFFD54F),
+    EquipmentItemSpec("lethal_sandstorm_jar", "Abyssal Sandstorm Flask", EquipmentSlotType.LETHAL, "Unleashes an abrasive desert vortex eroding armor & shields (Sand).", 185f, 7.0f, 0xFFD7CCC8),
+    EquipmentItemSpec("tactical_stim", "Nano-Stim Injector", EquipmentSlotType.TACTICAL, "Restores 60 shield instantly and accelerates movement & cooldowns.", 60f, 5.0f, 0xFF00E5FF),
+    EquipmentItemSpec("tactical_emp", "EMP Shockwave", EquipmentSlotType.TACTICAL, "Disables enemy energy barriers and stuns nearby targets (Energy).", 90f, 9.0f, 0xFF00B0FF),
     EquipmentItemSpec("tactical_decoy", "Holographic Decoy", EquipmentSlotType.TACTICAL, "Projects a decoy emitter that draws hostile aggro.", 0f, 14.0f, 0xFF1DE9B6),
-    EquipmentItemSpec("tactical_insertion", "Chrono Beacon", EquipmentSlotType.TACTICAL, "Spawns a revival checkpoint and continuous shield aura.", 110f, 20.0f, 0xFF651FFF),
+    EquipmentItemSpec("tactical_insertion", "Chrono Beacon", EquipmentSlotType.TACTICAL, "Spawns a revival checkpoint, continuous shield aura & cooldown surge.", 110f, 20.0f, 0xFF651FFF),
+    EquipmentItemSpec("tactical_rock_aegis", "Stonebreaker Bulwark Surge", EquipmentSlotType.TACTICAL, "Coats armor in tectonic stone reducing damage & staggering hostiles (Rock).", 95f, 8.5f, 0xFFFFCA28),
+    EquipmentItemSpec("tactical_sand_veil", "Desert Mirage Cloak", EquipmentSlotType.TACTICAL, "Summons a shifting sand veil restoring shield & boosting evade speed (Sand).", 80f, 7.5f, 0xFFE0C097),
   )
+
+  fun allEquipmentItems(customEquipment: List<UserCustomEquipmentSpec> = emptyList()): List<EquipmentItemSpec> =
+    equipmentItems + customEquipment.map { it.toEquipmentItemSpec() }
+
+  fun resolveEquipmentItem(id: String, customEquipment: List<UserCustomEquipmentSpec> = emptyList()): EquipmentItemSpec =
+    customEquipment.firstOrNull { it.id == id }?.toEquipmentItemSpec()
+      ?: equipmentItems.firstOrNull { it.id == id }
+      ?: equipmentItems.first()
 
   fun xpRequiredForEquipmentLevel(level: Int): Long = 90L + (level - 1).coerceAtLeast(0) * 22L
 
@@ -2007,6 +2230,14 @@ object UpgradeCosts {
   fun areaFeatureTier(tier: Int): Long = tier * 300L
   fun areaStar(stars: Int): Long = stars * 450L
   fun perkDrink(rank: Int): Long = 250L + (rank * 200L)
+  fun perkStar(stars: Int): Long = stars * 380L
+  fun protectionRank(rank: Int): Long = 260L + (rank * 200L)
+  fun protectionStar(stars: Int): Long = stars * 400L
+  fun customBuffTier(tier: Int): Long = tier * 320L
+  fun customBuffStar(stars: Int): Long = stars * 400L
+  fun blastShardTier(tier: Int): Long = 280L + (tier * 220L)
+  fun companionBuffTier(tier: Int): Long = 280L + (tier * 240L)
+  fun blastCoreBlueEssence(level: Int): Long = 240L + (level * 190L)
   fun vacuumBot(tier: Int): Long = 220L + (tier * 160L)
   fun vacuumBotStar(stars: Int): Long = stars * 400L
 

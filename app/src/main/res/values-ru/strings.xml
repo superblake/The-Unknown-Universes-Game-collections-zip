@@ -1,0 +1,34 @@
+<resources>
+    <string name="app_name">The Unknown Universes</string>
+    <string name="os_boot_tag">UNKNOWNOS v2.4 // ОБОЛОЧКА МУЛЬТИВСЕЛЕННОЙ</string>
+    <string name="auth_title">Запуск UnknownOS (Локальный профиль)</string>
+    <string name="auth_subtitle">Сохраняйте перки, способности, риги Blender, анимации и рекорды Мультивселенной локально на устройстве.</string>
+    <string name="boot_unknownos">Запустить UnknownOS</string>
+    <string name="cd_hero_banner">Арт командного узла The Unknown Universes</string>
+    <string name="cd_world_banner">Баннер мира вселенной</string>
+    <string name="cd_sign_out">Заблокировать сеанс UnknownOS</string>
+    <string name="launch_arena">Высадка на Арену</string>
+    <string name="forge_custom_module">Создать модуль</string>
+    <string name="save_rig_cloud">Сохранить риг</string>
+    <string name="export_html_btn">Скачать .HTML (iOS / Консоли / ПК)</string>
+    <string name="export_blender_btn">Скачать скрипт Blender (.PY)</string>
+    <string name="sync_now_btn">Синхронизировать</string>
+    <string name="export_save_btn">Сохранить (.JSON)</string>
+    <string name="share_save_btn">Поделиться</string>
+    <string name="import_save_btn">Импорт (.JSON)</string>
+    <string name="paste_save_btn">Вставить JSON</string>
+    <string name="export_bo3_xmodel_btn">Экспорт .XMODEL_EXPORT (BO3 риг)</string>
+    <string name="export_bo3_xanim_btn">Экспорт .XANIM_EXPORT (BO3 аним.)</string>
+    <string name="export_bo3_gdt_btn">Экспорт BO3 .GDT</string>
+    <string name="export_bo3_blender_btn">Экспорт скрипта CoD-Blender (.PY)</string>
+    <string name="steam_workshop_title">STEAM WORKSHOP И ЗАГРУЗЧИК МОДОВ</string>
+    <string name="steam_workshop_fetch_btn">Загрузить объект Steam Workshop</string>
+    <string name="steam_workshop_import_file_btn">Импорт .VDF / .JSON</string>
+    <string name="steam_workshop_paste_btn">Вставить код Workshop</string>
+    <string name="steam_workshop_export_vdf_btn">Экспорт SteamCMD .VDF</string>
+    <string name="steam_workshop_export_json_btn">Экспорт Workshop .JSON</string>
+    <string name="steam_workshop_share_btn">Поделиться пакетом Workshop</string>
+    <string name="cd_open_settings">Открыть настройки языка, управления и доступности</string>
+    <string name="settings_title">НАСТРОЙКИ И ДОСТУПНОСТЬ</string>
+    <string name="settings_subtitle">Язык, управление, графика, производительность и здоровье</string>
+</resources>

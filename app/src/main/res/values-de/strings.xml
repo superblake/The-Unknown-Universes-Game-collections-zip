@@ -1,0 +1,34 @@
+<resources>
+    <string name="app_name">The Unknown Universes</string>
+    <string name="os_boot_tag">UNKNOWNOS v2.4 // MULTIVERSUM-SHELL</string>
+    <string name="auth_title">UnknownOS starten (Lokales Profil)</string>
+    <string name="auth_subtitle">Speichere deine Perks, Kräfte, Blender-Rigs, Animationen und Multiversum-Rekorde lokal auf diesem Gerät.</string>
+    <string name="boot_unknownos">UnknownOS starten</string>
+    <string name="cd_hero_banner">Artwork des Kommando-Nexus von The Unknown Universes</string>
+    <string name="cd_world_banner">Universums-Banner</string>
+    <string name="cd_sign_out">UnknownOS-Sitzung sperren</string>
+    <string name="launch_arena">In Arena starten</string>
+    <string name="forge_custom_module">Eigenes Modul schmieden</string>
+    <string name="save_rig_cloud">Rig speichern</string>
+    <string name="export_html_btn">Spielbares .HTML laden (iOS / Konsole / PC)</string>
+    <string name="export_blender_btn">Blender-Rig-Skript laden (.PY)</string>
+    <string name="sync_now_btn">Jetzt synchronisieren</string>
+    <string name="export_save_btn">Speicherdaten (.JSON)</string>
+    <string name="share_save_btn">Spielstand teilen</string>
+    <string name="import_save_btn">Importieren (.JSON)</string>
+    <string name="paste_save_btn">JSON einfügen</string>
+    <string name="export_bo3_xmodel_btn">Export .XMODEL_EXPORT (BO3 Rig)</string>
+    <string name="export_bo3_xanim_btn">Export .XANIM_EXPORT (BO3 Anim)</string>
+    <string name="export_bo3_gdt_btn">Export BO3 .GDT Definition</string>
+    <string name="export_bo3_blender_btn">Export CoD-Blender BO3 Skript (.PY)</string>
+    <string name="steam_workshop_title">STEAM WORKSHOP &amp; MOD-LADER</string>
+    <string name="steam_workshop_fetch_btn">Steam Workshop-Objekt abrufen</string>
+    <string name="steam_workshop_import_file_btn">Import .VDF / .JSON</string>
+    <string name="steam_workshop_paste_btn">Workshop-Code einfügen</string>
+    <string name="steam_workshop_export_vdf_btn">SteamCMD .VDF exportieren</string>
+    <string name="steam_workshop_export_json_btn">Workshop .JSON exportieren</string>
+    <string name="steam_workshop_share_btn">Steam Workshop-Paket teilen</string>
+    <string name="cd_open_settings">Steuerung, Leistung, Grafik &amp; Barrierefreiheit öffnen</string>
+    <string name="settings_title">EINSTELLUNGEN &amp; ZUGANG</string>
+    <string name="settings_subtitle">Sprache, Steuerung, Leistung, Grafik &amp; Gesundheit</string>
+</resources>

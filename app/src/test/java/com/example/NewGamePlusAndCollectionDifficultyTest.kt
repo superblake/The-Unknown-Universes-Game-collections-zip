@@ -452,7 +452,9 @@ class NewGamePlusAndCollectionDifficultyTest {
     composeRule.onNodeWithTag("arena_places_toggle_btn").assertIsDisplayed().performClick()
     composeRule.waitForIdle()
 
-    composeRule.onNodeWithTag("arena_places_strip").assertIsDisplayed()
+    composeRule.onNodeWithTag("arena_places_strip")
+      .assertIsDisplayed()
+      .performScrollToNode(hasTestTag("arena_place_bld_0"))
     composeRule.onNodeWithTag("arena_place_bld_0").performTouchInput { longClick() }
     composeRule.waitForIdle()
 

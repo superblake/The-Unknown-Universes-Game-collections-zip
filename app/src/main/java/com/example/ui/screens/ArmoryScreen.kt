@@ -61,6 +61,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
 import com.example.R
 import com.example.data.local.AppSettings
+import com.example.data.local.GameStrings
+import com.example.data.local.LocalGameStrings
 import com.example.data.model.AchievementState
 import com.example.data.model.ArmoryItem
 import com.example.data.model.BattlePassVersion
@@ -100,7 +102,25 @@ enum class ArmorySection(val label: String, val tag: String) {
   PASS_CHALLENGES("Pass & Challenges", "pass"),
   STORE("Store", "store"),
   ACHIEVEMENTS("Achievements", "achievements"),
-  WORKSHOP_BO3("BO3 & Workshop", "workshop_bo3"),
+  WORKSHOP_BO3("BO3 & Workshop", "workshop_bo3");
+
+  fun localizedLabel(s: GameStrings): String = when (this) {
+    MODS -> s.armoryMods
+    OUTFITS -> s.armoryCharacters
+    WEAPONS -> s.armoryWeapons
+    GEAR -> s.armoryGear
+    EQUIPMENT -> s.armoryEquipment
+    SHARDS_CORES -> s.armoryShardsCores
+    AREAS -> s.armoryAreas
+    SKILLS -> s.armorySkills
+    CHARACTER -> s.armoryCharacter
+    LEVELS -> s.armoryLevels
+    MISSIONS -> s.armoryMissions
+    PASS_CHALLENGES -> s.armoryPass
+    STORE -> s.armoryStore
+    ACHIEVEMENTS -> s.armoryAchievements
+    WORKSHOP_BO3 -> s.armoryWorkshop
+  }
 }
 
 @Composable
@@ -222,6 +242,7 @@ fun ArmoryScreen(
   persistedCategory: String? = null,
   onPersistCategory: ((String) -> Unit)? = null,
 ) {
+  val gameStrings = LocalGameStrings.current
   val categories = listOf("all", "perk", "power", "upgrade", "consumable", "workshop_bo3")
   var localSection by remember { mutableStateOf(ArmorySection.MODS) }
   var localCategory by remember { mutableStateOf("all") }
@@ -291,7 +312,7 @@ fun ArmoryScreen(
           verticalAlignment = Alignment.CenterVertically,
         ) {
           Column(modifier = Modifier.weight(1f)) {
-            Text("MULTIVERSE ARMORY", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
+            Text(gameStrings.armoryTitle, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
             Text(
               text = "PWR ${powerLight.powerLevel} • LT ${powerLight.lightLevel} • Lv.${progression.playerLevel} • ${progression.activeOutfitSpec().nameWithVersion}",
               style = MaterialTheme.typography.labelSmall,
@@ -383,7 +404,7 @@ fun ArmoryScreen(
               FilterChip(
                 selected = selectedSection == sec,
                 onClick = { setSelectedSection(sec) },
-                label = { Text(sec.label, fontWeight = if (selectedSection == sec) FontWeight.Bold else FontWeight.Medium) },
+                label = { Text(sec.localizedLabel(gameStrings), fontWeight = if (selectedSection == sec) FontWeight.Bold else FontWeight.Medium) },
                 modifier = Modifier.height(48.dp).testTag("armory_tab_${sec.tag}"),
               )
             }
@@ -393,7 +414,7 @@ fun ArmoryScreen(
               FilterChip(
                 selected = selectedSection == sec,
                 onClick = { setSelectedSection(sec) },
-                label = { Text(sec.label, fontWeight = if (selectedSection == sec) FontWeight.Bold else FontWeight.Medium) },
+                label = { Text(sec.localizedLabel(gameStrings), fontWeight = if (selectedSection == sec) FontWeight.Bold else FontWeight.Medium) },
                 modifier = Modifier.height(48.dp).testTag("armory_tab_${sec.tag}"),
               )
             }

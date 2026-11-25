@@ -55,10 +55,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.R
+import com.example.data.local.AppLanguage
 import com.example.data.local.AppSettings
 import com.example.data.local.AppSettingsPresets
 import com.example.data.local.ColorBlindMode
+import com.example.data.local.GameStrings
 import com.example.data.local.GraphicsQuality
+import com.example.data.local.LocalGameStrings
 import com.example.data.local.ParticleDensity
 import com.example.data.local.ThemeVisualMode
 import com.example.data.model.RegionalServerCatalog
@@ -76,7 +79,17 @@ private enum class SettingsCategory(val id: String, val label: String) {
   PERFORMANCE("performance", "Performance"),
   VISUAL("visual", "Visuals"),
   ACCESSIBILITY("accessibility", "Health & Access"),
-  PROTECTION("protection", "Security"),
+  PROTECTION("protection", "Security");
+
+  fun localizedLabel(s: GameStrings): String = when (this) {
+    ALL -> s.settingsAll
+    AUDIO -> s.settingsAudio
+    CONTROLS -> s.settingsControls
+    PERFORMANCE -> s.settingsPerformance
+    VISUAL -> s.settingsVisual
+    ACCESSIBILITY -> s.settingsAccess
+    PROTECTION -> s.settingsSecurity
+  }
 }
 
 @Composable
@@ -91,8 +104,10 @@ fun SettingsDialog(
   onSelectRegion: ((String) -> Unit)? = null,
   onSelectServer: ((String) -> Unit)? = null,
   onToggleRegionDefaultSettings: ((Boolean) -> Unit)? = null,
+  onSelectLanguage: ((String) -> Unit)? = null,
 ) {
   val context = LocalContext.current
+  val gameStrings = LocalGameStrings.current
   var selectedCategory by remember { mutableStateOf(SettingsCategory.ALL) }
   var pinEnabled by remember(context) { mutableStateOf(AppSecurityManager.isPinEnabled(context)) }
   var showPinDialog by remember { mutableStateOf(false) }
@@ -178,7 +193,7 @@ fun SettingsDialog(
             FilterChip(
               selected = selectedCategory == cat,
               onClick = { selectedCategory = cat },
-              label = { Text(cat.label) },
+              label = { Text(cat.localizedLabel(gameStrings)) },
               modifier = Modifier.height(48.dp).testTag("settings_tab_${cat.id}"),
             )
           }
@@ -190,157 +205,71 @@ fun SettingsDialog(
           contentPadding = PaddingValues(16.dp),
           verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-          // One-Tap Health, Disability & Comfort Presets
-          item {
-            SettingsSectionCard(
-              title = "ONE-TAP COMFORT & HEALTH PRESETS",
-              subtitle = "Instant profiles tailored for epilepsy/migraine protection, motor dexterity, low vision, or battery life.",
-              icon = AppIcons.AutoAwesome,
-              accent = MaterialTheme.colorScheme.tertiary,
-            ) {
-              Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-              ) {
-                OutlinedButton(
-                  onClick = { onReplaceSettings(AppSettingsPresets.photosensitiveSafe(settings)) },
-                  modifier = Modifier.height(48.dp).testTag("preset_photosensitive_btn"),
-                ) { Text("Photosensitive Safe") }
-                OutlinedButton(
-                  onClick = { onReplaceSettings(AppSettingsPresets.motorAssist(settings)) },
-                  modifier = Modifier.height(48.dp).testTag("preset_motor_btn"),
-                ) { Text("Motor / One-Hand Assist") }
-                OutlinedButton(
-                  onClick = { onReplaceSettings(AppSettingsPresets.lowVisionContrast(settings)) },
-                  modifier = Modifier.height(48.dp).testTag("preset_lowvision_btn"),
-                ) { Text("Low-Vision Contrast") }
-                OutlinedButton(
-                  onClick = { onReplaceSettings(AppSettingsPresets.maxBatteryPerformance()) },
-                  modifier = Modifier.height(48.dp).testTag("preset_battery_btn"),
-                ) { Text("Max Battery 30 FPS") }
-              }
-              OutlinedButton(
-                onClick = onResetDefaults,
-                modifier = Modifier.fillMaxWidth().height(48.dp).testTag("preset_reset_btn"),
-              ) { Text("Reset All Settings to Defaults") }
-            }
-          }
-
-          if (selectedCategory == SettingsCategory.ALL || selectedCategory == SettingsCategory.PERFORMANCE) {
+          if (selectedCategory == SettingsCategory.ALL) {
+            // Game Language & Localization Switcher (12 Global Languages)
             item {
-              val activeRegion = settings.activeRegion
-              val activeServer = settings.activeServer
-              val regionServers = RegionalServerCatalog.serversForRegion(activeRegion)
+              val activeLang = settings.activeLanguage
               SettingsSectionCard(
-                title = "WORLD REGION, MULTI-SERVER NETWORK & AUTO-SETTINGS",
-                subtitle = "24 global servers (3 per region). Regional optimization settings are ON by default and automatically adjust when switching regions.",
+                title = gameStrings.languageSectionTitle,
+                subtitle = "${gameStrings.languageSectionSubtitle} (${activeLang.nativeName})",
                 icon = AppIcons.Public,
-                accent = Color(activeRegion.accentHex),
+                accent = MaterialTheme.colorScheme.primary,
               ) {
-                SettingSwitchRow(
-                  title = "Auto-Apply Region Default Settings",
-                  description = "Current profile (${activeRegion.shortTag}): ${activeRegion.defaultProfile.summary}",
-                  checked = settings.useRegionDefaultSettings,
-                  tag = "switch_region_auto_settings",
-                  onCheckedChange = { enabled ->
-                    if (onToggleRegionDefaultSettings != null) {
-                      onToggleRegionDefaultSettings(enabled)
-                    } else {
-                      onUpdateSettings { cur ->
-                        val next = cur.copy(useRegionDefaultSettings = enabled)
-                        if (enabled) AppSettingsPresets.forRegion(next, next.activeRegion) else next
-                      }
-                    }
-                  },
-                )
-
-                Text(
-                  text = "Select World Region (${WorldRegion.entries.size} Regions)",
-                  style = MaterialTheme.typography.titleMedium,
-                )
                 Row(
                   modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                   horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                  WorldRegion.entries.forEach { region ->
+                  AppLanguage.entries.forEach { lang ->
                     FilterChip(
-                      selected = activeRegion == region,
+                      selected = activeLang == lang,
                       onClick = {
-                        if (onSelectRegion != null) {
-                          onSelectRegion(region.id)
+                        if (onSelectLanguage != null) {
+                          onSelectLanguage(lang.code)
                         } else {
-                          val defaultSrv = RegionalServerCatalog.defaultServerFor(region)
-                          onUpdateSettings { cur ->
-                            val base = cur.copy(selectedRegionId = region.id, selectedServerId = defaultSrv.id)
-                            if (base.useRegionDefaultSettings) AppSettingsPresets.forRegion(base, region) else base
-                          }
+                          onUpdateSettings { it.copy(selectedLanguageCode = lang.code) }
                         }
                       },
-                      label = { Text("${region.shortTag} • ${region.displayName}") },
-                      modifier = Modifier.height(48.dp).testTag("settings_region_${region.id}"),
+                      label = { Text("${lang.flagTag} • ${lang.nativeName}") },
+                      modifier = Modifier.height(48.dp).testTag("settings_lang_${lang.code}"),
                     )
                   }
                 }
+              }
+            }
 
-                Text(
-                  text = "${activeRegion.displayName} Servers (${regionServers.size} Nodes)",
-                  style = MaterialTheme.typography.titleMedium,
-                )
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                  regionServers.forEach { srv ->
-                    val isSrvSelected = activeServer.id == srv.id
-                    Surface(
-                      onClick = {
-                        if (onSelectServer != null) {
-                          onSelectServer(srv.id)
-                        } else {
-                          onUpdateSettings { cur ->
-                            val base = cur.copy(selectedRegionId = srv.region.id, selectedServerId = srv.id)
-                            if (base.useRegionDefaultSettings) AppSettingsPresets.forRegion(base, srv.region) else base
-                          }
-                        }
-                      },
-                      shape = RoundedCornerShape(12.dp),
-                      color = if (isSrvSelected) Color(activeRegion.accentHex).copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                      modifier = Modifier
-                        .fillMaxWidth()
-                        .border(
-                          width = if (isSrvSelected) 1.5.dp else 1.dp,
-                          color = if (isSrvSelected) Color(activeRegion.accentHex) else MaterialTheme.colorScheme.outline,
-                          shape = RoundedCornerShape(12.dp),
-                        )
-                        .testTag("settings_server_${srv.id}"),
-                    ) {
-                      Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                      ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                          Text(
-                            text = "${srv.name} (${srv.code})",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isSrvSelected) Color(activeRegion.accentHex) else MaterialTheme.colorScheme.onSurface,
-                          )
-                          Text(
-                            text = "${srv.basePingMs}ms • ${srv.tickRateHz}Hz • ${srv.activeOperators}/${srv.maxCapacity}P • ${srv.bonusTag}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                          )
-                        }
-                        if (isSrvSelected) {
-                          Text(
-                            text = "CONNECTED",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF00E676),
-                          )
-                        }
-                      }
-                    }
-                  }
+            // One-Tap Health, Disability & Comfort Presets
+            item {
+              SettingsSectionCard(
+                title = gameStrings.presetsTitle,
+                subtitle = "Instant profiles tailored for epilepsy/migraine protection, motor dexterity, low vision, or battery life.",
+                icon = AppIcons.AutoAwesome,
+                accent = MaterialTheme.colorScheme.tertiary,
+              ) {
+                Row(
+                  modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                  horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                  OutlinedButton(
+                    onClick = { onReplaceSettings(AppSettingsPresets.photosensitiveSafe(settings)) },
+                    modifier = Modifier.height(48.dp).testTag("preset_photosensitive_btn"),
+                  ) { Text("Photosensitive Safe") }
+                  OutlinedButton(
+                    onClick = { onReplaceSettings(AppSettingsPresets.motorAssist(settings)) },
+                    modifier = Modifier.height(48.dp).testTag("preset_motor_btn"),
+                  ) { Text("Motor / One-Hand Assist") }
+                  OutlinedButton(
+                    onClick = { onReplaceSettings(AppSettingsPresets.lowVisionContrast(settings)) },
+                    modifier = Modifier.height(48.dp).testTag("preset_lowvision_btn"),
+                  ) { Text("Low-Vision Contrast") }
+                  OutlinedButton(
+                    onClick = { onReplaceSettings(AppSettingsPresets.maxBatteryPerformance()) },
+                    modifier = Modifier.height(48.dp).testTag("preset_battery_btn"),
+                  ) { Text("Max Battery 30 FPS") }
                 }
+                OutlinedButton(
+                  onClick = onResetDefaults,
+                  modifier = Modifier.fillMaxWidth().height(48.dp).testTag("preset_reset_btn"),
+                ) { Text(gameStrings.resetAllSettings) }
               }
             }
           }
@@ -614,6 +543,123 @@ fun SettingsDialog(
                 )
               }
             }
+
+            item {
+              val activeRegion = settings.activeRegion
+              val activeServer = settings.activeServer
+              val regionServers = RegionalServerCatalog.serversForRegion(activeRegion)
+              SettingsSectionCard(
+                title = gameStrings.regionSectionTitle,
+                subtitle = "${RegionalServerCatalog.servers.size} global servers across ${WorldRegion.entries.size} regions. Regional optimization settings are ON by default and automatically adjust when switching regions.",
+                icon = AppIcons.Public,
+                accent = Color(activeRegion.accentHex),
+              ) {
+                SettingSwitchRow(
+                  title = "Auto-Apply Region Default Settings",
+                  description = "Current profile (${activeRegion.shortTag}): ${activeRegion.defaultProfile.summary}",
+                  checked = settings.useRegionDefaultSettings,
+                  tag = "switch_region_auto_settings",
+                  onCheckedChange = { enabled ->
+                    if (onToggleRegionDefaultSettings != null) {
+                      onToggleRegionDefaultSettings(enabled)
+                    } else {
+                      onUpdateSettings { cur ->
+                        val next = cur.copy(useRegionDefaultSettings = enabled)
+                        if (enabled) AppSettingsPresets.forRegion(next, next.activeRegion) else next
+                      }
+                    }
+                  },
+                )
+
+                Text(
+                  text = "Select World Region (${WorldRegion.entries.size} Regions)",
+                  style = MaterialTheme.typography.titleMedium,
+                )
+                Row(
+                  modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                  horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                  WorldRegion.entries.forEach { region ->
+                    FilterChip(
+                      selected = activeRegion == region,
+                      onClick = {
+                        if (onSelectRegion != null) {
+                          onSelectRegion(region.id)
+                        } else {
+                          val defaultSrv = RegionalServerCatalog.defaultServerFor(region)
+                          onUpdateSettings { cur ->
+                            val base = cur.copy(selectedRegionId = region.id, selectedServerId = defaultSrv.id)
+                            if (base.useRegionDefaultSettings) AppSettingsPresets.forRegion(base, region) else base
+                          }
+                        }
+                      },
+                      label = { Text("${region.shortTag} • ${region.displayName}") },
+                      modifier = Modifier.height(48.dp).testTag("settings_region_${region.id}"),
+                    )
+                  }
+                }
+
+                Text(
+                  text = "${activeRegion.displayName} Servers (${regionServers.size} Nodes)",
+                  style = MaterialTheme.typography.titleMedium,
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                  regionServers.forEach { srv ->
+                    val isSrvSelected = activeServer.id == srv.id
+                    Surface(
+                      onClick = {
+                        if (onSelectServer != null) {
+                          onSelectServer(srv.id)
+                        } else {
+                          onUpdateSettings { cur ->
+                            val base = cur.copy(selectedRegionId = srv.region.id, selectedServerId = srv.id)
+                            if (base.useRegionDefaultSettings) AppSettingsPresets.forRegion(base, srv.region) else base
+                          }
+                        }
+                      },
+                      shape = RoundedCornerShape(12.dp),
+                      color = if (isSrvSelected) Color(activeRegion.accentHex).copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                      modifier = Modifier
+                        .fillMaxWidth()
+                        .border(
+                          width = if (isSrvSelected) 1.5.dp else 1.dp,
+                          color = if (isSrvSelected) Color(activeRegion.accentHex) else MaterialTheme.colorScheme.outline,
+                          shape = RoundedCornerShape(12.dp),
+                        )
+                        .testTag("settings_server_${srv.id}"),
+                    ) {
+                      Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                      ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                          Text(
+                            text = "${srv.name} (${srv.code})",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSrvSelected) Color(activeRegion.accentHex) else MaterialTheme.colorScheme.onSurface,
+                          )
+                          Text(
+                            text = "${srv.basePingMs}ms • ${srv.tickRateHz}Hz • ${srv.activeOperators}/${srv.maxCapacity}P • ${srv.bonusTag}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                          )
+                        }
+                        if (isSrvSelected) {
+                          Text(
+                            text = "CONNECTED",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF00E676),
+                          )
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
 
           if (selectedCategory == SettingsCategory.ALL || selectedCategory == SettingsCategory.VISUAL) {
@@ -778,7 +824,7 @@ fun SettingsDialog(
               shape = RoundedCornerShape(14.dp),
               modifier = Modifier.fillMaxWidth().height(52.dp).testTag("done_settings_btn"),
             ) {
-              Text("Save & Return", style = MaterialTheme.typography.labelLarge)
+              Text(gameStrings.saveAndReturn, style = MaterialTheme.typography.labelLarge)
             }
           }
         }

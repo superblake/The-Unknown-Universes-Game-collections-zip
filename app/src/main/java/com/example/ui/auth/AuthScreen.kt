@@ -3,6 +3,7 @@ package com.example.ui.auth
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -23,6 +25,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -54,13 +57,19 @@ import androidx.compose.ui.unit.dp
 import androidx.credentials.CredentialManager
 import com.example.BuildConfig
 import com.example.R
+import com.example.data.local.AppLanguage
+import com.example.data.local.LocalGameStrings
 import com.example.ui.theme.AppIcons
 
 @Composable
 fun AuthScreen(
   initialCallsign: String = "VanguardPrime",
+  selectedLanguageCode: String = AppLanguage.ENGLISH.code,
+  onSelectLanguage: (String) -> Unit = {},
   onBootLocalOperator: (callsign: String) -> Unit,
 ) {
+  val strings = LocalGameStrings.current
+  val activeLang = AppLanguage.fromCode(selectedLanguageCode)
   var callsign by remember(initialCallsign) { mutableStateOf(initialCallsign) }
   var validationError by remember { mutableStateOf<String?>(null) }
   var authNotice by remember { mutableStateOf<String?>(null) }
@@ -221,6 +230,23 @@ fun AuthScreen(
               subtitle = "Sign in with Google or boot locally with saved Perks, Powers, Rigs & Vault",
             )
 
+            // Language Quick Switcher Row
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+              AppLanguage.entries.forEach { lang ->
+                FilterChip(
+                  selected = activeLang == lang,
+                  onClick = { onSelectLanguage(lang.code) },
+                  label = { Text("${lang.flagTag} • ${lang.nativeName}") },
+                  modifier = Modifier.heightIn(min = 48.dp).testTag("auth_lang_${lang.code}"),
+                )
+              }
+            }
+
             OutlinedTextField(
               value = callsign,
               onValueChange = {
@@ -228,7 +254,7 @@ fun AuthScreen(
                 validationError = null
                 authNotice = null
               },
-              label = { Text("Operator Callsign") },
+              label = { Text(strings.operatorCallsign) },
               placeholder = { Text("VanguardPrime") },
               singleLine = true,
               modifier = Modifier.fillMaxWidth().testTag("operator_callsign_input"),
@@ -264,7 +290,7 @@ fun AuthScreen(
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                  text = "Signing in with Google...",
+                  text = strings.signingInGoogle,
                   style = MaterialTheme.typography.labelLarge,
                 )
               } else {
@@ -275,7 +301,7 @@ fun AuthScreen(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                  text = "Sign in with Google",
+                  text = strings.signInGoogle,
                   style = MaterialTheme.typography.labelLarge,
                 )
               }
@@ -437,7 +463,7 @@ fun AppPinUnlockScreen(
           modifier = Modifier.size(40.dp),
         )
         Text(
-          text = "UNKNOWNOS SHIELD LOCK",
+          text = LocalGameStrings.current.shieldLockTitle,
           style = MaterialTheme.typography.titleLarge,
           color = MaterialTheme.colorScheme.primary,
         )
@@ -481,13 +507,13 @@ fun AppPinUnlockScreen(
           shape = RoundedCornerShape(14.dp),
           modifier = Modifier.fillMaxWidth().height(50.dp).testTag("app_pin_unlock_btn"),
         ) {
-          Text("Unlock UnknownOS")
+          Text(LocalGameStrings.current.unlockBtn)
         }
         TextButton(
           onClick = onResetSession,
           modifier = Modifier.height(48.dp).testTag("app_pin_reset_session_btn"),
         ) {
-          Text("Switch Account / Sign Out")
+          Text(LocalGameStrings.current.switchAccountBtn)
         }
       }
     }

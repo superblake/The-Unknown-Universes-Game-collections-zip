@@ -17,6 +17,7 @@ import kotlin.math.sin
 
 private const val HORIZON_RATIO = 0.14f
 private const val PERSP_TILT = 0.24f
+private const val WORLD_VIEW_ZOOM = 0.62f
 
 fun perspectiveScaleForRelY(relY: Float): Float =
   (0.78f + (relY - 0.5f) * PERSP_TILT).coerceIn(0.46f, 1.32f)
@@ -34,8 +35,8 @@ fun worldToPerspectiveScreen(
   val depthScale = perspectiveScaleForRelY(relY)
   val horizonPx = h * HORIZON_RATIO
   val groundH = h - horizonPx
-  val sx = w * 0.5f + (relX - 0.5f) * w * depthScale
-  val normalizedY = ((relY - 0.5f) * depthScale + 0.5f)
+  val sx = w * 0.5f + (relX - 0.5f) * w * depthScale * WORLD_VIEW_ZOOM
+  val normalizedY = ((relY - 0.5f) * depthScale * WORLD_VIEW_ZOOM + 0.5f)
   val sy = horizonPx + normalizedY * groundH
   return Offset(sx, sy)
 }
@@ -51,13 +52,13 @@ fun screenToWorldCoords(
   val horizonPx = h * HORIZON_RATIO
   val groundH = (h - horizonPx).coerceAtLeast(1f)
   val normY = (py - horizonPx) / groundH
-  var relY = normY
+  var relY = 0.5f + (normY - 0.5f) / WORLD_VIEW_ZOOM
   for (it in 0..2) {
     val ds = perspectiveScaleForRelY(relY)
-    relY = 0.5f + (normY - 0.5f) / ds.coerceAtLeast(0.25f)
+    relY = 0.5f + (normY - 0.5f) / (ds * WORLD_VIEW_ZOOM).coerceAtLeast(0.20f)
   }
   val ds = perspectiveScaleForRelY(relY).coerceAtLeast(0.25f)
-  val relX = 0.5f + (px - w * 0.5f) / (w.coerceAtLeast(1f) * ds)
+  val relX = 0.5f + (px - w * 0.5f) / (w.coerceAtLeast(1f) * ds * WORLD_VIEW_ZOOM)
   return Pair(camX + relX, camY + relY)
 }
 
@@ -230,12 +231,12 @@ fun DrawScope.drawWorldArenaBackdrop(
       isUrbanRoadWorld -> Color(0xFFFFD54F).copy(alpha = 0.30f)
       else -> effAccent.copy(alpha = 0.32f)
     }
-    val vRoads = floatArrayOf(2.4f, ARENA_CENTER, 7.6f)
+    val vRoads = floatArrayOf(4.0f, ARENA_CENTER, 20.0f)
     for (rx in vRoads) {
-      val topP = worldToPerspectiveScreen(rx, camY - 0.15f, camX, camY, w, h)
-      val botP = worldToPerspectiveScreen(rx, camY + 1.15f, camX, camY, w, h)
+      val topP = worldToPerspectiveScreen(rx, camY - 0.25f, camX, camY, w, h)
+      val botP = worldToPerspectiveScreen(rx, camY + 1.35f, camX, camY, w, h)
       if (maxOf(topP.x, botP.x) > -80f && minOf(topP.x, botP.x) < w + 80f) {
-        drawLine(roadCol, topP, botP, strokeWidth = if (isOrbitalDeckWorld) 28f else 34f)
+        drawLine(roadCol, topP, botP, strokeWidth = if (isOrbitalDeckWorld) 26f else 32f)
         if (isUrbanRoadWorld) {
           drawLine(dashCol, topP, botP, strokeWidth = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 12f)))
         } else {
@@ -243,7 +244,7 @@ fun DrawScope.drawWorldArenaBackdrop(
         }
       }
     }
-    val hRoads = floatArrayOf(2.4f, ARENA_CENTER, 7.6f)
+    val hRoads = floatArrayOf(4.0f, ARENA_CENTER, 20.0f)
     for (ry in hRoads) {
       val leftP = worldToPerspectiveScreen(camX - 0.25f, ry, camX, camY, w, h)
       val rightP = worldToPerspectiveScreen(camX + 1.25f, ry, camX, camY, w, h)
@@ -286,24 +287,29 @@ fun DrawScope.drawWorldArenaBackdrop(
     }
   }
 
-  // Verdansk 10x10 Frontier Threshold (Dashed Passable Threshold — NOT a closed barrier!)
+  // Fortified 24x24 Perimeter Border Wall & Corner Bastions
   val fTL = worldToPerspectiveScreen(0f, 0f, camX, camY, w, h)
   val fTR = worldToPerspectiveScreen(ARENA_WORLD_SIZE, 0f, camX, camY, w, h)
   val fBR = worldToPerspectiveScreen(ARENA_WORLD_SIZE, ARENA_WORLD_SIZE, camX, camY, w, h)
   val fBL = worldToPerspectiveScreen(0f, ARENA_WORLD_SIZE, camX, camY, w, h)
-  val frontierStroke = Color(0xFFE040FB).copy(alpha = 0.55f)
-  val dash = PathEffect.dashPathEffect(floatArrayOf(18f, 14f))
-  if (fTL.y in -40f..h + 40f || fTR.y in -40f..h + 40f) {
-    drawLine(frontierStroke, fTL, fTR, strokeWidth = 3f, pathEffect = dash)
+  val outerWallGlow = (if (highContrast) Color.White else Color(0xFFFF3D71)).copy(alpha = 0.34f + pulse * 0.16f)
+  val outerWallCore = if (highContrast) Color(0xFFFFD54F) else Color(0xFFE040FB)
+  fun drawPerimeterWall(a: Offset, b: Offset) {
+    if ((a.x < -120f && b.x < -120f) || (a.x > w + 120f && b.x > w + 120f)) return
+    if ((a.y < -120f && b.y < -120f) || (a.y > h + 120f && b.y > h + 120f)) return
+    drawLine(Color(0xFF0A0D18), a, b, strokeWidth = 18f, cap = StrokeCap.Square)
+    drawLine(outerWallGlow, a, b, strokeWidth = 11f, cap = StrokeCap.Square)
+    drawLine(outerWallCore, a, b, strokeWidth = 3.5f, cap = StrokeCap.Square)
   }
-  if (fBL.y in -40f..h + 40f || fBR.y in -40f..h + 40f) {
-    drawLine(frontierStroke, fBL, fBR, strokeWidth = 3f, pathEffect = dash)
-  }
-  if (fTL.x in -40f..w + 40f || fBL.x in -40f..w + 40f) {
-    drawLine(frontierStroke, fTL, fBL, strokeWidth = 3f, pathEffect = dash)
-  }
-  if (fTR.x in -40f..w + 40f || fBR.x in -40f..w + 40f) {
-    drawLine(frontierStroke, fTR, fBR, strokeWidth = 3f, pathEffect = dash)
+  drawPerimeterWall(fTL, fTR)
+  drawPerimeterWall(fBL, fBR)
+  drawPerimeterWall(fTL, fBL)
+  drawPerimeterWall(fTR, fBR)
+  for (corner in arrayOf(fTL, fTR, fBR, fBL)) {
+    if (corner.x in -60f..w + 60f && corner.y in -60f..h + 60f) {
+      drawCircle(outerWallGlow, radius = 22f, center = corner)
+      drawCircle(outerWallCore, radius = 9f, center = corner)
+    }
   }
 
   // Center World Landmark projected in 2.5D
@@ -427,6 +433,126 @@ fun DrawScope.drawWorldArenaBackdrop(
         style = Stroke(width = 3f * cScale, pathEffect = PathEffect.dashPathEffect(floatArrayOf(18f, 8f))),
       )
     }
+  }
+}
+
+fun DrawScope.drawSectionBiomesAndBorders(
+  sim: ArenaSimState,
+  camX: Float,
+  camY: Float,
+  highContrast: Boolean,
+  lowGraphics: Boolean,
+  glowOn: Boolean,
+  pulse: Float,
+) {
+  val w = size.width
+  val h = size.height
+  val horizonY = h * HORIZON_RATIO
+
+  // 1. Render distinct 8x8 Section Biomes & Unique Floor Geometry
+  for (i in 0 until sim.mapSections.size) {
+    val sec = sim.mapSections[i]
+    val pCenter = worldToPerspectiveScreen(sec.centerX, sec.centerY, camX, camY, w, h)
+    // Skip sections completely far outside camera view
+    if (kotlin.math.abs(sec.centerX - camX) > 10.5f || kotlin.math.abs(sec.centerY - camY) > 10.5f) continue
+
+    val tl = worldToPerspectiveScreen(sec.minX, sec.minY, camX, camY, w, h)
+    val tr = worldToPerspectiveScreen(sec.maxX, sec.minY, camX, camY, w, h)
+    val br = worldToPerspectiveScreen(sec.maxX, sec.maxY, camX, camY, w, h)
+    val bl = worldToPerspectiveScreen(sec.minX, sec.maxY, camX, camY, w, h)
+    val quad = Path().apply {
+      moveTo(tl.x, tl.y.coerceAtLeast(horizonY))
+      lineTo(tr.x, tr.y.coerceAtLeast(horizonY))
+      lineTo(br.x, br.y.coerceAtLeast(horizonY))
+      lineTo(bl.x, bl.y.coerceAtLeast(horizonY))
+      close()
+    }
+    val groundTint = if (highContrast) Color(0xFF060812) else Color(sec.groundTintHex).copy(alpha = 0.56f)
+    drawPath(quad, color = groundTint)
+
+    val secAccent = Color(sec.accentHex)
+    if (!lowGraphics && pCenter.x in -180f..w + 180f && pCenter.y in horizonY - 80f..h + 180f) {
+      val sScale = perspectiveScaleForRelY(sec.centerY - camY)
+      val r = minOf(w, h) * 0.16f * sScale
+      when (sec.floorStyle) {
+        SectionFloorStyle.CRYO -> {
+          drawCircle(secAccent.copy(alpha = 0.20f), radius = r, center = pCenter, style = Stroke(width = 2.5f * sScale))
+          drawLine(secAccent.copy(alpha = 0.35f), Offset(pCenter.x - r * 0.8f, pCenter.y), Offset(pCenter.x + r * 0.8f, pCenter.y), strokeWidth = 2f)
+        }
+        SectionFloorStyle.BIO -> {
+          drawOval(secAccent.copy(alpha = 0.14f + pulse * 0.08f), topLeft = Offset(pCenter.x - r, pCenter.y - r * 0.6f), size = Size(r * 2f, r * 1.2f))
+        }
+        SectionFloorStyle.SOLAR -> {
+          drawCircle(secAccent.copy(alpha = 0.18f + pulse * 0.08f), radius = r * 0.85f, center = pCenter, style = Stroke(width = 3f * sScale))
+        }
+        SectionFloorStyle.CRYPT -> {
+          drawRect(secAccent.copy(alpha = 0.25f), topLeft = Offset(pCenter.x - r * 0.65f, pCenter.y - r * 0.45f), size = Size(r * 1.3f, r * 0.9f), style = Stroke(width = 2.5f * sScale))
+        }
+        SectionFloorStyle.VOID -> {
+          drawCircle(secAccent.copy(alpha = 0.24f + pulse * 0.12f), radius = r * 0.72f, center = pCenter, style = Stroke(width = 3f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f))))
+        }
+        SectionFloorStyle.URBAN, SectionFloorStyle.NEON -> {
+          drawRoundRect(secAccent.copy(alpha = 0.22f), topLeft = Offset(pCenter.x - r * 0.7f, pCenter.y - r * 0.5f), size = Size(r * 1.4f, r * 1.0f), cornerRadius = CornerRadius(12f, 12f), style = Stroke(width = 2f * sScale))
+        }
+        else -> {
+          drawOval(secAccent.copy(alpha = 0.20f), topLeft = Offset(pCenter.x - r * 0.8f, pCenter.y - r * 0.5f), size = Size(r * 1.6f, r * 1.0f), style = Stroke(width = 2f * sScale))
+        }
+      }
+    }
+  }
+
+  // 2. Internal Section Border Walls along x=8,16 and y=8,16 with Open Checkpoint Gateways (at 4, 12, 20 ± ARENA_BORDER_HALF_GATE)
+  val wallCore = if (highContrast) Color(0xFF00F0FF) else Color(0xFF40C4FF)
+  val gateCol = Color(0xFF00E676)
+  val gateHalf = ARENA_BORDER_HALF_GATE
+  val gateCenters = floatArrayOf(4.0f, 12.0f, 20.0f)
+
+  fun drawWallSegment(x1: Float, y1: Float, x2: Float, y2: Float) {
+    val a = worldToPerspectiveScreen(x1, y1, camX, camY, w, h)
+    val b = worldToPerspectiveScreen(x2, y2, camX, camY, w, h)
+    if ((a.x < -100f && b.x < -100f) || (a.x > w + 100f && b.x > w + 100f)) return
+    if ((a.y < horizonY - 40f && b.y < horizonY - 40f) || (a.y > h + 100f && b.y > h + 100f)) return
+    drawLine(Color(0xFF090F1E), a, b, strokeWidth = 14f, cap = StrokeCap.Square)
+    if (glowOn) drawLine(wallCore.copy(alpha = 0.28f + pulse * 0.14f), a, b, strokeWidth = 9f, cap = StrokeCap.Square)
+    drawLine(wallCore.copy(alpha = 0.88f), a, b, strokeWidth = 2.6f, cap = StrokeCap.Square)
+  }
+
+  fun drawGatewayBeacon(gx1: Float, gy1: Float, gx2: Float, gy2: Float) {
+    val p1 = worldToPerspectiveScreen(gx1, gy1, camX, camY, w, h)
+    val p2 = worldToPerspectiveScreen(gx2, gy2, camX, camY, w, h)
+    if (p1.x in -80f..w + 80f && p1.y in horizonY - 40f..h + 80f) {
+      drawCircle(gateCol, radius = 6.5f, center = p1)
+    }
+    if (p2.x in -80f..w + 80f && p2.y in horizonY - 40f..h + 80f) {
+      drawCircle(gateCol, radius = 6.5f, center = p2)
+    }
+    if ((p1.x in -80f..w + 80f || p2.x in -80f..w + 80f) && (p1.y in horizonY - 40f..h + 80f || p2.y in horizonY - 40f..h + 80f)) {
+      drawLine(gateCol.copy(alpha = 0.45f + pulse * 0.20f), p1, p2, strokeWidth = 3f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f)))
+    }
+  }
+
+  for (wallX in floatArrayOf(8.0f, 16.0f)) {
+    var cursor = 0.0f
+    for (gc in gateCenters) {
+      val gStart = (gc - gateHalf).coerceAtLeast(0f)
+      val gEnd = (gc + gateHalf).coerceAtMost(ARENA_WORLD_SIZE)
+      if (gStart > cursor) drawWallSegment(wallX, cursor, wallX, gStart)
+      drawGatewayBeacon(wallX, gStart, wallX, gEnd)
+      cursor = gEnd
+    }
+    if (cursor < ARENA_WORLD_SIZE) drawWallSegment(wallX, cursor, wallX, ARENA_WORLD_SIZE)
+  }
+
+  for (wallY in floatArrayOf(8.0f, 16.0f)) {
+    var cursor = 0.0f
+    for (gc in gateCenters) {
+      val gStart = (gc - gateHalf).coerceAtLeast(0f)
+      val gEnd = (gc + gateHalf).coerceAtMost(ARENA_WORLD_SIZE)
+      if (gStart > cursor) drawWallSegment(cursor, wallY, gStart, wallY)
+      drawGatewayBeacon(gStart, wallY, gEnd, wallY)
+      cursor = gEnd
+    }
+    if (cursor < ARENA_WORLD_SIZE) drawWallSegment(cursor, wallY, ARENA_WORLD_SIZE, wallY)
   }
 }
 

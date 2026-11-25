@@ -224,14 +224,19 @@ fun DrawScope.drawRigCharacter(
   auraTrailId: String = "none",
   outfitId: String = "",
 ) {
-  val isBatman = outfitId.startsWith("batman") || archetype == "batman"
+  val isBatman = outfitId.startsWith("batman") || outfitId == "nightwing_v3" || archetype == "batman"
+  val isNightwing = outfitId == "nightwing_v1" || outfitId == "nightwing_v2"
   val isSpiderMan = outfitId.startsWith("spiderman") || archetype == "spiderman"
   val isIronMan = outfitId.startsWith("ironman")
   val isIronSpider = outfitId == "spiderman_v3"
-  val isSuperman = outfitId.startsWith("superman")
+  val isSuperman = outfitId.startsWith("superman") || outfitId.startsWith("krypton")
   val isFlash = outfitId.startsWith("flash")
   val isGreenLantern = outfitId.startsWith("green_lantern")
   val isAbyss = outfitId.startsWith("abyss")
+  val isCodGhost = outfitId.startsWith("cod_ghost")
+  val isNiko = outfitId.startsWith("niko")
+  val isHeller = outfitId.startsWith("heller")
+  val isDelsin = outfitId.startsWith("delsin")
   val bodyStroke = if (highContrast) 13f else 11f
   val armorColor =
     if (visorColorOverride != null || cloakOverride != null) primaryColor
@@ -407,6 +412,26 @@ fun DrawScope.drawRigCharacter(
       drawCircle(color = Color(0xFFFFAB40).copy(alpha = 0.35f), radius = 8f, center = chestMid)
       drawLine(secondaryColor, Offset(chestMid.x, chestMid.y - 7f), Offset(chestMid.x, chestMid.y + 7f), strokeWidth = 3f, cap = StrokeCap.Round)
       drawLine(secondaryColor, Offset(chestMid.x - 6f, chestMid.y), Offset(chestMid.x + 6f, chestMid.y), strokeWidth = 2.6f, cap = StrokeCap.Round)
+    }
+    isNightwing -> {
+      drawLine(secondaryColor, Offset(chestMid.x - 10f, chestMid.y - 4f), Offset(chestMid.x, chestMid.y + 4f), strokeWidth = 3.2f, cap = StrokeCap.Round)
+      drawLine(secondaryColor, Offset(chestMid.x + 10f, chestMid.y - 4f), Offset(chestMid.x, chestMid.y + 4f), strokeWidth = 3.2f, cap = StrokeCap.Round)
+    }
+    isCodGhost -> {
+      drawCircle(color = Color.White, radius = 6f, center = chestMid)
+      drawCircle(color = Color(0xFF0A0D14), radius = 1.6f, center = Offset(chestMid.x - 2.2f, chestMid.y - 1f))
+      drawCircle(color = Color(0xFF0A0D14), radius = 1.6f, center = Offset(chestMid.x + 2.2f, chestMid.y - 1f))
+    }
+    isHeller -> {
+      drawCircle(color = Color(0xFFFF3D00), radius = 6.5f, center = chestMid, style = Stroke(width = 2.5f))
+      drawLine(Color(0xFFFFAB40), Offset(chestMid.x - 6f, chestMid.y - 5f), Offset(chestMid.x + 6f, chestMid.y + 5f), strokeWidth = 2.6f)
+    }
+    isDelsin -> {
+      drawLine(secondaryColor, Offset(chestMid.x - 7f, chestMid.y - 5f), Offset(chestMid.x + 7f, chestMid.y - 5f), strokeWidth = 2.5f)
+      drawLine(secondaryColor, Offset(chestMid.x - 5f, chestMid.y + 4f), Offset(chestMid.x + 5f, chestMid.y + 4f), strokeWidth = 2.5f)
+    }
+    isNiko -> {
+      drawRect(color = secondaryColor, topLeft = Offset(chestMid.x - 6f, chestMid.y - 4f), size = androidx.compose.ui.geometry.Size(12f, 8f), style = Stroke(width = 2.2f))
     }
     else -> drawCircle(color = secondaryColor, radius = 5f, center = chestMid)
   }
@@ -618,13 +643,13 @@ fun DrawScope.drawArenaHostile(
   maxArmor: Int = 0,
   immuneColors: List<Color> = emptyList(),
 ) {
-  val effScale = scale.coerceIn(0.45f, 1.55f)
+  val effScale = scale.coerceIn(0.55f, 1.85f)
   val baseRadius = when {
-    isBoss -> 28f
-    archetype == "mech" || archetype == "clockwork_automaton" -> 21f
-    isElite -> 19f
-    archetype == "rusher" || archetype == "water_hive_swarm" -> 12.5f
-    else -> 15f
+    isBoss -> 46f
+    archetype == "mech" || archetype == "clockwork_automaton" || archetype == "ultron_sentry" || archetype == "blackgate_enforcer" -> 34f
+    isElite -> 31f
+    archetype == "rusher" || archetype == "water_hive_swarm" -> 20f
+    else -> 24f
   } * effScale
   val primary = when {
     stasisActive -> Color(0xFFFFD54F)
@@ -809,11 +834,17 @@ fun DrawScope.drawArenaHostile(
     drawLine(Color(0xFFB0BEC5), Offset(center.x - barW * 0.5f, armY), Offset(center.x - barW * 0.5f + barW * armRatio, armY), strokeWidth = 3f * effScale, cap = StrokeCap.Round)
   }
   if (immuneColors.isNotEmpty()) {
+    drawCircle(
+      color = immuneColors.first().copy(alpha = 0.38f),
+      radius = baseRadius * 1.38f,
+      center = center,
+      style = Stroke(width = 2.2f * effScale),
+    )
     val pipY = barY - (if (maxArmor > 0 && armor > 0) 11.5f else 6.5f) * effScale
     immuneColors.take(2).forEachIndexed { idx, immCol ->
-      val pipX = center.x + ((idx - (immuneColors.size.coerceAtMost(2) - 1) / 2f) * 9f * effScale)
-      drawCircle(Color.Black, radius = 3.8f * effScale, center = Offset(pipX, pipY))
-      drawCircle(immCol, radius = 2.6f * effScale, center = Offset(pipX, pipY))
+      val pipX = center.x + ((idx - (immuneColors.size.coerceAtMost(2) - 1) / 2f) * 11f * effScale)
+      drawCircle(Color.Black, radius = 4.6f * effScale, center = Offset(pipX, pipY))
+      drawCircle(immCol, radius = 3.2f * effScale, center = Offset(pipX, pipY))
     }
   }
 }

@@ -1,0 +1,34 @@
+<resources>
+    <string name="app_name">The Unknown Universes</string>
+    <string name="os_boot_tag">UNKNOWNOS v2.4 // मल्टीवर्स शेल</string>
+    <string name="auth_title">UnknownOS बूट करें (लोकल प्रोफ़ाइल)</string>
+    <string name="auth_subtitle">अपने कस्टम पर्क्स, पावर्स, Blender रिग्स, एनिमेशन और मल्टीवर्स स्कोर इस डिवाइस पर सुरक्षित रखें।</string>
+    <string name="boot_unknownos">UnknownOS बूट करें</string>
+    <string name="cd_hero_banner">The Unknown Universes कमांड नेक्सस बैनर</string>
+    <string name="cd_world_banner">यूनिवर्स वर्ल्ड बैनर</string>
+    <string name="cd_sign_out">UnknownOS सत्र लॉक करें</string>
+    <string name="launch_arena">एरीना में उतरें</string>
+    <string name="forge_custom_module">कस्टम मॉड्यूल बनाएँ</string>
+    <string name="save_rig_cloud">रिग सहेजें और पूरा करें</string>
+    <string name="export_html_btn">खेलने योग्य .HTML डाउनलोड करें (iOS / कंसोल / PC)</string>
+    <string name="export_blender_btn">Blender रिग स्क्रिप्ट (.PY)</string>
+    <string name="sync_now_btn">अभी सिंक करें</string>
+    <string name="export_save_btn">डेटा सहेजें (.JSON)</string>
+    <string name="share_save_btn">सेव साझा करें</string>
+    <string name="import_save_btn">आयात करें (.JSON)</string>
+    <string name="paste_save_btn">JSON पेस्ट करें</string>
+    <string name="export_bo3_xmodel_btn">.XMODEL_EXPORT (BO3 रिग)</string>
+    <string name="export_bo3_xanim_btn">.XANIM_EXPORT (BO3 एनिम)</string>
+    <string name="export_bo3_gdt_btn">BO3 .GDT एसेट एक्सपोर्ट</string>
+    <string name="export_bo3_blender_btn">CoD-Blender BO3 स्क्रिप्ट (.PY)</string>
+    <string name="steam_workshop_title">STEAM WORKSHOP और मॉड लोडर</string>
+    <string name="steam_workshop_fetch_btn">Steam Workshop आइटम लाएँ</string>
+    <string name="steam_workshop_import_file_btn">.VDF / .JSON आयात करें</string>
+    <string name="steam_workshop_paste_btn">Workshop कोड पेस्ट करें</string>
+    <string name="steam_workshop_export_vdf_btn">SteamCMD .VDF एक्सपोर्ट</string>
+    <string name="steam_workshop_export_json_btn">Workshop .JSON एक्सपोर्ट</string>
+    <string name="steam_workshop_share_btn">Steam Workshop पैक साझा करें</string>
+    <string name="cd_open_settings">भाषा, नियंत्रण, प्रदर्शन और सुगमता सेटिंग्स खोलें</string>
+    <string name="settings_title">सेटिंग्स और सुगमता</string>
+    <string name="settings_subtitle">भाषा, नियंत्रण, प्रदर्शन, दृश्य और स्वास्थ्य सहायता</string>
+</resources>

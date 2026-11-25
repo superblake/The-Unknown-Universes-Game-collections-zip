@@ -1,0 +1,34 @@
+<resources>
+    <string name="app_name">The Unknown Universes</string>
+    <string name="os_boot_tag">UNKNOWNOS v2.4 // マルチバースシェル</string>
+    <string name="auth_title">UnknownOS を起動 (ローカル)</string>
+    <string name="auth_subtitle">カスタムパーク、パワー、Blenderリグ、アニメーション、マルチバーススコアを端末に保存します。</string>
+    <string name="boot_unknownos">UnknownOS を起動</string>
+    <string name="cd_hero_banner">The Unknown Universes コマンドネクサス画像</string>
+    <string name="cd_world_banner">ユニバースワールドバナー</string>
+    <string name="cd_sign_out">UnknownOS セッションをロック</string>
+    <string name="launch_arena">アリーナへ出撃</string>
+    <string name="forge_custom_module">カスタムモジュール作成</string>
+    <string name="save_rig_cloud">リグを保存して完了</string>
+    <string name="export_html_btn">プレイ可能 .HTML を保存 (iOS / コンソール / PC)</string>
+    <string name="export_blender_btn">Blender リグスクリプト (.PY)</string>
+    <string name="sync_now_btn">今すぐ同期</string>
+    <string name="export_save_btn">データ保存 (.JSON)</string>
+    <string name="share_save_btn">セーブ共有</string>
+    <string name="import_save_btn">インポート (.JSON)</string>
+    <string name="paste_save_btn">JSON 貼り付け</string>
+    <string name="export_bo3_xmodel_btn">BO3 .XMODEL_EXPORT 出力</string>
+    <string name="export_bo3_xanim_btn">BO3 .XANIM_EXPORT 出力</string>
+    <string name="export_bo3_gdt_btn">BO3 .GDT 定義を出力</string>
+    <string name="export_bo3_blender_btn">CoD-Blender BO3 スクリプト (.PY)</string>
+    <string name="steam_workshop_title">STEAM WORKSHOP &amp; MOD ローダー</string>
+    <string name="steam_workshop_fetch_btn">Steam Workshop アイテム取得</string>
+    <string name="steam_workshop_import_file_btn">.VDF / .JSON インポート</string>
+    <string name="steam_workshop_paste_btn">Workshop コード貼り付け</string>
+    <string name="steam_workshop_export_vdf_btn">SteamCMD .VDF 出力</string>
+    <string name="steam_workshop_export_json_btn">Workshop .JSON 出力</string>
+    <string name="steam_workshop_share_btn">Workshop パック共有</string>
+    <string name="cd_open_settings">操作・性能・表示・言語・アクセシビリティ設定を開く</string>
+    <string name="settings_title">設定 &amp; アクセシビリティ</string>
+    <string name="settings_subtitle">言語・操作・性能・表示・健康サポート</string>
+</resources>

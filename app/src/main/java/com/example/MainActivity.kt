@@ -2,7 +2,9 @@ package com.example
 
 import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
 import android.view.KeyEvent
@@ -40,6 +42,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -51,8 +54,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import androidx.credentials.CredentialManager
@@ -61,8 +67,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.example.data.local.AppLanguage
 import com.example.data.local.AppSettings
 import com.example.data.local.AppSettingsStore
+import com.example.data.local.GameStrings
+import com.example.data.local.GameStringsCatalog
+import com.example.data.local.LocalGameStrings
 import com.example.data.local.ProgressionStore
 import com.example.data.local.UniverseRepository
 import com.example.security.AppSecurityManager
@@ -154,6 +164,18 @@ private const val KEY_LAST_CALLSIGN = "last_callsign"
 private const val KEY_VAULT_WALLPAPER = "vault_wallpaper_path"
 private const val LOCAL_OPERATOR_ID = "local_operator"
 
+private tailrec fun Context.findActivity(): Activity? =
+  this as? Activity ?: (this as? ContextWrapper)?.baseContext?.findActivity()
+
+private fun OsWorkspaceTab.localizedLabel(s: GameStrings): String = when (this) {
+  OsWorkspaceTab.OS_DESKTOP -> s.tabOs
+  OsWorkspaceTab.ARENA_PLAY -> s.tabArena
+  OsWorkspaceTab.FORGE_RIG -> s.tabForge
+  OsWorkspaceTab.ARMORY -> s.tabArmory
+  OsWorkspaceTab.MEDIA_VAULT -> s.tabVault
+  OsWorkspaceTab.EXPORT_COMPAT -> s.tabExport
+}
+
 @Composable
 fun AppNavigation(
   pendingOAuthRedirect: StateFlow<Uri?> = MutableStateFlow(null),
@@ -234,7 +256,7 @@ fun AppNavigation(
   }
 
   DisposableEffect(appSettings.screenCaptureShield, context) {
-    val window = (context as? Activity)?.window
+    val window = context.findActivity()?.window
     if (appSettings.screenCaptureShield) {
       window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
     } else {
@@ -243,8 +265,25 @@ fun AppNavigation(
     onDispose {}
   }
 
+  val activeLanguage = appSettings.activeLanguage
+  val activeLocale = remember(activeLanguage) { activeLanguage.toLocale() }
+  val localizedContext = remember(context, activeLanguage) {
+    val config = Configuration(context.resources.configuration)
+    config.setLocale(activeLocale)
+    config.setLayoutDirection(activeLocale)
+    context.createConfigurationContext(config)
+  }
+  val gameStrings = remember(activeLanguage) { GameStringsCatalog.forLanguage(activeLanguage) }
+  val layoutDirection = if (activeLanguage.isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
+
   val currentUserId = signedInGoogleUid ?: LOCAL_OPERATOR_ID
 
+  CompositionLocalProvider(
+    LocalContext provides localizedContext,
+    LocalConfiguration provides localizedContext.resources.configuration,
+    LocalLayoutDirection provides layoutDirection,
+    LocalGameStrings provides gameStrings,
+  ) {
   UnknownUniversesTheme(
     darkTheme = appSettings.effectiveDarkTheme,
     settings = appSettings,
@@ -252,6 +291,8 @@ fun AppNavigation(
     if (!isSessionActive) {
       AuthScreen(
         initialCallsign = activeCallsign,
+        selectedLanguageCode = activeLanguage.code,
+        onSelectLanguage = { code -> settingsStore.selectLanguage(code) },
         onBootLocalOperator = { callsign ->
           activeCallsign = callsign
           prefs.edit {
@@ -294,6 +335,7 @@ fun AppNavigation(
               else putString(KEY_VAULT_WALLPAPER, path)
             }
           },
+          onSelectLanguage = { code -> settingsStore.selectLanguage(code) },
           pendingOAuthRedirect = pendingOAuthRedirect,
           onConsumeRedirect = onConsumeRedirect,
           onRegisterIntegrityCheck = { valid, fn ->
@@ -327,8 +369,13 @@ fun AppNavigation(
           progressionIntegrityValid = valid
           valid
         },
+        onSelectRegion = { id -> settingsStore.selectRegion(id) },
+        onSelectServer = { id -> settingsStore.selectServer(id) },
+        onToggleRegionDefaultSettings = { enabled -> settingsStore.setUseRegionDefaultSettings(enabled) },
+        onSelectLanguage = { code -> settingsStore.selectLanguage(code) },
       )
     }
+  }
   }
 }
 
@@ -342,12 +389,14 @@ fun UnknownOsShell(
   isSettingsOpen: Boolean = false,
   onOpenSettings: () -> Unit = {},
   onSetWallpaperPath: (String?) -> Unit,
+  onSelectLanguage: (String) -> Unit = {},
   pendingOAuthRedirect: StateFlow<Uri?>,
   onConsumeRedirect: () -> Unit,
   onRegisterIntegrityCheck: (Boolean, () -> Boolean) -> Unit = { _, _ -> },
   onLockSession: () -> Unit,
 ) {
   val context = LocalContext.current
+  val gameStrings = LocalGameStrings.current
   val scope = rememberCoroutineScope()
   val credentialManager = remember(context) { CredentialManager.create(context) }
   var isGoogleSigningIn by remember { mutableStateOf(false) }
@@ -443,7 +492,7 @@ fun UnknownOsShell(
 
   val hideBarsForArena = appSettings.immersiveFullscreen && activeTab == OsWorkspaceTab.ARENA_PLAY
   DisposableEffect(hideBarsForArena, context) {
-    val window = (context as? Activity)?.window
+    val window = context.findActivity()?.window
     if (window != null) {
       val controller = WindowCompat.getInsetsController(window, window.decorView)
       if (hideBarsForArena) {
@@ -473,16 +522,17 @@ fun UnknownOsShell(
             containerColor = MaterialTheme.colorScheme.surface,
           ) {
             OsWorkspaceTab.entries.forEach { tab ->
+              val tabText = tab.localizedLabel(gameStrings)
               NavigationBarItem(
                 selected = activeTab == tab,
                 onClick = { viewModel.selectTab(tab) },
                 icon = {
                   Icon(
                     imageVector = tabIcon(tab),
-                    contentDescription = tab.label,
+                    contentDescription = tabText,
                   )
                 },
-                label = { Text(tab.label, maxLines = 1) },
+                label = { Text(tabText, maxLines = 1) },
                 modifier = Modifier.testTag("nav_${tab.routeTag}"),
               )
             }
@@ -499,16 +549,17 @@ fun UnknownOsShell(
             modifier = Modifier.fillMaxHeight(),
           ) {
             OsWorkspaceTab.entries.forEach { tab ->
+              val tabText = tab.localizedLabel(gameStrings)
               NavigationRailItem(
                 selected = activeTab == tab,
                 onClick = { viewModel.selectTab(tab) },
                 icon = {
                   Icon(
                     imageVector = tabIcon(tab),
-                    contentDescription = tab.label,
+                    contentDescription = tabText,
                   )
                 },
-                label = { Text(tab.label) },
+                label = { Text(tabText) },
                 modifier = Modifier.testTag("rail_${tab.routeTag}"),
               )
             }
@@ -625,6 +676,8 @@ fun UnknownOsShell(
                   onDeployArea = viewModel::deployToAreaAndPlay,
                   onUpdateCollectionCustomMode = viewModel::updateCollectionCustomMode,
                   onDeployCollectionCustomMode = viewModel::deployCollectionCustomMode,
+                  activeLanguage = appSettings.activeLanguage,
+                  onSelectLanguage = onSelectLanguage,
                   onSignOut = onLockSession,
                 )
 

@@ -65,6 +65,7 @@ data class EssenceResonanceBonuses(
   val lootLuckBonus: Float,
   val summary: String,
   val extendedSourcesSummary: String = "",
+  val cooldownHasteBonus: Float = 0f,
 ) {
   companion object {
     const val MAX_SYNERGY_MAPS: Int = 30
@@ -105,9 +106,9 @@ data class EssenceResonanceBonuses(
       val combinedRate = (cScale * 0.24f).coerceAtMost(3.60f) + ln(1f + (cScale - 15f).coerceAtLeast(0f)) * 0.55f
       val fireRateMult = 1.0f + yellowRate + redRate + combinedRate
 
-      val yellowCdr = (yScale * 0.045f).coerceAtMost(0.68f)
-      val combinedCdr = (cScale * 0.065f).coerceAtMost(0.82f)
-      val cooldownReductionRatio = (1f - (1f - yellowCdr) * (1f - combinedCdr)).coerceIn(0f, 0.90f)
+      // Uncapped Cooldown Haste: scales monotonically without hitting a hard plateau.
+      val hasteBonus = (yScale * 0.08f) + (cScale * 0.14f) + (bScale * 0.03f) + (shardBoost * 0.25f)
+      val cooldownReductionRatio = (1f - (1f / (1f + hasteBonus))).coerceIn(0f, 0.99f)
 
       val regenBonus = ((gScale * 1.4f).coerceAtMost(26f) + (cScale * 2.2f).coerceAtMost(38f))
       val lootLuck = (bScale * 0.05f + cScale * 0.12f).coerceAtMost(3.5f)
@@ -115,6 +116,7 @@ data class EssenceResonanceBonuses(
       val dmgPct = ((damageMult - 1f) * 100f).toInt()
       val shdPct = ((shieldMult - 1f) * 100f).toInt()
       val spdPct = ((fireRateMult - 1f) * 100f).toInt()
+      val hastePct = (hasteBonus * 100f).toInt()
       return EssenceResonanceBonuses(
         damageMult = damageMult,
         shieldMult = shieldMult,
@@ -123,7 +125,8 @@ data class EssenceResonanceBonuses(
         cooldownReductionRatio = cooldownReductionRatio,
         regenBonusPerSec = regenBonus,
         lootLuckBonus = lootLuck,
-        summary = "+${dmgPct}% DMG • +${shdPct}% SHD • +${spdPct}% RATE",
+        summary = "+${dmgPct}% DMG • +${shdPct}% SHD • +${spdPct}% RATE • +${hastePct}% HASTE",
+        cooldownHasteBonus = hasteBonus,
       )
     }
 
@@ -157,6 +160,11 @@ data class EssenceResonanceBonuses(
       serverDamageMult: Float = 1.0f,
       serverShieldMult: Float = 1.0f,
       serverFireRateMult: Float = 1.0f,
+      protectionRankSum: Int = 0,
+      perkStarSum: Int = 0,
+      customBuffTierSum: Int = 0,
+      blastShardTier: Int = 1,
+      companionBuffTier: Int = 1,
     ): EssenceResonanceBonuses {
       // Spent Blue Essence preserves and amplifies resonance so upgrading never weakens stats!
       val effectiveBlue = blueEssence.coerceAtLeast(0L) + (blueEssenceSpent.coerceAtLeast(0L) / 2L)
@@ -184,26 +192,49 @@ data class EssenceResonanceBonuses(
         (armoryModTotalTiers.coerceAtLeast(0L) * 0.018f) +
         sqrt(armoryModTotalPower.coerceAtLeast(0L) / 140f) * 0.10f
 
-      val arsenalDmg = (weaponTierSum * 0.03f) + (weaponStarSum * 0.035f) + (customWeaponCount * 0.08f) + (wonderTierSum * 0.025f)
-      val gearShd = (gearTierSum * 0.045f) + (gearLevelSum * 0.008f) + (equipmentTierSum * 0.035f) + (outfitTierSum * 0.02f) + (outfitRarityRank * 0.09f)
-      val skillRate = (skillTierSum * 0.020f) + (equipmentTierSum * 0.022f) + (perkRankSum * 0.024f) + (blastCoreLevelSum * 0.025f)
-      val clanAndNgBonus = (clanLevel * 0.03f) + (ngPlusTier * 0.12f)
+      val shardTierAbove = (blastShardTier - 1).coerceAtLeast(0)
+      val companionTierAbove = (companionBuffTier - 1).coerceAtLeast(0)
+      val globalPerkSynergy = 1f + (perkRankSum * 0.015f) + (perkStarSum * 0.03f)
 
-      val finalDmg = (base.damageMult + mapDmg + modDmg + arsenalDmg + (perkRankSum * 0.02f) + (blastCoreLevelSum * 0.03f) + clanAndNgBonus) * serverDamageMult
-      val finalShd = (base.shieldMult + mapShd + modShd + gearShd + (perkRankSum * 0.025f) + (blastCoreLevelSum * 0.03f) + clanAndNgBonus) * serverShieldMult
-      val finalRate = (base.fireRateMult + mapRate + modRate + skillRate + (customWeaponCount * 0.05f)) * serverFireRateMult
-      val finalMove = base.moveSpeedMult + (effectiveMaps * 0.015f) + (armoryModTotalTiers * 0.006f) + (perkRankSum * 0.012f)
-      val extraCdr = (1f - (1f - base.cooldownReductionRatio) *
-        (1f - (effectiveMaps * 0.006f).coerceAtMost(0.22f)) *
-        (1f - (skillTierSum * 0.004f).coerceAtMost(0.25f)) *
-        (1f - (armoryModTotalTiers * 0.003f).coerceAtMost(0.20f))).coerceIn(0f, 0.92f)
-      val finalRegen = base.regenBonusPerSec + (effectiveMaps * 0.45f) + (gearTierSum * 0.35f) + (perkRankSum * 0.5f)
-      val finalLuck = base.lootLuckBonus + (effectiveMaps * 0.04f) + (armoryModCount * 0.03f)
+      val arsenalDmg = (weaponTierSum * 0.03f) + (weaponStarSum * 0.035f) + (customWeaponCount * 0.08f) + (wonderTierSum * 0.025f)
+      val gearShd = (gearTierSum * 0.045f) + (gearLevelSum * 0.008f) + (equipmentTierSum * 0.035f) +
+        (outfitTierSum * 0.02f) + (outfitRarityRank * 0.09f) + (protectionRankSum * 0.04f) + (customBuffTierSum * 0.035f)
+      val skillRate = (skillTierSum * 0.020f) + (equipmentTierSum * 0.022f) +
+        (perkRankSum * 0.026f * globalPerkSynergy) + (blastCoreLevelSum * 0.025f) + (companionTierAbove * 0.03f)
+      val clanAndNgBonus = (clanLevel * 0.03f) + (ngPlusTier * 0.12f) + (shardTierAbove * 0.05f)
+
+      val finalDmg = (base.damageMult + mapDmg + modDmg + arsenalDmg + (perkRankSum * 0.024f * globalPerkSynergy) +
+        (perkStarSum * 0.04f) + (blastCoreLevelSum * 0.03f) + (customBuffTierSum * 0.03f) + clanAndNgBonus) * serverDamageMult
+      val finalShd = (base.shieldMult + mapShd + modShd + gearShd + (perkRankSum * 0.028f * globalPerkSynergy) +
+        (perkStarSum * 0.04f) + (blastCoreLevelSum * 0.03f) + clanAndNgBonus) * serverShieldMult
+      val finalRate = (base.fireRateMult + mapRate + modRate + skillRate + (customWeaponCount * 0.05f) +
+        (customBuffTierSum * 0.025f) + (shardTierAbove * 0.03f)) * serverFireRateMult
+      val finalMove = base.moveSpeedMult + (effectiveMaps * 0.015f) + (armoryModTotalTiers * 0.006f) +
+        (perkRankSum * 0.014f * globalPerkSynergy) + (protectionRankSum * 0.008f) + (companionTierAbove * 0.015f)
+
+      // Uncapped cumulative Cooldown Haste across all upgrades, skills, perks, gear, maps, and essences
+      val totalHaste = base.cooldownHasteBonus +
+        (effectiveMaps * 0.018f) +
+        (skillTierSum * 0.022f) +
+        (armoryModTotalTiers * 0.010f) +
+        (equipmentTierSum * 0.020f) +
+        (gearTierSum * 0.015f) +
+        (perkRankSum * 0.018f * globalPerkSynergy) +
+        (perkStarSum * 0.03f) +
+        (protectionRankSum * 0.015f) +
+        (customBuffTierSum * 0.025f) +
+        (blastCoreLevelSum * 0.022f) +
+        (shardTierAbove * 0.03f) +
+        (companionTierAbove * 0.025f)
+      val extraCdr = (1f - (1f / (1f + totalHaste))).coerceIn(0f, 0.99f)
+      val finalRegen = base.regenBonusPerSec + (effectiveMaps * 0.45f) + (gearTierSum * 0.35f) +
+        (perkRankSum * 0.55f * globalPerkSynergy) + (protectionRankSum * 0.4f) + (customBuffTierSum * 0.4f)
+      val finalLuck = base.lootLuckBonus + (effectiveMaps * 0.04f) + (armoryModCount * 0.03f) + (shardTierAbove * 0.05f)
 
       val dmgPct = ((finalDmg - 1f) * 100f).toInt()
       val shdPct = ((finalShd - 1f) * 100f).toInt()
       val spdPct = ((finalRate - 1f) * 100f).toInt()
-      val cdrPct = (extraCdr * 100f).toInt()
+      val hastePct = (totalHaste * 100f).toInt()
       return EssenceResonanceBonuses(
         damageMult = finalDmg,
         shieldMult = finalShd,
@@ -212,8 +243,9 @@ data class EssenceResonanceBonuses(
         cooldownReductionRatio = extraCdr,
         regenBonusPerSec = finalRegen,
         lootLuckBonus = finalLuck,
-        summary = "+${dmgPct}% DMG • +${shdPct}% SHD • +${spdPct}% RATE • ${cdrPct}% CDR",
-        extendedSourcesSummary = "Sources: Essences + ${blueEssenceSpent} Spent • $effectiveMaps/$MAX_SYNERGY_MAPS Maps • $armoryModCount Mods (T$armoryModTotalTiers) • Gear/Skills/Wpn/Cores",
+        summary = "+${dmgPct}% DMG • +${shdPct}% SHD • +${spdPct}% RATE • +${hastePct}% HASTE",
+        extendedSourcesSummary = "Sources: Essences + ${blueEssenceSpent} Spent • $effectiveMaps/$MAX_SYNERGY_MAPS Maps • $armoryModCount Mods • Perks(x${String.format(java.util.Locale.US, "%.2f", globalPerkSynergy)}) • Prot($protectionRankSum) • Custom($customBuffTierSum) • ShardT$blastShardTier/CompT$companionBuffTier",
+        cooldownHasteBonus = totalHaste,
       )
     }
   }
@@ -266,6 +298,12 @@ enum class CharacterUniverseGroup(val id: String, val label: String) {
   FLASH("flash", "The Flash"),
   GREEN_LANTERN("green_lantern", "Green Lantern"),
   ABYSS_DUNGEONS("abyss_dungeons", "Abyss of Dungeons"),
+  GTA4_LIBERTY("gta4_liberty", "GTA IV Liberty"),
+  COD_PRIMIS("cod_primis", "CoD Operators"),
+  ARKHAM_KNIGHTS("arkham_knights", "Arkham Allies"),
+  BLACKLIGHT_HELLER("blacklight_heller", "Sgt. Heller"),
+  INFAMOUS_DELSIN("infamous_delsin", "Delsin Rowe"),
+  KRYPTON_APEX("krypton_apex", "Supergirl & Zod"),
 }
 
 @Immutable
@@ -1480,6 +1518,414 @@ object MultiverseArsenalCatalog {
       baseFireRateBonus = 0.32f,
       isOriginalCharacter = false,
       originTag = "Abyss of Dungeons",
+    ),
+
+    // GTA IV LIBERTY CITY (NIKO BELLIC / JOHNNY / LUIS - v1, v2, v3)
+    HeroOutfitSpec(
+      id = "niko_v1",
+      characterGroup = CharacterUniverseGroup.GTA4_LIBERTY,
+      nameWithVersion = "Niko Bellic v1",
+      subtitle = "Hove Beach Tracksuit & Heavy AK Rig",
+      rigArchetype = "operator",
+      primaryHex = 0xFF37474F,
+      secondaryHex = 0xFFFFAB40,
+      visorHex = 0xFFFFD54F,
+      cloakEnabled = false,
+      auraId = "none",
+      signatureSkillSummary = "Liberty Carbine Precision & Heavy Body Armor",
+      signatureGearSummary = "Hove Beach Leather Jacket & Kevlar Vest",
+      signatureLethalId = "lethal_frag",
+      signatureTacticalId = "tactical_stim",
+      baseShieldBonus = 140,
+      baseDamageBonus = 8,
+      baseMoveBonus = 0.22f,
+      baseFireRateBonus = 0.24f,
+      isOriginalCharacter = false,
+      originTag = "GTA IV Liberty City",
+    ),
+    HeroOutfitSpec(
+      id = "niko_v2",
+      characterGroup = CharacterUniverseGroup.GTA4_LIBERTY,
+      nameWithVersion = "Niko Bellic v2",
+      subtitle = "Algonquin Tailored Suit & Three-Leaf Clover",
+      rigArchetype = "operator",
+      primaryHex = 0xFF1C2331,
+      secondaryHex = 0xFF00E676,
+      visorHex = 0xFF00E5FF,
+      cloakEnabled = false,
+      auraId = "pulse_ring",
+      signatureSkillSummary = "Bank Heist Armored Advance & Dual SMG Cadence",
+      signatureGearSummary = "Algonquin Tactical Suit & NOOSE Riot Plate",
+      signatureLethalId = "lethal_c4",
+      signatureTacticalId = "tactical_emp",
+      baseShieldBonus = 175,
+      baseDamageBonus = 11,
+      baseMoveBonus = 0.25f,
+      baseFireRateBonus = 0.28f,
+      isOriginalCharacter = false,
+      originTag = "GTA IV Liberty City",
+    ),
+    HeroOutfitSpec(
+      id = "niko_v3",
+      characterGroup = CharacterUniverseGroup.GTA4_LIBERTY,
+      nameWithVersion = "Niko Bellic v3",
+      subtitle = "Alderney Annihilator Apex Sovereign",
+      rigArchetype = "infernal",
+      primaryHex = 0xFF212121,
+      secondaryHex = 0xFFFF5252,
+      visorHex = 0xFFFFAB40,
+      cloakEnabled = false,
+      auraId = "infernal_flare",
+      signatureSkillSummary = "RPG Warhead Volley & 6-Star Wanted Shield Surge",
+      signatureGearSummary = "NOOSE Heavy Enforcer Exoskeleton",
+      signatureLethalId = "lethal_cluster",
+      signatureTacticalId = "tactical_insertion",
+      baseShieldBonus = 215,
+      baseDamageBonus = 14,
+      baseMoveBonus = 0.27f,
+      baseFireRateBonus = 0.32f,
+      isOriginalCharacter = false,
+      originTag = "GTA IV Liberty City",
+    ),
+
+    // CALL OF DUTY OPERATORS (GHOST / SOAP / PRIMIS - v1, v2, v3)
+    HeroOutfitSpec(
+      id = "cod_ghost_v1",
+      characterGroup = CharacterUniverseGroup.COD_PRIMIS,
+      nameWithVersion = "Ghost Ops v1",
+      subtitle = "Task Force 141 Tactical Skull Rig",
+      rigArchetype = "operator",
+      primaryHex = 0xFF263238,
+      secondaryHex = 0xFF00E5FF,
+      visorHex = 0xFFFF5252,
+      cloakEnabled = false,
+      auraId = "none",
+      signatureSkillSummary = "Sleight-of-Hand Reload & Stopping Power Rounds",
+      signatureGearSummary = "Skull Balaclava & Juggernog Ballistic Vest",
+      signatureLethalId = "lethal_frag",
+      signatureTacticalId = "tactical_stim",
+      baseShieldBonus = 135,
+      baseDamageBonus = 9,
+      baseMoveBonus = 0.26f,
+      baseFireRateBonus = 0.30f,
+      isOriginalCharacter = false,
+      originTag = "Call of Duty",
+    ),
+    HeroOutfitSpec(
+      id = "cod_ghost_v2",
+      characterGroup = CharacterUniverseGroup.COD_PRIMIS,
+      nameWithVersion = "Ghost Ops v2",
+      subtitle = "BO3 BlackCell Dark-Aether Specialist",
+      rigArchetype = "chrono",
+      primaryHex = 0xFF101824,
+      secondaryHex = 0xFFE040FB,
+      visorHex = 0xFF00E676,
+      cloakEnabled = true,
+      auraId = "chrono_spark",
+      signatureSkillSummary = "Pack-a-Punch Weapon Boost & Quick-Revive Surge",
+      signatureGearSummary = "Element-115 Reactive Combat Exosuit",
+      signatureLethalId = "lethal_c4",
+      signatureTacticalId = "tactical_emp",
+      baseShieldBonus = 180,
+      baseDamageBonus = 12,
+      baseMoveBonus = 0.28f,
+      baseFireRateBonus = 0.35f,
+      isOriginalCharacter = false,
+      originTag = "Call of Duty",
+    ),
+    HeroOutfitSpec(
+      id = "cod_ghost_v3",
+      characterGroup = CharacterUniverseGroup.COD_PRIMIS,
+      nameWithVersion = "Ghost Ops v3",
+      subtitle = "Primis BlackCell Apex Mk.III",
+      rigArchetype = "starblade",
+      primaryHex = 0xFF18120B,
+      secondaryHex = 0xFFFFD54F,
+      visorHex = 0xFFFF3D71,
+      cloakEnabled = true,
+      auraId = "infernal_flare",
+      signatureSkillSummary = "Apothicon Wonder Amplifier & Double-Tap Barrage",
+      signatureGearSummary = "Golden BlackCell Aether Sovereign Plate",
+      signatureLethalId = "lethal_cluster",
+      signatureTacticalId = "tactical_insertion",
+      baseShieldBonus = 220,
+      baseDamageBonus = 15,
+      baseMoveBonus = 0.31f,
+      baseFireRateBonus = 0.40f,
+      isOriginalCharacter = false,
+      originTag = "Call of Duty",
+    ),
+
+    // BATMAN ARKHAM ALLIES (NIGHTWING / RED HOOD / KNIGHTFALL - v1, v2, v3)
+    HeroOutfitSpec(
+      id = "nightwing_v1",
+      characterGroup = CharacterUniverseGroup.ARKHAM_KNIGHTS,
+      nameWithVersion = "Nightwing v1",
+      subtitle = "Bludhaven Electric Escrima Suit",
+      rigArchetype = "operator",
+      primaryHex = 0xFF0D1B2A,
+      secondaryHex = 0xFF00B0FF,
+      visorHex = 0xFF00E5FF,
+      cloakEnabled = false,
+      auraId = "pulse_ring",
+      signatureSkillSummary = "Shock Escrima Combo & Arkham Freeflow Evade",
+      signatureGearSummary = "Bludhaven Wing-Crest Kevlar Weave",
+      signatureLethalId = "lethal_frag",
+      signatureTacticalId = "tactical_emp",
+      baseShieldBonus = 130,
+      baseDamageBonus = 9,
+      baseMoveBonus = 0.32f,
+      baseFireRateBonus = 0.32f,
+      isOriginalCharacter = false,
+      originTag = "Batman Arkham",
+    ),
+    HeroOutfitSpec(
+      id = "nightwing_v2",
+      characterGroup = CharacterUniverseGroup.ARKHAM_KNIGHTS,
+      nameWithVersion = "Red Hood v2",
+      subtitle = "Arkham Knight Crimson Vigilante",
+      rigArchetype = "infernal",
+      primaryHex = 0xFF1A1F29,
+      secondaryHex = 0xFFD50000,
+      visorHex = 0xFFFF1744,
+      cloakEnabled = false,
+      auraId = "infernal_flare",
+      signatureSkillSummary = "Dual Pistol Ricochet & Heavy Armor Disruptor",
+      signatureGearSummary = "Crimson Tactical Helmet & Reinforced Jacket",
+      signatureLethalId = "lethal_c4",
+      signatureTacticalId = "tactical_decoy",
+      baseShieldBonus = 165,
+      baseDamageBonus = 12,
+      baseMoveBonus = 0.28f,
+      baseFireRateBonus = 0.36f,
+      isOriginalCharacter = false,
+      originTag = "Batman Arkham",
+    ),
+    HeroOutfitSpec(
+      id = "nightwing_v3",
+      characterGroup = CharacterUniverseGroup.ARKHAM_KNIGHTS,
+      nameWithVersion = "Arkham Ally v3",
+      subtitle = "Wayne-Tech Knightfall Sovereign Exo",
+      rigArchetype = "starblade",
+      primaryHex = 0xFF0B0E17,
+      secondaryHex = 0xFFFFD54F,
+      visorHex = 0xFF00E5FF,
+      cloakEnabled = true,
+      auraId = "chrono_spark",
+      signatureSkillSummary = "Multi-Batarang Swarm & Disruptor Overload",
+      signatureGearSummary = "Batcomputer Tri-Weave Exo-Gauntlets",
+      signatureLethalId = "lethal_cluster",
+      signatureTacticalId = "tactical_insertion",
+      baseShieldBonus = 210,
+      baseDamageBonus = 14,
+      baseMoveBonus = 0.33f,
+      baseFireRateBonus = 0.35f,
+      isOriginalCharacter = false,
+      originTag = "Batman Arkham",
+    ),
+
+    // PROTOTYPE 2 SGT. JAMES HELLER (v1, v2, v3)
+    HeroOutfitSpec(
+      id = "heller_v1",
+      characterGroup = CharacterUniverseGroup.BLACKLIGHT_HELLER,
+      nameWithVersion = "James Heller v1",
+      subtitle = "NYZ Red-Zone Tendril Bioweapon",
+      rigArchetype = "biomorph",
+      primaryHex = 0xFF21161C,
+      secondaryHex = 0xFFFF3D00,
+      visorHex = 0xFFFFAB40,
+      cloakEnabled = true,
+      auraId = "infernal_flare",
+      signatureSkillSummary = "Bio-Tendril Pull & Blacklight Siphon",
+      signatureGearSummary = "Infected Leather Jacket & Bio-Tendril Arms",
+      signatureLethalId = "lethal_molotov",
+      signatureTacticalId = "tactical_stim",
+      baseShieldBonus = 155,
+      baseDamageBonus = 10,
+      baseMoveBonus = 0.28f,
+      baseFireRateBonus = 0.28f,
+      isOriginalCharacter = false,
+      originTag = "Prototype 2",
+    ),
+    HeroOutfitSpec(
+      id = "heller_v2",
+      characterGroup = CharacterUniverseGroup.BLACKLIGHT_HELLER,
+      nameWithVersion = "James Heller v2",
+      subtitle = "Alpha Hammerfist & Blade Form",
+      rigArchetype = "biomorph",
+      primaryHex = 0xFF2D0A14,
+      secondaryHex = 0xFFFF1744,
+      visorHex = 0xFFFF5252,
+      cloakEnabled = true,
+      auraId = "pulse_ring",
+      signatureSkillSummary = "Devastator Shockwave & Armored Tendril Surge",
+      signatureGearSummary = "Chitinous Bio-Plate & Hammerfist Gauntlets",
+      signatureLethalId = "lethal_cluster",
+      signatureTacticalId = "tactical_emp",
+      baseShieldBonus = 195,
+      baseDamageBonus = 13,
+      baseMoveBonus = 0.29f,
+      baseFireRateBonus = 0.30f,
+      isOriginalCharacter = false,
+      originTag = "Prototype 2",
+    ),
+    HeroOutfitSpec(
+      id = "heller_v3",
+      characterGroup = CharacterUniverseGroup.BLACKLIGHT_HELLER,
+      nameWithVersion = "James Heller v3",
+      subtitle = "Apex Consume Sovereign Mk.III",
+      rigArchetype = "infernal",
+      primaryHex = 0xFF14050B,
+      secondaryHex = 0xFFE040FB,
+      visorHex = 0xFFFFD54F,
+      cloakEnabled = true,
+      auraId = "infernal_flare",
+      signatureSkillSummary = "Pack Leader Bio-Bomb & Max Shield Consume",
+      signatureGearSummary = "Apex Mercer-Heller Biomass Armor",
+      signatureLethalId = "lethal_c4",
+      signatureTacticalId = "tactical_insertion",
+      baseShieldBonus = 235,
+      baseDamageBonus = 15,
+      baseMoveBonus = 0.32f,
+      baseFireRateBonus = 0.33f,
+      isOriginalCharacter = false,
+      originTag = "Prototype 2",
+    ),
+
+    // INFAMOUS SECOND SON DELSIN ROWE (v1, v2, v3)
+    HeroOutfitSpec(
+      id = "delsin_v1",
+      characterGroup = CharacterUniverseGroup.INFAMOUS_DELSIN,
+      nameWithVersion = "Delsin Rowe v1",
+      subtitle = "Seattle Smoke & Cinder Chain",
+      rigArchetype = "chrono",
+      primaryHex = 0xFF1C2430,
+      secondaryHex = 0xFFFF6D00,
+      visorHex = 0xFFFFAB40,
+      cloakEnabled = false,
+      auraId = "infernal_flare",
+      signatureSkillSummary = "Cinder Dash & Smoke Orbital Drop",
+      signatureGearSummary = "Crimson Beanie & DUP Chain Vest",
+      signatureLethalId = "lethal_molotov",
+      signatureTacticalId = "tactical_decoy",
+      baseShieldBonus = 125,
+      baseDamageBonus = 9,
+      baseMoveBonus = 0.33f,
+      baseFireRateBonus = 0.31f,
+      isOriginalCharacter = false,
+      originTag = "inFamous",
+    ),
+    HeroOutfitSpec(
+      id = "delsin_v2",
+      characterGroup = CharacterUniverseGroup.INFAMOUS_DELSIN,
+      nameWithVersion = "Delsin Rowe v2",
+      subtitle = "Neon Stasis & Light-Speed Dash",
+      rigArchetype = "chrono",
+      primaryHex = 0xFF1A0E2E,
+      secondaryHex = 0xFFE040FB,
+      visorHex = 0xFF00E5FF,
+      cloakEnabled = false,
+      auraId = "pulse_ring",
+      signatureSkillSummary = "Neon Laser Pinpoint & Light-Speed Sprint",
+      signatureGearSummary = "Neon Ray-Conduit Gauntlets",
+      signatureLethalId = "lethal_cluster",
+      signatureTacticalId = "tactical_emp",
+      baseShieldBonus = 155,
+      baseDamageBonus = 11,
+      baseMoveBonus = 0.40f,
+      baseFireRateBonus = 0.38f,
+      isOriginalCharacter = false,
+      originTag = "inFamous",
+    ),
+    HeroOutfitSpec(
+      id = "delsin_v3",
+      characterGroup = CharacterUniverseGroup.INFAMOUS_DELSIN,
+      nameWithVersion = "Delsin Rowe v3",
+      subtitle = "Video & Concrete Angel Sovereign",
+      rigArchetype = "starblade",
+      primaryHex = 0xFF0B1C2E,
+      secondaryHex = 0xFF00E5FF,
+      visorHex = 0xFFFFFFFF,
+      cloakEnabled = true,
+      auraId = "chrono_spark",
+      signatureSkillSummary = "Video Wing Barrage & Concrete Armor Barrage",
+      signatureGearSummary = "Tri-Conduit Banner Exosuit",
+      signatureLethalId = "lethal_c4",
+      signatureTacticalId = "tactical_insertion",
+      baseShieldBonus = 195,
+      baseDamageBonus = 14,
+      baseMoveBonus = 0.42f,
+      baseFireRateBonus = 0.40f,
+      isOriginalCharacter = false,
+      originTag = "inFamous",
+    ),
+
+    // KRYPTON APEX: SUPERGIRL & GENERAL ZOD (v1, v2, v3)
+    HeroOutfitSpec(
+      id = "krypton_v1",
+      characterGroup = CharacterUniverseGroup.KRYPTON_APEX,
+      nameWithVersion = "Supergirl v1",
+      subtitle = "National City Solar Cape Defender",
+      rigArchetype = "starblade",
+      primaryHex = 0xFF1565C0,
+      secondaryHex = 0xFFD50000,
+      visorHex = 0xFF00E5FF,
+      cloakEnabled = true,
+      auraId = "pulse_ring",
+      signatureSkillSummary = "Solar Flare Pulse & Arctic Freeze Breath",
+      signatureGearSummary = "House of El Crimson Crest & Solar Cape",
+      signatureLethalId = "lethal_cluster",
+      signatureTacticalId = "tactical_stim",
+      baseShieldBonus = 175,
+      baseDamageBonus = 10,
+      baseMoveBonus = 0.32f,
+      baseFireRateBonus = 0.28f,
+      isOriginalCharacter = false,
+      originTag = "Superman Returns",
+    ),
+    HeroOutfitSpec(
+      id = "krypton_v2",
+      characterGroup = CharacterUniverseGroup.KRYPTON_APEX,
+      nameWithVersion = "General Zod v2",
+      subtitle = "Kryptonian Black-Steel Warlord",
+      rigArchetype = "infernal",
+      primaryHex = 0xFF14181F,
+      secondaryHex = 0xFF90A4AE,
+      visorHex = 0xFFFF1744,
+      cloakEnabled = true,
+      auraId = "infernal_flare",
+      signatureSkillSummary = "Thermal Heat-Vision Sweep & Heavy Battle Armor",
+      signatureGearSummary = "Phantom Zone Warlord Armor Plate",
+      signatureLethalId = "lethal_c4",
+      signatureTacticalId = "tactical_emp",
+      baseShieldBonus = 220,
+      baseDamageBonus = 13,
+      baseMoveBonus = 0.28f,
+      baseFireRateBonus = 0.30f,
+      isOriginalCharacter = false,
+      originTag = "Superman Returns",
+    ),
+    HeroOutfitSpec(
+      id = "krypton_v3",
+      characterGroup = CharacterUniverseGroup.KRYPTON_APEX,
+      nameWithVersion = "Krypton Apex v3",
+      subtitle = "Twin-Sun Sovereign Mk.III",
+      rigArchetype = "starblade",
+      primaryHex = 0xFF0D2149,
+      secondaryHex = 0xFFFFD54F,
+      visorHex = 0xFFFFEA00,
+      cloakEnabled = true,
+      auraId = "chrono_spark",
+      signatureSkillSummary = "Orbital Sun-Beam Volley & Apex Shield Matrix",
+      signatureGearSummary = "Fortress Celestial Exo-Mantle",
+      signatureLethalId = "lethal_cluster",
+      signatureTacticalId = "tactical_insertion",
+      baseShieldBonus = 250,
+      baseDamageBonus = 16,
+      baseMoveBonus = 0.35f,
+      baseFireRateBonus = 0.36f,
+      isOriginalCharacter = false,
+      originTag = "Superman Returns",
     ),
   )
 

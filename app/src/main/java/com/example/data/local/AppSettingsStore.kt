@@ -88,7 +88,13 @@ data class AppSettings(
   val selectedRegionId: String = WorldRegion.NA_EAST.id,
   val selectedServerId: String = "srv_na_east_1",
   val useRegionDefaultSettings: Boolean = true,
+
+  // 8. Language & Localization
+  val selectedLanguageCode: String = AppLanguage.ENGLISH.code,
 ) {
+  val activeLanguage: AppLanguage
+    get() = AppLanguage.fromCode(selectedLanguageCode)
+
   val activeRegion: WorldRegion
     get() = WorldRegion.fromId(selectedRegionId)
 
@@ -289,6 +295,13 @@ class AppSettingsStore(context: Context) {
     }
   }
 
+  fun selectLanguage(code: String) {
+    val resolved = AppLanguage.fromCode(code)
+    update { current ->
+      current.copy(selectedLanguageCode = resolved.code)
+    }
+  }
+
   private fun sanitize(s: AppSettings): AppSettings = s.copy(
     joystickScale = s.joystickScale.coerceIn(0.8f, 1.4f),
     buttonScale = s.buttonScale.coerceIn(1.0f, 1.35f),
@@ -304,6 +317,7 @@ class AppSettingsStore(context: Context) {
     gameSpeedMultiplier = s.gameSpeedMultiplier.coerceIn(0.55f, 1.3f),
     musicVolume = s.musicVolume.coerceIn(0.0f, 0.70f),
     selectedMusicTrack = s.selectedMusicTrack.coerceIn(0, 2),
+    selectedLanguageCode = AppLanguage.fromCode(s.selectedLanguageCode).code,
   )
 
   private fun loadFromPrefs(): AppSettings {
@@ -354,6 +368,7 @@ class AppSettingsStore(context: Context) {
         selectedRegionId = prefs.getString("selected_region_id", d.selectedRegionId) ?: d.selectedRegionId,
         selectedServerId = prefs.getString("selected_server_id", d.selectedServerId) ?: d.selectedServerId,
         useRegionDefaultSettings = prefs.getBoolean("use_region_defaults", d.useRegionDefaultSettings),
+        selectedLanguageCode = prefs.getString("selected_language_code", d.selectedLanguageCode) ?: d.selectedLanguageCode,
       )
     )
   }
@@ -396,6 +411,7 @@ class AppSettingsStore(context: Context) {
       putString("selected_region_id", s.selectedRegionId)
       putString("selected_server_id", s.selectedServerId)
       putBoolean("use_region_defaults", s.useRegionDefaultSettings)
+      putString("selected_language_code", s.selectedLanguageCode)
     }
   }
 

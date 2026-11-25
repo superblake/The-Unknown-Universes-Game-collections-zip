@@ -64,7 +64,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.BuildConfig
 import com.example.R
+import com.example.data.local.AppLanguage
 import com.example.data.local.CloudSyncState
+import com.example.data.local.LocalGameStrings
 import com.example.data.local.SaveBundlePreview
 import com.example.data.model.AchievementState
 import com.example.data.model.ArmoryItem
@@ -140,8 +142,11 @@ fun OsDesktopScreen(
   onDeployArea: (String) -> Unit = { areaId -> onSelectArea(areaId); onLaunchArena() },
   onUpdateCollectionCustomMode: ((CollectionCustomModeConfig) -> CollectionCustomModeConfig) -> Unit = {},
   onDeployCollectionCustomMode: () -> Unit = {},
+  activeLanguage: AppLanguage = AppLanguage.ENGLISH,
+  onSelectLanguage: (String) -> Unit = {},
   onSignOut: () -> Unit,
 ) {
+  val gameStrings = LocalGameStrings.current
   val activeWorld = UniverseCatalog.worldById(profile.activeUniverseId)
   val activeMode = UniverseCatalog.modeById(profile.activeMode)
   val activeConsole = UniverseCatalog.consoleById(profile.consolePreset)
@@ -152,6 +157,7 @@ fun OsDesktopScreen(
   var showLobbyRosterDialog by remember { mutableStateOf(false) }
   var showCodesDialog by remember { mutableStateOf(false) }
   var showCustomModeDialog by remember { mutableStateOf(false) }
+  var showLanguageDialog by remember { mutableStateOf(false) }
   var callsignDraft by remember(profile.callsign) { mutableStateOf(profile.callsign) }
   val claimableAchievements = achievements.count { it.unlocked && !it.claimed }
   val haptic = LocalHapticFeedback.current
@@ -272,6 +278,19 @@ fun OsDesktopScreen(
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
+              OutlinedButton(
+                onClick = { showLanguageDialog = true },
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                modifier = Modifier.height(48.dp).testTag("os_language_btn"),
+              ) {
+                Text(
+                  text = activeLanguage.flagTag,
+                  style = MaterialTheme.typography.labelMedium,
+                  fontWeight = FontWeight.Bold,
+                  color = MaterialTheme.colorScheme.primary,
+                )
+              }
               IconButton(
                 onClick = onOpenSettings,
                 modifier = Modifier.size(48.dp).testTag("open_settings_button"),
@@ -1382,24 +1401,47 @@ fun OsDesktopScreen(
       }
     }
 
-    // Playable Arenas & Custom Locations Switcher
-    item {
-      val playableAreas = progression.allPlayableAreas()
-      Text(
-        text = "PLAYABLE ARENAS & CUSTOM MAPS (${playableAreas.size} ARENAS • BO3 CUSTOM • COLLECTIONS)",
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.primary,
-      )
-    }
-
+    // Playable Arenas & Custom Locations Switcher (Segregated by Current World vs All Worlds)
     item {
       val playableAreas = remember(progression.customGameMaps) { progression.allPlayableAreas() }
-      @OptIn(ExperimentalFoundationApi::class)
-      LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        modifier = Modifier.testTag("os_arenas_row"),
-      ) {
-        items(playableAreas, key = { it.id }) { area ->
+      var showAllWorldArenas by remember { mutableStateOf(false) }
+      val worldScopedAreas = remember(playableAreas, activeWorld.id, progression.activeAreaId, showAllWorldArenas) {
+        if (showAllWorldArenas) {
+          playableAreas
+        } else {
+          playableAreas.filter { it.linkedWorldId == activeWorld.id || it.id == progression.activeAreaId }
+            .ifEmpty { playableAreas }
+        }
+      }
+      val thisWorldCount = remember(playableAreas, activeWorld.id, progression.activeAreaId) {
+        playableAreas.count { it.linkedWorldId == activeWorld.id || it.id == progression.activeAreaId }
+      }
+      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+          text = "${gameStrings.playableArenas} (${worldScopedAreas.size}/${playableAreas.size} MAPS)",
+          style = MaterialTheme.typography.titleMedium,
+          color = MaterialTheme.colorScheme.primary,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          FilterChip(
+            selected = !showAllWorldArenas,
+            onClick = { showAllWorldArenas = false },
+            label = { Text("${gameStrings.thisWorld} ($thisWorldCount)") },
+            modifier = Modifier.heightIn(min = 48.dp).testTag("os_arenas_filter_world"),
+          )
+          FilterChip(
+            selected = showAllWorldArenas,
+            onClick = { showAllWorldArenas = true },
+            label = { Text("${gameStrings.allWorlds} (${playableAreas.size})") },
+            modifier = Modifier.heightIn(min = 48.dp).testTag("os_arenas_filter_all"),
+          )
+        }
+        @OptIn(ExperimentalFoundationApi::class)
+        LazyRow(
+          horizontalArrangement = Arrangement.spacedBy(10.dp),
+          modifier = Modifier.testTag("os_arenas_row"),
+        ) {
+          items(worldScopedAreas, key = { it.id }) { area ->
           val isSelected = area.id == progression.activeAreaId
           val areaSt = progression.areaState(area.id)
           val accent = Color(area.accentHex)
@@ -1442,7 +1484,7 @@ fun OsDesktopScreen(
                 )
                 if (isSelected) {
                   Text(
-                    text = "ACTIVE",
+                    text = gameStrings.activeBadge,
                     style = MaterialTheme.typography.labelSmall,
                     color = Color(0xFF00E676),
                     fontWeight = FontWeight.Bold,
@@ -1465,6 +1507,7 @@ fun OsDesktopScreen(
               )
             }
           }
+        }
         }
       }
     }
@@ -1632,6 +1675,71 @@ fun OsDesktopScreen(
       onDeploy = onDeployCollectionCustomMode,
       onDismiss = { showCustomModeDialog = false },
       customGameMaps = progression.customGameMaps,
+    )
+  }
+
+  if (showLanguageDialog) {
+    AlertDialog(
+      onDismissRequest = { showLanguageDialog = false },
+      title = { Text(gameStrings.chooseLanguageDialogTitle, fontWeight = FontWeight.Bold) },
+      text = {
+        LazyColumn(
+          modifier = Modifier.fillMaxWidth().heightIn(max = 380.dp),
+          verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+          items(AppLanguage.entries, key = { it.code }) { lang ->
+            val selected = lang == activeLanguage
+            Surface(
+              onClick = {
+                onSelectLanguage(lang.code)
+                onStatusMessage("${gameStrings.languageSectionTitle}: ${lang.nativeName}")
+                showLanguageDialog = false
+              },
+              shape = RoundedCornerShape(12.dp),
+              color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+              modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .border(
+                  width = if (selected) 1.5.dp else 1.dp,
+                  color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                  shape = RoundedCornerShape(12.dp),
+                )
+                .testTag("os_lang_option_${lang.code}"),
+            ) {
+              Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                Column {
+                  Text(
+                    text = "${lang.flagTag} • ${lang.nativeName}",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                  )
+                  Text(
+                    text = lang.englishName,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
+                }
+                if (selected) {
+                  Text(
+                    text = gameStrings.activeBadge,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF00E676),
+                  )
+                }
+              }
+            }
+          }
+        }
+      },
+      confirmButton = {
+        TextButton(onClick = { showLanguageDialog = false }) { Text("OK") }
+      },
     )
   }
 }
