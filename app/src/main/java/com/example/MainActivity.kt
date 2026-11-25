@@ -111,6 +111,7 @@ class MainActivity : ComponentActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    com.example.util.AppCrashShield.install(application)
     pendingOAuthRedirect.value = intent?.data
     enableEdgeToEdge()
     com.example.util.BackgroundMusicManager.startAmbientMusic(this)

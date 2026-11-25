@@ -36,7 +36,9 @@ abstract class UniverseDatabase : RoomDatabase() {
           context.applicationContext,
           UniverseDatabase::class.java,
           "unknown_universes_os.db",
-        ).build().also { INSTANCE = it }
+        )
+          .fallbackToDestructiveMigration()
+          .build().also { INSTANCE = it }
       }
     }
   }

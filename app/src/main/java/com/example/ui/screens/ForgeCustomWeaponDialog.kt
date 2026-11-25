@@ -59,6 +59,8 @@ private val customWeaponElements: List<Pair<String, String>> = listOf(
   "cryo" to "Cryo",
   "bio" to "Bio / Blacklight",
   "sand" to "Sand / Earth",
+  "rock" to "Rock / Tectonic",
+  "explosive" to "Explosive / Ordnance",
   "void" to "Void / Cosmic",
 )
 

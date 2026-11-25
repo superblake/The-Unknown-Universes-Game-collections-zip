@@ -304,7 +304,11 @@ fun ArenaScreen(
       if (accumNanos >= minStepNanos) {
         val dtSec = (accumNanos / 1_000_000_000f).coerceIn(0.001f, 0.06f)
         accumNanos = 0L
-        sim.stepFrame(dtSec)
+        try {
+          sim.stepFrame(dtSec)
+        } catch (e: Throwable) {
+          android.util.Log.e("ArenaScreen", "Suppressed simulation step error", e)
+        }
         if (settings.showFpsCounter) {
           fpsAccumNanos += rawDeltaNanos
           fpsFrames++
@@ -800,7 +804,7 @@ fun ArenaScreen(
             )
           }
           for (i in 0 until sim.intels.size) {
-            val intel = sim.intels[i]
+            val intel = sim.intels.getOrNull(i) ?: continue
             if (!intel.collected) {
               val ip = worldToPerspectiveScreen(intel.x, intel.y, camX, camY, w, h)
               if (glowOn) drawCircle(palette.dropBuff.copy(alpha = 0.25f), radius = 20f, center = ip)
@@ -819,7 +823,7 @@ fun ArenaScreen(
 
         // Power-up Field Drops
         for (i in 0 until sim.drops.size) {
-          val d = sim.drops[i]
+          val d = sim.drops.getOrNull(i) ?: continue
           val pos = worldToPerspectiveScreen(d.x, d.y, camX, camY, w, h)
           val dScale = perspectiveScaleForRelY(d.y - camY)
           if (pos.x < -30f || pos.x > w + 30f || pos.y < -30f || pos.y > h + 30f) continue
@@ -836,7 +840,7 @@ fun ArenaScreen(
 
         // Random Mystery Wonder Weapon Pickups
         for (i in 0 until sim.wonderPickups.size) {
-          val wp = sim.wonderPickups[i]
+          val wp = sim.wonderPickups.getOrNull(i) ?: continue
           val pos = worldToPerspectiveScreen(wp.x, wp.y, camX, camY, w, h)
           val wpScale = perspectiveScaleForRelY(wp.y - camY)
           if (pos.x < -30f || pos.x > w + 30f || pos.y < -30f || pos.y > h + 30f) continue
@@ -861,7 +865,7 @@ fun ArenaScreen(
 
         // Arcs
         for (i in 0 until sim.arcs.size) {
-          val arc = sim.arcs[i]
+          val arc = sim.arcs.getOrNull(i) ?: continue
           val a = (arc.life / 18f).coerceIn(0f, 1f)
           val p1 = worldToPerspectiveScreen(arc.x1, arc.y1, camX, camY, w, h)
           val p2 = worldToPerspectiveScreen(arc.x2, arc.y2, camX, camY, w, h)
@@ -873,7 +877,7 @@ fun ArenaScreen(
 
         // Projectiles
         for (i in 0 until sim.bolts.size) {
-          val b = sim.bolts[i]
+          val b = sim.bolts.getOrNull(i) ?: continue
           val head = worldToPerspectiveScreen(b.x, b.y, camX, camY, w, h)
           val bScale = perspectiveScaleForRelY(b.y - camY)
           if (head.x < -30f || head.x > w + 30f || head.y < -30f || head.y > h + 30f) continue
@@ -897,7 +901,7 @@ fun ArenaScreen(
         // Impact Sparks
         if (settings.particleDensity != ParticleDensity.OFF) {
           for (i in 0 until sim.sparks.size) {
-            val sp = sim.sparks[i]
+            val sp = sim.sparks.getOrNull(i) ?: continue
             val spPos = worldToPerspectiveScreen(sp.x, sp.y, camX, camY, w, h)
             val spScale = perspectiveScaleForRelY(sp.y - camY)
             val r = (sp.maxLife - sp.life).coerceAtLeast(3f) * 1.8f * spScale
@@ -913,7 +917,7 @@ fun ArenaScreen(
         // Animated Lore & Original Hostiles & Bosses with 2.5D depth scaling
         val overrideEnemyCol = if (settings.colorBlindMode != ColorBlindMode.NONE || highContrast) palette.hostile else null
         for (i in 0 until sim.hostiles.size) {
-          val e = sim.hostiles[i]
+          val e = sim.hostiles.getOrNull(i) ?: continue
           val ePos = worldToPerspectiveScreen(e.x, e.y, camX, camY, w, h)
           if (ePos.x < -130f || ePos.x > w + 130f || ePos.y < -130f || ePos.y > h + 130f) continue
           val eScale = perspectiveScaleForRelY(e.y - camY)
@@ -940,7 +944,7 @@ fun ArenaScreen(
 
         // AI Lobby Bot Combatants
         for (i in 0 until sim.arenaBots.size) {
-          val bot = sim.arenaBots[i]
+          val bot = sim.arenaBots.getOrNull(i) ?: continue
           if (bot.hp <= 0) continue
           val botOrigin = worldToPerspectiveScreen(bot.x, bot.y, camX, camY, w, h)
           if (botOrigin.x < -50f || botOrigin.x > w + 50f || botOrigin.y < -50f || botOrigin.y > h + 50f) continue
@@ -1085,25 +1089,25 @@ fun ArenaScreen(
             }
           }
           for (bi in 0 until sim.buildings.size) {
-            val b = sim.buildings[bi]
+            val b = sim.buildings.getOrNull(bi) ?: continue
             plotRadar(b.x + b.width * 0.5f, b.y + b.height * 0.5f)?.let { pt ->
               drawCircle(if (b.explored) Color(0xFF00E676) else b.accentColor, radius = 2.5f, center = pt)
             }
           }
           for (ci in 0 until sim.restCamps.size) {
-            val camp = sim.restCamps[ci]
+            val camp = sim.restCamps.getOrNull(ci) ?: continue
             plotRadar(camp.x, camp.y)?.let { pt ->
               drawCircle(Color(0xFF00E676), radius = 3f, center = pt, style = Stroke(width = 1.6f))
             }
           }
           for (si in 0 until sim.worldStations.size) {
-            val st = sim.worldStations[si]
+            val st = sim.worldStations.getOrNull(si) ?: continue
             plotRadar(st.x, st.y)?.let { pt ->
               drawCircle(st.kind.color, radius = 2.4f, center = pt)
             }
           }
           for (li in 0 until sim.lootCrates.size) {
-            val cr = sim.lootCrates[li]
+            val cr = sim.lootCrates.getOrNull(li) ?: continue
             if (!cr.opened) {
               plotRadar(cr.x, cr.y)?.let { pt ->
                 drawCircle(Color(cr.rarity.colorHex), radius = 2.2f, center = pt)
@@ -1111,7 +1115,7 @@ fun ArenaScreen(
             }
           }
           for (ei in 0 until sim.catEasterEggs.size) {
-            val cat = sim.catEasterEggs[ei]
+            val cat = sim.catEasterEggs.getOrNull(ei) ?: continue
             if (!cat.found) {
               plotRadar(cat.x, cat.y)?.let { pt ->
                 drawCircle(Color(0xFFFFD54F), radius = 2.4f, center = pt)
@@ -1119,7 +1123,7 @@ fun ArenaScreen(
             }
           }
           for (i in 0 until sim.hostiles.size) {
-            val e = sim.hostiles[i]
+            val e = sim.hostiles.getOrNull(i) ?: continue
             plotRadar(e.x, e.y)?.let { pt ->
               drawCircle(
                 color = if (e.isBoss) palette.boss else palette.hostile,

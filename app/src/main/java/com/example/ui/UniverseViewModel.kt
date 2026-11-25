@@ -46,6 +46,10 @@ import com.example.data.model.StarRankMeta
 import com.example.data.model.UniverseCatalog
 import com.example.data.model.UserCustomGameMapSpec
 import com.example.data.model.UserCustomWeaponSpec
+import com.example.data.model.UserCustomPerkSpec
+import com.example.data.model.UserCustomGearSpec
+import com.example.data.model.UserCustomEquipmentSpec
+import com.example.data.model.GearSlotCustomization
 import com.example.data.model.WeaponCustomization
 import com.example.data.remote.extractFirestoreRootError
 import com.google.firebase.firestore.FirebaseFirestoreException
@@ -1437,6 +1441,168 @@ class UniverseViewModel(
     } else {
       res.exceptionOrNull()?.message ?: "Blast Core upgrade failed"
     }
+  }
+
+  fun upgradePerkStar(perkId: String, currentBlueEssence: Long) {
+    val store = progressionStore ?: return
+    runEssenceUpgrade(store.upgradePerkStar(perkId, currentBlueEssence), "Perk star upgrade failed") {
+      val star = progressionState.value.perkStar(perkId)
+      val name = MultiverseArsenalCatalog.perkDrinks.firstOrNull { it.id == perkId }?.name ?: perkId
+      "$name Star Level upgraded to $star/10★!"
+    }
+  }
+
+  fun upgradeAllPerks(currentBlueEssence: Long) {
+    val store = progressionStore ?: return
+    runEssenceUpgrade(store.upgradeAllPerks(currentBlueEssence), "All-Perk upgrade failed") { cost ->
+      "All Perks upgraded! (-$cost Blue Essence)"
+    }
+  }
+
+  fun upgradeProtection(protId: String, currentBlueEssence: Long) {
+    val store = progressionStore ?: return
+    runEssenceUpgrade(store.upgradeProtection(protId, currentBlueEssence), "Protection upgrade failed") {
+      val rank = progressionState.value.protectionRank(protId)
+      val spec = ProgressionCatalog.protectionUpgrades.firstOrNull { it.id == protId }
+      "${spec?.title ?: protId} upgraded to Rank $rank/25!"
+    }
+  }
+
+  fun upgradeProtectionStar(protId: String, currentBlueEssence: Long) {
+    val store = progressionStore ?: return
+    runEssenceUpgrade(store.upgradeProtectionStar(protId, currentBlueEssence), "Protection star upgrade failed") {
+      val star = progressionState.value.protectionStar(protId)
+      val spec = ProgressionCatalog.protectionUpgrades.firstOrNull { it.id == protId }
+      "${spec?.title ?: protId} Star Level upgraded to $star/10★!"
+    }
+  }
+
+  fun upgradeBlastShardTier(currentBlueEssence: Long) {
+    val store = progressionStore ?: return
+    runEssenceUpgrade(store.upgradeBlastShardTier(currentBlueEssence), "Blast Shard tier upgrade failed") {
+      val tier = progressionState.value.blastShardTier
+      "Blast Shard Channeling Tier upgraded to T$tier/25!"
+    }
+  }
+
+  fun upgradeCompanionBuffTier(currentBlueEssence: Long) {
+    val store = progressionStore ?: return
+    runEssenceUpgrade(store.upgradeCompanionBuffTier(currentBlueEssence), "Companion buff tier upgrade failed") {
+      val tier = progressionState.value.companionBuffTier
+      "Companion Squad Buff Tier upgraded to T$tier/25!"
+    }
+  }
+
+  fun upgradeBlastCoreWithEssence(color: BlastCoreColor, currentBlueEssence: Long) {
+    val store = progressionStore ?: return
+    runEssenceUpgrade(store.upgradeBlastCoreWithEssence(color, currentBlueEssence), "Blast Core essence upgrade failed") {
+      val lvl = progressionState.value.blastCoreLevel(color)
+      "${color.displayName} Core upgraded to Level $lvl/20 using Blue Essence!"
+    }
+  }
+
+  fun addOrUpdateCustomPerk(spec: UserCustomPerkSpec) {
+    progressionStore?.addOrUpdateCustomPerk(spec)
+    _statusBanner.value = "Custom Perk '${spec.name}' saved!"
+  }
+
+  fun toggleEquipCustomPerk(perkId: String) {
+    progressionStore?.toggleEquipCustomPerk(perkId)
+    val equipped = progressionState.value.equippedCustomPerkIds.contains(perkId)
+    _statusBanner.value = "Custom Perk ${if (equipped) "equipped" else "unequipped"}!"
+  }
+
+  fun upgradeCustomPerkTier(perkId: String, currentBlueEssence: Long) {
+    val store = progressionStore ?: return
+    runEssenceUpgrade(store.upgradeCustomPerkTier(perkId, currentBlueEssence), "Custom perk tier upgrade failed") {
+      val perk = progressionState.value.customPerks.firstOrNull { it.id == perkId }
+      "${perk?.name ?: "Custom Perk"} upgraded to Tier ${perk?.tier ?: 1}/25!"
+    }
+  }
+
+  fun upgradeCustomPerkStar(perkId: String, currentBlueEssence: Long) {
+    val store = progressionStore ?: return
+    runEssenceUpgrade(store.upgradeCustomPerkStar(perkId, currentBlueEssence), "Custom perk star upgrade failed") {
+      val perk = progressionState.value.customPerks.firstOrNull { it.id == perkId }
+      "${perk?.name ?: "Custom Perk"} upgraded to Star ${perk?.starLevel ?: 0}/10★!"
+    }
+  }
+
+  fun deleteCustomPerk(perkId: String) {
+    progressionStore?.deleteCustomPerk(perkId)
+    _statusBanner.value = "Custom Perk deleted."
+  }
+
+  fun customizeGearSlot(slot: GearSlot, customization: GearSlotCustomization) {
+    progressionStore?.customizeGearSlot(slot, customization)
+    _statusBanner.value = "${slot.displayName} customization updated!"
+  }
+
+  fun addOrUpdateCustomGear(spec: UserCustomGearSpec) {
+    progressionStore?.addOrUpdateCustomGear(spec)
+    _statusBanner.value = "Custom Gear '${spec.name}' (${spec.slot.displayName}) saved & equipped!"
+  }
+
+  fun equipCustomGear(slot: GearSlot, gearId: String) {
+    val store = progressionStore ?: return
+    val spec = store.state.value.customGear.firstOrNull { it.id == gearId }
+    if (spec != null) {
+      store.equipCustomGear(slot, gearId)
+      _statusBanner.value = "Equipped ${spec.name} in ${slot.displayName}!"
+    }
+  }
+
+  fun upgradeCustomGearTier(gearId: String, currentBlueEssence: Long) {
+    val store = progressionStore ?: return
+    runEssenceUpgrade(store.upgradeCustomGearTier(gearId, currentBlueEssence), "Custom gear tier upgrade failed") {
+      val gear = progressionState.value.customGear.firstOrNull { it.id == gearId }
+      "${gear?.name ?: "Gear"} upgraded to Tier ${gear?.tier ?: 1}/25!"
+    }
+  }
+
+  fun upgradeCustomGearStar(gearId: String, currentBlueEssence: Long) {
+    val store = progressionStore ?: return
+    runEssenceUpgrade(store.upgradeCustomGearStar(gearId, currentBlueEssence), "Custom gear star upgrade failed") {
+      val gear = progressionState.value.customGear.firstOrNull { it.id == gearId }
+      "${gear?.name ?: "Gear"} upgraded to Star ${gear?.starLevel ?: 0}/10★!"
+    }
+  }
+
+  fun deleteCustomGear(gearId: String) {
+    progressionStore?.deleteCustomGear(gearId)
+    _statusBanner.value = "Custom Gear deleted."
+  }
+
+  fun setEquipmentVariant(slotId: String, variantId: String) {
+    progressionStore?.setEquipmentVariant(slotId, variantId)
+    val variant = ProgressionCatalog.equipmentVariants.firstOrNull { it.first == variantId }
+    _statusBanner.value = "$slotId variant set to ${variant?.second ?: variantId}!"
+  }
+
+  fun addOrUpdateCustomEquipment(spec: UserCustomEquipmentSpec) {
+    progressionStore?.addOrUpdateCustomEquipment(spec)
+    _statusBanner.value = "Custom Equipment '${spec.name}' saved & equipped!"
+  }
+
+  fun upgradeCustomEquipmentTier(itemId: String, currentBlueEssence: Long) {
+    val store = progressionStore ?: return
+    runEssenceUpgrade(store.upgradeCustomEquipmentTier(itemId, currentBlueEssence), "Equipment tier upgrade failed") {
+      val eq = progressionState.value.customEquipment.firstOrNull { it.id == itemId }
+      "${eq?.name ?: "Equipment"} upgraded to Tier ${eq?.tier ?: 1}/25!"
+    }
+  }
+
+  fun upgradeCustomEquipmentStar(itemId: String, currentBlueEssence: Long) {
+    val store = progressionStore ?: return
+    runEssenceUpgrade(store.upgradeCustomEquipmentStar(itemId, currentBlueEssence), "Equipment star upgrade failed") {
+      val eq = progressionState.value.customEquipment.firstOrNull { it.id == itemId }
+      "${eq?.name ?: "Equipment"} upgraded to Star ${eq?.starLevel ?: 0}/10★!"
+    }
+  }
+
+  fun deleteCustomEquipment(itemId: String) {
+    progressionStore?.deleteCustomEquipment(itemId)
+    _statusBanner.value = "Custom Equipment deleted."
   }
 
   fun upgradeVacuumBot(currentBlueEssence: Long) {

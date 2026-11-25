@@ -35,6 +35,7 @@ import com.example.data.model.OperatorProgressionState
 import com.example.data.model.OutfitProgressState
 import com.example.data.model.PowerTier
 import com.example.data.model.ProgressionCatalog
+import com.example.data.model.SkillNode
 import com.example.data.model.StarRankMeta
 import com.example.data.model.TradeCurrencyKind
 import com.example.data.model.VacuumBotState
@@ -3048,8 +3049,8 @@ class ProgressionStore(
       root.optJSONObject("skillNodes")?.let { obj ->
         obj.keys().forEach { k ->
           val sObj = obj.optJSONObject(k)
-          if (sObj != null && map.containsKey(k)) {
-            val existing = map[k]!!
+          val existing = map[k]
+          if (sObj != null && existing != null) {
             map[k] = existing.copy(
               unlocked = sObj.optBoolean("unlocked", false),
               tier = sObj.optInt("tier", 1).coerceIn(1, existing.maxTier),
@@ -3810,15 +3811,16 @@ class ProgressionStore(
       val a = base.gearMap[k]
       val b = incoming.gearMap[k]
       when {
-        a == null -> b!!
-        b == null -> a
-        else -> a.copy(
+        a == null && b != null -> b
+        b == null && a != null -> a
+        a != null && b != null -> a.copy(
           level = maxOf(a.level, b.level),
           prestige = maxOf(a.prestige, b.prestige),
           xp = maxOf(a.xp, b.xp),
           tier = maxOf(a.tier, b.tier),
           starLevel = maxOf(a.starLevel, b.starLevel),
         )
+        else -> a ?: b ?: GearState(slot = GearSlot.entries.firstOrNull { it.id == k } ?: GearSlot.HELMET)
       }
     }
 
@@ -3826,15 +3828,16 @@ class ProgressionStore(
       val a = base.equipmentMap[k]
       val b = incoming.equipmentMap[k]
       when {
-        a == null -> b!!
-        b == null -> a
-        else -> a.copy(
+        a == null && b != null -> b
+        b == null && a != null -> a
+        a != null && b != null -> a.copy(
           level = maxOf(a.level, b.level),
           prestige = maxOf(a.prestige, b.prestige),
           xp = maxOf(a.xp, b.xp),
           tier = maxOf(a.tier, b.tier),
           starLevel = maxOf(a.starLevel, b.starLevel),
         )
+        else -> a ?: b ?: EquipmentState(slotId = k, equippedItemId = "frag")
       }
     }
 
@@ -3842,13 +3845,14 @@ class ProgressionStore(
       val a = base.skillNodes[k]
       val b = incoming.skillNodes[k]
       when {
-        a == null -> b!!
-        b == null -> a
-        else -> a.copy(
+        a == null && b != null -> b
+        b == null && a != null -> a
+        a != null && b != null -> a.copy(
           unlocked = a.unlocked || b.unlocked,
           tier = maxOf(a.tier, b.tier),
           starLevel = maxOf(a.starLevel, b.starLevel),
         )
+        else -> a ?: b ?: SkillNode(id = k, title = k, description = "", category = "COMBAT", costEssence = 100L)
       }
     }
 
@@ -3856,9 +3860,9 @@ class ProgressionStore(
       val a = base.outfitStates[k]
       val b = incoming.outfitStates[k]
       when {
-        a == null -> b!!
-        b == null -> a
-        else -> a.copy(
+        a == null && b != null -> b
+        b == null && a != null -> a
+        a != null && b != null -> a.copy(
           level = maxOf(a.level, b.level),
           tier = maxOf(a.tier, b.tier),
           skillRank = maxOf(a.skillRank, b.skillRank),
@@ -3866,6 +3870,7 @@ class ProgressionStore(
           equipmentRank = maxOf(a.equipmentRank, b.equipmentRank),
           starLevel = maxOf(a.starLevel, b.starLevel),
         )
+        else -> a ?: b ?: OutfitProgressState(k)
       }
     }
 
@@ -3873,9 +3878,9 @@ class ProgressionStore(
       val a = base.areaStates[k]
       val b = incoming.areaStates[k]
       when {
-        a == null -> b!!
-        b == null -> a
-        else -> a.copy(
+        a == null && b != null -> b
+        b == null && a != null -> a
+        a != null && b != null -> a.copy(
           ageYears = maxOf(a.ageYears, b.ageYears),
           rebirthCycles = maxOf(a.rebirthCycles, b.rebirthCycles),
           powerGridTier = maxOf(a.powerGridTier, b.powerGridTier),
@@ -3884,6 +3889,7 @@ class ProgressionStore(
           lootRichnessTier = maxOf(a.lootRichnessTier, b.lootRichnessTier),
           starLevel = maxOf(a.starLevel, b.starLevel),
         )
+        else -> a ?: b ?: CustomAreaState(k)
       }
     }
 

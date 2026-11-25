@@ -45,7 +45,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36], qualifiers = "w800dp-h1280dp")
+@Config(sdk = [36], qualifiers = "w800dp-h1280dp", manifest = Config.NONE)
 class BorderedWorldAndRegionsTest {
 
   @get:Rule

@@ -451,7 +451,7 @@ fun DrawScope.drawSectionBiomesAndBorders(
 
   // 1. Render distinct 8x8 Section Biomes & Unique Floor Geometry
   for (i in 0 until sim.mapSections.size) {
-    val sec = sim.mapSections[i]
+    val sec = sim.mapSections.getOrNull(i) ?: continue
     val pCenter = worldToPerspectiveScreen(sec.centerX, sec.centerY, camX, camY, w, h)
     // Skip sections completely far outside camera view
     if (kotlin.math.abs(sec.centerX - camX) > 10.5f || kotlin.math.abs(sec.centerY - camY) > 10.5f) continue
@@ -568,7 +568,7 @@ fun DrawScope.drawBuildingsAndTraps(
 
   // 1. Elemental Hazard Zones (Ice, Fire, Toxic, Electric, Windy)
   for (i in 0 until sim.hazards.size) {
-    val hz = sim.hazards[i]
+    val hz = sim.hazards.getOrNull(i) ?: continue
     val p = worldToPerspectiveScreen(hz.x, hz.y, camX, camY, w, h)
     val scale = perspectiveScaleForRelY(hz.y - camY)
     val rx = hz.radius * w * 0.46f * scale
@@ -596,7 +596,7 @@ fun DrawScope.drawBuildingsAndTraps(
 
   // 2. Safe Rest Camps (Take a break + x3 Shield Regeneration)
   for (i in 0 until sim.restCamps.size) {
-    val camp = sim.restCamps[i]
+    val camp = sim.restCamps.getOrNull(i) ?: continue
     val p = worldToPerspectiveScreen(camp.x, camp.y, camX, camY, w, h)
     val scale = perspectiveScaleForRelY(camp.y - camY)
     val r = camp.radius * w * 0.52f * scale
@@ -617,7 +617,7 @@ fun DrawScope.drawBuildingsAndTraps(
 
   // 3. 3D Extruded Buildings with Rooftop Bevel, Windows & Interior Nodes
   for (i in 0 until sim.buildings.size) {
-    val b = sim.buildings[i]
+    val b = sim.buildings.getOrNull(i) ?: continue
     val tl = worldToPerspectiveScreen(b.x, b.y, camX, camY, w, h)
     val br = worldToPerspectiveScreen(b.x + b.width, b.y + b.height, camX, camY, w, h)
     val sw = (br.x - tl.x).coerceAtLeast(18f)
@@ -679,7 +679,7 @@ fun DrawScope.drawBuildingsAndTraps(
 
   // 4. Electric & Fire Traps projected in 2.5D
   for (i in 0 until sim.traps.size) {
-    val trap = sim.traps[i]
+    val trap = sim.traps.getOrNull(i) ?: continue
     val p = worldToPerspectiveScreen(trap.x, trap.y, camX, camY, w, h)
     val scale = perspectiveScaleForRelY(trap.y - camY)
     val radPx = trap.radius * minOf(w, h) * scale * 0.72f
@@ -700,7 +700,7 @@ fun DrawScope.drawBuildingsAndTraps(
 
   // 5. Interactive Pack-a-Punch, Perk Machines & Ammo Crates
   for (i in 0 until sim.worldStations.size) {
-    val st = sim.worldStations[i]
+    val st = sim.worldStations.getOrNull(i) ?: continue
     val p = worldToPerspectiveScreen(st.x, st.y, camX, camY, w, h)
     val scale = perspectiveScaleForRelY(st.y - camY)
     if (p.x < -50f || p.x > w + 50f || p.y < -50f || p.y > h + 50f) continue
@@ -731,7 +731,7 @@ fun DrawScope.drawBuildingsAndTraps(
 
   // 6. Rarity-Colored 3D Loot Crates (higher rarity inside Hazards & Outer Frontier!)
   for (i in 0 until sim.lootCrates.size) {
-    val crate = sim.lootCrates[i]
+    val crate = sim.lootCrates.getOrNull(i) ?: continue
     if (crate.opened) continue
     val p = worldToPerspectiveScreen(crate.x, crate.y, camX, camY, w, h)
     val scale = perspectiveScaleForRelY(crate.y - camY)
@@ -758,7 +758,7 @@ fun DrawScope.drawBuildingsAndTraps(
 
   // 7. Hidden Cat Easter Eggs
   for (i in 0 until sim.catEasterEggs.size) {
-    val cat = sim.catEasterEggs[i]
+    val cat = sim.catEasterEggs.getOrNull(i) ?: continue
     if (cat.found) continue
     val p = worldToPerspectiveScreen(cat.x, cat.y, camX, camY, w, h)
     val scale = perspectiveScaleForRelY(cat.y - camY)
@@ -798,7 +798,7 @@ fun DrawScope.drawVacuumAndCollectibles(
 
   // Collectibles (Orbs, Blast Shards, Perk Drinks, Blast Cores, Character Shards, Cat Easter Eggs)
   for (i in 0 until sim.collectibles.size) {
-    val c = sim.collectibles[i]
+    val c = sim.collectibles.getOrNull(i) ?: continue
     val pos = worldToPerspectiveScreen(c.x, c.y, camX, camY, w, h)
     val scale = perspectiveScaleForRelY(c.y - camY)
     if (pos.x < -30f || pos.x > w + 30f || pos.y < -30f || pos.y > h + 30f) continue

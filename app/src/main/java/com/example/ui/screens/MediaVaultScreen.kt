@@ -117,8 +117,12 @@ fun rememberAssetImageBitmap(
       value = it
       return@produceState
     }
+    val path = assetPath ?: run {
+      value = null
+      return@produceState
+    }
     val decoded = withContext(Dispatchers.IO) {
-      decodeAssetBitmap(context, assetPath!!, maxDim)
+      decodeAssetBitmap(context, path, maxDim)
     }
     if (decoded != null) {
       VaultBitmapCache.put(key, decoded)

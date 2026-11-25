@@ -3671,7 +3671,7 @@ class ArenaSimState(
     // DMZ Intel & Active Exfil Chopper Timer
     if (modeId == "dmz") {
       for (i in 0 until intels.size) {
-        val intel = intels[i]
+        val intel = intels.getOrNull(i) ?: continue
         if (!intel.collected) {
           val dx = intel.x - playerX
           val dy = intel.y - playerY
@@ -3826,7 +3826,7 @@ class ArenaSimState(
       val hitRSq = hitR * hitR
       var died = false
       for (i in 0 until bolts.size) {
-        val b = bolts[i]
+        val b = bolts.getOrNull(i) ?: continue
         if (b.isEnemyShot || b.life <= 0f) continue
         val bdx = b.x - h.x
         val bdy = b.y - h.y
@@ -3904,7 +3904,7 @@ class ArenaSimState(
               }
               for (j in 0 until hostiles.size) {
                 if (chains >= maxChains) break
-                val other = hostiles[j]
+                val other = hostiles.getOrNull(j) ?: continue
                 if (other === h || other.hp <= 0) continue
                 val ox = other.x - h.x
                 val oy = other.y - h.y
@@ -3923,13 +3923,13 @@ class ArenaSimState(
               val splashDmg = if (activeWonderWeapon == WonderWeaponKind.RAY_NOVA_MK3) 2 else 3
               val splashType = if (activeWonderWeapon == WonderWeaponKind.CRUCIBLE_BFG) ArenaDamageType.THERMAL else b.damageType
               for (j in 0 until hostiles.size) {
-                val other = hostiles[j]
+                val other = hostiles.getOrNull(j) ?: continue
                 if (other === h || other.hp <= 0) continue
                 val ox = other.x - h.x
                 val oy = other.y - h.y
                 if (ox * ox + oy * oy <= splashRadiusSq) {
                   applyDamageToHostile(other, splashDmg, splashType)
-                  addSparkIfAllowed(other.x, other.y, Color(activeWonderWeapon!!.accentHex), 12f)
+                  addSparkIfAllowed(other.x, other.y, Color(activeWonderWeapon?.accentHex ?: 0xFF00E5FFL), 12f)
                 }
               }
             }
