@@ -247,6 +247,22 @@ object UniverseCatalog {
       interactActionLabel = "ANCHOR",
       platformBadges = "PS5/4/3 • XBOX • SWITCH • PC • MOBILE",
     ),
+    UniverseWorld(
+      id = "sector_star_wars_nexus",
+      title = "Star Wars Multiverse Nexus",
+      subtitle = "Tatooine • Coruscant • Death Star • Mustafar • Jedi Temple",
+      inspirations = "Star Wars Legends & Canon • Tatooine Dunes • Coruscant Underworld • Death Star Trench • Mustafar Lava • Jedi Temple Sanctum",
+      description = "Traverse all iconic Star Wars eras and planets in one unified nexus: pilot starfighters through the Death Star trench, battle Sith Lords on Mustafar lava rivers, patrol Coruscant Jedi Temple spires, and trade at Tatooine cantinas.",
+      signatureMechanic = "Force Kyber Resonance + Death Star Trench Run",
+      defaultModeId = "campaign",
+      accentHex = 0xFFFFD54F,
+      secondaryHex = 0xFF00E5FF,
+      bannerRes = R.drawable.tuu_aegis_starblade_drawn_1795681704068,
+      supportedModes = allModeIds,
+      mapSectors = listOf("Tatooine Mos Eisley Cantina", "Coruscant Jedi Temple Spire", "Death Star Trench Sector", "Mustafar Obsidian Citadel", "Kamino Cloning Spire"),
+      interactActionLabel = "KYBER SURGE",
+      platformBadges = "PS5/4/3 • XBOX • SWITCH • PC • VR",
+    ),
   )
 
   val modes: List<GameModeSpec> = listOf(

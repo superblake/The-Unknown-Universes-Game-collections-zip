@@ -482,6 +482,43 @@ fun SettingsDialog(
                   tag = "slider_button_scale",
                   onValueChange = { v -> onUpdateSettings { it.copy(buttonScale = v) } },
                 )
+                Spacer(Modifier.height(8.dp))
+                Text("Virtual Controller Layout Style", style = MaterialTheme.typography.titleMedium)
+                Row(
+                  modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                  horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                  listOf(
+                    "console_gamepad" to "Console Gamepad (ABXY + D-Pad)",
+                    "codm_tactical" to "CODM Tactical HUD",
+                    "floating_classic" to "Floating Classic",
+                  ).forEach { (id, lbl) ->
+                    FilterChip(
+                      selected = settings.controllerStyle == id,
+                      onClick = { onUpdateSettings { it.copy(controllerStyle = id) } },
+                      label = { Text(lbl) },
+                      modifier = Modifier.height(48.dp).testTag("chip_controller_$id"),
+                    )
+                  }
+                }
+                SettingSliderRow(
+                  title = "Controller Opacity (${(settings.controllerOpacity * 100).roundToInt()}%)",
+                  description = "Transparency of virtual controller buttons and sticks on screen.",
+                  value = settings.controllerOpacity,
+                  range = 0.3f..1.0f,
+                  steps = 6,
+                  tag = "slider_controller_opacity",
+                  onValueChange = { v -> onUpdateSettings { it.copy(controllerOpacity = v) } },
+                )
+                SettingSliderRow(
+                  title = "Controller Scale (${(settings.controllerScale * 100).roundToInt()}%)",
+                  description = "Overall scaling factor for the virtual controller layout.",
+                  value = settings.controllerScale,
+                  range = 0.75f..1.5f,
+                  steps = 5,
+                  tag = "slider_controller_scale",
+                  onValueChange = { v -> onUpdateSettings { it.copy(controllerScale = v) } },
+                )
                 SettingSliderRow(
                   title = "Movement Sensitivity (${String.format(Locale.US, "%.2fx", settings.moveSensitivity)})",
                   description = "Adjust how quickly operator movement responds to thumbstick deflection.",

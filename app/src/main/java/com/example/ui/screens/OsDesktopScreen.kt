@@ -448,6 +448,18 @@ fun OsDesktopScreen(
       }
     }
 
+    item {
+      MultiverseSystemsControlCard(
+        progression = progression,
+        onMaxAllTiers = onMaxAllTiers,
+        onMaxAllStars = onMaxAllStars,
+        onDeployStarWarsNexus = {
+          onSelectUniverse("sector_star_wars_nexus")
+          onDeployArea("area_star_wars_nexus")
+        },
+      )
+    }
+
     // Active Universe Hero Box-Art Card
     item {
       Surface(
@@ -2132,3 +2144,115 @@ private fun UniverseCollectionCard(
     }
   }
 }
+
+@Composable
+fun MultiverseSystemsControlCard(
+  progression: OperatorProgressionState,
+  onMaxAllTiers: () -> Unit,
+  onMaxAllStars: () -> Unit,
+  onDeployStarWarsNexus: () -> Unit,
+) {
+  Surface(
+    shape = RoundedCornerShape(16.dp),
+    color = MaterialTheme.colorScheme.surface,
+    modifier = Modifier
+      .fillMaxWidth()
+      .border(1.5.dp, Color(0xFFFFD54F).copy(alpha = 0.75f), RoundedCornerShape(16.dp)),
+  ) {
+    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Text(
+          text = "🌟 MULTIVERSE SYSTEMS & HIGHER UPGRADES",
+          style = MaterialTheme.typography.titleSmall,
+          fontWeight = FontWeight.Bold,
+          color = Color(0xFFFFD54F),
+        )
+        Surface(
+          shape = RoundedCornerShape(6.dp),
+          color = Color(0xFFFFD54F).copy(alpha = 0.2f),
+        ) {
+          Text(
+            text = "TIER 25+ / 15★",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFFFFD54F),
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+          )
+        }
+      }
+
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+      ) {
+        CurrencyBadge("🪙 Gold", "${progression.gold}", Color(0xFFFFD54F))
+        CurrencyBadge("💎 Diamonds", "${progression.diamonds}", Color(0xFF00E5FF))
+        CurrencyBadge("💵 TUUCash", "${progression.tuuCash}", Color(0xFF00E676))
+        CurrencyBadge("🔮 Crystals", "${progression.crystals.size}", Color(0xFFE040FB))
+      }
+
+      Text(
+        text = "🔮 Magic: ${progression.magicState.activeSpellId.uppercase()} (Mana: ${progression.magicState.manaCurrent.toInt()}/${progression.magicState.manaMax.toInt()}) • Difficulty: ${String.format(Locale.US, "%.2f", progression.magicState.difficultyScalingFactor)}x",
+        style = MaterialTheme.typography.labelSmall,
+        color = Color(0xFFE040FB),
+      )
+      Text(
+        text = "🏰 Player Base: ${progression.playerBaseState.baseName} (Wall T${progression.playerBaseState.wallTier} • Turret T${progression.playerBaseState.turretTier}) • Attacks Defended: ${progression.playerBaseState.defenseSuccessCount}",
+        style = MaterialTheme.typography.labelSmall,
+        color = Color(0xFF38BDF8),
+      )
+
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        Button(
+          onClick = onMaxAllTiers,
+          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD54F), contentColor = Color.Black),
+          shape = RoundedCornerShape(10.dp),
+          modifier = Modifier.weight(1f).height(44.dp).testTag("os_max_tiers_btn"),
+        ) {
+          Text("Max Tiers (T25)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+        }
+        Button(
+          onClick = onMaxAllStars,
+          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF), contentColor = Color.Black),
+          shape = RoundedCornerShape(10.dp),
+          modifier = Modifier.weight(1f).height(44.dp).testTag("os_max_stars_btn"),
+        ) {
+          Text("Max Stars (15★)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+        }
+        Button(
+          onClick = onDeployStarWarsNexus,
+          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF3D71), contentColor = Color.White),
+          shape = RoundedCornerShape(10.dp),
+          modifier = Modifier.weight(1f).height(44.dp).testTag("os_star_wars_nexus_btn"),
+        ) {
+          Text("Star Wars Nexus", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+        }
+      }
+    }
+  }
+}
+
+@Composable
+fun CurrencyBadge(label: String, value: String, color: Color) {
+  Surface(
+    shape = RoundedCornerShape(8.dp),
+    color = color.copy(alpha = 0.15f),
+    border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.5f)),
+  ) {
+    Column(
+      modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+      horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+      Text(text = label, style = MaterialTheme.typography.labelSmall, color = color, fontWeight = FontWeight.Bold)
+      Text(text = value, style = MaterialTheme.typography.bodySmall, color = Color.White, fontWeight = FontWeight.Bold)
+    }
+  }
+}
+

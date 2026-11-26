@@ -1029,9 +1029,21 @@ data class OperatorProgressionState(
   val companionBuffTier: Int = 1,
   val modeTierMap: Map<String, Int> = emptyMap(),
   val modeStarMap: Map<String, Int> = emptyMap(),
+  val gold: Long = 1500L,
+  val diamonds: Long = 350L,
+  val tuuCash: Long = 10000L,
+  val environmentalResources: Map<String, Long> = mapOf("crystal_shard" to 50L, "metal_scrap" to 120L, "energy_cell" to 40L),
+  val magicState: MagicSystemState = MagicSystemState(),
+  val playerBaseState: PlayerBaseState = PlayerBaseState(),
+  val crystals: List<CrystalItem> = defaultCrystals(),
 ) {
   val playerLevel: Int
     get() = ProgressionCatalog.levelForXp(playerXp)
+
+  fun canHealWithThoughtAndSpirit(): Boolean {
+    val summary = computePowerAndLightLevel()
+    return summary.powerLevel >= 300 || playerLevel >= 2
+  }
 
   val playerRankTitle: String
     get() = ProgressionCatalog.rankTitleForLevel(playerLevel, playerPrestige)
@@ -3240,6 +3252,52 @@ object CuratedCustomMapsCatalog {
     return (MultiverseArsenalCatalog.customAreas + customSpecs).distinctBy { it.id }
   }
 }
+
+@Immutable
+data class MagicSystemState(
+  val unlocked: Boolean = true,
+  val activeSpellId: String = "spell_abyssal_nova",
+  val manaCurrent: Float = 100f,
+  val manaMax: Float = 100f,
+  val magicTier: Int = 1,
+  val difficultyScalingFactor: Float = 1.20f,
+  val unlockedSpells: Set<String> = setOf("spell_abyssal_nova", "spell_chrono_stasis", "spell_soul_heal"),
+)
+
+@Immutable
+data class PlayerBaseState(
+  val baseName: String = "Nexus Command Citadel",
+  val wallTier: Int = 1,
+  val turretTier: Int = 1,
+  val shieldGeneratorTier: Int = 1,
+  val resourceVaultTier: Int = 1,
+  val storedGold: Long = 850L,
+  val storedDiamonds: Long = 200L,
+  val underAttack: Boolean = false,
+  val attackWaveCountdownSec: Int = 300,
+  val defenseSuccessCount: Int = 0,
+)
+
+@Immutable
+data class CrystalItem(
+  val id: String,
+  val name: String,
+  val rarity: String,
+  val statBonusSummary: String,
+  val damageBoostPct: Int,
+  val shieldBoostPct: Int,
+  val luckBoostPct: Int,
+  val socketedSlot: String? = null,
+  val level: Int = 1,
+)
+
+fun defaultCrystals(): List<CrystalItem> = listOf(
+  CrystalItem("crystal_kyber", "Kyber Resonance Crystal", "Mythic", "+15% Energy DMG & +20% Shield", 15, 20, 5, "weapon", 1),
+  CrystalItem("crystal_aether", "Aether 115 Shard Crystal", "Legendary", "+12% Fire Rate & +10% Loot Luck", 12, 10, 10, "rig", 1),
+  CrystalItem("crystal_vibranium", "Vibranium Plating Crystal", "Epic", "+25% Max Shield & Armor Regen", 0, 25, 0, "chest", 1),
+  CrystalItem("crystal_chrono", "Chrono-Stasis Temporal Crystal", "Cosmic", "-20% Cooldowns & +18% Move Speed", 10, 15, 12, "helmet", 1),
+)
+
 
 
 

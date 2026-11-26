@@ -322,6 +322,11 @@ data class AppSettings(
 
   // 8. Language & Localization
   val selectedLanguageCode: String = AppLanguage.ENGLISH.code,
+
+  // 9. Controller & Virtual Gamepad Customization
+  val controllerStyle: String = "console_gamepad",
+  val controllerOpacity: Float = 0.85f,
+  val controllerScale: Float = 1.0f,
 ) {
   fun shouldHideSystemBars(inArena: Boolean): Boolean =
     immersiveFullscreen && when (fullscreenMode) {
@@ -639,6 +644,9 @@ class AppSettingsStore(context: Context) {
         selectedServerId = prefs.getString("selected_server_id", d.selectedServerId) ?: d.selectedServerId,
         useRegionDefaultSettings = prefs.getBoolean("use_region_defaults", d.useRegionDefaultSettings),
         selectedLanguageCode = prefs.getString("selected_language_code", d.selectedLanguageCode) ?: d.selectedLanguageCode,
+        controllerStyle = prefs.getString("controller_style", d.controllerStyle) ?: d.controllerStyle,
+        controllerOpacity = prefs.getFloat("controller_opacity", d.controllerOpacity),
+        controllerScale = prefs.getFloat("controller_scale", d.controllerScale),
       )
     )
   }
@@ -688,6 +696,9 @@ class AppSettingsStore(context: Context) {
       putString("selected_server_id", s.selectedServerId)
       putBoolean("use_region_defaults", s.useRegionDefaultSettings)
       putString("selected_language_code", s.selectedLanguageCode)
+      putString("controller_style", s.controllerStyle)
+      putFloat("controller_opacity", s.controllerOpacity)
+      putFloat("controller_scale", s.controllerScale)
     }
   }
 
