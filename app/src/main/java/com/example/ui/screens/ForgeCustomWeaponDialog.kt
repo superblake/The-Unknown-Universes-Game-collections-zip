@@ -106,8 +106,9 @@ fun ForgeCustomWeaponDialog(
 
   Dialog(
     onDismissRequest = onDismiss,
-    properties = DialogProperties(usePlatformDefaultWidth = false),
+    properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
   ) {
+    com.example.util.SyncDialogFullscreen()
     Box(
       modifier = Modifier
         .fillMaxWidth()
@@ -145,6 +146,43 @@ fun ForgeCustomWeaponDialog(
               .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(10.dp),
           ) {
+            Text(
+              text = "1-TAP QUICK FORGE PRESETS",
+              style = MaterialTheme.typography.labelSmall,
+              fontWeight = FontWeight.Bold,
+              color = accentColor,
+            )
+            val weaponPresets = listOf(
+              Triple("Ray Cannon Mk.IV", CustomMapGameCategory.BO3, "energy"),
+              Triple("Conduit Amp Rifle", CustomMapGameCategory.INFAMOUS, "energy"),
+              Triple("Arkham Shock Blaster", CustomMapGameCategory.ARKHAM, "kinetic"),
+              Triple("Spartan Solar Spear", CustomMapGameCategory.GODOFWAR, "thermal"),
+              Triple("Abyss Void Edge", CustomMapGameCategory.ABYSS_DUNGEONS, "void"),
+            )
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+              horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+              weaponPresets.forEach { (pName, pCat, pElem) ->
+                FilterChip(
+                  selected = name == pName,
+                  onClick = {
+                    name = pName
+                    category = pCat
+                    damageTypeId = pElem
+                    tracerHex = pCat.defaultAccentHex
+                    baseDamage = 12
+                    baseCadenceTicks = 6f
+                    baseSpreadCount = 2
+                    basePierce = 2
+                  },
+                  label = { Text(pName, style = MaterialTheme.typography.labelSmall) },
+                  modifier = Modifier.heightIn(min = 48.dp),
+                )
+              }
+            }
             Text(
               text = "GAME COLLECTION ORIGIN",
               style = MaterialTheme.typography.labelSmall,

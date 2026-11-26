@@ -256,7 +256,7 @@ fun WeaponCustomizationTab(
       }
       Spacer(Modifier.height(6.dp))
       LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        items(allWeapons, key = { it.id }) { weapon ->
+        items(allWeapons.distinctBy { it.id }, key = { it.id }) { weapon ->
           val selected = weapon.id == wc.equippedWeaponId
           val inMulti = multiWeapons.contains(weapon.id)
           val lvl = progression.weaponLevel(weapon.id)
@@ -610,12 +610,12 @@ fun CharacterCustomizationTab(
   val charStarCost = UpgradeCosts.characterStar(progression.characterStarLevel)
   val powerLight = progression.computePowerAndLightLevel(totalBlueEssence)
   val milestoneSummary = ProgressionCatalog.milestoneBonusSummary(progression.playerLevel)
-  var originalsOnlyFilter by remember { mutableStateOf(false) }
-  val characterRoster = remember(originalsOnlyFilter) {
-    if (originalsOnlyFilter) {
-      MultiverseArsenalCatalog.outfits.filter { it.isOriginalCharacter }
-    } else {
-      MultiverseArsenalCatalog.outfits
+  var characterFilterMode by remember { mutableStateOf("all") }
+  val characterRoster = remember(characterFilterMode) {
+    when (characterFilterMode) {
+      "real_life" -> MultiverseArsenalCatalog.outfits.filter { it.isRealLifeCreatorVersion }
+      "originals" -> MultiverseArsenalCatalog.outfits.filter { it.isOriginalCharacter }
+      else -> MultiverseArsenalCatalog.outfits
     }
   }
   val capePath = remember { Path() }
@@ -623,16 +623,16 @@ fun CharacterCustomizationTab(
 
   LazyColumn(
     modifier = Modifier.fillMaxSize().testTag("character_customization_list"),
-    contentPadding = PaddingValues(16.dp),
-    verticalArrangement = Arrangement.spacedBy(12.dp),
+    contentPadding = PaddingValues(12.dp),
+    verticalArrangement = Arrangement.spacedBy(10.dp),
   ) {
     item {
       Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.fillMaxWidth().border(1.5.dp, Color(cc.primaryArmorHex).copy(alpha = 0.7f), RoundedCornerShape(16.dp)),
+        modifier = Modifier.fillMaxWidth().border(1.5.dp, Color(cc.primaryArmorHex).copy(alpha = 0.7f), RoundedCornerShape(14.dp)),
       ) {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -640,7 +640,7 @@ fun CharacterCustomizationTab(
           ) {
             Box(
               modifier = Modifier
-                .size(width = 112.dp, height = 140.dp)
+                .size(width = 100.dp, height = 122.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(Color(0xFF0A101E))
                 .border(1.dp, Color(cc.primaryArmorHex).copy(alpha = 0.5f), RoundedCornerShape(12.dp)),
@@ -697,13 +697,35 @@ fun CharacterCustomizationTab(
                   color = Color(0xFF00E676).copy(alpha = 0.18f),
                 ) {
                   Text(
-                    text = "ORIGINAL HERO • +25% POWER & SHIELD RESONANCE",
+                    text = if (activeSpec.isRealLifeCreatorVersion) {
+                      "REAL-LIFE ME • +25% POWER & RESONANCE"
+                    } else {
+                      "ORIGINAL HERO • +25% POWER & SHIELD RESONANCE"
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF00E676),
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp).testTag("character_original_badge"),
                   )
                 }
+              }
+              if (activeSpec.realLifeApparel.isNotBlank()) {
+                Text(
+                  text = "Real-Life Outfit: ${activeSpec.realLifeApparel}",
+                  style = MaterialTheme.typography.labelSmall,
+                  color = Color(0xFF93C5FD),
+                  maxLines = 2,
+                  overflow = TextOverflow.Ellipsis,
+                )
+              }
+              if (activeSpec.realLifeDailyGear.isNotBlank()) {
+                Text(
+                  text = "Daily Gear: ${activeSpec.realLifeDailyGear}",
+                  style = MaterialTheme.typography.labelSmall,
+                  color = Color(0xFFFDE68A),
+                  maxLines = 2,
+                  overflow = TextOverflow.Ellipsis,
+                )
               }
               Text(
                 text = "LV ${progression.playerLevel}/1000 • P${progression.playerPrestige}/30 • ${progression.playerRankTitle}",
@@ -773,45 +795,51 @@ fun CharacterCustomizationTab(
     }
 
     item {
-      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically,
-        ) {
-          Text(
-            text = "PLAYABLE CHARACTER ROSTER (${characterRoster.size})",
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary,
-          )
-          Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+      Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+          text = "PLAYABLE CHARACTER ROSTER (${characterRoster.size})",
+          style = MaterialTheme.typography.titleSmall,
+          color = MaterialTheme.colorScheme.primary,
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+          item {
             FilterChip(
-              selected = !originalsOnlyFilter,
-              onClick = { originalsOnlyFilter = false },
+              selected = characterFilterMode == "all",
+              onClick = { characterFilterMode = "all" },
               label = { Text("All (${MultiverseArsenalCatalog.outfits.size})") },
               modifier = Modifier.heightIn(min = 48.dp).testTag("char_filter_all"),
             )
+          }
+          item {
             FilterChip(
-              selected = originalsOnlyFilter,
-              onClick = { originalsOnlyFilter = true },
+              selected = characterFilterMode == "real_life",
+              onClick = { characterFilterMode = "real_life" },
+              label = { Text("Real-Life Me (${MultiverseArsenalCatalog.outfits.count { it.isRealLifeCreatorVersion }})") },
+              modifier = Modifier.heightIn(min = 48.dp).testTag("char_filter_real_life"),
+            )
+          }
+          item {
+            FilterChip(
+              selected = characterFilterMode == "originals",
+              onClick = { characterFilterMode = "originals" },
               label = { Text("Originals +25%") },
               modifier = Modifier.heightIn(min = 48.dp).testTag("char_filter_originals"),
             )
           }
         }
         LazyRow(
-          horizontalArrangement = Arrangement.spacedBy(10.dp),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
           modifier = Modifier.testTag("char_roster_row"),
         ) {
           items(characterRoster, key = { it.id }) { spec ->
             val selected = progression.equippedOutfitId == spec.id
             val accent = Color(spec.secondaryHex)
             Surface(
-              shape = RoundedCornerShape(14.dp),
+              shape = RoundedCornerShape(12.dp),
               color = if (selected) accent.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surface,
               modifier = Modifier
-                .width(210.dp)
-                .clip(RoundedCornerShape(14.dp))
+                .width(205.dp)
+                .clip(RoundedCornerShape(12.dp))
                 .combinedClickable(
                   onClick = { onEquipOutfit(spec.id) },
                   onLongClick = {
@@ -822,11 +850,11 @@ fun CharacterCustomizationTab(
                 .border(
                   width = if (selected) 2.dp else 1.dp,
                   color = if (selected) accent else MaterialTheme.colorScheme.outline,
-                  shape = RoundedCornerShape(14.dp),
+                  shape = RoundedCornerShape(12.dp),
                 )
                 .testTag("char_select_${spec.id}"),
             ) {
-              Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+              Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(
                   modifier = Modifier.fillMaxWidth(),
                   horizontalArrangement = Arrangement.SpaceBetween,
@@ -837,17 +865,29 @@ fun CharacterCustomizationTab(
                     style = MaterialTheme.typography.labelSmall,
                     color = accent,
                     fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                   )
                   if (spec.isOriginalCharacter) {
                     Text(
-                      text = "ORIG +25%",
+                      text = if (spec.isRealLifeCreatorVersion) "ME +25%" else "ORIG +25%",
                       style = MaterialTheme.typography.labelSmall,
                       color = Color(0xFF00E676),
                       fontWeight = FontWeight.Bold,
                     )
                   }
                 }
-                Text(spec.nameWithVersion, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(spec.nameWithVersion, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (spec.realLifeApparel.isNotBlank()) {
+                  Text(
+                    text = spec.realLifeApparel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFF93C5FD),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                  )
+                }
                 Text(
                   text = "+${spec.baseShieldBonus} SHD • +${spec.baseDamageBonus} DMG • +${(spec.baseMoveBonus * 100).toInt()}% SPD",
                   style = MaterialTheme.typography.labelSmall,
@@ -873,14 +913,23 @@ fun CharacterCustomizationTab(
         modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp)),
       ) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          val safeRigSpeed = if (cc.animationSpeedMultiplier.isFinite()) {
+            cc.animationSpeedMultiplier.coerceIn(0.5f, 2.5f)
+          } else {
+            1.0f
+          }
           Text(
-            text = "RIGGING MOVEMENT SPEED: ${String.format(Locale.US, "%.2fx", cc.animationSpeedMultiplier)}",
+            text = "RIGGING MOVEMENT SPEED: ${String.format(Locale.US, "%.2fx", safeRigSpeed)}",
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary,
           )
           Slider(
-            value = cc.animationSpeedMultiplier.coerceIn(0.5f, 2.5f),
-            onValueChange = { spd -> onUpdateCharacterCustom { it.copy(animationSpeedMultiplier = spd.coerceIn(0.5f, 2.5f)) } },
+            value = safeRigSpeed,
+            onValueChange = { spd ->
+              if (spd.isFinite()) {
+                onUpdateCharacterCustom { it.copy(animationSpeedMultiplier = spd.coerceIn(0.5f, 2.5f)) }
+              }
+            },
             valueRange = 0.5f..2.5f,
             modifier = Modifier.testTag("character_rig_speed_slider"),
           )
@@ -1211,14 +1260,23 @@ fun LevelCustomizationTab(
         modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp)),
       ) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          val safeDensity = if (lc.enemyDensityMultiplier.isFinite()) {
+            lc.enemyDensityMultiplier.coerceIn(0.75f, 2.5f)
+          } else {
+            1.0f
+          }
           Text(
-            text = "Enemy Wave Density: ${String.format(Locale.US, "%.2fx", lc.enemyDensityMultiplier)} (up to 2.5x Swarm)",
+            text = "Enemy Wave Density: ${String.format(Locale.US, "%.2fx", safeDensity)} (up to 2.5x Swarm)",
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.primary,
           )
           Slider(
-            value = lc.enemyDensityMultiplier.coerceIn(0.75f, 2.5f),
-            onValueChange = { v -> onUpdateLevelCustom { it.copy(enemyDensityMultiplier = v.coerceIn(0.75f, 2.5f)) } },
+            value = safeDensity,
+            onValueChange = { v ->
+              if (v.isFinite()) {
+                onUpdateLevelCustom { it.copy(enemyDensityMultiplier = v.coerceIn(0.75f, 2.5f)) }
+              }
+            },
             valueRange = 0.75f..2.5f,
             modifier = Modifier.testTag("level_density_slider"),
           )
@@ -1322,16 +1380,36 @@ fun EquipmentCustomizationTab(
   onUpgradeEquipmentStar: (String) -> Unit = {},
   onUpgradeCustomEquipmentTier: (String) -> Unit = {},
   onUpgradeCustomEquipmentStar: (String) -> Unit = {},
+  onOpenForgeEquipment: (() -> Unit)? = null,
 ) {
   val haptic = LocalHapticFeedback.current
   LazyColumn(
     modifier = Modifier.fillMaxSize(),
-    contentPadding = PaddingValues(16.dp),
-    verticalArrangement = Arrangement.spacedBy(16.dp),
+    contentPadding = PaddingValues(12.dp),
+    verticalArrangement = Arrangement.spacedBy(10.dp),
   ) {
     item {
-      Text("MULTI-EQUIP LETHAL & TACTICAL LOADOUT (UP TO 2 PER SLOT)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-      Text("Tap or Hold any equipment card to equip/upgrade • Level to 60, Tier 1–25, Prestige P30.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Column(modifier = Modifier.weight(1f)) {
+          Text("LETHAL & TACTICAL (2 PER SLOT)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+          Text("Equip & upgrade up to Lvl 60, Tier 25, P30.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (onOpenForgeEquipment != null) {
+          Button(
+            onClick = onOpenForgeEquipment,
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF6D00), contentColor = Color.Black),
+            shape = RoundedCornerShape(10.dp),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+            modifier = Modifier.heightIn(min = 48.dp).testTag("open_forge_custom_equipment_btn"),
+          ) {
+            Text("+ Forge Equip", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+          }
+        }
+      }
     }
 
     items(com.example.data.model.EquipmentSlotType.entries, key = { it.id }) { slotType ->
@@ -1393,7 +1471,7 @@ fun EquipmentCustomizationTab(
           )
 
           LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(itemsForSlot, key = { it.id }) { item ->
+            items(itemsForSlot.distinctBy { it.id }, key = { it.id }) { item ->
               val isPrimary = item.id == eqState.equippedItemId
               val inMulti = multiList.contains(item.id)
               Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1580,12 +1658,13 @@ fun GearCustomizationTab(
   onUpgradeCustomGearTier: (String) -> Unit = {},
   onUpgradeCustomGearStar: (String) -> Unit = {},
   onEquipCustomGear: (GearSlot, String) -> Unit = { _, _ -> },
+  onOpenForgeGear: (() -> Unit)? = null,
 ) {
   val haptic = LocalHapticFeedback.current
   LazyColumn(
     modifier = Modifier.fillMaxSize(),
-    contentPadding = PaddingValues(16.dp),
-    verticalArrangement = Arrangement.spacedBy(16.dp),
+    contentPadding = PaddingValues(12.dp),
+    verticalArrangement = Arrangement.spacedBy(10.dp),
   ) {
     item {
       Row(
@@ -1594,23 +1673,50 @@ fun GearCustomizationTab(
         verticalAlignment = Alignment.CenterVertically,
       ) {
         Column(modifier = Modifier.weight(1f)) {
-          Text("OPERATOR GEAR SUITE", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+          Text("OPERATOR GEAR SUITE • P${progression.gearPrestige}/30", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
           Text(
-            text = "Tap or Hold to upgrade 5 gear modules up to Level 50, Tiers 1–25, and Prestige P30.",
-            style = MaterialTheme.typography.bodySmall,
+            text = "Upgrade 5 slots up to Lvl 50, T25, or forge custom armor.",
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
         }
+        if (onOpenForgeGear != null) {
+          Button(
+            onClick = onOpenForgeGear,
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF), contentColor = Color.Black),
+            shape = RoundedCornerShape(10.dp),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+            modifier = Modifier.heightIn(min = 48.dp).testTag("open_forge_custom_gear_btn"),
+          ) {
+            Text("+ Forge Gear", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+          }
+        } else {
+          Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.18f),
+          ) {
+            Text(
+              text = "P${progression.gearPrestige}/30",
+              style = MaterialTheme.typography.labelMedium,
+              fontWeight = FontWeight.Bold,
+              color = MaterialTheme.colorScheme.tertiary,
+              modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp).testTag("gear_prestige_badge"),
+            )
+          }
+        }
+      }
+      if (onOpenForgeGear != null) {
         Surface(
-          shape = RoundedCornerShape(10.dp),
-          color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.18f),
+          shape = RoundedCornerShape(8.dp),
+          color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.14f),
+          modifier = Modifier.padding(top = 4.dp),
         ) {
           Text(
             text = "GEAR PRESTIGE: P${progression.gearPrestige}/30",
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.tertiary,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp).testTag("gear_prestige_badge"),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp).testTag("gear_prestige_badge"),
           )
         }
       }
@@ -1841,15 +1947,15 @@ fun SkillTreeTab(
 ) {
   val haptic = LocalHapticFeedback.current
   var selectedCategory by remember { mutableStateOf("ALL") }
-  val categories = listOf("ALL", "COMBAT", "SURVIVAL", "ENGINEERING", "WONDER")
+  val categories = listOf("ALL", "COMBAT", "SURVIVAL", "ENGINEERING", "PROTECTION", "WONDER", "REAL_LIFE")
   val nodes = progression.skillNodes.values.toList()
   val filtered = if (selectedCategory == "ALL") nodes else nodes.filter { it.category == selectedCategory }
   val unlockedCount = nodes.count { it.unlocked }
 
   LazyColumn(
     modifier = Modifier.fillMaxSize(),
-    contentPadding = PaddingValues(16.dp),
-    verticalArrangement = Arrangement.spacedBy(14.dp),
+    contentPadding = PaddingValues(12.dp),
+    verticalArrangement = Arrangement.spacedBy(10.dp),
   ) {
     item {
       Row(
@@ -1858,10 +1964,10 @@ fun SkillTreeTab(
         verticalAlignment = Alignment.CenterVertically,
       ) {
         Column(modifier = Modifier.weight(1f)) {
-          Text("OPERATOR SKILL TREE (TIERS 1–25)", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+          Text("SKILL TREE (${nodes.size} INSPIRED • T1–T25)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
           Text(
-            text = "Tap or Hold skill nodes to unlock and ascend from Tier 1 to Tier 25 Multiversal with Blue Essence.",
-            style = MaterialTheme.typography.bodySmall,
+            text = "Combat, Arkham/inFAMOUS/Prototype/Zombies/God of War/Hades/Real-Life skills.",
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
           )
         }
@@ -1870,23 +1976,23 @@ fun SkillTreeTab(
           color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
         ) {
           Text(
-            text = "$unlockedCount / ${nodes.size} UNLOCKED",
+            text = "$unlockedCount / ${nodes.size}",
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp).testTag("skills_unlocked_badge"),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp).testTag("skills_unlocked_badge"),
           )
         }
       }
     }
 
     item {
-      LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         items(categories) { cat ->
           FilterChip(
             selected = selectedCategory == cat,
             onClick = { selectedCategory = cat },
-            label = { Text(cat) },
+            label = { Text(if (cat == "REAL_LIFE") "REAL-LIFE ME" else cat, style = MaterialTheme.typography.labelSmall) },
             modifier = Modifier.heightIn(min = 48.dp).testTag("skill_cat_$cat"),
           )
         }
@@ -1898,6 +2004,8 @@ fun SkillTreeTab(
         "COMBAT" -> Color(0xFFFF5252)
         "SURVIVAL" -> Color(0xFF00E5FF)
         "ENGINEERING" -> Color(0xFFFFD54F)
+        "PROTECTION" -> Color(0xFF38BDF8)
+        "REAL_LIFE" -> Color(0xFF10B981)
         else -> Color(0xFFE040FB)
       }
       val tierMeta = ProgressionCatalog.tierMeta(node.tier)
@@ -1906,25 +2014,35 @@ fun SkillTreeTab(
       val isMaxTier = node.unlocked && node.tier >= node.maxTier
 
       Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier
           .fillMaxWidth()
           .border(
             width = if (node.unlocked) 1.5.dp else 1.dp,
             color = if (node.unlocked) accent else MaterialTheme.colorScheme.outline,
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(12.dp),
           ),
       ) {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
           ) {
-            Column(modifier = Modifier.weight(1f)) {
-              Text(node.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-              Text(node.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+              Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(node.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Surface(shape = RoundedCornerShape(5.dp), color = accent.copy(alpha = 0.16f)) {
+                  Text(
+                    text = node.inspirationTag,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = accent,
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                  )
+                }
+              }
+              Text(node.description, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Surface(
               shape = RoundedCornerShape(8.dp),
@@ -1940,59 +2058,63 @@ fun SkillTreeTab(
             }
           }
 
-          if (!isMaxTier) {
-            val canAfford = totalEssence >= nextCost
-            Surface(
-              shape = RoundedCornerShape(10.dp),
-              color = if (canAfford) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-              modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 48.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .combinedClickable(
-                  onClick = { onUnlockSkill(node.id) },
-                  onLongClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onUnlockSkill(node.id)
-                  },
-                )
-                .testTag("unlock_skill_${node.id}"),
-            ) {
-              Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 10.dp, horizontal = 10.dp)) {
-                Text(
-                  text = when {
-                    !node.unlocked && canAfford -> "Unlock Skill (${nextCost} Blue Essence)"
-                    node.unlocked && canAfford -> "Upgrade to Tier ${node.tier + 1} (${nextCost} Blue Essence)"
-                    else -> "Need ${nextCost - totalEssence} More Blue Essence"
-                  },
-                  style = MaterialTheme.typography.labelMedium,
-                  fontWeight = FontWeight.Bold,
-                  color = if (canAfford) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                  textAlign = TextAlign.Center,
-                )
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (!isMaxTier) {
+              val canAfford = totalEssence >= nextCost
+              Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = if (canAfford) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier
+                  .weight(1f)
+                  .heightIn(min = 48.dp)
+                  .clip(RoundedCornerShape(10.dp))
+                  .combinedClickable(
+                    onClick = { onUnlockSkill(node.id) },
+                    onLongClick = {
+                      haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                      onUnlockSkill(node.id)
+                    },
+                  )
+                  .testTag("unlock_skill_${node.id}"),
+              ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(vertical = 8.dp, horizontal = 8.dp)) {
+                  Text(
+                    text = when {
+                      !node.unlocked && canAfford -> "Unlock (${nextCost} B)"
+                      node.unlocked && canAfford -> "Tier ${node.tier + 1} (${nextCost} B)"
+                      else -> "Need ${nextCost - totalEssence} B"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (canAfford) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    textAlign = TextAlign.Center,
+                  )
+                }
               }
-            }
-          } else {
-            Text(
-              text = "MAX TIER ${node.maxTier} MULTIVERSAL ACTIVE",
-              style = MaterialTheme.typography.labelSmall,
-              fontWeight = FontWeight.Bold,
-              color = Color(0xFF00E676),
-            )
-          }
-
-          if (node.unlocked) {
-            OutlinedButton(
-              onClick = { onUpgradeSkillStar(node.id) },
-              enabled = node.starLevel < StarRankMeta.MAX_STARS,
-              shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.fillMaxWidth().height(48.dp).testTag("upgrade_skill_star_${node.id}"),
-            ) {
+            } else {
               Text(
-                text = if (node.starLevel >= StarRankMeta.MAX_STARS) "${StarRankMeta.MAX_STARS}★ MAX" else "Skill Star +1 (${node.starLevel}★ -> ${node.starLevel + 1}★, $skillStarCost B)",
+                text = "MAX T${node.maxTier}",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
+                color = Color(0xFF00E676),
+                modifier = Modifier.weight(1f),
               )
+            }
+
+            if (node.unlocked) {
+              OutlinedButton(
+                onClick = { onUpgradeSkillStar(node.id) },
+                enabled = node.starLevel < StarRankMeta.MAX_STARS,
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                modifier = Modifier.weight(0.9f).height(48.dp).testTag("upgrade_skill_star_${node.id}"),
+              ) {
+                Text(
+                  text = if (node.starLevel >= StarRankMeta.MAX_STARS) "${StarRankMeta.MAX_STARS}★ MAX" else "★+1 (${node.starLevel}★, $skillStarCost B)",
+                  style = MaterialTheme.typography.labelSmall,
+                  fontWeight = FontWeight.Bold,
+                )
+              }
             }
           }
         }

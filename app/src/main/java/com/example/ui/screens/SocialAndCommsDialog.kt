@@ -3,6 +3,7 @@ package com.example.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
@@ -109,8 +111,9 @@ fun SocialAndCommsDialog(
 
   Dialog(
     onDismissRequest = onDismiss,
-    properties = DialogProperties(usePlatformDefaultWidth = false),
+    properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
   ) {
+    com.example.util.SyncDialogFullscreen()
     Surface(
       color = MaterialTheme.colorScheme.background,
       modifier = Modifier.fillMaxSize().testTag("social_and_comms_dialog"),
@@ -370,8 +373,11 @@ fun SocialAndCommsDialog(
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
           Text("Donate Blue Essence to level up Clan [${progression.clan.tag}] and increase perks for all members!")
           Text("Current Clan Bank: ${progression.clan.totalEssenceDonated} Blue Essence • Level ${progression.clan.level}/25")
-          LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(donationOptions) { amount ->
+          Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+          ) {
+            donationOptions.forEach { amount ->
               OutlinedButton(
                 onClick = {
                   onDonateClan(amount)

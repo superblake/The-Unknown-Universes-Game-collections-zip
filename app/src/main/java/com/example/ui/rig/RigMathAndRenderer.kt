@@ -263,6 +263,13 @@ fun DrawScope.drawRigCharacter(
     val isNiko = outfitId.startsWith("niko")
     val isHeller = outfitId.startsWith("heller")
     val isDelsin = outfitId.startsWith("delsin")
+    val isRealLifeMe = outfitId.startsWith("mrcrossover") ||
+      outfitId.startsWith("origin_sentinel") ||
+      outfitId.startsWith("cole") ||
+      outfitId.startsWith("prototype") ||
+      outfitId.startsWith("spacetime") ||
+      outfitId.startsWith("crucible") ||
+      outfitId.startsWith("shipheroes")
     val bodyStroke = if (highContrast) 13f else 11f
     val armorColor =
       if (visorColorOverride != null || cloakOverride != null) primaryColor
@@ -459,11 +466,19 @@ fun DrawScope.drawRigCharacter(
     isNiko -> {
       drawRect(color = secondaryColor, topLeft = Offset(chestMid.x - 6f, chestMid.y - 4f), size = androidx.compose.ui.geometry.Size(12f, 8f), style = Stroke(width = 2.2f))
     }
+    isRealLifeMe && !highContrast -> {
+      // Real-life hoodie / jacket collar & center zipper seam
+      val collarMid = Offset(skeleton.chest.x, skeleton.chest.y - 2f)
+      drawLine(Color(0xFFE2E8F0).copy(alpha = 0.72f), collarMid, Offset(skeleton.pelvis.x, skeleton.pelvis.y - 2f), strokeWidth = 2.4f, cap = StrokeCap.Round)
+      drawLine(secondaryColor.copy(alpha = 0.9f), skeleton.lShoulder, collarMid, strokeWidth = 3.2f, cap = StrokeCap.Round)
+      drawLine(secondaryColor.copy(alpha = 0.9f), skeleton.rShoulder, collarMid, strokeWidth = 3.2f, cap = StrokeCap.Round)
+      drawCircle(color = secondaryColor, radius = 3.8f, center = chestMid)
+    }
     else -> drawCircle(color = secondaryColor, radius = 5f, center = chestMid)
   }
-  // Tactical / Utility belt
+  // Tactical / Utility belt (or real-life casual belt)
   drawLine(
-    color = if (isBatman) Color(0xFFFFD54F) else secondaryColor.copy(alpha = 0.8f),
+    color = if (isBatman) Color(0xFFFFD54F) else if (isRealLifeMe) Color(0xFF334155) else secondaryColor.copy(alpha = 0.8f),
     start = Offset(skeleton.lHip.x - 4f, skeleton.pelvis.y),
     end = Offset(skeleton.rHip.x + 4f, skeleton.pelvis.y),
     strokeWidth = if (isBatman) 5f else 4f,
@@ -471,15 +486,20 @@ fun DrawScope.drawRigCharacter(
   )
 
   // Shoulder Pauldrons & Division Orange ISAC Beacon
-  drawCircle(color = armorColor, radius = 8.5f, center = skeleton.lShoulder)
-  drawCircle(color = armorColor, radius = 8.5f, center = skeleton.rShoulder)
+  drawCircle(color = armorColor, radius = if (isRealLifeMe) 7f else 8.5f, center = skeleton.lShoulder)
+  drawCircle(color = armorColor, radius = if (isRealLifeMe) 7f else 8.5f, center = skeleton.rShoulder)
   if (archetype == "operator") {
     drawCircle(color = Color(0xFFFF8F00), radius = 4f, center = Offset(skeleton.lShoulder.x, skeleton.lShoulder.y - 4f))
   }
 
-  // Arms & Gauntlet Bracers
+  // Arms & Gauntlet Bracers (+ everyday wristwatch on left forearm for real-life Blake)
   drawLine(armorColor.copy(alpha = 0.9f), skeleton.lShoulder, skeleton.lElbow, strokeWidth = bodyStroke * 0.85f, cap = StrokeCap.Round)
   drawLine(secondaryColor, skeleton.lElbow, skeleton.lHand, strokeWidth = bodyStroke * 0.78f, cap = StrokeCap.Round)
+  if (isRealLifeMe && !highContrast) {
+    val watchPos = Offset((skeleton.lElbow.x + skeleton.lHand.x) * 0.52f, (skeleton.lElbow.y + skeleton.lHand.y) * 0.52f)
+    drawCircle(color = Color(0xFF0F172A), radius = 5.5f, center = watchPos)
+    drawCircle(color = Color(0xFF38BDF8), radius = 3.2f, center = watchPos)
+  }
   drawLine(armorColor.copy(alpha = 0.9f), skeleton.rShoulder, skeleton.rElbow, strokeWidth = bodyStroke * 0.85f, cap = StrokeCap.Round)
   drawLine(secondaryColor, skeleton.rElbow, skeleton.rHand, strokeWidth = bodyStroke * 0.78f, cap = StrokeCap.Round)
 
@@ -600,6 +620,13 @@ fun DrawScope.drawRigCharacter(
     drawLine(maskCol, Offset(skeleton.head.x - 10f, skeleton.head.y - 2f), Offset(skeleton.head.x + 10f, skeleton.head.y - 2f), strokeWidth = 6f, cap = StrokeCap.Round)
     drawCircle(Color.White, radius = 2.4f, center = Offset(skeleton.head.x - 5f, skeleton.head.y - 2f))
     drawCircle(Color.White, radius = 2.4f, center = Offset(skeleton.head.x + 5f, skeleton.head.y - 2f))
+  } else if (isRealLifeMe) {
+    // Everyday eyeglasses frame + subtle hair crest for Real-Life Blake versions
+    val frameCol = visorColorOverride ?: Color(0xFFE2E8F0)
+    drawLine(Color(0xFF1E293B), Offset(skeleton.head.x - 10f, skeleton.head.y - 14f), Offset(skeleton.head.x + 10f, skeleton.head.y - 14f), strokeWidth = 4.5f, cap = StrokeCap.Round)
+    drawRect(color = frameCol, topLeft = Offset(skeleton.head.x - 10f, skeleton.head.y - 6f), size = androidx.compose.ui.geometry.Size(8f, 6f), style = Stroke(width = 2.0f))
+    drawRect(color = frameCol, topLeft = Offset(skeleton.head.x + 2f, skeleton.head.y - 6f), size = androidx.compose.ui.geometry.Size(8f, 6f), style = Stroke(width = 2.0f))
+    drawLine(frameCol, Offset(skeleton.head.x - 2f, skeleton.head.y - 3f), Offset(skeleton.head.x + 2f, skeleton.head.y - 3f), strokeWidth = 2.0f)
   } else {
     drawLine(
       color = visorColorOverride ?: secondaryColor,

@@ -657,12 +657,13 @@ data class SkillNode(
   val id: String,
   val title: String,
   val description: String,
-  val category: String, // COMBAT, SURVIVAL, ENGINEERING, WONDER, PROTECTION
+  val category: String, // COMBAT, SURVIVAL, ENGINEERING, PROTECTION, WONDER, REAL_LIFE
   val costEssence: Long,
   val unlocked: Boolean = false,
   val tier: Int = 1,
   val maxTier: Int = 25,
   val starLevel: Int = 1,
+  val inspirationTag: String = "Core",
 ) {
   fun nextUpgradeCost(): Long = costEssence + (tier * 250L)
 }
@@ -1634,20 +1635,45 @@ object ProgressionCatalog {
   )
 
   fun defaultSkillNodes(): Map<String, SkillNode> = listOf(
-    SkillNode("sk_shield_1", "Reinforced Chassis I", "+25 Max Shield per Tier (up to T25: +625 Shield).", "SURVIVAL", 300L, false, 1, 25),
-    SkillNode("sk_shield_2", "Reinforced Chassis II", "+35 Max Shield & +1 Regen/sec per Tier (up to T25).", "SURVIVAL", 600L, false, 1, 25),
-    SkillNode("sk_damage_1", "Ballistic Lethality I", "+2 Bolt Damage per Tier (up to T25: +50 DMG).", "COMBAT", 350L, false, 1, 25),
-    SkillNode("sk_damage_2", "Ballistic Lethality II", "+3 Bolt Damage & +1 Pierce every 2 Tiers (T1-T25).", "COMBAT", 750L, false, 1, 25),
-    SkillNode("sk_cooldown_1", "Overdrive Capacitor", "+12% Cooldown Haste & +3% Move Speed per Tier (uncapped).", "ENGINEERING", 450L, false, 1, 25),
-    SkillNode("sk_cooldown_2", "Temporal Flux Relay", "+14% Cooldown Haste & +5% Fire Rate per Tier (uncapped).", "ENGINEERING", 650L, false, 1, 25),
-    SkillNode("sk_wonder_1", "Mystery Crate Attractor", "+30% Wonder Drop Rate & +15% Wonder Duration per Tier (T1-T25).", "WONDER", 550L, false, 1, 25),
-    SkillNode("sk_protection_1", "Titanium Reactive Plate", "+3.5% Incoming Damage Protection & +20 Shield per Tier.", "PROTECTION", 400L, false, 1, 25),
-    SkillNode("sk_protection_2", "Multiverse Aegis Ward", "+4% Elemental/Explosive/Rock/Sand Protection & +1.5 Siphon/Tier.", "PROTECTION", 650L, false, 1, 25),
-    SkillNode("sk_explosive_1", "Ordnance & Seismic Mastery", "+12% Explosive, Rock & Sand Damage + Blast Splash per Tier.", "COMBAT", 500L, false, 1, 25),
-    SkillNode("sk_perk_amp_1", "Global Perk Overcharger", "+8% Effectiveness to ALL Perks & Custom Perks per Tier.", "SURVIVAL", 550L, false, 1, 25),
-    SkillNode("sk_buff_mastery_1", "Omniverse Buff Resonance", "+6% Power to ALL Buffs, Cores, Shards & Companions per Tier.", "WONDER", 600L, false, 1, 25),
-    SkillNode("sk_sand_rock_1", "Tectonic Dune Shredder", "+3 Armor Shred & +8% Stagger/Knockback per Tier.", "COMBAT", 480L, false, 1, 25),
-    SkillNode("sk_siphon_1", "Blacklight Shield Siphon", "+3 Kill Shield Siphon & +1.2/sec Regen per Tier.", "PROTECTION", 520L, false, 1, 25),
+    // Core + Existing 14 IDs preserved
+    SkillNode("sk_shield_1", "Reinforced Chassis I", "+25 Max Shield per Tier (up to T25: +625 Shield).", "SURVIVAL", 300L, false, 1, 25, inspirationTag = "The Division SHD"),
+    SkillNode("sk_shield_2", "Reinforced Chassis II", "+35 Max Shield & +1 Regen/sec per Tier (up to T25).", "SURVIVAL", 600L, false, 1, 25, inspirationTag = "Warframe / Destiny"),
+    SkillNode("sk_damage_1", "Ballistic Lethality I", "+2 Bolt Damage per Tier (up to T25: +50 DMG).", "COMBAT", 350L, false, 1, 25, inspirationTag = "Call of Duty Zombies"),
+    SkillNode("sk_damage_2", "Ballistic Lethality II", "+3 Bolt Damage & +1 Pierce every 2 Tiers (T1-T25).", "COMBAT", 750L, false, 1, 25, inspirationTag = "Doom Eternal"),
+    SkillNode("sk_cooldown_1", "Overdrive Capacitor", "+12% Cooldown Haste & +3% Move Speed per Tier.", "ENGINEERING", 450L, false, 1, 25, inspirationTag = "inFAMOUS / Control"),
+    SkillNode("sk_cooldown_2", "Temporal Flux Relay", "+14% Cooldown Haste & +5% Fire Rate per Tier.", "ENGINEERING", 650L, false, 1, 25, inspirationTag = "Chrono / Force Unleashed"),
+    SkillNode("sk_wonder_1", "Mystery Crate Attractor", "+30% Wonder Drop Rate & +15% Wonder Duration per Tier.", "WONDER", 550L, false, 1, 25, inspirationTag = "BO3 / MW Zombies"),
+    SkillNode("sk_protection_1", "Titanium Reactive Plate", "+3.5% Incoming Damage Protection & +20 Shield per Tier.", "PROTECTION", 400L, false, 1, 25, inspirationTag = "Batman Arkham"),
+    SkillNode("sk_protection_2", "Multiverse Aegis Ward", "+4% Elemental/Explosive/Rock/Sand DR & +1.5 Siphon/Tier.", "PROTECTION", 650L, false, 1, 25, inspirationTag = "God of War / Hades"),
+    SkillNode("sk_explosive_1", "Ordnance & Seismic Mastery", "+12% Explosive, Rock & Sand Damage + Blast Splash per Tier.", "COMBAT", 500L, false, 1, 25, inspirationTag = "GTA IV / Prototype"),
+    SkillNode("sk_perk_amp_1", "Global Perk Overcharger", "+8% Effectiveness to ALL Perks & Custom Perks per Tier.", "SURVIVAL", 550L, false, 1, 25, inspirationTag = "BO3 GobbleGum / Sunset"),
+    SkillNode("sk_buff_mastery_1", "Omniverse Buff Resonance", "+6% Power to ALL Buffs, Cores, Shards & Companions per Tier.", "WONDER", 600L, false, 1, 25, inspirationTag = "Control / Warframe"),
+    SkillNode("sk_sand_rock_1", "Tectonic Dune Shredder", "+3 Armor Shred & +8% Stagger/Knockback per Tier.", "COMBAT", 480L, false, 1, 25, inspirationTag = "Abyss / Dark & Darker"),
+    SkillNode("sk_siphon_1", "Blacklight Shield Siphon", "+3 Kill Shield Siphon & +1.2/sec Regen per Tier.", "PROTECTION", 520L, false, 1, 25, inspirationTag = "Prototype / Bloodborne"),
+    // Expanded Inspired Collection & Spiritual Successor Skills (22 new nodes -> 36 total)
+    SkillNode("sk_zombies_gobble", "Aether GobbleGum Alchemy", "+5% Essence Gain & +18% Wonder Drop Chance per Tier.", "WONDER", 420L, false, 1, 25, inspirationTag = "BO3 Zombies"),
+    SkillNode("sk_zombies_deadbolt", "Deadbolt Exfil Mastery", "+12 Max Shield & +4% Fire Rate per Tier during Waves.", "SURVIVAL", 440L, false, 1, 25, inspirationTag = "MW Zombies"),
+    SkillNode("sk_division_isac", "ISAC Smart Tech Support", "-5% All Cooldowns & +0.8/sec Armor Regen per Tier.", "ENGINEERING", 460L, false, 1, 25, inspirationTag = "The Division"),
+    SkillNode("sk_infamous_karmic", "Karmic Conduit Overload", "+2 Chain Voltage DMG & +3% Sprint Speed per Tier.", "COMBAT", 430L, false, 1, 25, inspirationTag = "inFAMOUS / Sunset Overdrive"),
+    SkillNode("sk_prototype_biomass", "Blacklight Tendril Devour", "+20 Max Shield & +2 Shield Siphon on Kill per Tier.", "SURVIVAL", 480L, false, 1, 25, inspirationTag = "Prototype / Crackdown"),
+    SkillNode("sk_arkham_freeflow", "Freeflow Critical Combo", "+8% Crit Damage & +2.5% Evade Speed per Tier.", "COMBAT", 410L, false, 1, 25, inspirationTag = "Batman Arkham / Shadow of War"),
+    SkillNode("sk_arkham_predator", "Detective Sonar Disruptor", "+1 Bolt Pierce every 4 Tiers & +14% Trap Bonus per Tier.", "ENGINEERING", 450L, false, 1, 25, inspirationTag = "Arkham Origins"),
+    SkillNode("sk_gow_spartan", "Spartan Runic Rage", "+3 Heavy DMG & +15 Max Shield per Tier.", "COMBAT", 510L, false, 1, 25, inspirationTag = "God of War / DMC"),
+    SkillNode("sk_gow_valkyrie", "Valkyrie Parry Ward", "+3% Incoming DR & +1.0/sec Regen per Tier.", "PROTECTION", 540L, false, 1, 25, inspirationTag = "God of War Ragnarök"),
+    SkillNode("sk_force_telekinesis", "Force Repulse Mastery", "-6% Power Cooldown & +10% Knockback/Splash per Tier.", "ENGINEERING", 490L, false, 1, 25, inspirationTag = "Force Unleashed / Control"),
+    SkillNode("sk_spider_acuity", "Spider-Sense Dodge Flow", "+4% Move Speed & +2.5% Incoming DR per Tier.", "PROTECTION", 400L, false, 1, 25, inspirationTag = "Insomniac Spider-Man"),
+    SkillNode("sk_gta4_grit", "Liberty Street Grit", "+18 Max Shield & +2 Close-Range DMG per Tier.", "SURVIVAL", 360L, false, 1, 25, inspirationTag = "GTA IV / Max Payne"),
+    SkillNode("sk_superman_solar", "Fortress Solar Overcharge", "+14% Projectile Velocity & +2 Solar DMG per Tier.", "COMBAT", 530L, false, 1, 25, inspirationTag = "Superman Returns / Saints Row IV"),
+    SkillNode("sk_abyss_dungeon", "Abyssal Torch Extraction", "+6% Loot Luck & +1.5/sec Dungeon Regen per Tier.", "WONDER", 470L, false, 1, 25, inspirationTag = "Abyss / Dark & Darker"),
+    SkillNode("sk_abyss_boon", "Chthonic Death Defiance", "+25 Max Shield & +3% Boss Impact DR per Tier.", "PROTECTION", 580L, false, 1, 25, inspirationTag = "Hades / Abyss"),
+    SkillNode("sk_doom_glory", "Rip & Tear Armor Belch", "+2.5 Kill Shield Siphon & +4% Fire Rate per Tier.", "COMBAT", 560L, false, 1, 25, inspirationTag = "Doom Eternal"),
+    SkillNode("sk_dmc_style", "SSS Stylish Cadence", "+6% Fire Rate & +5% Crit Multiplier per Tier.", "COMBAT", 520L, false, 1, 25, inspirationTag = "Devil May Cry"),
+    SkillNode("sk_control_astral", "Astral Object of Power", "-6% Power & Dash Cooldown + 12% Wonder Duration per Tier.", "WONDER", 550L, false, 1, 25, inspirationTag = "Control / Remedy"),
+    // Real-Life Creator Skills (Blake's real-life habits & creative craft)
+    SkillNode("sk_rl_sketchbook", "Sep 2025 Sketchbook Focus", "+2 Bolt DMG & +5% Essence Gain per Tier from hand-drawn planning.", "REAL_LIFE", 320L, false, 1, 25, inspirationTag = "Real-Life Origins Map"),
+    SkillNode("sk_rl_krita_layers", "Krita & PENUP Layer Flow", "+5% Crit & -5% Cooldowns per Tier from digital art precision.", "REAL_LIFE", 360L, false, 1, 25, inspirationTag = "Real-Life Art Tablet"),
+    SkillNode("sk_rl_gym_cardio", "Everyday Gym & Cardio Grit", "+22 Max Shield & +4% Sprint Speed per Tier from real conditioning.", "REAL_LIFE", 340L, false, 1, 25, inspirationTag = "Real-Life Conditioning"),
+    SkillNode("sk_rl_modder_tinker", "Android & Blender Tinker", "+5% Fire Rate & +12% Trap/Vacuum Radius per Tier.", "REAL_LIFE", 390L, false, 1, 25, inspirationTag = "Real-Life Modding"),
   ).associateBy { it.id }
 
   val protectionUpgrades: List<ProtectionUpgradeSpec> = listOf(
@@ -1698,6 +1724,38 @@ object ProgressionCatalog {
       effectTag = "BOSS GUARD",
       baseCostEssence = 480L,
       colorHex = 0xFFFF3D71L,
+    ),
+    ProtectionUpgradeSpec(
+      id = "prot_arkham_freeflow",
+      title = "Arkham Counter-Weave Vest",
+      subtitle = "Batman Arkham / Shadow of War: +20 Max Shield & +3% Counter Evade DR per Rank",
+      effectTag = "COUNTER DR",
+      baseCostEssence = 360L,
+      colorHex = 0xFFFFD54FL,
+    ),
+    ProtectionUpgradeSpec(
+      id = "prot_control_resonance",
+      title = "HRA Astral Resonance Shield",
+      subtitle = "Control / Force Unleashed: +28 Max Shield & +5% Power Haste per Rank",
+      effectTag = "ASTRAL WARD",
+      baseCostEssence = 420L,
+      colorHex = 0xFF7C4DFFL,
+    ),
+    ProtectionUpgradeSpec(
+      id = "prot_hades_defiance",
+      title = "Stygian Death-Defiance Boon",
+      subtitle = "Hades / Abyss of Dungeons: +22 Max Shield & +1.2/s Regen per Rank",
+      effectTag = "DEFIANCE",
+      baseCostEssence = 460L,
+      colorHex = 0xFFB388FFL,
+    ),
+    ProtectionUpgradeSpec(
+      id = "prot_doom_armor_belch",
+      title = "Praetor Flame-Belch Plating",
+      subtitle = "Doom Eternal / God of War: +30 Max Shield & +2 Shield Siphon/Kill per Rank",
+      effectTag = "ARMOR BELCH",
+      baseCostEssence = 490L,
+      colorHex = 0xFFFF5722L,
     ),
   )
 
@@ -2122,16 +2180,20 @@ object ProgressionCatalog {
     EquipmentItemSpec("lethal_cluster", "Arc Cluster Mine", EquipmentSlotType.LETHAL, "Deploys homing arc sub-munitions seeking elite targets (Energy).", 190f, 10.0f, 0xFF7C4DFF),
     EquipmentItemSpec("lethal_rock_tremor", "Tectonic Quake Charge", EquipmentSlotType.LETHAL, "Detonates seismic rock spikes shattering enemy armor (Rock).", 220f, 7.5f, 0xFFFFD54F),
     EquipmentItemSpec("lethal_sandstorm_jar", "Abyssal Sandstorm Flask", EquipmentSlotType.LETHAL, "Unleashes an abrasive desert vortex eroding armor & shields (Sand).", 185f, 7.0f, 0xFFD7CCC8),
+    EquipmentItemSpec("lethal_web_snare_bomb", "Spider-Tech Web Bomb", EquipmentSlotType.LETHAL, "Spider-Man / Arkham: Tethers & slows swarms in electrified shock webbing (Energy).", 210f, 6.5f, 0xFFE53935),
+    EquipmentItemSpec("lethal_force_repulse_emitter", "Force & Astral Repulse Pod", EquipmentSlotType.LETHAL, "Force Unleashed / Control: Blasts a kinetic shockwave knocking back elites (Kinetic).", 255f, 8.5f, 0xFF38BDF8),
     EquipmentItemSpec("tactical_stim", "Nano-Stim Injector", EquipmentSlotType.TACTICAL, "Restores 60 shield instantly and accelerates movement & cooldowns.", 60f, 5.0f, 0xFF00E5FF),
     EquipmentItemSpec("tactical_emp", "EMP Shockwave", EquipmentSlotType.TACTICAL, "Disables enemy energy barriers and stuns nearby targets (Energy).", 90f, 9.0f, 0xFF00B0FF),
     EquipmentItemSpec("tactical_decoy", "Holographic Decoy", EquipmentSlotType.TACTICAL, "Projects a decoy emitter that draws hostile aggro.", 0f, 14.0f, 0xFF1DE9B6),
     EquipmentItemSpec("tactical_insertion", "Chrono Beacon", EquipmentSlotType.TACTICAL, "Spawns a revival checkpoint, continuous shield aura & cooldown surge.", 110f, 20.0f, 0xFF651FFF),
     EquipmentItemSpec("tactical_rock_aegis", "Stonebreaker Bulwark Surge", EquipmentSlotType.TACTICAL, "Coats armor in tectonic stone reducing damage & staggering hostiles (Rock).", 95f, 8.5f, 0xFFFFCA28),
     EquipmentItemSpec("tactical_sand_veil", "Desert Mirage Cloak", EquipmentSlotType.TACTICAL, "Summons a shifting sand veil restoring shield & boosting evade speed (Sand).", 80f, 7.5f, 0xFFE0C097),
+    EquipmentItemSpec("tactical_isac_seeker_heal", "ISAC Mender Seeker", EquipmentSlotType.TACTICAL, "The Division: Launches a nano-repair drone restoring 85 shield & pulsing regen.", 85f, 6.5f, 0xFFFF8F00),
+    EquipmentItemSpec("tactical_runic_frost_cleaver", "Leviathan Frost & Parry Pulse", EquipmentSlotType.TACTICAL, "God of War / Hades: Chills surrounding enemies & grants brief counter armor (Cryo).", 105f, 8.0f, 0xFF448AFF),
   )
 
   fun allEquipmentItems(customEquipment: List<UserCustomEquipmentSpec> = emptyList()): List<EquipmentItemSpec> =
-    equipmentItems + customEquipment.map { it.toEquipmentItemSpec() }
+    (equipmentItems + customEquipment.map { it.toEquipmentItemSpec() }).distinctBy { it.id }
 
   fun resolveEquipmentItem(id: String, customEquipment: List<UserCustomEquipmentSpec> = emptyList()): EquipmentItemSpec =
     customEquipment.firstOrNull { it.id == id }?.toEquipmentItemSpec()

@@ -13,19 +13,23 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -330,11 +334,17 @@ fun ArenaScreen(
     Color(0xFF0A101E).copy(alpha = settings.hudOpacity)
   }
 
+  activeArenaZoomScale = settings.collectionResolutionMode.arenaZoomScale
+
+  BoxWithConstraints(
+    modifier = Modifier
+      .fillMaxSize()
+      .background(if (settings.effectiveHighContrast) Color.Black else Color(0xFF060911)),
+  ) {
+    val rightActionMaxWidth = (maxWidth * 0.58f).coerceAtLeast(180.dp)
   Column(
     modifier = Modifier
       .fillMaxSize()
-      .background(if (settings.effectiveHighContrast) Color.Black else Color(0xFF060911))
-      .windowInsetsPadding(WindowInsets.displayCutout)
       .padding(outerMargin)
       .focusRequester(focusRequester)
       .focusable()
@@ -379,7 +389,12 @@ fun ArenaScreen(
       color = hudSurfaceBg,
       modifier = Modifier.fillMaxWidth().border(1.dp, palette.playerAccent.copy(alpha = 0.6f)),
     ) {
-      Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+      Column(
+        modifier = Modifier
+          .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top))
+          .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+      ) {
         var showPlacesBar by remember { mutableStateOf(false) }
         Row(
           modifier = Modifier.fillMaxWidth(),
@@ -429,7 +444,9 @@ fun ArenaScreen(
             }
           }
 
+          Spacer(Modifier.width(6.dp))
           Row(
+            modifier = Modifier.widthIn(max = rightActionMaxWidth).horizontalScroll(rememberScrollState()),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
           ) {
@@ -1634,9 +1651,12 @@ fun ArenaScreen(
           }
         },
         text = {
-          Column(modifier = Modifier.fillMaxWidth().height(380.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-              items(listOf(ChatChannel.LIVE_MATCH, ChatChannel.CLAN, ChatChannel.GENERAL), key = { it.id }) { ch ->
+          Column(modifier = Modifier.fillMaxWidth().heightIn(min = 200.dp, max = 380.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+              modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+              horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+              listOf(ChatChannel.LIVE_MATCH, ChatChannel.CLAN, ChatChannel.GENERAL).forEach { ch ->
                 FilterChip(
                   selected = activeArenaChannel == ch,
                   onClick = { activeArenaChannel = ch },
@@ -1656,8 +1676,11 @@ fun ArenaScreen(
             }
             if (activeArenaChannel == ChatChannel.LIVE_MATCH) {
               Text("1-TAP QUICK CALLOUTS", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-              LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(SocialCatalog.quickTacticalCallouts) { callout ->
+              Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+              ) {
+                SocialCatalog.quickTacticalCallouts.forEach { callout ->
                   Button(
                     onClick = {
                       onSendChatMessage(ChatChannel.LIVE_MATCH, callout, null, true)
@@ -1734,11 +1757,14 @@ fun ArenaScreen(
           Text("SWITCH ARENA MAP & MODE (${allAreas.size} MAPS)", fontWeight = FontWeight.Bold)
         },
         text = {
-          Column(modifier = Modifier.fillMaxWidth().height(440.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          Column(modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp, max = 440.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (onSelectMode != null) {
               Text("DEPLOYMENT MODE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-              LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(UniverseCatalog.modes.distinctBy { it.id }, key = { it.id }) { m ->
+              Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+              ) {
+                UniverseCatalog.modes.distinctBy { it.id }.forEach { m ->
                   val mTier = progression.modeTier(m.id)
                   val mStar = progression.modeStar(m.id)
                   FilterChip(
@@ -1837,5 +1863,6 @@ fun ArenaScreen(
         customGameMaps = progression.customGameMaps,
       )
     }
+  }
   }
 }

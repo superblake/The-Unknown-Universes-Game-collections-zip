@@ -742,7 +742,7 @@ class UniverseViewModel(
       title.lowercase().replace(Regex("[^a-z0-9_]+"), "_").trim('_').ifEmpty { "custom" }
     }
     val prefix = if (category == CustomMapGameCategory.BO3) "area_bo3_custom_" else "area_col_custom_"
-    val mapId = "${prefix}${slug.take(24)}_${System.currentTimeMillis() % 10000}"
+    val mapId = "${prefix}${slug.take(24)}_${java.util.UUID.randomUUID().toString().take(8)}"
     val spec = store.addOrUpdateCustomGameMap(
       UserCustomGameMapSpec(
         id = mapId,
@@ -786,7 +786,7 @@ class UniverseViewModel(
     val slug = weaponCode.lowercase().replace(Regex("[^a-z0-9_]+"), "_").trim('_').ifEmpty {
       name.lowercase().replace(Regex("[^a-z0-9_]+"), "_").trim('_').ifEmpty { "custom" }
     }
-    val wpnId = "wpn_${category.id}_${slug.take(18)}_${System.currentTimeMillis() % 10000}"
+    val wpnId = "wpn_${category.id}_${slug.take(18)}_${java.util.UUID.randomUUID().toString().take(8)}"
     val spec = store.addOrUpdateCustomWeapon(
       UserCustomWeaponSpec(
         id = wpnId,
@@ -1312,7 +1312,7 @@ class UniverseViewModel(
 
   fun toggleMultiEquipmentEquip(slotType: EquipmentSlotType, itemId: String) {
     val list = progressionStore?.toggleMultiEquipmentEquip(slotType, itemId) ?: return
-    val name = ProgressionCatalog.equipmentItems.firstOrNull { it.id == itemId }?.name ?: itemId
+    val name = ProgressionCatalog.resolveEquipmentItem(itemId, progressionState.value.customEquipment).name
     _statusBanner.value = "${slotType.displayName} Loadout (${list.size}/2) updated: $name"
   }
 

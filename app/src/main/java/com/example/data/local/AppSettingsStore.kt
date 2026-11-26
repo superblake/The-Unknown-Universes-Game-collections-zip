@@ -74,6 +74,194 @@ enum class ColorBlindMode(val label: String) {
   TRITANOPIA("Tritanopia (Blue-Yellow)"),
 }
 
+enum class CollectionResolutionMode(
+  val id: String,
+  val label: String,
+  val shortTag: String,
+  val targetWidthPx: Int,
+  val targetHeightPx: Int,
+  val cardAspectRatio: Float,
+  val bitmapMaxDim: Int,
+  val arenaZoomScale: Float,
+  val summary: String,
+) {
+  AUTO(
+    id = "auto",
+    label = "Auto (Device Native)",
+    shortTag = "AUTO",
+    targetWidthPx = 0,
+    targetHeightPx = 0,
+    cardAspectRatio = 16f / 9.5f,
+    bitmapMaxDim = 960,
+    arenaZoomScale = 1.0f,
+    summary = "Adapts automatically to phone, foldable, or tablet displays (including Galaxy Tab A9+)",
+  ),
+  SD_480P(
+    id = "sd_480",
+    label = "480p SD (854×480)",
+    shortTag = "480P",
+    targetWidthPx = 854,
+    targetHeightPx = 480,
+    cardAspectRatio = 16f / 9f,
+    bitmapMaxDim = 480,
+    arenaZoomScale = 0.88f,
+    summary = "Compact 16:9 low-overhead preset for older devices & maximum battery life",
+  ),
+  QHD_540P(
+    id = "qhd_540",
+    label = "540p qHD (960×540)",
+    shortTag = "540P",
+    targetWidthPx = 960,
+    targetHeightPx = 540,
+    cardAspectRatio = 16f / 9f,
+    bitmapMaxDim = 540,
+    arenaZoomScale = 0.91f,
+    summary = "Balanced handheld qHD layout for slim screens and smooth frame pacing",
+  ),
+  HD_720(
+    id = "hd_720",
+    label = "720p HD (1280×720)",
+    shortTag = "720P",
+    targetWidthPx = 1280,
+    targetHeightPx = 720,
+    cardAspectRatio = 16f / 9f,
+    bitmapMaxDim = 640,
+    arenaZoomScale = 0.94f,
+    summary = "Crisp 16:9 HD layout for phones and smooth battery performance",
+  ),
+  WXGA_800(
+    id = "wxga_800",
+    label = "800p Tablet (1280×800)",
+    shortTag = "800P 16:10",
+    targetWidthPx = 1280,
+    targetHeightPx = 800,
+    cardAspectRatio = 16f / 10f,
+    bitmapMaxDim = 800,
+    arenaZoomScale = 0.96f,
+    summary = "Lightweight 16:10 tablet aspect ratio for 8–11\" Android tablets",
+  ),
+  HD_PLUS_900(
+    id = "hd_plus_900",
+    label = "900p HD+ (1600×900)",
+    shortTag = "900P",
+    targetWidthPx = 1600,
+    targetHeightPx = 900,
+    cardAspectRatio = 16f / 9f,
+    bitmapMaxDim = 900,
+    arenaZoomScale = 0.98f,
+    summary = "Widescreen HD+ density bridging mobile and desktop showcase views",
+  ),
+  FHD_1080(
+    id = "fhd_1080",
+    label = "1080p FHD (1920×1080)",
+    shortTag = "1080P",
+    targetWidthPx = 1920,
+    targetHeightPx = 1080,
+    cardAspectRatio = 16f / 9f,
+    bitmapMaxDim = 960,
+    arenaZoomScale = 1.0f,
+    summary = "Standard sharp 16:9 widescreen collection showcase & Arena framing",
+  ),
+  FHD_PLUS_20_9(
+    id = "fhd_plus_2400",
+    label = "1080p+ Tall (2400×1080)",
+    shortTag = "20:9 FHD+",
+    targetWidthPx = 2400,
+    targetHeightPx = 1080,
+    cardAspectRatio = 20f / 10.5f,
+    bitmapMaxDim = 1080,
+    arenaZoomScale = 1.02f,
+    summary = "Modern 20:9 OLED smartphone cinema framing for wide banners",
+  ),
+  TABLET_WUXGA_1200(
+    id = "wuxga_1200",
+    label = "Tab A9+ 1200p (1920×1200)",
+    shortTag = "1200P 16:10",
+    targetWidthPx = 1920,
+    targetHeightPx = 1200,
+    cardAspectRatio = 16f / 10f,
+    bitmapMaxDim = 1200,
+    arenaZoomScale = 1.04f,
+    summary = "Native 16:10 widescreen tuned specifically for Samsung Galaxy Tab A9+",
+  ),
+  QHD_1440(
+    id = "qhd_1440",
+    label = "1440p QHD (2560×1440)",
+    shortTag = "1440P",
+    targetWidthPx = 2560,
+    targetHeightPx = 1440,
+    cardAspectRatio = 16f / 9f,
+    bitmapMaxDim = 1440,
+    arenaZoomScale = 1.08f,
+    summary = "Quad-HD high-density artwork sampling and crisper Arena perspective detail",
+  ),
+  WQXGA_1600(
+    id = "wqxga_1600",
+    label = "1600p Pro Tablet (2560×1600)",
+    shortTag = "1600P 16:10",
+    targetWidthPx = 2560,
+    targetHeightPx = 1600,
+    cardAspectRatio = 16f / 10f,
+    bitmapMaxDim = 1600,
+    arenaZoomScale = 1.10f,
+    summary = "High-DPI 16:10 tablet widescreen for flagship large-screen slabs",
+  ),
+  ULTRAWIDE_1440(
+    id = "uwqhd_1440",
+    label = "Ultrawide 21:9 (3440×1440)",
+    shortTag = "21:9 UWQHD",
+    targetWidthPx = 3440,
+    targetHeightPx = 1440,
+    cardAspectRatio = 21f / 9.5f,
+    bitmapMaxDim = 1720,
+    arenaZoomScale = 1.12f,
+    summary = "Panoramic 21:9 collection cards for Dex, ChromeOS, foldables & external displays",
+  ),
+  UHD_4K(
+    id = "uhd_2160",
+    label = "4K UHD (3840×2160)",
+    shortTag = "4K UHD",
+    targetWidthPx = 3840,
+    targetHeightPx = 2160,
+    cardAspectRatio = 16f / 9f,
+    bitmapMaxDim = 1920,
+    arenaZoomScale = 1.14f,
+    summary = "Ultra-HD collection artwork decoding & multi-column wide viewport showcase",
+  );
+
+  companion object {
+    fun fromId(id: String): CollectionResolutionMode =
+      entries.firstOrNull { it.id == id } ?: AUTO
+  }
+}
+
+enum class FullscreenMode(
+  val id: String,
+  val label: String,
+  val summary: String,
+) {
+  APP_WIDE(
+    id = "app_wide",
+    label = "App-Wide Immersive",
+    summary = "Hides Android status bar, nav pill, and Galaxy Tab taskbar across menus & Arena",
+  ),
+  ARENA_ONLY(
+    id = "arena_only",
+    label = "Arena Only",
+    summary = "Shows OS system bars in menus and hides them during active Arena combat",
+  ),
+  OFF(
+    id = "off",
+    label = "Standard Window",
+    summary = "Keeps system bars visible at all times while remaining edge-to-edge safe",
+  );
+
+  companion object {
+    fun fromId(id: String): FullscreenMode =
+      entries.firstOrNull { it.id == id } ?: APP_WIDE
+  }
+}
+
 @Immutable
 data class AppSettings(
   // 1. Controls
@@ -123,6 +311,9 @@ data class AppSettings(
   val musicVolume: Float = 0.22f,
   val selectedMusicTrack: Int = 0, // 0 = Auto Cycle, 1 = My Feelings of Music, 2 = Destiny Legendary Stories 1
   val immersiveFullscreen: Boolean = true,
+  val fullscreenMode: FullscreenMode = FullscreenMode.APP_WIDE,
+  val collectionResolutionMode: CollectionResolutionMode = CollectionResolutionMode.AUTO,
+  val menuScale: Float = 1.0f,
 
   // 7. World Region, Multi-Server & Region Default Auto-Tuning
   val selectedRegionId: String = WorldRegion.NA_EAST.id,
@@ -132,6 +323,13 @@ data class AppSettings(
   // 8. Language & Localization
   val selectedLanguageCode: String = AppLanguage.ENGLISH.code,
 ) {
+  fun shouldHideSystemBars(inArena: Boolean): Boolean =
+    immersiveFullscreen && when (fullscreenMode) {
+      FullscreenMode.APP_WIDE -> true
+      FullscreenMode.ARENA_ONLY -> inArena
+      FullscreenMode.OFF -> false
+    }
+
   val activeLanguage: AppLanguage
     get() = AppLanguage.fromCode(selectedLanguageCode)
 
@@ -345,24 +543,37 @@ class AppSettingsStore(context: Context) {
     }
   }
 
-  private fun sanitize(s: AppSettings): AppSettings = s.copy(
-    joystickScale = s.joystickScale.coerceIn(0.8f, 1.4f),
-    buttonScale = s.buttonScale.coerceIn(1.0f, 1.35f),
-    moveSensitivity = s.moveSensitivity.coerceIn(0.6f, 1.6f),
-    targetFpsCap = when {
-      s.targetFpsCap <= 30 -> 30
-      s.targetFpsCap >= 120 -> 120
-      else -> 60
-    },
-    ramGraphicsBudgetMb = s.ramGraphicsBudgetMb.coerceIn(64, 1024),
-    hudOpacity = s.hudOpacity.coerceIn(0.6f, 1.0f),
-    screenMarginDp = s.screenMarginDp.coerceIn(0, 16),
-    textScale = s.textScale.coerceIn(1.0f, 1.4f),
-    gameSpeedMultiplier = s.gameSpeedMultiplier.coerceIn(0.55f, 1.3f),
-    musicVolume = s.musicVolume.coerceIn(0.0f, 0.70f),
-    selectedMusicTrack = s.selectedMusicTrack.coerceIn(0, 2),
-    selectedLanguageCode = AppLanguage.fromCode(s.selectedLanguageCode).code,
-  )
+  private fun sanitizeFloat(value: Float, min: Float, max: Float, fallback: Float): Float =
+    if (value.isFinite()) value.coerceIn(min, max) else fallback
+
+  private fun sanitize(s: AppSettings): AppSettings {
+    val normalizedFullscreenMode = if (!s.immersiveFullscreen) {
+      FullscreenMode.OFF
+    } else {
+      s.fullscreenMode
+    }
+    return s.copy(
+      joystickScale = sanitizeFloat(s.joystickScale, 0.8f, 1.4f, 1.0f),
+      buttonScale = sanitizeFloat(s.buttonScale, 1.0f, 1.35f, 1.0f),
+      moveSensitivity = sanitizeFloat(s.moveSensitivity, 0.6f, 1.6f, 1.0f),
+      targetFpsCap = when {
+        s.targetFpsCap <= 30 -> 30
+        s.targetFpsCap >= 120 -> 120
+        else -> 60
+      },
+      ramGraphicsBudgetMb = s.ramGraphicsBudgetMb.coerceIn(64, 1024),
+      hudOpacity = sanitizeFloat(s.hudOpacity, 0.6f, 1.0f, 0.92f),
+      screenMarginDp = s.screenMarginDp.coerceIn(0, 16),
+      textScale = sanitizeFloat(s.textScale, 1.0f, 1.4f, 1.0f),
+      menuScale = sanitizeFloat(s.menuScale, 0.75f, 1.35f, 1.0f),
+      gameSpeedMultiplier = sanitizeFloat(s.gameSpeedMultiplier, 0.55f, 1.3f, 1.0f),
+      musicVolume = sanitizeFloat(s.musicVolume, 0.0f, 0.70f, 0.22f),
+      selectedMusicTrack = s.selectedMusicTrack.coerceIn(0, 2),
+      fullscreenMode = normalizedFullscreenMode,
+      immersiveFullscreen = normalizedFullscreenMode != FullscreenMode.OFF,
+      selectedLanguageCode = AppLanguage.fromCode(s.selectedLanguageCode).code,
+    )
+  }
 
   private fun loadFromPrefs(): AppSettings {
     val d = AppSettings()
@@ -414,6 +625,16 @@ class AppSettingsStore(context: Context) {
         musicVolume = prefs.getFloat("music_volume", d.musicVolume),
         selectedMusicTrack = prefs.getInt("selected_music_track", d.selectedMusicTrack),
         immersiveFullscreen = prefs.getBoolean("immersive_fullscreen", d.immersiveFullscreen),
+        fullscreenMode = runCatching {
+          FullscreenMode.fromId(prefs.getString("fullscreen_mode", d.fullscreenMode.id) ?: d.fullscreenMode.id)
+        }.getOrDefault(d.fullscreenMode),
+        collectionResolutionMode = runCatching {
+          CollectionResolutionMode.fromId(
+            prefs.getString("collection_resolution_mode", d.collectionResolutionMode.id)
+              ?: d.collectionResolutionMode.id
+          )
+        }.getOrDefault(d.collectionResolutionMode),
+        menuScale = prefs.getFloat("menu_scale", d.menuScale),
         selectedRegionId = prefs.getString("selected_region_id", d.selectedRegionId) ?: d.selectedRegionId,
         selectedServerId = prefs.getString("selected_server_id", d.selectedServerId) ?: d.selectedServerId,
         useRegionDefaultSettings = prefs.getBoolean("use_region_defaults", d.useRegionDefaultSettings),
@@ -460,6 +681,9 @@ class AppSettingsStore(context: Context) {
       putFloat("music_volume", s.musicVolume)
       putInt("selected_music_track", s.selectedMusicTrack)
       putBoolean("immersive_fullscreen", s.immersiveFullscreen)
+      putString("fullscreen_mode", s.fullscreenMode.id)
+      putString("collection_resolution_mode", s.collectionResolutionMode.id)
+      putFloat("menu_scale", s.menuScale)
       putString("selected_region_id", s.selectedRegionId)
       putString("selected_server_id", s.selectedServerId)
       putBoolean("use_region_defaults", s.useRegionDefaultSettings)

@@ -967,8 +967,9 @@ internal fun VaultArtworkLightboxDialog(
 ) {
   Dialog(
     onDismissRequest = onDismiss,
-    properties = DialogProperties(usePlatformDefaultWidth = false),
+    properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
   ) {
+    com.example.util.SyncDialogFullscreen()
     VaultArtworkLightboxContent(
       artwork = artwork,
       isActiveWallpaper = isActiveWallpaper,

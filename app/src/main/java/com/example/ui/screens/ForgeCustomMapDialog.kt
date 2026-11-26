@@ -84,8 +84,9 @@ fun ForgeCustomMapDialog(
 
   Dialog(
     onDismissRequest = onDismiss,
-    properties = DialogProperties(usePlatformDefaultWidth = false),
+    properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
   ) {
+    com.example.util.SyncDialogFullscreen()
     Box(
       modifier = Modifier
         .fillMaxWidth()
@@ -123,6 +124,39 @@ fun ForgeCustomMapDialog(
             .verticalScroll(rememberScrollState()),
           verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+          Text(
+            text = "1-TAP QUICK MAP PRESETS",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = accentColor,
+          )
+          val mapPresets = listOf(
+            "BO3 Aether Bunker" to CustomMapGameCategory.BO3,
+            "Empire Rooftop Grid" to CustomMapGameCategory.INFAMOUS,
+            "Gotham Wayne Vault" to CustomMapGameCategory.ARKHAM,
+            "Abyss Torch Crypt" to CustomMapGameCategory.ABYSS_DUNGEONS,
+          )
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+          ) {
+            mapPresets.forEach { (pTitle, pCat) ->
+              FilterChip(
+                selected = title == pTitle,
+                onClick = {
+                  title = pTitle
+                  category = pCat
+                  wonderWeapon = pCat.defaultWonderWeapon
+                  zonesText = pCat.defaultZones.joinToString(", ")
+                  accentHex = pCat.defaultAccentHex
+                },
+                label = { Text(pTitle, style = MaterialTheme.typography.labelSmall) },
+                modifier = Modifier.heightIn(min = 48.dp),
+              )
+            }
+          }
           Text(
             text = "GAME / COLLECTION CATEGORY",
             style = MaterialTheme.typography.labelSmall,

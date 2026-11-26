@@ -65,7 +65,7 @@ fun TierBoostCodesDialog(
     },
     text = {
       LazyColumn(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 420.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = PaddingValues(vertical = 4.dp),
       ) {

@@ -425,8 +425,9 @@ fun BlueEssenceStoreDialog(
 ) {
   Dialog(
     onDismissRequest = onDismiss,
-    properties = DialogProperties(usePlatformDefaultWidth = false),
+    properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
   ) {
+    com.example.util.SyncDialogFullscreen()
     Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize().testTag("blue_essence_store_dialog")) {
       Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -458,8 +459,9 @@ fun AchievementsDialog(
 ) {
   Dialog(
     onDismissRequest = onDismiss,
-    properties = DialogProperties(usePlatformDefaultWidth = false),
+    properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
   ) {
+    com.example.util.SyncDialogFullscreen()
     Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize().testTag("achievements_dialog")) {
       Column(modifier = Modifier.fillMaxSize()) {
         Row(

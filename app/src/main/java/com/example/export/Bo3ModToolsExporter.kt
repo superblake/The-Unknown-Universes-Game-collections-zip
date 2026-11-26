@@ -118,7 +118,8 @@ object Bo3ModToolsExporter {
     options: Bo3ExportOptions = Bo3ExportOptions(),
   ): String {
     val joints = buildJointHierarchy(options.boneMode)
-    val scale = rig.rigScale.coerceIn(0.4, 3.0) * options.unitScale
+    val safeScale = if (rig.rigScale.isFinite()) rig.rigScale.coerceIn(0.4, 3.0) else 1.0
+    val scale = safeScale * options.unitScale
     val worldPositions = computeRestWorldPositions(joints, scale)
     val slug = sanitizeAssetSlug(rig.name)
     val matName = "mtl_${sanitizeAssetSlug(rig.archetype)}_$slug"
@@ -245,9 +246,11 @@ object Bo3ModToolsExporter {
     options: Bo3ExportOptions = Bo3ExportOptions(),
   ): String {
     val joints = buildJointHierarchy(options.boneMode)
-    val scale = rig.rigScale.coerceIn(0.4, 3.0) * options.unitScale
+    val safeScale = if (rig.rigScale.isFinite()) rig.rigScale.coerceIn(0.4, 3.0) else 1.0
+    val safeSpeed = if (rig.playbackSpeed.isFinite()) rig.playbackSpeed.coerceIn(0.25, 3.0) else 1.0
+    val scale = safeScale * options.unitScale
     val frameList = (0..60 step if (options.fps >= 60) 1 else 2).toList()
-    val effectiveFps = (options.fps * rig.playbackSpeed.coerceIn(0.25, 3.0)).toInt().coerceIn(15, 120)
+    val effectiveFps = (options.fps * safeSpeed).toInt().coerceIn(15, 120)
     val baseRest = computeRestWorldPositions(joints, scale)
 
     val sb = StringBuilder(12288)
@@ -396,7 +399,8 @@ object Bo3ModToolsExporter {
     options: Bo3ExportOptions = Bo3ExportOptions(),
   ): String {
     val joints = buildJointHierarchy(options.boneMode)
-    val worldPositions = computeRestWorldPositions(joints, rig.rigScale.coerceIn(0.4, 3.0))
+    val safeScale = if (rig.rigScale.isFinite()) rig.rigScale.coerceIn(0.4, 3.0) else 1.0
+    val worldPositions = computeRestWorldPositions(joints, safeScale)
     val slug = sanitizeAssetSlug(rig.name)
     val clipSlug = sanitizeAssetSlug(rig.activeClip)
     val boneDefs = joints.mapIndexed { idx, joint ->
@@ -404,8 +408,8 @@ object Bo3ModToolsExporter {
       val parentName = if (joint.parentIndex >= 0) "\"${joints[joint.parentIndex].exportName}\"" else "None"
       "    (\"${joint.exportName}\", $parentName, (${fmt(pos.first)}, ${fmt(pos.second)}, ${fmt(pos.third)}), \"${joint.id}\"),"
     }.joinToString("\n")
-    val anglesJson = rig.poseAngles.entries.joinToString(",\n    ") { (k, v) -> "\"$k\": $v" }
-    val keyframes = rig.keyframeFrames.joinToString(", ")
+    val anglesJson = rig.poseAngles.entries.joinToString(",\n    ") { (k, v) -> "\"$k\": ${fmt(v)}" }
+    val keyframes = rig.keyframeFrames.filter { it in 0L..60L }.joinToString(", ")
 
     return """# The Unknown Universes — CoD: Black Ops 3 Mod Tools Blender (bpy) Pipeline
 # Works standalone in Blender 3.6+/4.x and supports io_scene_cod (.xmodel_export / .xanim_export)

@@ -1413,10 +1413,10 @@ class ProgressionStore(
         customEquipment = nextList,
         equipmentMap = cur.equipmentMap + (slotId to eqSt.copy(equippedItemId = spec.id)),
         equippedLethalIds = if (spec.slotType == EquipmentSlotType.LETHAL) {
-          (cur.equippedLethalIds + spec.id).distinct()
+          (listOf(spec.id) + cur.equippedLethalIds).distinct().take(2)
         } else cur.equippedLethalIds,
         equippedTacticalIds = if (spec.slotType == EquipmentSlotType.TACTICAL) {
-          (cur.equippedTacticalIds + spec.id).distinct()
+          (listOf(spec.id) + cur.equippedTacticalIds).distinct().take(2)
         } else cur.equippedTacticalIds,
       )
     )
@@ -3586,7 +3586,7 @@ class ProgressionStore(
             )
           )
         }
-        list
+        list.distinctBy { it.id }
       } else fallback.customGameMaps
     }
 
@@ -3616,7 +3616,7 @@ class ProgressionStore(
             )
           )
         }
-        list
+        list.distinctBy { it.id }
       } else fallback.customWeapons
     }
 
@@ -3688,7 +3688,7 @@ class ProgressionStore(
             )
           )
         }
-        list
+        list.distinctBy { it.id }
       } else fallback.customPerks
     }
     val equippedCustomPerkSet = safeParse(fallback.equippedCustomPerkIds) {
@@ -3747,7 +3747,7 @@ class ProgressionStore(
             )
           )
         }
-        list
+        list.distinctBy { it.id }
       } else fallback.customGear
     }
     val equippedCustomGear = safeParse(fallback.equippedCustomGearMap) {
@@ -3785,7 +3785,7 @@ class ProgressionStore(
             )
           )
         }
-        list
+        list.distinctBy { it.id }
       } else fallback.customEquipment
     }
 

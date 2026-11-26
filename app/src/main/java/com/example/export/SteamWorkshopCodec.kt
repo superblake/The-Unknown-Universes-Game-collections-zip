@@ -819,6 +819,14 @@ object SteamWorkshopCodec {
             val details = parseWorkshopDetailsApiJson(trimmed).getOrThrow()
             Result.success(buildPreviewFromSteamDetails(details, targetUserId, "STEAM_API_JSON"))
           }
+          root.has("objects") || root.has("bones") || root.has("nodes") || root.has("asset") || root.has("meshes") -> {
+            val prismaRes = Prisma3dImporter.importFromText(trimmed, "prisma3d_scene.prisma", targetUserId)
+            if (prismaRes.isSuccess) {
+              Result.success(prismaRes.getOrThrow().toWorkshopPreview(targetUserId))
+            } else {
+              Result.failure(prismaRes.exceptionOrNull() ?: IllegalArgumentException("Invalid Prisma3D JSON"))
+            }
+          }
           else -> {
             val savePreview = SaveDataSerializer.parseAndValidateSaveJson(trimmed, targetUserId).getOrThrow()
             val bundle = savePreview.bundle
@@ -855,6 +863,13 @@ object SteamWorkshopCodec {
     if (vdfResult.isSuccess) {
       return vdfResult.map { details ->
         buildPreviewFromSteamDetails(details, targetUserId, "VDF_MANIFEST")
+      }
+    }
+
+    if (Prisma3dImporter.looksLikePrisma3dFile("import.obj", trimmed.toByteArray(Charsets.UTF_8))) {
+      val prismaObj = Prisma3dImporter.importFromText(trimmed, "prisma3d_model.obj", targetUserId)
+      if (prismaObj.isSuccess) {
+        return Result.success(prismaObj.getOrThrow().toWorkshopPreview(targetUserId))
       }
     }
 

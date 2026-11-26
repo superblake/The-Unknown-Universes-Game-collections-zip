@@ -58,12 +58,15 @@ import com.example.R
 import com.example.data.local.AppLanguage
 import com.example.data.local.AppSettings
 import com.example.data.local.AppSettingsPresets
+import com.example.data.local.CollectionResolutionMode
 import com.example.data.local.ColorBlindMode
+import com.example.data.local.FullscreenMode
 import com.example.data.local.GameStrings
 import com.example.data.local.GraphicsQuality
 import com.example.data.local.LocalGameStrings
 import com.example.data.local.ParticleDensity
 import com.example.data.local.ThemeVisualMode
+import com.example.util.SyncDialogFullscreen
 import com.example.data.model.RegionalServerCatalog
 import com.example.data.model.WorldRegion
 import com.example.security.AppSecurityManager
@@ -126,8 +129,12 @@ fun SettingsDialog(
 
   Dialog(
     onDismissRequest = onDismiss,
-    properties = DialogProperties(usePlatformDefaultWidth = false),
+    properties = DialogProperties(
+      usePlatformDefaultWidth = false,
+      decorFitsSystemWindows = false,
+    ),
   ) {
+    SyncDialogFullscreen(hideSystemBars = settings.shouldHideSystemBars(inArena = false))
     Surface(
       color = MaterialTheme.colorScheme.background,
       modifier = Modifier.fillMaxSize().safeDrawingPadding().imePadding().testTag("settings_dialog_root"),
@@ -744,12 +751,107 @@ fun SettingsDialog(
                 )
 
                 SettingSwitchRow(
-                  title = "Full-Screen Immersive Arena",
-                  description = "Hides Android system bars and OS navigation rail during active Arena missions for maximum battlefield visibility.",
+                  title = "Full-Screen Immersive Display",
+                  description = "Hides Android status bar, navigation bar, and Samsung Galaxy Tab taskbar across selected app scopes.",
                   checked = settings.immersiveFullscreen,
                   tag = "switch_immersive_fullscreen",
-                  onCheckedChange = { v -> onUpdateSettings { it.copy(immersiveFullscreen = v) } },
+                  onCheckedChange = { v ->
+                    onUpdateSettings {
+                      it.copy(
+                        immersiveFullscreen = v,
+                        fullscreenMode = if (v) {
+                          if (it.fullscreenMode == FullscreenMode.OFF) FullscreenMode.APP_WIDE else it.fullscreenMode
+                        } else {
+                          FullscreenMode.OFF
+                        },
+                      )
+                    }
+                  },
                 )
+
+                Text("Fullscreen Coverage Mode", style = MaterialTheme.typography.titleMedium)
+                Text(
+                  text = settings.fullscreenMode.summary,
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                  modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                  horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                  FullscreenMode.entries.forEach { fsMode ->
+                    FilterChip(
+                      selected = settings.fullscreenMode == fsMode,
+                      onClick = {
+                        onUpdateSettings {
+                          it.copy(
+                            fullscreenMode = fsMode,
+                            immersiveFullscreen = fsMode != FullscreenMode.OFF,
+                          )
+                        }
+                      },
+                      label = { Text(fsMode.label) },
+                      modifier = Modifier.height(48.dp).testTag("chip_fullscreen_mode_${fsMode.id}"),
+                    )
+                  }
+                }
+
+                Text("Game Collections & Viewport Resolution", style = MaterialTheme.typography.titleMedium)
+                Text(
+                  text = "${settings.collectionResolutionMode.label} — ${settings.collectionResolutionMode.summary}",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                  modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                  horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                  CollectionResolutionMode.entries.forEach { resMode ->
+                    FilterChip(
+                      selected = settings.collectionResolutionMode == resMode,
+                      onClick = {
+                        onUpdateSettings { it.copy(collectionResolutionMode = resMode) }
+                      },
+                      label = { Text(resMode.label) },
+                      modifier = Modifier.height(48.dp).testTag("chip_col_res_${resMode.id}"),
+                    )
+                  }
+                }
+
+                val safeMenuScalePct = (
+                  (if (settings.menuScale.isFinite()) settings.menuScale else 1.0f) * 100f
+                ).roundToInt()
+                SettingSliderRow(
+                  title = "Menu & UI Scale ($safeMenuScalePct%)",
+                  description = "Scales menus, cards, tabs, and dialogs cleanly for compact phones or large tablets (75%–135%).",
+                  value = if (settings.menuScale.isFinite()) settings.menuScale else 1.0f,
+                  range = 0.75f..1.35f,
+                  steps = 11,
+                  tag = "slider_menu_scale",
+                  onValueChange = { v ->
+                    val clean = if (v.isFinite()) v.coerceIn(0.75f, 1.35f) else 1.0f
+                    onUpdateSettings { it.copy(menuScale = clean) }
+                  },
+                )
+                Row(
+                  modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                  horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                  listOf(
+                    0.85f to "85% Compact",
+                    1.0f to "100% Standard",
+                    1.15f to "115% Comfort",
+                    1.30f to "130% Tablet",
+                  ).forEach { (presetScale, label) ->
+                    val activeScale = kotlin.math.abs((if (settings.menuScale.isFinite()) settings.menuScale else 1.0f) - presetScale) < 0.03f
+                    FilterChip(
+                      selected = activeScale,
+                      onClick = { onUpdateSettings { it.copy(menuScale = presetScale) } },
+                      label = { Text(label) },
+                      modifier = Modifier.height(48.dp).testTag("chip_menu_scale_${(presetScale * 100).roundToInt()}"),
+                    )
+                  }
+                }
 
                 SettingSwitchRow(
                   title = "Neon Glow & Aura Rings",
@@ -1027,12 +1129,17 @@ private fun SettingSliderRow(
   tag: String,
   onValueChange: (Float) -> Unit,
 ) {
+  val safeVal = if (value.isFinite()) value.coerceIn(range.start, range.endInclusive) else range.start
   Column(modifier = Modifier.fillMaxWidth()) {
     Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
     Text(description, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     Slider(
-      value = value.coerceIn(range.start, range.endInclusive),
-      onValueChange = onValueChange,
+      value = safeVal,
+      onValueChange = { next ->
+        if (next.isFinite()) {
+          onValueChange(next.coerceIn(range.start, range.endInclusive))
+        }
+      },
       valueRange = range,
       steps = steps,
       modifier = Modifier.fillMaxWidth().testTag(tag),

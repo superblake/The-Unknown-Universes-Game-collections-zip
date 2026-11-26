@@ -9,10 +9,12 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -65,7 +67,9 @@ import androidx.compose.ui.unit.dp
 import com.example.BuildConfig
 import com.example.R
 import com.example.data.local.AppLanguage
+import com.example.data.local.AppSettings
 import com.example.data.local.CloudSyncState
+import com.example.data.local.CollectionResolutionMode
 import com.example.data.local.LocalGameStrings
 import com.example.data.local.SaveBundlePreview
 import com.example.data.model.AchievementState
@@ -87,6 +91,7 @@ import com.example.data.model.UniverseCatalog
 import com.example.data.model.UniverseWorld
 import com.example.ui.auth.CrossPlatformAccountsCard
 import java.util.Locale
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -147,6 +152,8 @@ fun OsDesktopScreen(
   onUpdateCollectionCustomMode: ((CollectionCustomModeConfig) -> CollectionCustomModeConfig) -> Unit = {},
   onDeployCollectionCustomMode: () -> Unit = {},
   activeLanguage: AppLanguage = AppLanguage.ENGLISH,
+  appSettings: AppSettings = AppSettings(),
+  onUpdateSettings: ((AppSettings) -> AppSettings) -> Unit = {},
   onSelectLanguage: (String) -> Unit = {},
   onSignOut: () -> Unit,
 ) {
@@ -165,8 +172,12 @@ fun OsDesktopScreen(
   var callsignDraft by remember(profile.callsign) { mutableStateOf(profile.callsign) }
   val claimableAchievements = achievements.count { it.unlocked && !it.claimed }
   val haptic = LocalHapticFeedback.current
+  val activeResMode = appSettings.collectionResolutionMode
 
-  val wallpaperBitmap = rememberAssetImageBitmap(activeWallpaperPath, maxDim = 960)
+  val wallpaperBitmap = rememberAssetImageBitmap(
+    activeWallpaperPath,
+    maxDim = activeResMode.bitmapMaxDim.coerceIn(720, 1440),
+  )
   val wallpaperGradient = when (profile.osWallpaperIndex.toInt() % 4) {
     1 -> listOf(Color(0xFF0A0718), Color(0xFF1A0F36), Color(0xFF070A12))
     2 -> listOf(Color(0xFF14070D), Color(0xFF280D1B), Color(0xFF070A12))
@@ -174,7 +185,27 @@ fun OsDesktopScreen(
     else -> listOf(Color(0xFF070A12), Color(0xFF0F1A33), Color(0xFF070A12))
   }
 
-  Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(wallpaperGradient))) {
+  BoxWithConstraints(
+    modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(wallpaperGradient)),
+  ) {
+    val viewportWidthDp = maxWidth
+    val viewportHeightDp = maxHeight
+    val isMediumScreen = viewportWidthDp >= 600.dp
+    val isExpandedScreen = viewportWidthDp >= 840.dp
+    val collectionColumns = when {
+      activeResMode == CollectionResolutionMode.UHD_4K || activeResMode == CollectionResolutionMode.ULTRAWIDE_1440 ->
+        if (viewportWidthDp >= 840.dp) 3 else if (isMediumScreen) 2 else 1
+      viewportWidthDp >= 1040.dp -> 4
+      isExpandedScreen -> 3
+      isMediumScreen -> 2
+      else -> 1
+    }
+    val heroBannerHeight = when {
+      isExpandedScreen -> 196.dp
+      isMediumScreen -> 168.dp
+      else -> 136.dp
+    }
+
     if (wallpaperBitmap != null) {
       Image(
         bitmap = wallpaperBitmap,
@@ -192,20 +223,24 @@ fun OsDesktopScreen(
 
   LazyColumn(
     modifier = Modifier.fillMaxSize().testTag("os_desktop_list"),
-    contentPadding = PaddingValues(16.dp),
-    verticalArrangement = Arrangement.spacedBy(16.dp),
+    horizontalAlignment = Alignment.CenterHorizontally,
+    contentPadding = PaddingValues(
+      horizontal = if (isExpandedScreen) 20.dp else 12.dp,
+      vertical = 12.dp,
+    ),
+    verticalArrangement = Arrangement.spacedBy(10.dp),
   ) {
     // App Title Header & UnknownOS Kernel Status
     item {
       Surface(
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
         modifier = Modifier.fillMaxWidth()
-          .border(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f), RoundedCornerShape(18.dp)),
+          .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.55f), RoundedCornerShape(14.dp)),
       ) {
         Column(
-          modifier = Modifier.padding(16.dp),
-          verticalArrangement = Arrangement.spacedBy(10.dp),
+          modifier = Modifier.padding(10.dp),
+          verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
           Row(
             modifier = Modifier.fillMaxWidth(),
@@ -215,18 +250,19 @@ fun OsDesktopScreen(
             Column(modifier = Modifier.weight(1f)) {
               Text(
                 text = "THE UNKNOWN UNIVERSES",
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
               )
-              Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+              Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Box(
-                  modifier = Modifier.size(8.dp).clip(CircleShape).background(Color(0xFF00E676))
+                  modifier = Modifier.size(7.dp).clip(CircleShape).background(Color(0xFF00E676))
                 )
                 Text(
-                  text = "UNKNOWNOS v2.4 // ${profile.callsign.uppercase()}",
-                  style = MaterialTheme.typography.labelMedium,
+                  text = "UNKNOWNOS // ${profile.callsign.uppercase()}",
+                  style = MaterialTheme.typography.labelSmall,
                   color = MaterialTheme.colorScheme.onSurface,
                   maxLines = 1,
                   overflow = TextOverflow.Ellipsis,
@@ -239,45 +275,39 @@ fun OsDesktopScreen(
                     imageVector = Icons.Filled.Edit,
                     contentDescription = "Edit callsign",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.size(16.dp),
                   )
                 }
               }
               val activeWeapon = ProgressionCatalog.weaponById(progression.weaponCustom.equippedWeaponId, progression.customWeapons)
               val activeOutfit = progression.activeOutfitSpec()
               val activeAreaSpec = progression.activeAreaSpec()
-              val activeAreaState = progression.areaState(activeAreaSpec.id)
-              val resonance = progression.essenceResonance(profile.totalEssence)
               val powerLight = progression.computePowerAndLightLevel(profile.totalEssence)
               val activeRarity = progression.outfitRarity(activeOutfit.id)
               Text(
-                text = "PWR ${powerLight.powerLevel} • LT ${powerLight.lightLevel} (${powerLight.tierLabel}) • ${progression.levelCustom.worldDifficultyTier.label.uppercase()}",
+                text = "PWR ${powerLight.powerLevel} • LT ${powerLight.lightLevel} • ${progression.levelCustom.worldDifficultyTier.label.uppercase()}",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFFFFD54F),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.testTag("os_power_light_badge"),
               )
               Text(
                 text = "LV ${progression.playerLevel} (${progression.playerRankTitle}) • ${activeOutfit.nameWithVersion} [${activeRarity.label}] • ${activeWeapon.name}",
                 style = MaterialTheme.typography.labelSmall,
                 color = Color(progression.activePassVersion.accentHex),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.testTag("os_level_rank_badge"),
               )
               Text(
-                text = "Blue Essence: ${profile.totalEssence} • ${progression.activePassVersion.title.substringBefore(":")} • Best: ${profile.highScore} • ${activeConsole.label}",
+                text = "Blue Essence: ${profile.totalEssence} • R:${progression.redEssence} Y:${progression.yellowEssence} G:${progression.greenEssence} • ${activeAreaSpec.name.substringBefore(" (")}",
                 style = MaterialTheme.typography.labelSmall,
                 color = Color(0xFF00E5FF),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.testTag("os_blue_essence_text"),
-              )
-              Text(
-                text = "R:${progression.redEssence} Y:${progression.yellowEssence} G:${progression.greenEssence} Prism:${progression.combinedEssence} • Shards:${progression.blastShards} • ${activeAreaSpec.name.substringBefore(" (")} (${activeAreaState.ageYears}y ${activeAreaState.currentEra.name})",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color(0xFFE040FB),
-              )
-              Text(
-                text = "Resonance ${resonance.summary} • Vacuum Lv.${progression.vacuumBot.level}",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color(0xFF00E676),
               )
             }
 
@@ -405,13 +435,13 @@ fun OsDesktopScreen(
           .border(1.5.dp, Color(0xFF00E676).copy(alpha = 0.65f), RoundedCornerShape(16.dp))
           .testTag("os_missions_card"),
       ) {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-          Text("${com.example.data.model.MissionsCatalog.allMissions.size} MULTIVERSE & CAMPAIGN MISSIONS", style = MaterialTheme.typography.titleSmall, color = Color(0xFF00E676))
+        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+          Text("${com.example.data.model.MissionsCatalog.allMissions.size} MULTIVERSE MISSIONS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = Color(0xFF00E676))
           Text(
-            text = "45 Missions per ${UniverseCatalog.worlds.size} Worlds & ${MultiverseArsenalCatalog.customAreas.size} Arenas • Gotham, Spider-Verse & Frontier Ready",
-            style = MaterialTheme.typography.bodySmall,
+            text = "${UniverseCatalog.worlds.size} Worlds • ${MultiverseArsenalCatalog.customAreas.size} Arenas • Tap to view",
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 2,
+            maxLines = 1,
             overflow = TextOverflow.Ellipsis,
           )
         }
@@ -421,13 +451,13 @@ fun OsDesktopScreen(
     // Active Universe Hero Box-Art Card
     item {
       Surface(
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier.fillMaxWidth()
-          .border(1.5.dp, Color(activeWorld.accentHex).copy(alpha = 0.68f), RoundedCornerShape(22.dp)),
+          .border(1.2.dp, Color(activeWorld.accentHex).copy(alpha = 0.65f), RoundedCornerShape(16.dp)),
       ) {
         Column {
-          Box(modifier = Modifier.fillMaxWidth().height(196.dp)) {
+          Box(modifier = Modifier.fillMaxWidth().height(heroBannerHeight)) {
             Image(
               painter = painterResource(id = activeWorld.bannerRes),
               contentDescription = stringResource(R.string.cd_world_banner),
@@ -441,30 +471,30 @@ fun OsDesktopScreen(
             Surface(
               shape = RoundedCornerShape(999.dp),
               color = Color(0xCC0A0F1A),
-              modifier = Modifier.align(Alignment.TopStart).padding(12.dp)
+              modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
                 .border(1.dp, Color(activeWorld.accentHex).copy(alpha = 0.7f), RoundedCornerShape(999.dp)),
             ) {
               Text(
                 text = activeWorld.platformBadges,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
               )
             }
             Surface(
               shape = RoundedCornerShape(999.dp),
               color = Color(activeMode.accentHex).copy(alpha = 0.24f),
-              modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
+              modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
                 .border(1.dp, Color(activeMode.accentHex), RoundedCornerShape(999.dp)),
             ) {
               Text(
                 text = "${activeMode.shortTag} • ${activeMode.label}",
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelSmall,
                 color = Color(activeMode.accentHex),
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
               )
             }
-            Column(modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)) {
+            Column(modifier = Modifier.align(Alignment.BottomStart).padding(10.dp)) {
               Text(
                 text = activeWorld.inspirations.uppercase(),
                 style = MaterialTheme.typography.labelSmall,
@@ -474,20 +504,25 @@ fun OsDesktopScreen(
               )
               Text(
                 text = activeWorld.title,
-                style = MaterialTheme.typography.headlineMedium,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
               )
             }
           }
 
           Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
           ) {
             Text(
               text = activeWorld.description,
-              style = MaterialTheme.typography.bodyMedium,
+              style = MaterialTheme.typography.bodySmall,
               color = MaterialTheme.colorScheme.onSurfaceVariant,
+              maxLines = 2,
+              overflow = TextOverflow.Ellipsis,
             )
             Surface(
               shape = RoundedCornerShape(10.dp),
@@ -1050,30 +1085,128 @@ fun OsDesktopScreen(
       }
     }
 
-    // Multiverse Worlds Collection
+    // Multiverse Worlds Collection (Multi-Resolution Showcase)
     item {
-      Text(
-        text = "THE UNKNOWN UNIVERSES COLLECTION (${UniverseCatalog.worlds.size} WORLDS)",
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.primary,
-      )
+      Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Column(modifier = Modifier.weight(1f)) {
+            Text(
+              text = "THE UNKNOWN UNIVERSES COLLECTION (${UniverseCatalog.worlds.size} WORLDS)",
+              style = MaterialTheme.typography.titleMedium,
+              color = MaterialTheme.colorScheme.primary,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+            )
+            val vpW = viewportWidthDp.value.roundToInt()
+            val vpH = viewportHeightDp.value.roundToInt()
+            val safeMenuPct = ((if (appSettings.menuScale.isFinite()) appSettings.menuScale else 1.0f) * 100f).roundToInt()
+            Text(
+              text = "Viewport ${vpW}×${vpH}dp • ${activeResMode.label} • ${collectionColumns}x Grid • Menu $safeMenuPct%",
+              style = MaterialTheme.typography.labelSmall,
+              color = Color(0xFF00E5FF),
+              modifier = Modifier.testTag("os_collection_resolution_badge"),
+            )
+          }
+          OutlinedButton(
+            onClick = onOpenSettings,
+            shape = RoundedCornerShape(10.dp),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+            modifier = Modifier.heightIn(min = 48.dp).testTag("os_collection_res_settings_btn"),
+          ) {
+            Text("Display & Scale", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+          }
+        }
+
+        // Quick Multi-Resolution Preset Bar + Menu Scale Pills
+        Row(
+          modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          CollectionResolutionMode.entries.forEach { resMode ->
+            FilterChip(
+              selected = activeResMode == resMode,
+              onClick = {
+                onUpdateSettings { it.copy(collectionResolutionMode = resMode) }
+                onStatusMessage("Collection Resolution: ${resMode.label}")
+              },
+              label = { Text(resMode.shortTag, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold) },
+              modifier = Modifier.heightIn(min = 48.dp).testTag("os_col_res_${resMode.id}"),
+            )
+          }
+          listOf(0.85f to "UI 85%", 1.0f to "UI 100%", 1.15f to "UI 115%", 1.30f to "UI 130%").forEach { (scaleVal, scaleLabel) ->
+            val currentScale = if (appSettings.menuScale.isFinite()) appSettings.menuScale else 1.0f
+            val activeScale = kotlin.math.abs(currentScale - scaleVal) < 0.03f
+            FilterChip(
+              selected = activeScale,
+              onClick = {
+                onUpdateSettings { it.copy(menuScale = scaleVal) }
+                onStatusMessage("Menu Scale set to $scaleLabel")
+              },
+              label = { Text(scaleLabel, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold) },
+              modifier = Modifier.heightIn(min = 48.dp).testTag("os_menu_scale_${(scaleVal * 100).roundToInt()}"),
+            )
+          }
+        }
+      }
     }
 
     item {
-      LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.testTag("os_worlds_row"),
-      ) {
-        items(UniverseCatalog.worlds, key = { it.id }) { world ->
-          UniverseCollectionCard(
-            world = world,
-            selected = world.id == profile.activeUniverseId,
-            onClick = { onSelectUniverse(world.id) },
-            onLongClick = {
-              onSelectUniverse(world.id)
-              onStatusMessage("Held & Mounted World: ${world.title}")
-            },
-          )
+      if (collectionColumns <= 1) {
+        val compactCardWidth = (viewportWidthDp * 0.74f).coerceIn(228.dp, 310.dp)
+        LazyRow(
+          horizontalArrangement = Arrangement.spacedBy(12.dp),
+          modifier = Modifier.testTag("os_worlds_row"),
+        ) {
+          items(UniverseCatalog.worlds, key = { it.id }) { world ->
+            UniverseCollectionCard(
+              world = world,
+              selected = world.id == profile.activeUniverseId,
+              cardAspectRatio = activeResMode.cardAspectRatio,
+              modifier = Modifier.width(compactCardWidth),
+              onClick = { onSelectUniverse(world.id) },
+              onLongClick = {
+                onSelectUniverse(world.id)
+                onStatusMessage("Held & Mounted World: ${world.title}")
+              },
+            )
+          }
+        }
+      } else {
+        Column(
+          modifier = Modifier.fillMaxWidth().testTag("os_worlds_row"),
+          verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+          UniverseCatalog.worlds.chunked(collectionColumns).forEach { rowWorlds ->
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+              rowWorlds.forEach { world ->
+                UniverseCollectionCard(
+                  world = world,
+                  selected = world.id == profile.activeUniverseId,
+                  cardAspectRatio = activeResMode.cardAspectRatio,
+                  modifier = Modifier.weight(1f),
+                  onClick = { onSelectUniverse(world.id) },
+                  onLongClick = {
+                    onSelectUniverse(world.id)
+                    onStatusMessage("Held & Mounted World: ${world.title}")
+                  },
+                )
+              }
+              repeat(collectionColumns - rowWorlds.size) {
+                Spacer(modifier = Modifier.weight(1f))
+              }
+            }
+          }
         }
       }
     }
@@ -1351,7 +1484,7 @@ fun OsDesktopScreen(
               )
               .testTag("mode_chip_${mode.id}"),
           ) {
-            Column(modifier = Modifier.width(220.dp).padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(modifier = Modifier.width(196.dp).padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
               Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1359,18 +1492,18 @@ fun OsDesktopScreen(
               ) {
                 Row(
                   verticalAlignment = Alignment.CenterVertically,
-                  horizontalArrangement = Arrangement.spacedBy(6.dp),
+                  horizontalArrangement = Arrangement.spacedBy(5.dp),
                   modifier = Modifier.weight(1f),
                 ) {
                   Icon(
                     imageVector = AppIcons.Bolt,
                     contentDescription = null,
                     tint = Color(mode.accentHex),
-                    modifier = Modifier.size(16.dp),
+                    modifier = Modifier.size(14.dp),
                   )
                   Text(
                     text = mode.label,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -1493,12 +1626,12 @@ fun OsDesktopScreen(
           val gridCost = com.example.data.model.UpgradeCosts.areaFeatureTier(areaSt.powerGridTier)
           val starCost = com.example.data.model.UpgradeCosts.areaStar(areaSt.starLevel)
           Surface(
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(14.dp),
             color = if (isSelected) accent.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surface,
             modifier = Modifier
-              .width(248.dp)
-              .heightIn(min = 64.dp)
-              .clip(RoundedCornerShape(16.dp))
+              .width(214.dp)
+              .heightIn(min = 56.dp)
+              .clip(RoundedCornerShape(14.dp))
               .combinedClickable(
                 onClick = { onSelectArea(area.id) },
                 onLongClick = {
@@ -1510,11 +1643,11 @@ fun OsDesktopScreen(
               .border(
                 width = if (isSelected) 2.dp else 1.dp,
                 color = if (isSelected) accent else MaterialTheme.colorScheme.outline,
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(14.dp),
               )
               .testTag("os_arena_card_${area.id}"),
           ) {
-            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
               Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1696,6 +1829,7 @@ fun OsDesktopScreen(
         onConfirmWorkshopImport = onConfirmWorkshopImport,
         onStatusMessage = onStatusMessage,
         onOpenBo3Export = onOpenExport,
+        onOpenPrisma3dExport = onOpenExport,
         onDeployWorkshopArea = onDeployArea,
       )
     }
@@ -1895,15 +2029,17 @@ private fun OsStatTile(
 private fun UniverseCollectionCard(
   world: UniverseWorld,
   selected: Boolean,
+  cardAspectRatio: Float = 16f / 9.5f,
+  modifier: Modifier = Modifier.width(248.dp),
   onClick: () -> Unit,
   onLongClick: () -> Unit = onClick,
 ) {
   val haptic = LocalHapticFeedback.current
+  val safeAspect = cardAspectRatio.coerceIn(1.35f, 2.35f)
   Surface(
     shape = RoundedCornerShape(18.dp),
     color = MaterialTheme.colorScheme.surface,
-    modifier = Modifier
-      .width(248.dp)
+    modifier = modifier
       .clip(RoundedCornerShape(18.dp))
       .combinedClickable(
         onClick = onClick,
@@ -1920,7 +2056,7 @@ private fun UniverseCollectionCard(
       .testTag("world_card_${world.id}"),
   ) {
     Column {
-      Box(modifier = Modifier.fillMaxWidth().height(108.dp)) {
+      Box(modifier = Modifier.fillMaxWidth().aspectRatio(safeAspect)) {
         Image(
           painter = painterResource(id = world.bannerRes),
           contentDescription = world.title,

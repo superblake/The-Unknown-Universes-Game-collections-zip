@@ -240,7 +240,7 @@ fun MissionsDialog(
     onDismissRequest = onDismiss,
     title = { Text("Multiverse & Campaign Missions") },
     text = {
-      Column(modifier = Modifier.fillMaxWidth().height(500.dp)) {
+      Column(modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp, max = 440.dp)) {
         MissionsTab(
           missions = missions,
           activeWorldId = activeWorldId,

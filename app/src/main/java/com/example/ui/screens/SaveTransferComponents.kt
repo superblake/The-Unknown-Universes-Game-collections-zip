@@ -1,8 +1,6 @@
 package com.example.ui.screens
 
 import android.content.Intent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -66,40 +64,56 @@ fun CloudSyncAndSaveCard(
   var showPasteDialog by remember { mutableStateOf(false) }
   var pasteDraft by remember { mutableStateOf("") }
 
-  val saveFileLauncher =
-    rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-      if (uri != null) {
-        try {
-          context.contentResolver.openOutputStream(uri)?.use { out ->
-            out.write(pendingSaveJson.toByteArray(Charsets.UTF_8))
-          }
-          onStatusMessage("Save data exported (.json) — ready to share!")
-        } catch (e: Exception) {
-          onStatusMessage("Save export failed: ${e.localizedMessage}")
+  val launchSaveFile = com.example.util.rememberSafeCreateDocumentLauncher(
+    mimeType = "application/json",
+    onUnavailable = { onStatusMessage("Save export picker unavailable on this host.") },
+  ) { uri ->
+    if (uri != null) {
+      try {
+        context.contentResolver.openOutputStream(uri)?.use { out ->
+          out.write(pendingSaveJson.toByteArray(Charsets.UTF_8))
         }
+        onStatusMessage("Save data exported (.json) — ready to share!")
+      } catch (t: Throwable) {
+        onStatusMessage("Save export failed: ${t.localizedMessage ?: "Write error"}")
       }
     }
+  }
 
-  val openFileLauncher =
-    rememberLauncherForActivityResult(
-      ActivityResultContracts.OpenDocument(),
-    ) { uri ->
-      if (uri != null) {
-        try {
-          val raw = context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use {
-            it.readText()
-          }.orEmpty()
-          val parsed = onParseSaveJson(raw)
-          if (parsed.isSuccess) {
-            pendingImportPreview = parsed.getOrThrow()
-          } else {
-            onStatusMessage(parsed.exceptionOrNull()?.localizedMessage ?: "Invalid save file")
+  val launchOpenSaveFile = com.example.util.rememberSafeOpenDocumentLauncher(
+    onUnavailable = { onStatusMessage("Save import picker unavailable on this host.") },
+  ) { uri ->
+    if (uri != null) {
+      try {
+        val maxBytes = 12 * 1024 * 1024 + 1
+        val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
+          val buffer = ByteArray(16 * 1024)
+          val baos = java.io.ByteArrayOutputStream()
+          var total = 0
+          while (total < maxBytes) {
+            val read = input.read(buffer, 0, minOf(buffer.size, maxBytes - total))
+            if (read <= 0) break
+            baos.write(buffer, 0, read)
+            total += read
           }
-        } catch (e: Exception) {
-          onStatusMessage("Could not read save file: ${e.localizedMessage}")
+          baos.toByteArray()
+        } ?: ByteArray(0)
+        if (bytes.size >= maxBytes) {
+          onStatusMessage("Save file exceeds 12 MB limit.")
+          return@rememberSafeOpenDocumentLauncher
         }
+        val raw = bytes.toString(Charsets.UTF_8)
+        val parsed = onParseSaveJson(raw)
+        if (parsed.isSuccess) {
+          pendingImportPreview = parsed.getOrThrow()
+        } else {
+          onStatusMessage(parsed.exceptionOrNull()?.localizedMessage ?: "Invalid save file")
+        }
+      } catch (t: Throwable) {
+        onStatusMessage("Could not read save file: ${t.localizedMessage ?: "Read error"}")
       }
     }
+  }
 
   val (statusDotColor, statusLabel, statusDetail) = when (cloudSyncState) {
     is CloudSyncState.Synced -> Triple(
@@ -202,7 +216,7 @@ fun CloudSyncAndSaveCard(
             onRequestSaveExportJson { json ->
               pendingSaveJson = json
               val safeTag = callsign.lowercase().replace(Regex("[^a-z0-9_\\-]"), "_").ifBlank { "operator" }
-              saveFileLauncher.launch("unknown_universes_${safeTag}_save.json")
+              launchSaveFile("unknown_universes_${safeTag}_save.json")
             }
           },
           colors = ButtonDefaults.buttonColors(
@@ -220,12 +234,20 @@ fun CloudSyncAndSaveCard(
         OutlinedButton(
           onClick = {
             onRequestSaveExportJson { json ->
-              val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_SUBJECT, "The Unknown Universes — $callsign Save Data")
-                putExtra(Intent.EXTRA_TEXT, json)
+              try {
+                if (json.length > 200_000) {
+                  onStatusMessage("Save file too large for quick share (${json.length / 1024} KB). Use Export Save (.JSON) instead.")
+                  return@onRequestSaveExportJson
+                }
+                val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                  type = "text/plain"
+                  putExtra(Intent.EXTRA_SUBJECT, "The Unknown Universes — $callsign Save Data")
+                  putExtra(Intent.EXTRA_TEXT, json)
+                }
+                context.startActivity(Intent.createChooser(sendIntent, "Share Save Data"))
+              } catch (t: Throwable) {
+                onStatusMessage("Share unavailable: ${t.localizedMessage ?: "Unsupported"}")
               }
-              context.startActivity(Intent.createChooser(sendIntent, "Share Save Data"))
             }
           },
           shape = RoundedCornerShape(12.dp),
@@ -242,9 +264,7 @@ fun CloudSyncAndSaveCard(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
       ) {
         OutlinedButton(
-          onClick = {
-            openFileLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
-          },
+          onClick = { launchOpenSaveFile(arrayOf("application/json", "text/plain", "*/*")) },
           shape = RoundedCornerShape(12.dp),
           modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("import_save_file_btn"),
         ) {

@@ -81,12 +81,14 @@ fun OutfitsMenuTab(
 ) {
   val haptic = LocalHapticFeedback.current
   var selectedGroup by remember { mutableStateOf(CharacterUniverseGroup.ALL) }
-  val outfits = remember(selectedGroup) {
-    if (selectedGroup == CharacterUniverseGroup.ALL) {
+  var realLifeOnly by remember { mutableStateOf(false) }
+  val outfits = remember(selectedGroup, realLifeOnly) {
+    val base = if (selectedGroup == CharacterUniverseGroup.ALL) {
       MultiverseArsenalCatalog.outfits
     } else {
       MultiverseArsenalCatalog.outfits.filter { it.characterGroup == selectedGroup }
     }
+    if (realLifeOnly) base.filter { it.isRealLifeCreatorVersion } else base
   }
   val activeSpec = progression.activeOutfitSpec()
   val activeState = progression.outfitState(activeSpec.id)
@@ -97,18 +99,18 @@ fun OutfitsMenuTab(
 
   LazyColumn(
     modifier = Modifier.fillMaxSize().testTag("outfits_menu_list"),
-    contentPadding = PaddingValues(16.dp),
-    verticalArrangement = Arrangement.spacedBy(12.dp),
+    contentPadding = PaddingValues(12.dp),
+    verticalArrangement = Arrangement.spacedBy(10.dp),
   ) {
     item {
       Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier
           .fillMaxWidth()
-          .border(1.5.dp, Color(activeSpec.secondaryHex).copy(alpha = 0.75f), RoundedCornerShape(16.dp)),
+          .border(1.5.dp, Color(activeSpec.secondaryHex).copy(alpha = 0.75f), RoundedCornerShape(14.dp)),
       ) {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
           Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -174,13 +176,35 @@ fun OutfitsMenuTab(
                   color = Color(0xFF00E676).copy(alpha = 0.18f),
                 ) {
                   Text(
-                    text = "${activeSpec.originTag.uppercase()} • ORIGINAL HERO +25% POWER BUFF",
+                    text = if (activeSpec.isRealLifeCreatorVersion) {
+                      "REAL-LIFE ME • +25% POWER BUFF"
+                    } else {
+                      "${activeSpec.originTag.uppercase()} • ORIGINAL HERO +25% POWER BUFF"
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF00E676),
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                   )
                 }
+              }
+              if (activeSpec.realLifeApparel.isNotBlank()) {
+                Text(
+                  text = "Real-Life Outfit: ${activeSpec.realLifeApparel}",
+                  style = MaterialTheme.typography.labelSmall,
+                  color = Color(0xFF93C5FD),
+                  maxLines = 2,
+                  overflow = TextOverflow.Ellipsis,
+                )
+              }
+              if (activeSpec.realLifeDailyGear.isNotBlank()) {
+                Text(
+                  text = "Daily Gear: ${activeSpec.realLifeDailyGear}",
+                  style = MaterialTheme.typography.labelSmall,
+                  color = Color(0xFFFDE68A),
+                  maxLines = 2,
+                  overflow = TextOverflow.Ellipsis,
+                )
               }
               Text(activeSpec.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
               Text(
@@ -225,9 +249,17 @@ fun OutfitsMenuTab(
     }
 
     item {
-      Text("PLAYABLE CHARACTERS (${MultiverseArsenalCatalog.outfits.size} VERSIONS • SHARD RARITY & +25% ORIGINALS)", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-      Spacer(Modifier.height(6.dp))
-      LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      Text("PLAYABLE CHARACTERS (${outfits.size}/${MultiverseArsenalCatalog.outfits.size} • +25% REAL-LIFE ORIGINALS)", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+      Spacer(Modifier.height(4.dp))
+      LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        item {
+          FilterChip(
+            selected = realLifeOnly,
+            onClick = { realLifeOnly = !realLifeOnly },
+            label = { Text("Real-Life Me (${MultiverseArsenalCatalog.outfits.count { it.isRealLifeCreatorVersion }})") },
+            modifier = Modifier.heightIn(min = 48.dp).testTag("outfit_filter_real_life"),
+          )
+        }
         items(CharacterUniverseGroup.entries, key = { it.id }) { group ->
           FilterChip(
             selected = selectedGroup == group,
@@ -273,7 +305,7 @@ fun OutfitsMenuTab(
             shape = RoundedCornerShape(16.dp),
           ),
       ) {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -328,7 +360,7 @@ fun OutfitsMenuTab(
                       color = Color(0xFF00E676).copy(alpha = 0.2f),
                     ) {
                       Text(
-                        text = "ORIGINAL +25%",
+                        text = if (spec.isRealLifeCreatorVersion) "REAL-LIFE ME +25%" else "ORIGINAL +25%",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF00E676),
@@ -338,7 +370,7 @@ fun OutfitsMenuTab(
                   }
                 }
                 Text(
-                  text = "${spec.originTag} • ${spec.subtitle} • Rig: ${spec.rigArchetype.uppercase()}",
+                  text = if (spec.realLifeApparel.isNotBlank()) "${spec.originTag} • ${spec.realLifeApparel}" else "${spec.originTag} • ${spec.subtitle} • Rig: ${spec.rigArchetype.uppercase()}",
                   style = MaterialTheme.typography.bodySmall,
                   color = MaterialTheme.colorScheme.onSurfaceVariant,
                   maxLines = 1,
@@ -479,6 +511,7 @@ fun ShardsPerksAndCoresTab(
   armoryItems: List<ArmoryItem> = emptyList(),
   region: WorldRegion = WorldRegion.NA_EAST,
   server: RegionalServerSpec? = null,
+  onOpenForgePerk: (() -> Unit)? = null,
 ) {
   val haptic = LocalHapticFeedback.current
   val resonance = remember(
@@ -501,16 +534,16 @@ fun ShardsPerksAndCoresTab(
 
   LazyColumn(
     modifier = Modifier.fillMaxSize().testTag("shards_perks_cores_list"),
-    contentPadding = PaddingValues(16.dp),
-    verticalArrangement = Arrangement.spacedBy(12.dp),
+    contentPadding = PaddingValues(12.dp),
+    verticalArrangement = Arrangement.spacedBy(10.dp),
   ) {
     item {
       Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surface,
-        modifier = Modifier.fillMaxWidth().border(1.5.dp, Color(0xFFE040FB).copy(alpha = 0.7f), RoundedCornerShape(16.dp)),
+        modifier = Modifier.fillMaxWidth().border(1.5.dp, Color(0xFFE040FB).copy(alpha = 0.7f), RoundedCornerShape(14.dp)),
       ) {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
           Text("OMNI-SOURCE RESONANCE & BONUSES", style = MaterialTheme.typography.titleMedium, color = Color(0xFFE040FB), fontWeight = FontWeight.Bold)
           Text(
             text = "All bonuses scale uncapped from held/spent Essence, Armory Mods, 30 Upgraded Maps, Weapons, Gear, Skills, Perks, Blast Cores & ${region.shortTag} Server.",
@@ -636,7 +669,30 @@ fun ShardsPerksAndCoresTab(
     }
 
     item {
-      Text("PERK CANS & BOTTLES (8 CLASSICS)", style = MaterialTheme.typography.titleMedium, color = Color(0xFFFFD54F))
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Text(
+          text = "PERK CANS & BOTTLES (${MultiverseArsenalCatalog.perkDrinks.size} INSPIRED)",
+          style = MaterialTheme.typography.titleSmall,
+          fontWeight = FontWeight.Bold,
+          color = Color(0xFFFFD54F),
+          modifier = Modifier.weight(1f),
+        )
+        if (onOpenForgePerk != null) {
+          Button(
+            onClick = onOpenForgePerk,
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E676), contentColor = Color.Black),
+            shape = RoundedCornerShape(10.dp),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+            modifier = Modifier.heightIn(min = 48.dp).testTag("open_forge_custom_perk_btn"),
+          ) {
+            Text("+ Forge Perk", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+          }
+        }
+      }
     }
 
     items(MultiverseArsenalCatalog.perkDrinks, key = { it.id }) { perk ->
@@ -690,7 +746,7 @@ fun ShardsPerksAndCoresTab(
       item {
         Text("FORGED CUSTOM PERKS (${progression.customPerks.size})", style = MaterialTheme.typography.titleMedium, color = Color(0xFF00E676))
       }
-      items(progression.customPerks, key = { it.id }) { cPerk ->
+      items(progression.customPerks.distinctBy { it.id }, key = { it.id }) { cPerk ->
         val accent = Color(cPerk.accentHex)
         val tierCost = UpgradeCosts.gearTier(cPerk.tier)
         val starCost = UpgradeCosts.gearStar(cPerk.starLevel)

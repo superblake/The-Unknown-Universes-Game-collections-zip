@@ -1,8 +1,6 @@
 package com.example.ui.screens
 
 import android.content.Intent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -79,6 +77,7 @@ fun SteamWorkshopCard(
   onConfirmWorkshopImport: (SteamWorkshopImportPreview, Boolean, Boolean) -> Unit,
   onStatusMessage: (String) -> Unit,
   onOpenBo3Export: (() -> Unit)? = null,
+  onOpenPrisma3dExport: (() -> Unit)? = null,
   onDeployWorkshopArea: ((String) -> Unit)? = null,
   modifier: Modifier = Modifier,
 ) {
@@ -114,40 +113,64 @@ fun SteamWorkshopCard(
   var importModulePreset by remember { mutableStateOf(true) }
   var importRigPreset by remember { mutableStateOf(true) }
 
-  val saveWorkshopDocLauncher =
-    rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { uri ->
-      if (uri != null) {
-        try {
-          context.contentResolver.openOutputStream(uri)?.use { out ->
-            out.write(pendingFileContent.toByteArray(Charsets.UTF_8))
-          }
-          onStatusMessage("Steam Workshop package exported successfully!")
-        } catch (e: Exception) {
-          onStatusMessage("Workshop export failed: ${e.localizedMessage}")
+  val launchSaveWorkshopDoc = com.example.util.rememberSafeCreateDocumentLauncher(
+    mimeType = "*/*",
+    onUnavailable = { onStatusMessage("Workshop export picker unavailable on this host.") },
+  ) { uri ->
+    if (uri != null) {
+      try {
+        context.contentResolver.openOutputStream(uri)?.use { out ->
+          out.write(pendingFileContent.toByteArray(Charsets.UTF_8))
         }
+        onStatusMessage("Steam Workshop package exported successfully!")
+      } catch (t: Throwable) {
+        onStatusMessage("Workshop export failed: ${t.localizedMessage ?: "Write error"}")
       }
     }
+  }
 
-  val openWorkshopDocLauncher =
-    rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-      if (uri != null) {
-        try {
-          val raw = context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use {
-            it.readText()
-          }.orEmpty()
-          val parsed = SteamWorkshopCodec.parseWorkshopImportInput(raw, profile.userId)
-          if (parsed.isSuccess) {
+  val launchOpenWorkshopDoc = com.example.util.rememberSafeOpenDocumentLauncher(
+    onUnavailable = { onStatusMessage("Workshop import picker unavailable on this host.") },
+  ) { uri ->
+    if (uri != null) {
+      try {
+        val fileName = com.example.util.resolveUriDisplayName(context, uri, "import.p3d")
+        val maxBytes = 12 * 1024 * 1024 + 1
+        val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
+          val buffer = ByteArray(16 * 1024)
+          val baos = java.io.ByteArrayOutputStream()
+          var total = 0
+          while (total < maxBytes) {
+            val read = input.read(buffer, 0, minOf(buffer.size, maxBytes - total))
+            if (read <= 0) break
+            baos.write(buffer, 0, read)
+            total += read
+          }
+          baos.toByteArray()
+        } ?: ByteArray(0)
+        if (com.example.export.Prisma3dImporter.looksLikePrisma3dFile(fileName, bytes)) {
+          val prismaRes = com.example.export.Prisma3dImporter.importFromBytes(bytes, fileName, profile.userId)
+          if (prismaRes.isSuccess) {
             importModulePreset = true
             importRigPreset = true
-            pendingImportPreview = parsed.getOrThrow()
-          } else {
-            onStatusMessage(parsed.exceptionOrNull()?.localizedMessage ?: "Invalid Steam Workshop file")
+            pendingImportPreview = prismaRes.getOrThrow().toWorkshopPreview(profile.userId)
+            return@rememberSafeOpenDocumentLauncher
           }
-        } catch (e: Exception) {
-          onStatusMessage("Could not read Workshop file: ${e.localizedMessage}")
         }
+        val raw = bytes.toString(Charsets.UTF_8)
+        val parsed = SteamWorkshopCodec.parseWorkshopImportInput(raw, profile.userId)
+        if (parsed.isSuccess) {
+          importModulePreset = true
+          importRigPreset = true
+          pendingImportPreview = parsed.getOrThrow()
+        } else {
+          onStatusMessage(parsed.exceptionOrNull()?.localizedMessage ?: "Invalid Steam Workshop or Prisma3D file")
+        }
+      } catch (t: Throwable) {
+        onStatusMessage("Could not read Workshop/Prisma3D file: ${t.localizedMessage ?: "Read error"}")
       }
     }
+  }
 
   fun buildExportConfig(): SteamWorkshopExportConfig = SteamWorkshopExportConfig(
     appId = exportAppId,
@@ -325,7 +348,7 @@ fun SteamWorkshopCard(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
           ) {
             OutlinedButton(
-              onClick = { openWorkshopDocLauncher.launch(arrayOf("*/*")) },
+              onClick = { launchOpenWorkshopDoc(arrayOf("*/*")) },
               shape = RoundedCornerShape(12.dp),
               modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("workshop_import_file_btn"),
             ) {
@@ -568,9 +591,13 @@ fun SteamWorkshopCard(
           ) {
             Button(
               onClick = {
-                pendingFileContent = SteamWorkshopCodec.generateWorkshopVdf(buildExportConfig())
-                val appToken = SteamWorkshopCodec.sanitizeNumericId(exportAppId, "480")
-                saveWorkshopDocLauncher.launch("workshop_${appToken}_item.vdf")
+                try {
+                  pendingFileContent = SteamWorkshopCodec.generateWorkshopVdf(buildExportConfig())
+                  val appToken = SteamWorkshopCodec.sanitizeNumericId(exportAppId, "480")
+                  launchSaveWorkshopDoc("workshop_${appToken}_item.vdf")
+                } catch (t: Throwable) {
+                  onStatusMessage("Export unavailable: ${t.localizedMessage ?: "Unsupported"}")
+                }
               },
               colors = ButtonDefaults.buttonColors(
                 containerColor = SteamAccent,
@@ -586,13 +613,17 @@ fun SteamWorkshopCard(
 
             OutlinedButton(
               onClick = {
-                pendingFileContent = SteamWorkshopCodec.generateWorkshopPackageJson(
-                  config = buildExportConfig(),
-                  profile = profile,
-                  armory = armory,
-                  rigs = rigs,
-                )
-                saveWorkshopDocLauncher.launch("unknown_universes_workshop.json")
+                try {
+                  pendingFileContent = SteamWorkshopCodec.generateWorkshopPackageJson(
+                    config = buildExportConfig(),
+                    profile = profile,
+                    armory = armory,
+                    rigs = rigs,
+                  )
+                  launchSaveWorkshopDoc("unknown_universes_workshop.json")
+                } catch (t: Throwable) {
+                  onStatusMessage("Export unavailable: ${t.localizedMessage ?: "Unsupported"}")
+                }
               },
               shape = RoundedCornerShape(12.dp),
               modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("workshop_export_json_btn"),
@@ -605,16 +636,24 @@ fun SteamWorkshopCard(
 
           OutlinedButton(
             onClick = {
-              val cfg = buildExportConfig()
-              val vdf = SteamWorkshopCodec.generateWorkshopVdf(cfg)
-              val wsJson = SteamWorkshopCodec.generateWorkshopPackageJson(cfg, profile, armory, rigs)
-              val combined = "=== workshop_item.vdf (SteamCMD) ===\n$vdf\n\n=== unknown_universes_workshop.json ===\n$wsJson"
-              val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_SUBJECT, "Steam Workshop Pack: ${cfg.title}")
-                putExtra(Intent.EXTRA_TEXT, combined)
+              try {
+                val cfg = buildExportConfig()
+                val vdf = SteamWorkshopCodec.generateWorkshopVdf(cfg)
+                val wsJson = SteamWorkshopCodec.generateWorkshopPackageJson(cfg, profile, armory, rigs)
+                val combined = "=== workshop_item.vdf (SteamCMD) ===\n$vdf\n\n=== unknown_universes_workshop.json ===\n$wsJson"
+                if (combined.length > 200_000) {
+                  onStatusMessage("Workshop pack too large for quick share (${combined.length / 1024} KB). Export JSON instead.")
+                  return@OutlinedButton
+                }
+                val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                  type = "text/plain"
+                  putExtra(Intent.EXTRA_SUBJECT, "Steam Workshop Pack: ${cfg.title}")
+                  putExtra(Intent.EXTRA_TEXT, combined)
+                }
+                context.startActivity(Intent.createChooser(sendIntent, "Share Steam Workshop Pack"))
+              } catch (t: Throwable) {
+                onStatusMessage("Share unavailable: ${t.localizedMessage ?: "Unsupported"}")
               }
-              context.startActivity(Intent.createChooser(sendIntent, "Share Steam Workshop Pack"))
             },
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("workshop_share_btn"),
@@ -633,6 +672,18 @@ fun SteamWorkshopCard(
               Icon(AppIcons.Animation, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.tertiary)
               Spacer(Modifier.width(6.dp))
               Text("Open BO3 Mod Tools Exporter (.XMODEL / .XANIM / .GDT)", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.tertiary)
+            }
+          }
+
+          if (onOpenPrisma3dExport != null) {
+            OutlinedButton(
+              onClick = onOpenPrisma3dExport,
+              shape = RoundedCornerShape(12.dp),
+              modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("workshop_open_prisma3d_btn"),
+            ) {
+              Icon(AppIcons.Animation, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color(0xFF00E5FF))
+              Spacer(Modifier.width(6.dp))
+              Text("Open Prisma3D Exporter (.PRISMA / .P3D / .OBJ)", style = MaterialTheme.typography.labelMedium, color = Color(0xFF00E5FF))
             }
           }
         }

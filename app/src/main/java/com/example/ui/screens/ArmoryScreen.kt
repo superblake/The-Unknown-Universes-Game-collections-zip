@@ -57,6 +57,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.toColorInt
 import com.example.R
@@ -83,9 +84,13 @@ import com.example.data.model.ProgressionCatalog
 import com.example.data.model.RigAsset
 import com.example.data.model.StarRankMeta
 import com.example.data.model.UpgradeCosts
+import com.example.data.model.UserCustomEquipmentSpec
 import com.example.data.model.UserCustomGameMapSpec
+import com.example.data.model.UserCustomGearSpec
+import com.example.data.model.UserCustomPerkSpec
 import com.example.data.model.UserCustomWeaponSpec
 import com.example.data.model.WeaponCustomization
+import androidx.compose.foundation.verticalScroll
 
 enum class ArmorySection(val label: String, val tag: String) {
   MODS("Mods", "mods"),
@@ -243,6 +248,9 @@ fun ArmoryScreen(
   onEquipCustomGear: (GearSlot, String) -> Unit = { _, _ -> },
   onUpgradeCustomEquipmentTier: (String) -> Unit = {},
   onUpgradeCustomEquipmentStar: (String) -> Unit = {},
+  onForgeCustomPerk: (UserCustomPerkSpec) -> Unit = {},
+  onForgeCustomGear: (UserCustomGearSpec) -> Unit = {},
+  onForgeCustomEquipment: (UserCustomEquipmentSpec) -> Unit = {},
   settings: AppSettings = AppSettings(),
   persistedSectionTag: String? = null,
   onPersistSectionTag: ((String) -> Unit)? = null,
@@ -278,6 +286,9 @@ fun ArmoryScreen(
   var forgeMapInitialCategory by remember { mutableStateOf(CustomMapGameCategory.BO3) }
   var showForgeCustomWeaponDialog by remember { mutableStateOf(false) }
   var forgeWeaponInitialCategory by remember { mutableStateOf(CustomMapGameCategory.BO3) }
+  var showForgeCustomPerkDialog by remember { mutableStateOf(false) }
+  var showForgeCustomGearDialog by remember { mutableStateOf(false) }
+  var showForgeCustomEquipmentDialog by remember { mutableStateOf(false) }
   var customMapFilter by remember { mutableStateOf("all") }
 
   val filtered = when (selectedCategory) {
@@ -309,77 +320,86 @@ fun ArmoryScreen(
       color = MaterialTheme.colorScheme.surface,
       modifier = Modifier
         .fillMaxWidth()
-        .padding(start = 16.dp, end = 16.dp, top = 12.dp)
-        .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp)),
+        .padding(start = 12.dp, end = 12.dp, top = 6.dp)
+        .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(14.dp)),
     ) {
-      Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(
           modifier = Modifier.fillMaxWidth(),
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically,
         ) {
           Column(modifier = Modifier.weight(1f)) {
-            Text(gameStrings.armoryTitle, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
+            Text(
+              text = gameStrings.armoryTitle,
+              style = MaterialTheme.typography.titleMedium,
+              fontWeight = FontWeight.Bold,
+              color = MaterialTheme.colorScheme.onSurface,
+              maxLines = 1,
+            )
             Text(
               text = "PWR ${powerLight.powerLevel} • LT ${powerLight.lightLevel} • Lv.${progression.playerLevel} • ${progression.activeOutfitSpec().nameWithVersion}",
               style = MaterialTheme.typography.labelSmall,
               color = MaterialTheme.colorScheme.primary,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
             )
           }
           Surface(
-            shape = RoundedCornerShape(10.dp),
+            shape = RoundedCornerShape(8.dp),
             color = Color(0xFF00E5FF).copy(alpha = 0.16f),
           ) {
             Text(
-              text = "$totalEssence BLUE ESSENCE",
-              style = MaterialTheme.typography.labelLarge,
+              text = "$totalEssence B",
+              style = MaterialTheme.typography.labelMedium,
               fontWeight = FontWeight.Bold,
               color = Color(0xFF00E5FF),
-              modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp).testTag("armory_blue_essence_badge"),
+              modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp).testTag("armory_blue_essence_badge"),
             )
           }
         }
 
         Text(
-          text = "R:${progression.redEssence} Y:${progression.yellowEssence} G:${progression.greenEssence} • ${resonance.summary} • $upgradedMaps/${EssenceResonanceBonuses.MAX_SYNERGY_MAPS} Maps • ${settings.activeRegion.shortTag}/${settings.activeServer.code}",
+          text = "R:${progression.redEssence} Y:${progression.yellowEssence} G:${progression.greenEssence} • $upgradedMaps/${EssenceResonanceBonuses.MAX_SYNERGY_MAPS} Maps • ${settings.activeRegion.shortTag}/${settings.activeServer.code} • ${resonance.summary}",
           style = MaterialTheme.typography.labelSmall,
           color = Color(0xFFE040FB),
-          fontWeight = FontWeight.SemiBold,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
         )
 
         Row(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.SpaceBetween,
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
           verticalAlignment = Alignment.CenterVertically,
         ) {
           OutlinedButton(
             onClick = { setSelectedSection(sections[(curIdx - 1 + sections.size) % sections.size]) },
-            shape = RoundedCornerShape(10.dp),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
             modifier = Modifier.height(48.dp).testTag("armory_prev_section_btn"),
           ) {
-            Text("< Prev", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text("< Prev", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
           }
           Button(
             onClick = { showCodesDialog = true },
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6200EE), contentColor = Color.White),
-            shape = RoundedCornerShape(10.dp),
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-            modifier = Modifier.height(48.dp).testTag("tier_codes_menu_btn"),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+            modifier = Modifier.weight(1f).height(48.dp).testTag("tier_codes_menu_btn"),
           ) {
-            Text("⚡ Codes & Boost", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            Text("⚡ Codes & Boost", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, maxLines = 1)
           }
           OutlinedButton(
             onClick = { setSelectedSection(sections[(curIdx + 1) % sections.size]) },
-            shape = RoundedCornerShape(10.dp),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
             modifier = Modifier.height(48.dp).testTag("armory_next_section_btn"),
           ) {
-            Text("Next >", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text("Next >", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
           }
         }
 
-        val topRowSections = remember(sections) {
+        val orderedSections = remember(sections) {
           listOf(
             ArmorySection.MODS,
             ArmorySection.OUTFITS,
@@ -388,10 +408,6 @@ fun ArmoryScreen(
             ArmorySection.LEVELS,
             ArmorySection.MISSIONS,
             ArmorySection.PASS_CHALLENGES,
-          )
-        }
-        val bottomRowSections = remember(sections) {
-          listOf(
             ArmorySection.GEAR,
             ArmorySection.EQUIPMENT,
             ArmorySection.SKILLS,
@@ -402,29 +418,17 @@ fun ArmoryScreen(
             ArmorySection.WORKSHOP_BO3,
           )
         }
-        Column(
+        Row(
           modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-          verticalArrangement = Arrangement.spacedBy(6.dp),
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            topRowSections.forEach { sec ->
-              FilterChip(
-                selected = selectedSection == sec,
-                onClick = { setSelectedSection(sec) },
-                label = { Text(sec.localizedLabel(gameStrings), fontWeight = if (selectedSection == sec) FontWeight.Bold else FontWeight.Medium) },
-                modifier = Modifier.height(48.dp).testTag("armory_tab_${sec.tag}"),
-              )
-            }
-          }
-          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            bottomRowSections.forEach { sec ->
-              FilterChip(
-                selected = selectedSection == sec,
-                onClick = { setSelectedSection(sec) },
-                label = { Text(sec.localizedLabel(gameStrings), fontWeight = if (selectedSection == sec) FontWeight.Bold else FontWeight.Medium) },
-                modifier = Modifier.height(48.dp).testTag("armory_tab_${sec.tag}"),
-              )
-            }
+          orderedSections.forEach { sec ->
+            FilterChip(
+              selected = selectedSection == sec,
+              onClick = { setSelectedSection(sec) },
+              label = { Text(sec.localizedLabel(gameStrings), style = MaterialTheme.typography.labelSmall, fontWeight = if (selectedSection == sec) FontWeight.Bold else FontWeight.Medium) },
+              modifier = Modifier.height(48.dp).testTag("armory_tab_${sec.tag}"),
+            )
           }
         }
       }
@@ -557,6 +561,7 @@ fun ArmoryScreen(
           armoryItems = armory,
           region = settings.activeRegion,
           server = settings.activeServer,
+          onOpenForgePerk = { showForgeCustomPerkDialog = true },
         )
 
         ArmorySection.AREAS -> AreasAndAgingTab(
@@ -625,6 +630,7 @@ fun ArmoryScreen(
           onUpgradeCustomGearTier = onUpgradeCustomGearTier,
           onUpgradeCustomGearStar = onUpgradeCustomGearStar,
           onEquipCustomGear = onEquipCustomGear,
+          onOpenForgeGear = { showForgeCustomGearDialog = true },
         )
 
         ArmorySection.EQUIPMENT -> EquipmentCustomizationTab(
@@ -638,6 +644,7 @@ fun ArmoryScreen(
           onUpgradeEquipmentStar = onUpgradeEquipmentStar,
           onUpgradeCustomEquipmentTier = onUpgradeCustomEquipmentTier,
           onUpgradeCustomEquipmentStar = onUpgradeCustomEquipmentStar,
+          onOpenForgeEquipment = { showForgeCustomEquipmentDialog = true },
         )
 
         ArmorySection.SKILLS -> SkillTreeTab(
@@ -1201,6 +1208,36 @@ fun ArmoryScreen(
       },
     )
   }
+
+  if (showForgeCustomPerkDialog) {
+    ForgeCustomPerkDialog(
+      onDismiss = { showForgeCustomPerkDialog = false },
+      onConfirm = { spec ->
+        onForgeCustomPerk(spec)
+        showForgeCustomPerkDialog = false
+      },
+    )
+  }
+
+  if (showForgeCustomGearDialog) {
+    ForgeCustomGearDialog(
+      onDismiss = { showForgeCustomGearDialog = false },
+      onConfirm = { spec ->
+        onForgeCustomGear(spec)
+        showForgeCustomGearDialog = false
+      },
+    )
+  }
+
+  if (showForgeCustomEquipmentDialog) {
+    ForgeCustomEquipmentDialog(
+      onDismiss = { showForgeCustomEquipmentDialog = false },
+      onConfirm = { spec ->
+        onForgeCustomEquipment(spec)
+        showForgeCustomEquipmentDialog = false
+      },
+    )
+  }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -1375,7 +1412,7 @@ private fun ArmoryModuleCard(
 }
 
 @Composable
-private fun ForgeArmoryItemDialog(
+fun ForgeArmoryItemDialog(
   onDismiss: () -> Unit,
   onConfirm: (String, String, String, String, Long, Long, String) -> Unit,
 ) {
@@ -1383,30 +1420,62 @@ private fun ForgeArmoryItemDialog(
   var category by remember { mutableStateOf("power") }
   var universeTag by remember { mutableStateOf("UnknownOS Custom") }
   var description by remember { mutableStateOf("Custom forged multiverse module.") }
-  var powerStr by remember { mutableStateOf("200") }
+  var powerStr by remember { mutableStateOf("260") }
   var cooldownStr by remember { mutableStateOf("6") }
 
   val categoryOptions = listOf("perk", "power", "upgrade", "consumable")
+  val quickPresets = listOf(
+    Triple("Rift Nova Surge", "power", "320"),
+    Triple("Real-Life Grit Core", "perk", "280"),
+    Triple("BO3 Pack Circuit", "upgrade", "350"),
+    Triple("Quick Shield Cell", "consumable", "240"),
+  )
 
   AlertDialog(
     onDismissRequest = onDismiss,
     title = { Text("Forge Custom Armory Module") },
     text = {
-      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      Column(
+        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+      ) {
+        Text("1-TAP MODULE PRESETS", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+        Row(
+          modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+          quickPresets.forEach { (pName, pCat, pPow) ->
+            FilterChip(
+              selected = name == pName,
+              onClick = {
+                name = pName
+                category = pCat
+                powerStr = pPow
+                cooldownStr = if (pCat == "perk") "0" else "6"
+              },
+              label = { Text(pName, style = MaterialTheme.typography.labelSmall) },
+              modifier = Modifier.heightIn(min = 48.dp),
+            )
+          }
+        }
         OutlinedTextField(
           value = name,
           onValueChange = { name = it.take(50) },
-          label = { Text("Module Name") },
+          label = { Text("Module Name (Optional)") },
           placeholder = { Text("e.g. Rift Nova Surge") },
           singleLine = true,
           modifier = Modifier.fillMaxWidth().testTag("custom_module_name_input"),
         )
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-          items(categoryOptions) { cat ->
+        Row(
+          modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+          categoryOptions.forEach { cat ->
             FilterChip(
               selected = category == cat,
               onClick = { category = cat },
               label = { Text(cat.replaceFirstChar { it.uppercase() }) },
+              modifier = Modifier.heightIn(min = 48.dp),
             )
           }
         }
@@ -1445,29 +1514,28 @@ private fun ForgeArmoryItemDialog(
     confirmButton = {
       Button(
         onClick = {
-          if (name.trim().isNotEmpty()) {
-            val hex = when (category) {
-              "perk" -> "#00E676"
-              "power" -> "#7C4DFF"
-              "upgrade" -> "#FFAB40"
-              else -> "#00E5FF"
-            }
-            onConfirm(
-              name.trim(),
-              category,
-              universeTag.trim(),
-              description.trim(),
-              cooldownStr.toLongOrNull() ?: 6L,
-              powerStr.toLongOrNull() ?: 200L,
-              hex,
-            )
+          val resolvedName = name.trim().ifBlank { "Custom ${category.replaceFirstChar { it.uppercase() }} Module" }
+          val hex = when (category) {
+            "perk" -> "#00E676"
+            "power" -> "#7C4DFF"
+            "upgrade" -> "#FFAB40"
+            else -> "#00E5FF"
           }
+          onConfirm(
+            resolvedName,
+            category,
+            universeTag.trim().ifBlank { "UnknownOS Custom" },
+            description.trim().ifBlank { "Custom forged multiverse module." },
+            cooldownStr.toLongOrNull() ?: if (category == "perk") 0L else 6L,
+            powerStr.toLongOrNull() ?: 260L,
+            hex,
+          )
         },
-        modifier = Modifier.testTag("confirm_forge_module_btn"),
+        modifier = Modifier.heightIn(min = 48.dp).testTag("confirm_forge_module_btn"),
       ) { Text("Forge") }
     },
     dismissButton = {
-      TextButton(onClick = onDismiss) { Text("Cancel") }
+      TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("Cancel") }
     },
   )
 }

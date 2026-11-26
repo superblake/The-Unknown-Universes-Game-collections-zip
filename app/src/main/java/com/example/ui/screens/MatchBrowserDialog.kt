@@ -142,8 +142,9 @@ fun MatchBrowserDialog(
 
   Dialog(
     onDismissRequest = onDismiss,
-    properties = DialogProperties(usePlatformDefaultWidth = false),
+    properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
   ) {
+    com.example.util.SyncDialogFullscreen()
     Surface(
       color = MaterialTheme.colorScheme.background,
       modifier = Modifier.fillMaxSize().testTag("match_browser_dialog"),

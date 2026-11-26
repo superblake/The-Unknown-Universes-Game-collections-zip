@@ -18,7 +18,14 @@ import kotlin.math.sin
 
 private const val HORIZON_RATIO = 0.14f
 private const val PERSP_TILT = 0.24f
-private const val WORLD_VIEW_ZOOM = 0.62f
+private const val BASE_WORLD_VIEW_ZOOM = 0.62f
+
+@Volatile
+var activeArenaZoomScale: Float = 1.0f
+
+fun currentWorldViewZoom(): Float =
+  (BASE_WORLD_VIEW_ZOOM * (if (activeArenaZoomScale.isFinite()) activeArenaZoomScale else 1.0f))
+    .coerceIn(0.48f, 0.80f)
 
 fun perspectiveScaleForRelY(relY: Float): Float =
   (0.78f + (relY - 0.5f) * PERSP_TILT).coerceIn(0.46f, 1.32f)
@@ -31,13 +38,14 @@ fun worldToPerspectiveScreen(
   w: Float,
   h: Float,
 ): Offset {
+  val zoom = currentWorldViewZoom()
   val relX = wx - camX
   val relY = wy - camY
   val depthScale = perspectiveScaleForRelY(relY)
   val horizonPx = h * HORIZON_RATIO
   val groundH = h - horizonPx
-  val sx = w * 0.5f + (relX - 0.5f) * w * depthScale * WORLD_VIEW_ZOOM
-  val normalizedY = ((relY - 0.5f) * depthScale * WORLD_VIEW_ZOOM + 0.5f)
+  val sx = w * 0.5f + (relX - 0.5f) * w * depthScale * zoom
+  val normalizedY = ((relY - 0.5f) * depthScale * zoom + 0.5f)
   val sy = horizonPx + normalizedY * groundH
   return Offset(sx, sy)
 }
@@ -50,16 +58,17 @@ fun screenToWorldCoords(
   w: Float,
   h: Float,
 ): Pair<Float, Float> {
+  val zoom = currentWorldViewZoom()
   val horizonPx = h * HORIZON_RATIO
   val groundH = (h - horizonPx).coerceAtLeast(1f)
   val normY = (py - horizonPx) / groundH
-  var relY = 0.5f + (normY - 0.5f) / WORLD_VIEW_ZOOM
+  var relY = 0.5f + (normY - 0.5f) / zoom
   for (it in 0..2) {
     val ds = perspectiveScaleForRelY(relY)
-    relY = 0.5f + (normY - 0.5f) / (ds * WORLD_VIEW_ZOOM).coerceAtLeast(0.20f)
+    relY = 0.5f + (normY - 0.5f) / (ds * zoom).coerceAtLeast(0.20f)
   }
   val ds = perspectiveScaleForRelY(relY).coerceAtLeast(0.25f)
-  val relX = 0.5f + (px - w * 0.5f) / (w.coerceAtLeast(1f) * ds * WORLD_VIEW_ZOOM)
+  val relX = 0.5f + (px - w * 0.5f) / (w.coerceAtLeast(1f) * ds * zoom)
   return Pair(camX + relX, camY + relY)
 }
 

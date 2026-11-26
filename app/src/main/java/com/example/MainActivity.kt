@@ -5,30 +5,36 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.content.res.Configuration
+import android.content.res.Resources
 import android.net.Uri
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.WindowManager
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedDispatcherOwner
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivityResultRegistryOwner
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.ActivityResultRegistryOwner
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -56,13 +62,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
 import androidx.credentials.CredentialManager
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -99,7 +110,14 @@ import com.example.ui.screens.MissionsDialog
 import com.example.ui.screens.OsDesktopScreen
 import com.example.ui.screens.SettingsDialog
 import com.example.ui.screens.SocialAndCommsDialog
+import com.example.data.model.CustomMapGameCategory
 import com.example.data.model.SocialCatalog
+import com.example.ui.screens.ForgeArmoryItemDialog
+import com.example.ui.screens.ForgeCustomEquipmentDialog
+import com.example.ui.screens.ForgeCustomGearDialog
+import com.example.ui.screens.ForgeCustomMapDialog
+import com.example.ui.screens.ForgeCustomPerkDialog
+import com.example.ui.screens.ForgeCustomWeaponDialog
 import com.example.ui.theme.AppIcons
 import com.example.ui.theme.UnknownUniversesTheme
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -108,12 +126,19 @@ import kotlinx.coroutines.flow.asStateFlow
 
 class MainActivity : ComponentActivity() {
   private val pendingOAuthRedirect = MutableStateFlow<Uri?>(null)
+  @Volatile private var shouldHideSystemBars: Boolean = true
+
+  fun updateSystemBarsVisibility(hide: Boolean) {
+    shouldHideSystemBars = hide
+    com.example.util.applyWindowFullscreen(window, hide)
+  }
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     com.example.util.AppCrashShield.install(application)
     pendingOAuthRedirect.value = intent?.data
     enableEdgeToEdge()
+    com.example.util.applyWindowFullscreen(window, shouldHideSystemBars)
     com.example.util.BackgroundMusicManager.startAmbientMusic(this)
     setContent {
       AppNavigation(
@@ -130,7 +155,20 @@ class MainActivity : ComponentActivity() {
 
   override fun onResume() {
     super.onResume()
+    com.example.util.applyWindowFullscreen(window, shouldHideSystemBars)
     com.example.util.BackgroundMusicManager.resumeMusic()
+  }
+
+  override fun onWindowFocusChanged(hasFocus: Boolean) {
+    super.onWindowFocusChanged(hasFocus)
+    if (hasFocus) {
+      com.example.util.applyWindowFullscreen(window, shouldHideSystemBars)
+    }
+  }
+
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    super.onConfigurationChanged(newConfig)
+    com.example.util.applyWindowFullscreen(window, shouldHideSystemBars)
   }
 
   override fun onDestroy() {
@@ -266,25 +304,45 @@ fun AppNavigation(
     onDispose {}
   }
 
+  val hostActivity = remember(context) { context.findActivity() }
+  val activityResultOwner =
+    LocalActivityResultRegistryOwner.current ?: (hostActivity as? ActivityResultRegistryOwner)
+  val backPressedOwner =
+    LocalOnBackPressedDispatcherOwner.current ?: (hostActivity as? OnBackPressedDispatcherOwner)
+
   val activeLanguage = appSettings.activeLanguage
   val activeLocale = remember(activeLanguage) { activeLanguage.toLocale() }
-  val localizedContext = remember(context, activeLanguage) {
+  val localizedResources = remember(context, activeLanguage) {
     val config = Configuration(context.resources.configuration)
     config.setLocale(activeLocale)
     config.setLayoutDirection(activeLocale)
-    context.createConfigurationContext(config)
+    context.createConfigurationContext(config).resources
+  }
+  val localizedContext = remember(context, localizedResources) {
+    object : ContextWrapper(context) {
+      override fun getResources(): Resources = localizedResources
+    }
   }
   val gameStrings = remember(activeLanguage) { GameStringsCatalog.forLanguage(activeLanguage) }
   val layoutDirection = if (activeLanguage.isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
 
   val currentUserId = signedInGoogleUid ?: LOCAL_OPERATOR_ID
 
-  CompositionLocalProvider(
-    LocalContext provides localizedContext,
-    LocalConfiguration provides localizedContext.resources.configuration,
-    LocalLayoutDirection provides layoutDirection,
-    LocalGameStrings provides gameStrings,
-  ) {
+  val providedLocals = buildList {
+    add(LocalContext provides localizedContext)
+    add(LocalConfiguration provides localizedResources.configuration)
+    add(LocalLayoutDirection provides layoutDirection)
+    add(LocalGameStrings provides gameStrings)
+    add(com.example.util.LocalHideSystemBars provides appSettings.shouldHideSystemBars(inArena = false))
+    if (activityResultOwner != null) {
+      add(LocalActivityResultRegistryOwner provides activityResultOwner)
+    }
+    if (backPressedOwner != null) {
+      add(LocalOnBackPressedDispatcherOwner provides backPressedOwner)
+    }
+  }.toTypedArray()
+
+  CompositionLocalProvider(*providedLocals) {
   UnknownUniversesTheme(
     darkTheme = appSettings.effectiveDarkTheme,
     settings = appSettings,
@@ -329,6 +387,7 @@ fun AppNavigation(
           appSettings = appSettings,
           isSettingsOpen = showSettingsDialog,
           onOpenSettings = { showSettingsDialog = true },
+          onUpdateSettings = { transform -> settingsStore.update(transform) },
           onSetWallpaperPath = { path ->
             activeWallpaperPath = path
             prefs.edit {
@@ -389,6 +448,7 @@ fun UnknownOsShell(
   appSettings: AppSettings = AppSettings(),
   isSettingsOpen: Boolean = false,
   onOpenSettings: () -> Unit = {},
+  onUpdateSettings: ((AppSettings) -> AppSettings) -> Unit = {},
   onSetWallpaperPath: (String?) -> Unit,
   onSelectLanguage: (String) -> Unit = {},
   pendingOAuthRedirect: StateFlow<Uri?>,
@@ -435,6 +495,12 @@ fun UnknownOsShell(
   var matchBrowserInitialTab by remember { mutableIntStateOf(0) }
   var showSocialDialog by remember { mutableStateOf(false) }
   var socialDialogInitialTab by remember { mutableIntStateOf(0) }
+  var showHubForgeWeapon by remember { mutableStateOf(false) }
+  var showHubForgeMap by remember { mutableStateOf(false) }
+  var showHubForgeModule by remember { mutableStateOf(false) }
+  var showHubForgePerk by remember { mutableStateOf(false) }
+  var showHubForgeGear by remember { mutableStateOf(false) }
+  var showHubForgeEquipment by remember { mutableStateOf(false) }
   var cachedArenaSimKey by remember { mutableStateOf<String?>(null) }
   var cachedArenaSim by remember { mutableStateOf<com.example.ui.screens.ArenaSimState?>(null) }
 
@@ -491,35 +557,57 @@ fun UnknownOsShell(
     }
   }
 
-  val hideBarsForArena = appSettings.immersiveFullscreen && activeTab == OsWorkspaceTab.ARENA_PLAY
-  DisposableEffect(hideBarsForArena, context) {
-    val window = context.findActivity()?.window
-    if (window != null) {
-      val controller = WindowCompat.getInsetsController(window, window.decorView)
-      if (hideBarsForArena) {
-        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        controller.hide(WindowInsetsCompat.Type.systemBars())
-      } else {
-        controller.show(WindowInsetsCompat.Type.systemBars())
+  val inArena = activeTab == OsWorkspaceTab.ARENA_PLAY
+  val hideSystemBars = appSettings.shouldHideSystemBars(inArena = inArena)
+  val hideChromeBarsForArena = appSettings.immersiveFullscreen && inArena
+  val lifecycleOwner = LocalLifecycleOwner.current
+  DisposableEffect(hideSystemBars, context, lifecycleOwner) {
+    val activity = context.findActivity()
+    (activity as? MainActivity)?.updateSystemBarsVisibility(hideSystemBars)
+      ?: com.example.util.applyWindowFullscreen(activity?.window, hideSystemBars)
+    val observer = LifecycleEventObserver { _, event ->
+      if (event == Lifecycle.Event.ON_RESUME) {
+        (activity as? MainActivity)?.updateSystemBarsVisibility(hideSystemBars)
+          ?: com.example.util.applyWindowFullscreen(activity?.window, hideSystemBars)
       }
     }
-    onDispose {}
+    lifecycleOwner.lifecycle.addObserver(observer)
+    onDispose {
+      lifecycleOwner.lifecycle.removeObserver(observer)
+    }
   }
 
+  val baseDensity = LocalDensity.current
+  val safeMenuScale = if (appSettings.menuScale.isFinite()) appSettings.menuScale.coerceIn(0.75f, 1.35f) else 1.0f
+  val scaledMenuDensity = remember(baseDensity, safeMenuScale, inArena) {
+    if (inArena || safeMenuScale == 1.0f) {
+      baseDensity
+    } else {
+      Density(
+        density = (baseDensity.density * safeMenuScale).coerceAtLeast(0.75f),
+        fontScale = baseDensity.fontScale,
+      )
+    }
+  }
+
+  CompositionLocalProvider(
+    LocalDensity provides scaledMenuDensity,
+    com.example.util.LocalHideSystemBars provides hideSystemBars,
+  ) {
   BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
     val useNavRail = maxWidth >= 600.dp
 
     Scaffold(
-      contentWindowInsets = if (hideBarsForArena) WindowInsets(0, 0, 0, 0) else WindowInsets.safeDrawing,
+      contentWindowInsets = if (hideSystemBars) WindowInsets(0, 0, 0, 0) else WindowInsets.safeDrawing,
       snackbarHost = {
         SnackbarHost(hostState = snackbarHostState) { data ->
           Snackbar(snackbarData = data)
         }
       },
       bottomBar = {
-        if (!useNavRail && !hideBarsForArena) {
+        if (!useNavRail && !hideChromeBarsForArena) {
           NavigationBar(
-            windowInsets = WindowInsets.navigationBars,
+            windowInsets = if (hideSystemBars) WindowInsets(0, 0, 0, 0) else WindowInsets.navigationBars,
             containerColor = MaterialTheme.colorScheme.surface,
           ) {
             OsWorkspaceTab.entries.forEach { tab ->
@@ -541,10 +629,15 @@ fun UnknownOsShell(
         }
       },
     ) { innerPadding ->
+      val cutoutModifier = if (!inArena) {
+        Modifier.windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+      } else {
+        Modifier
+      }
       Row(
-        modifier = Modifier.fillMaxSize().padding(innerPadding)
+        modifier = Modifier.fillMaxSize().padding(innerPadding).then(cutoutModifier)
       ) {
-        if (useNavRail && !hideBarsForArena) {
+        if (useNavRail && !hideChromeBarsForArena) {
           NavigationRail(
             containerColor = MaterialTheme.colorScheme.surface,
             modifier = Modifier.fillMaxHeight(),
@@ -682,6 +775,8 @@ fun UnknownOsShell(
                   onUpdateCollectionCustomMode = viewModel::updateCollectionCustomMode,
                   onDeployCollectionCustomMode = viewModel::deployCollectionCustomMode,
                   activeLanguage = appSettings.activeLanguage,
+                  appSettings = appSettings,
+                  onUpdateSettings = onUpdateSettings,
                   onSelectLanguage = onSelectLanguage,
                   onSignOut = onLockSession,
                 )
@@ -745,6 +840,12 @@ fun UnknownOsShell(
                   settings = appSettings,
                   progression = progression,
                   onStatusMessage = viewModel::showBanner,
+                  onOpenForgeWeapon = { showHubForgeWeapon = true },
+                  onOpenForgeMap = { showHubForgeMap = true },
+                  onOpenForgeModule = { showHubForgeModule = true },
+                  onOpenForgePerk = { showHubForgePerk = true },
+                  onOpenForgeGear = { showHubForgeGear = true },
+                  onOpenForgeEquipment = { showHubForgeEquipment = true },
                 )
 
                 OsWorkspaceTab.ARMORY -> ArmoryScreen(
@@ -844,6 +945,9 @@ fun UnknownOsShell(
                   onEquipCustomGear = viewModel::equipCustomGear,
                   onUpgradeCustomEquipmentTier = { itemId -> viewModel.upgradeCustomEquipmentTier(itemId, state.profile.totalEssence) },
                   onUpgradeCustomEquipmentStar = { itemId -> viewModel.upgradeCustomEquipmentStar(itemId, state.profile.totalEssence) },
+                  onForgeCustomPerk = viewModel::addOrUpdateCustomPerk,
+                  onForgeCustomGear = viewModel::addOrUpdateCustomGear,
+                  onForgeCustomEquipment = viewModel::addOrUpdateCustomEquipment,
                 )
 
                 OsWorkspaceTab.MEDIA_VAULT -> MediaVaultScreen(
@@ -866,6 +970,7 @@ fun UnknownOsShell(
                   onSelectConsolePreset = viewModel::selectConsolePreset,
                   onStatusMessage = viewModel::showBanner,
                   progression = progression,
+                  onConfirmWorkshopImport = viewModel::importSteamWorkshopPreview,
                 )
               }
             }
@@ -958,6 +1063,69 @@ fun UnknownOsShell(
         onDismiss = { showSocialDialog = false },
       )
     }
+
+    if (showHubForgeWeapon) {
+      ForgeCustomWeaponDialog(
+        initialCategory = CustomMapGameCategory.BO3,
+        onDismiss = { showHubForgeWeapon = false },
+        onConfirm = { name, code, category, desc, dmgType, dmg, cadence, spread, pierce, hex, equipNow ->
+          viewModel.createCustomWeapon(name, code, category, desc, dmgType, dmg, cadence, spread, pierce, hex, equipNow)
+          showHubForgeWeapon = false
+        },
+      )
+    }
+
+    if (showHubForgeMap) {
+      ForgeCustomMapDialog(
+        initialCategory = CustomMapGameCategory.BO3,
+        onDismiss = { showHubForgeMap = false },
+        onConfirm = { title, code, category, desc, zones, ww, hex, deployNow ->
+          viewModel.createCustomGameMap(title, code, category, desc, zones, ww, hex, deployNow)
+          showHubForgeMap = false
+        },
+      )
+    }
+
+    if (showHubForgeModule) {
+      ForgeArmoryItemDialog(
+        onDismiss = { showHubForgeModule = false },
+        onConfirm = { name, cat, tag, desc, cd, power, hex ->
+          viewModel.createCustomArmoryItem(name, cat, tag, desc, cd, power, hex)
+          showHubForgeModule = false
+        },
+      )
+    }
+
+    if (showHubForgePerk) {
+      ForgeCustomPerkDialog(
+        onDismiss = { showHubForgePerk = false },
+        onConfirm = { spec ->
+          viewModel.addOrUpdateCustomPerk(spec)
+          showHubForgePerk = false
+        },
+      )
+    }
+
+    if (showHubForgeGear) {
+      ForgeCustomGearDialog(
+        onDismiss = { showHubForgeGear = false },
+        onConfirm = { spec ->
+          viewModel.addOrUpdateCustomGear(spec)
+          showHubForgeGear = false
+        },
+      )
+    }
+
+    if (showHubForgeEquipment) {
+      ForgeCustomEquipmentDialog(
+        onDismiss = { showHubForgeEquipment = false },
+        onConfirm = { spec ->
+          viewModel.addOrUpdateCustomEquipment(spec)
+          showHubForgeEquipment = false
+        },
+      )
+    }
+  }
   }
 }
 

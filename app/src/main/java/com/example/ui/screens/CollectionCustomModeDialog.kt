@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -11,8 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -169,8 +168,11 @@ fun CollectionCustomModeDialog(
           fontWeight = FontWeight.Bold,
           color = MaterialTheme.colorScheme.primary,
         )
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-          items(CollectionCustomScope.entries, key = { it.id }) { sc ->
+        Row(
+          modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+          CollectionCustomScope.entries.forEach { sc ->
             FilterChip(
               selected = draft.scope == sc,
               onClick = {
@@ -249,8 +251,11 @@ fun CollectionCustomModeDialog(
           fontWeight = FontWeight.Bold,
           color = MaterialTheme.colorScheme.primary,
         )
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-          items(scopedAreas, key = { it.id }) { area ->
+        Row(
+          modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+          scopedAreas.distinctBy { it.id }.forEach { area ->
             FilterChip(
               selected = resolvedArea?.id == area.id,
               onClick = { draft = draft.copy(targetAreaId = area.id) },
@@ -326,7 +331,9 @@ fun CollectionCustomModeDialog(
           Slider(
             value = draft.enemyHpBoostPercent.toFloat().coerceIn(0f, maxUiHp.toFloat()),
             onValueChange = { v ->
-              draft = draft.copy(enabled = true, enemyHpBoostPercent = (v.roundToInt() / 5) * 5)
+              if (v.isFinite()) {
+                draft = draft.copy(enabled = true, enemyHpBoostPercent = (v.roundToInt() / 5) * 5)
+              }
             },
             valueRange = 0f..maxUiHp.toFloat(),
             colors = SliderDefaults.colors(

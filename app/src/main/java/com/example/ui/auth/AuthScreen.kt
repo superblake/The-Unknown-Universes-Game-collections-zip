@@ -151,7 +151,7 @@ fun AuthScreen(
               )
         ) {
           Image(
-            painter = painterResource(id = R.drawable.img_universe_hero_banner_1794591188619),
+            painter = painterResource(id = R.drawable.tuu_hero_banner_drawn_1795681686173),
             contentDescription = stringResource(R.string.cd_hero_banner),
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop,

@@ -47,7 +47,7 @@ object BackgroundMusicManager {
     trackMode: Int,
   ) {
     appContext = context.applicationContext
-    val cleanVol = volume.coerceIn(0f, 0.70f)
+    val cleanVol = if (volume.isFinite()) volume.coerceIn(0f, 0.70f) else 0.22f
     val cleanMode = trackMode.coerceIn(0, tracks.size)
     val trackChanged = cleanMode != selectedTrackMode && cleanMode in 1..tracks.size && cleanMode != currentTrackNumber
 
@@ -69,7 +69,7 @@ object BackgroundMusicManager {
   }
 
   fun setVolume(volume: Float) {
-    currentVolume = volume.coerceIn(0f, 0.70f)
+    currentVolume = if (volume.isFinite()) volume.coerceIn(0f, 0.70f) else 0.22f
     try {
       mediaPlayer?.setVolume(currentVolume, currentVolume)
     } catch (_: Exception) {
@@ -108,29 +108,31 @@ object BackgroundMusicManager {
     stopAmbientMusic()
     currentTrackNumber = spec.index
     try {
-      val afd = ctx.assets.openFd(spec.assetPath)
       val player = MediaPlayer()
       mediaPlayer = player
-      player.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
-      afd.close()
+      ctx.assets.openFd(spec.assetPath).use { afd ->
+        player.setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
+      }
       player.setVolume(currentVolume, currentVolume)
       player.isLooping = selectedTrackMode in 1..tracks.size
       player.setOnPreparedListener { mp ->
-        if (musicEnabled) {
+        if (musicEnabled && mediaPlayer === mp) {
           mp.setVolume(currentVolume, currentVolume)
           mp.start()
           playingState = true
           pausedByLifecycle = false
         }
       }
-      player.setOnCompletionListener {
-        if (musicEnabled && selectedTrackMode == 0) {
+      player.setOnCompletionListener { mp ->
+        if (musicEnabled && selectedTrackMode == 0 && mediaPlayer === mp) {
           val nextIndex = if (currentTrackNumber >= tracks.size) 1 else currentTrackNumber + 1
           playTrack(nextIndex)
         }
       }
-      player.setOnErrorListener { _, _, _ ->
-        playingState = false
+      player.setOnErrorListener { mp, _, _ ->
+        if (mediaPlayer === mp) {
+          playingState = false
+        }
         true
       }
       player.prepareAsync()

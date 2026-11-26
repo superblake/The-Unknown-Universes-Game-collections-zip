@@ -31,4 +31,7 @@
     <string name="cd_open_settings">Open Controls, Performance, Visual &amp; Accessibility Settings</string>
     <string name="settings_title">SETTINGS &amp; ACCESSIBILITY</string>
     <string name="settings_subtitle">Controls, Performance, Visuals, Health &amp; Disability Support</string>
+    <string name="export_prisma_scene_btn">Export Prisma3D Scene (.PRISMA)</string>
+    <string name="export_prisma_bundle_btn">Export Prisma3D Package (.P3D)</string>
+    <string name="export_prisma_obj_btn">Export 3D Wavefront Mesh (.OBJ)</string>
 </resources>

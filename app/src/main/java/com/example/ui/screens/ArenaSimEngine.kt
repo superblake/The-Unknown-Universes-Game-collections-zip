@@ -338,6 +338,9 @@ data class ArenaLoadoutStats(
   val characterRarity: com.example.data.model.CharacterRarity = com.example.data.model.CharacterRarity.COMMON,
   val levelMilestoneMult: Float = 1.0f,
   val playerBonusHealthScale: Float = 1.0f,
+  val killSiphonBonus: Int = 0,
+  val essenceBonusMult: Float = 1.0f,
+  val skillDamageReductionRatio: Float = 0f,
 ) {
   companion object {
     fun fromArmory(
@@ -431,7 +434,7 @@ data class ArenaLoadoutStats(
       val modeTierMult = ProgressionCatalog.tierMultiplier(progression.modeTier(activeModeId))
       val modeStarMult = StarRankMeta.forStars(progression.modeStar(activeModeId)).multiplier
 
-      // Perk Cans & Bottles Ranks
+      // Perk Cans & Bottles Ranks (14 inspired perks)
       val juggPerkRank = progression.perkRank("perk_juggernog")
       val speedColaRank = progression.perkRank("perk_speed_cola")
       val doubleTapRank = progression.perkRank("perk_double_tap")
@@ -439,6 +442,25 @@ data class ArenaLoadoutStats(
       val staminUpRank = progression.perkRank("perk_stamin_up")
       val electricCherryRank = progression.perkRank("perk_electric_cherry")
       val phdRank = progression.perkRank("perk_phd_flopper")
+      val widowsWineRank = progression.perkRank("perk_widows_wine")
+      val muleKickRank = progression.perkRank("perk_mule_kick")
+      val deadshotRank = progression.perkRank("perk_deadshot_daiquiri")
+      val vultureAidRank = progression.perkRank("perk_vulture_aid")
+      val elementalPopRank = progression.perkRank("perk_elemental_pop")
+      val freeflowFocusRank = progression.perkRank("perk_freeflow_focus")
+      val spartanFuryRank = progression.perkRank("perk_spartan_fury")
+
+      // Protection Upgrades (10 inspired & spiritual wards)
+      val protArmorRank = progression.protectionRank("prot_armor_weave")
+      val protElemRank = progression.protectionRank("prot_elemental_ward")
+      val protSiphonRank = progression.protectionRank("prot_aegis_siphon")
+      val protParkourRank = progression.protectionRank("prot_cover_fortress")
+      val protEmergencyRank = progression.protectionRank("prot_emergency_dome")
+      val protTitanRank = progression.protectionRank("prot_titan_guard")
+      val protArkhamRank = progression.protectionRank("prot_arkham_freeflow")
+      val protControlRank = progression.protectionRank("prot_control_resonance")
+      val protHadesRank = progression.protectionRank("prot_hades_defiance")
+      val protDoomRank = progression.protectionRank("prot_doom_armor_belch")
 
       // Colored Blast Core Levels (Blue, Purple, Green, Yellow, Red) — Lv.1 is baseline (+0)
       val blueCoreAbove = (progression.blastCoreLevel(BlastCoreColor.BLUE) - 1).coerceAtLeast(0)
@@ -447,20 +469,50 @@ data class ArenaLoadoutStats(
       val yellowCoreAbove = (progression.blastCoreLevel(BlastCoreColor.YELLOW) - 1).coerceAtLeast(0)
       val redCoreAbove = (progression.blastCoreLevel(BlastCoreColor.RED) - 1).coerceAtLeast(0)
 
-      // Skill Tree Nodes (Tier 1..25 + Star Level 1..10★)
-      val skShield1Node = progression.skillNodes["sk_shield_1"]?.takeIf { it.unlocked }
-      val skShield2Node = progression.skillNodes["sk_shield_2"]?.takeIf { it.unlocked }
-      val skDmg1Node = progression.skillNodes["sk_damage_1"]?.takeIf { it.unlocked }
-      val skDmg2Node = progression.skillNodes["sk_damage_2"]?.takeIf { it.unlocked }
-      val skCdNode = progression.skillNodes["sk_cooldown_1"]?.takeIf { it.unlocked }
-      val skWonderNode = progression.skillNodes["sk_wonder_1"]?.takeIf { it.unlocked }
+      // Skill Tree Nodes (All 36 nodes, Tier 1..25 + Star Level 1..10★)
+      fun skillPower(id: String): Int {
+        val node = progression.skillNodes[id]?.takeIf { it.unlocked } ?: return 0
+        return (node.tier * StarRankMeta.forStars(node.starLevel).multiplier).roundToInt().coerceAtLeast(1)
+      }
+      val skShield1 = skillPower("sk_shield_1")
+      val skShield2 = skillPower("sk_shield_2")
+      val skDmg1 = skillPower("sk_damage_1")
+      val skDmg2 = skillPower("sk_damage_2")
+      val skCd = skillPower("sk_cooldown_1")
+      val skCd2 = skillPower("sk_cooldown_2")
+      val skWonder = skillPower("sk_wonder_1")
+      val skProt1 = skillPower("sk_protection_1")
+      val skProt2 = skillPower("sk_protection_2")
+      val skExplosive = skillPower("sk_explosive_1")
+      val skPerkAmp = skillPower("sk_perk_amp_1")
+      val skBuffMastery = skillPower("sk_buff_mastery_1")
+      val skSandRock = skillPower("sk_sand_rock_1")
+      val skSiphon1 = skillPower("sk_siphon_1")
 
-      val skShield1 = ((skShield1Node?.tier ?: 0) * StarRankMeta.forStars(skShield1Node?.starLevel ?: 1).multiplier).roundToInt()
-      val skShield2 = ((skShield2Node?.tier ?: 0) * StarRankMeta.forStars(skShield2Node?.starLevel ?: 1).multiplier).roundToInt()
-      val skDmg1 = ((skDmg1Node?.tier ?: 0) * StarRankMeta.forStars(skDmg1Node?.starLevel ?: 1).multiplier).roundToInt()
-      val skDmg2 = ((skDmg2Node?.tier ?: 0) * StarRankMeta.forStars(skDmg2Node?.starLevel ?: 1).multiplier).roundToInt()
-      val skCd = ((skCdNode?.tier ?: 0) * StarRankMeta.forStars(skCdNode?.starLevel ?: 1).multiplier).roundToInt()
-      val skWonder = ((skWonderNode?.tier ?: 0) * StarRankMeta.forStars(skWonderNode?.starLevel ?: 1).multiplier).roundToInt()
+      val skZombiesGobble = skillPower("sk_zombies_gobble")
+      val skZombiesDeadbolt = skillPower("sk_zombies_deadbolt")
+      val skDivisionIsac = skillPower("sk_division_isac")
+      val skInfamousKarmic = skillPower("sk_infamous_karmic")
+      val skPrototypeBiomass = skillPower("sk_prototype_biomass")
+      val skArkhamFreeflow = skillPower("sk_arkham_freeflow")
+      val skArkhamPredator = skillPower("sk_arkham_predator")
+      val skGowSpartan = skillPower("sk_gow_spartan")
+      val skGowValkyrie = skillPower("sk_gow_valkyrie")
+      val skForceTelekinesis = skillPower("sk_force_telekinesis")
+      val skSpiderAcuity = skillPower("sk_spider_acuity")
+      val skGta4Grit = skillPower("sk_gta4_grit")
+      val skSupermanSolar = skillPower("sk_superman_solar")
+      val skAbyssDungeon = skillPower("sk_abyss_dungeon")
+      val skAbyssBoon = skillPower("sk_abyss_boon")
+      val skDoomGlory = skillPower("sk_doom_glory")
+      val skDmcStyle = skillPower("sk_dmc_style")
+      val skControlAstral = skillPower("sk_control_astral")
+      val skRlSketchbook = skillPower("sk_rl_sketchbook")
+      val skRlKrita = skillPower("sk_rl_krita_layers")
+      val skRlGymCardio = skillPower("sk_rl_gym_cardio")
+      val skRlModder = skillPower("sk_rl_modder_tinker")
+
+      val perkAmpMult = 1f + (skPerkAmp * 0.08f) + (skBuffMastery * 0.04f)
 
       // Gear Bonuses (Level 1..50, Tier 1..25, Star 1..10★, Prestige 0..30)
       val helmet = progression.gearMap[GearSlot.HELMET.id]
@@ -476,7 +528,11 @@ data class ArenaLoadoutStats(
       val backRigStarAbove = ((backRig?.starLevel ?: 1) - 1).coerceAtLeast(0)
 
       val chestShield = ((chest?.level ?: 1) - 1) * 3 + (((chest?.tier ?: 1) - 1) * 18) + (chestStarAbove * 22) + progression.gearPrestige * 15
-      val skillShield = skShield1 * 25 + skShield2 * 35
+      val skillShield = (skShield1 * 25) + (skShield2 * 35) + (skProt1 * 20) +
+        (skZombiesDeadbolt * 12) + (skPrototypeBiomass * 20) + (skGowSpartan * 15) +
+        (skGta4Grit * 18) + (skAbyssBoon * 25) + (skRlGymCardio * 22)
+      val protShield = (protArmorRank * 18) + (protSiphonRank * 25) + (protTitanRank * 40) +
+        (protArkhamRank * 20) + (protControlRank * 28) + (protHadesRank * 22) + (protDoomRank * 30)
 
       val juggBonus = perks.sumOf { p ->
         val starExtra = (progression.armoryItemStar(p.id) - 1) * 15
@@ -485,7 +541,8 @@ data class ArenaLoadoutStats(
         } else {
           (p.tier * 20).toInt() + starExtra
         }
-      } + (juggPerkRank * 45) + (blueCoreAbove * 15) + ((areaSt.powerGridTier - 1) * 15)
+      } + ((juggPerkRank * 45 + spartanFuryRank * 12) * perkAmpMult).roundToInt() +
+        protShield + (blueCoreAbove * 15) + ((areaSt.powerGridTier - 1) * 15)
 
       val barrelBonusDmg = when (wc.barrelId) {
         "heavy_bore" -> 2
@@ -567,13 +624,14 @@ data class ArenaLoadoutStats(
       val stockMoveBonus = (if (wc.stockId == "lightweight_skeleton") 0.08f else 0f) + attachmentMoveBonus
       val speedMutatorMult = if (matchRules.doubleSpeed) 1.45f else 1.0f
       val moveBoost = ((1f + speedPerkCount * 0.14f + (perks.size * 0.05f) + pass.moveSpeedBonus +
-        skCd * 0.03f + bootsMoveBonus + stockMoveBonus + outfitMoveBonus + storyAreaMove +
-        (staminUpRank * 0.10f) + (yellowCoreAbove * 0.04f)) * resonance.moveSpeedMult * era.speedMod * speedMutatorMult)
+        (skCd * 0.03f) + (skInfamousKarmic * 0.03f) + (skArkhamFreeflow * 0.025f) + (skSpiderAcuity * 0.04f) + (skRlGymCardio * 0.04f) +
+        (protParkourRank * 0.03f) + bootsMoveBonus + stockMoveBonus + outfitMoveBonus + storyAreaMove +
+        ((staminUpRank * 0.10f + freeflowFocusRank * 0.04f) * perkAmpMult) + (yellowCoreAbove * 0.04f)) * resonance.moveSpeedMult * era.speedMod * speedMutatorMult)
         .coerceIn(0.85f, 4.2f)
 
       val magExtraSpread = if (wc.magazineId == "extended_mag_2") 1 else 0
       val multiShot = (1 + upgrades.sumOf { (it.tier / 2).toInt().coerceAtLeast(1) } +
-        (weapon.baseSpreadCount - 1) + magExtraSpread + (doubleTapRank / 3)).coerceAtMost(8)
+        (weapon.baseSpreadCount - 1) + magExtraSpread + (doubleTapRank / 3) + (muleKickRank / 4)).coerceAtMost(8)
 
       // Armory Pack Mod Tier 1..25 directly unlocks Pack Tier 1..25!
       val packItem = upgrades.firstOrNull { it.id == "upgrade_packtier" || it.name.contains("Pack", ignoreCase = true) }
@@ -587,8 +645,10 @@ data class ArenaLoadoutStats(
       val customModeDmgMult = cm.effectiveDamageMultFor(progression.activeAreaId, progression.customGameMaps)
       val clawItem = upgrades.firstOrNull { it.id == "upgrade_claws" || it.name.contains("Claw", ignoreCase = true) || it.name.contains("Melee", ignoreCase = true) }
       val primaryPower = powers.firstOrNull()
-      val skillCdMult = ((1f - skCd * 0.06f) * (1f - resonance.cooldownReductionRatio * 0.45f)).coerceIn(0.22f, 1.0f)
-      val powerCdSec = ((primaryPower?.cooldownSec?.toFloat() ?: 6f) * pass.cooldownMultiplier * skillCdMult * customModeCdMult).coerceIn(0.9f, 32f)
+      val totalCdHasteLevels = skCd + skCd2 + skDivisionIsac + skForceTelekinesis + skControlAstral + skRlKrita +
+        (protEmergencyRank / 2) + (protControlRank / 2) + freeflowFocusRank
+      val skillCdMult = ((1f - totalCdHasteLevels * 0.035f) * (1f - resonance.cooldownReductionRatio * 0.45f)).coerceIn(0.20f, 1.0f)
+      val powerCdSec = ((primaryPower?.cooldownSec?.toFloat() ?: 6f) * pass.cooldownMultiplier * skillCdMult * customModeCdMult).coerceIn(0.8f, 32f)
       val customBonusDmg = ((primaryPower?.powerValue ?: 180L) / 70L).toInt().coerceIn(2, 24)
       val powerTierBonus = ((primaryPower?.tier ?: 1L) - 1L).toInt()
       val powerStarBonus = primaryPower?.let { (progression.armoryItemStar(it.id) - 1) * 2 } ?: 0
@@ -600,23 +660,38 @@ data class ArenaLoadoutStats(
       val cCdSec = ((primaryConsumable?.cooldownSec?.toFloat() ?: 12f) * pass.cooldownMultiplier * skillCdMult * customModeCdMult).coerceIn(2.0f, 35f)
 
       val levelDmgBonus = ((wpnLevel - 1) / 3) + (wpnPrestige * 2)
-      val skillDmgBonus = skDmg1 * 2 + skDmg2 * 3 + outfitDmgBonus + charTierDmg + (doubleTapRank * 2) + (redCoreAbove * 2)
+      val skillDmgBonus = (skDmg1 * 2) + (skDmg2 * 3) + (skExplosive * 2) + (skSandRock * 2) +
+        (skInfamousKarmic * 2) + (skGowSpartan * 3) + (skGta4Grit * 2) + (skSupermanSolar * 2) + (skRlSketchbook * 2) +
+        outfitDmgBonus + charTierDmg + ((doubleTapRank * 2 + muleKickRank * 2 + elementalPopRank * 2) * perkAmpMult).roundToInt() + (redCoreAbove * 2)
       val rawTotalWpnDmg = ((weapon.baseDamage - 1).coerceAtLeast(0) + attachmentTotalBonusDmg +
         levelDmgBonus + skillDmgBonus) * originPowerMult * wpnTierMult * wpnStarMult * charStarMult * modeTierMult * modeStarMult * resonance.damageMult * era.damageMod * areaCycleMult * areaStarMult * storyAreaDmgMult * levelMilestoneMult * customModeDmgMult
 
       val glovesRateBonus = ((gloves?.level ?: 1) - 1) * 0.04f + ((gloves?.tier ?: 1) - 1) * 0.25f + (glovesStarAbove * 0.25f)
       val levelCadenceReduction = (((wpnLevel - 1) * 0.08f) + glovesRateBonus).coerceAtMost(4.5f)
       val mutatorRateMult = (if (matchRules.doubleSpeed) 1.75f else 1.0f) * (if (matchRules.infiniteAmmo) 1.25f else 1.0f)
-      val totalRateMult = (pass.fireRateMultiplier + outfitRateBonus + (speedColaRank * 0.12f) + (yellowCoreAbove * 0.06f)) * resonance.fireRateMult * mutatorRateMult
+      val skillRateMult = (skCd2 * 0.04f) + (skZombiesDeadbolt * 0.04f) + (skDoomGlory * 0.04f) + (skDmcStyle * 0.06f) + (skRlModder * 0.05f)
+      val totalRateMult = (pass.fireRateMultiplier + outfitRateBonus + skillRateMult +
+        ((speedColaRank * 0.12f + muleKickRank * 0.04f) * perkAmpMult) + (yellowCoreAbove * 0.06f)) * resonance.fireRateMult * mutatorRateMult
       val rawCadence = (weapon.baseCadenceTicks - speedPerkCount * 0.9f - levelCadenceReduction - attachmentCadenceReduction) / totalRateMult.coerceAtLeast(1f)
       val fireCadence = rawCadence.coerceIn(1.8f, 15.0f)
 
-      val wonderDropSkillMult = (1f + skWonder * 0.30f + ((areaSt.lootRichnessTier - 1) * 0.15f) + resonance.lootLuckBonus) *
+      val wonderDropSkillMult = (1f + skWonder * 0.30f + skZombiesGobble * 0.18f + skAbyssDungeon * 0.06f +
+        ((areaSt.lootRichnessTier - 1) * 0.15f) + resonance.lootLuckBonus) *
         progression.clan.wonderPerkMultiplier * (if (matchRules.wonderSpawnBoost) 2.2f else 1.0f)
-      val wonderDurSkillMult = 1f + skWonder * 0.15f + (((backRig?.level ?: 1) - 1) * 0.01f) + ((backRig?.tier ?: 1) - 1) * 0.08f + (backRigStarAbove * 0.10f) + (purpleCoreAbove * 0.18f) + wonderCustomDurBonus
-      val critDmgGearBonus = 1f + (((helmet?.level ?: 1) - 1) * 0.02f) + ((helmet?.tier ?: 1) - 1) * 0.12f + (helmetStarAbove * 0.14f) + (redCoreAbove * 0.12f) + attachmentCritBonus
-      val vacRadius = (progression.vacuumBot.vacuumRadius + greenCoreAbove * 0.018f).coerceAtMost(0.95f)
-      val trapBonus = (electricCherryRank * 3) + (phdRank * 3) + (blueCoreAbove * 2) + ((areaSt.trapDensityTier - 1) * 2)
+      val wonderDurSkillMult = 1f + skWonder * 0.15f + skControlAstral * 0.12f +
+        (((backRig?.level ?: 1) - 1) * 0.01f) + ((backRig?.tier ?: 1) - 1) * 0.08f + (backRigStarAbove * 0.10f) + (purpleCoreAbove * 0.18f) + wonderCustomDurBonus
+      val critDmgGearBonus = 1f + (((helmet?.level ?: 1) - 1) * 0.02f) + ((helmet?.tier ?: 1) - 1) * 0.12f + (helmetStarAbove * 0.14f) +
+        (redCoreAbove * 0.12f) + attachmentCritBonus + (deadshotRank * 0.12f * perkAmpMult) +
+        (skArkhamFreeflow * 0.08f) + (skDmcStyle * 0.05f) + (skRlKrita * 0.05f)
+      val vacRadius = (progression.vacuumBot.vacuumRadius + greenCoreAbove * 0.018f + skRlModder * 0.01f).coerceAtMost(0.95f)
+      val trapBonus = (electricCherryRank * 3) + (phdRank * 3) + (elementalPopRank * 3) + (blueCoreAbove * 2) +
+        ((areaSt.trapDensityTier - 1) * 2) + skArkhamPredator * 2 + skRlModder * 2
+      val killSiphonBonus = (skSiphon1 * 2) + (skProt2) + (skPrototypeBiomass * 2) + (skDoomGlory * 2) +
+        (widowsWineRank) + (spartanFuryRank * 2) + (protSiphonRank * 2) + (protDoomRank * 2)
+      val essenceBonusMult = 1f + (vultureAidRank * 0.06f * perkAmpMult) + (skZombiesGobble * 0.05f) + (skRlSketchbook * 0.05f)
+      val skillDamageReductionRatio = ((skProt1 * 0.03f) + (skProt2 * 0.03f) + (skGowValkyrie * 0.025f) +
+        (skSpiderAcuity * 0.02f) + (skAbyssBoon * 0.025f) + (protArmorRank * 0.025f) +
+        (protElemRank * 0.02f) + (protParkourRank * 0.02f) + (protTitanRank * 0.02f) + (protArkhamRank * 0.025f)).coerceIn(0f, 0.75f)
 
       val weaponBulletColor = if (wc.equippedWeaponId == weapon.id && wc.tracerColorHex != 0L) {
         Color(wc.tracerColorHex)
@@ -636,6 +711,8 @@ data class ArenaLoadoutStats(
         .coerceIn(1.0f, 32.0f)
 
       val perkRegenStarBonus = perks.sumOf { (progression.armoryItemStar(it.id) - 1) * 0.5 }.toFloat()
+      val skillRegenBonus = (skShield2 * 1.0f) + (skSiphon1 * 1.2f) + (skDivisionIsac * 0.8f) + (skGowValkyrie * 1.0f) + (skAbyssDungeon * 1.5f)
+      val protRegenBonus = (protSiphonRank * 0.8f) + (protEmergencyRank * 1.5f) + (protHadesRank * 1.2f)
       return ArenaLoadoutStats(
         maxShield = maxShield,
         moveBoost = moveBoost,
@@ -652,8 +729,8 @@ data class ArenaLoadoutStats(
         hasTendrilPower = powers.any { it.id == "power_tendril" || it.name.contains("Tendril", ignoreCase = true) || it.name.contains("Bio", ignoreCase = true) },
         hasRepulsePower = powers.any { it.id == "power_repulse" || it.name.contains("Repulse", ignoreCase = true) || it.name.contains("Force", ignoreCase = true) },
         hasChevronPower = powers.any { it.id == "power_chevron" || it.name.contains("Chevron", ignoreCase = true) || it.name.contains("Chrono", ignoreCase = true) || it.name.contains("Stasis", ignoreCase = true) },
-        passiveRegenPerSec = 1.5f + perks.size * 1.0f + perkRegenStarBonus + skShield2 * 1.0f + ((chest?.tier ?: 1) - 1) * 0.4f +
-          (quickReviveRank * 2.0f) + (greenCoreAbove * 1.2f) + resonance.regenBonusPerSec + storyAreaRegen,
+        passiveRegenPerSec = 1.5f + perks.size * 1.0f + perkRegenStarBonus + skillRegenBonus + protRegenBonus + ((chest?.tier ?: 1) - 1) * 0.4f +
+          (quickReviveRank * 2.0f * perkAmpMult) + (greenCoreAbove * 1.2f) + resonance.regenBonusPerSec + storyAreaRegen,
         consumableHeal = cHeal,
         consumableCooldownTicks = cCdSec * 60f,
         fireCadenceTicks = fireCadence,
@@ -665,8 +742,8 @@ data class ArenaLoadoutStats(
         weaponTierMultiplier = wpnTierMult,
         weaponBonusDamage = weaponBonusDmg,
         weaponExtraSpread = attachmentExtraSpread,
-        weaponExtraPierce = weapon.basePierce + attachmentExtraPierce + ((wpnLevel - 1) / 6) + (skDmg2 / 2) + ((wpnTier - 1) / 3) + (if (matchRules.infiniteAmmo) 1 else 0),
-        projectileSpeed = weapon.baseProjectileSpeed * attachmentSpeedMult * (1f + ((wpnLevel - 1) * 0.008f).coerceAtMost(0.35f)),
+        weaponExtraPierce = weapon.basePierce + attachmentExtraPierce + ((wpnLevel - 1) / 6) + (skDmg2 / 2) + (skArkhamPredator / 4) + ((wpnTier - 1) / 3) + (if (matchRules.infiniteAmmo) 1 else 0),
+        projectileSpeed = weapon.baseProjectileSpeed * attachmentSpeedMult * (1f + ((wpnLevel - 1) * 0.008f).coerceAtMost(0.35f) + (skSupermanSolar * 0.02f)),
         tracerColor = weaponBulletColor,
         ammoModId = wc.ammoModId,
         playerLevel = playerLvl,
@@ -685,6 +762,9 @@ data class ArenaLoadoutStats(
         characterRarity = outfitRarity,
         levelMilestoneMult = levelMilestoneMult,
         playerBonusHealthScale = computedBonusHealthScale,
+        killSiphonBonus = killSiphonBonus,
+        essenceBonusMult = essenceBonusMult,
+        skillDamageReductionRatio = skillDamageReductionRatio,
       )
     }
   }
@@ -836,15 +916,21 @@ class ArenaSimState(
   var hudInOuterFrontier by mutableStateOf(false)
 
   val equippedLethalItem: com.example.data.model.EquipmentItemSpec
-    get() = ProgressionCatalog.equipmentItems.firstOrNull { it.id == progression.equippedLethalIds.firstOrNull() }
-      ?: ProgressionCatalog.equipmentItems.firstOrNull { it.id == progression.equipmentState("lethal").equippedItemId }
-      ?: ProgressionCatalog.equipmentItems.firstOrNull { it.slotType == com.example.data.model.EquipmentSlotType.LETHAL }
-      ?: ProgressionCatalog.equipmentItems.first()
+    get() {
+      val allEq = ProgressionCatalog.allEquipmentItems(progression.customEquipment)
+      return allEq.firstOrNull { it.id == progression.equippedLethalIds.firstOrNull() }
+        ?: allEq.firstOrNull { it.id == progression.equipmentState("lethal").equippedItemId }
+        ?: allEq.firstOrNull { it.slotType == com.example.data.model.EquipmentSlotType.LETHAL }
+        ?: ProgressionCatalog.equipmentItems.first()
+    }
   val equippedTacticalItem: com.example.data.model.EquipmentItemSpec
-    get() = ProgressionCatalog.equipmentItems.firstOrNull { it.id == progression.equippedTacticalIds.firstOrNull() }
-      ?: ProgressionCatalog.equipmentItems.firstOrNull { it.id == progression.equipmentState("tactical").equippedItemId }
-      ?: ProgressionCatalog.equipmentItems.firstOrNull { it.slotType == com.example.data.model.EquipmentSlotType.TACTICAL }
-      ?: ProgressionCatalog.equipmentItems.last()
+    get() {
+      val allEq = ProgressionCatalog.allEquipmentItems(progression.customEquipment)
+      return allEq.firstOrNull { it.id == progression.equippedTacticalIds.firstOrNull() }
+        ?: allEq.firstOrNull { it.id == progression.equipmentState("tactical").equippedItemId }
+        ?: allEq.firstOrNull { it.slotType == com.example.data.model.EquipmentSlotType.TACTICAL }
+        ?: ProgressionCatalog.equipmentItems.last()
+    }
   val hudLethalName: String
     get() = if (progression.equippedLethalIds.size > 1) "${equippedLethalItem.name.substringBefore(" ").uppercase()} +${progression.equippedLethalIds.size - 1}"
     else equippedLethalItem.name.substringBefore(" ").uppercase()
@@ -878,7 +964,7 @@ class ArenaSimState(
   val collectionDifficulty = progression.collectionDifficulty(world.id)
   val ngPlusSpec = progression.ngPlusSpec
   val modeRewardMultiplier = 1f + ((progression.modeTier(modeId) - 1).coerceAtLeast(0) * 0.04f) + ((progression.modeStar(modeId) - 1).coerceAtLeast(0) * 0.08f)
-  val gameplayRewardMultiplier = progression.combinedGameplayRewardMultiplier(world.id) * modeRewardMultiplier
+  val gameplayRewardMultiplier = progression.combinedGameplayRewardMultiplier(world.id) * modeRewardMultiplier * loadout.essenceBonusMult
   var hudCurrentPlaceName by mutableStateOf(
     "${areaSpec.name.substringBefore(" (")} • ${areaSpec.buildingNames.firstOrNull() ?: world.mapSectors.firstOrNull() ?: "Central Sector"}"
   )
@@ -2834,8 +2920,9 @@ class ArenaSimState(
 
     val scoreMult = if (doubleEssenceTicks > 0f) 2L else 1L
     var totalDmg = 0
+    val allEq = ProgressionCatalog.allEquipmentItems(progression.customEquipment)
     equippedIds.forEachIndexed { idx, itemId ->
-      val spec = ProgressionCatalog.equipmentItems.firstOrNull { it.id == itemId } ?: equippedLethalItem
+      val spec = allEq.firstOrNull { it.id == itemId } ?: equippedLethalItem
       val spreadAngle = atan2(aimY, aimX) + (idx * 0.25f)
       val blastX = playerX + cos(spreadAngle) * 0.20f
       val blastY = playerY + sin(spreadAngle) * 0.20f
@@ -2881,8 +2968,9 @@ class ArenaSimState(
     val baseCd = equippedTacticalItem.cooldownSeconds * 60f * loadout.skillDashCdMult
     tacticalCd = baseCd
     var totalHeal = 0
+    val allTacEq = ProgressionCatalog.allEquipmentItems(progression.customEquipment)
     equippedIds.forEach { itemId ->
-      val spec = ProgressionCatalog.equipmentItems.firstOrNull { it.id == itemId } ?: equippedTacticalItem
+      val spec = allTacEq.firstOrNull { it.id == itemId } ?: equippedTacticalItem
       totalHeal += (((spec.baseDamageOrEffect.toInt() + eqState.level * 2).coerceAtLeast(35)) * eqStarMult).roundToInt()
       if (spec.id == "tactical_emp" || spec.id == "tactical_decoy") {
         stasisTicks = maxOf(stasisTicks, 140f)
@@ -2982,6 +3070,9 @@ class ArenaSimState(
     }
     if (matchRules.vampiricSiphon) {
       hudShield = (hudShield + 20).coerceAtMost(loadout.maxShield)
+    }
+    if (loadout.killSiphonBonus > 0) {
+      hudShield = (hudShield + loadout.killSiphonBonus).coerceAtMost(loadout.maxShield)
     }
     if (h.isBoss || h.isElite) {
       val clanSiphon = (progression.clan.armorSiphonPerk / 4).coerceAtLeast(1)

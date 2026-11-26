@@ -1,8 +1,6 @@
 package com.example.ui.screens
 
 import android.content.Intent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -57,6 +55,9 @@ import com.example.export.Bo3BoneMappingMode
 import com.example.export.Bo3ExportOptions
 import com.example.export.Bo3ModToolsExporter
 import com.example.export.PortablePackageGenerator
+import com.example.export.Prisma3dExportFormat
+import com.example.export.Prisma3dExportOptions
+import com.example.export.Prisma3dExporter
 
 @Composable
 fun ExportCompatScreen(
@@ -72,6 +73,7 @@ fun ExportCompatScreen(
   onSelectConsolePreset: (String) -> Unit,
   onStatusMessage: (String) -> Unit,
   progression: com.example.data.model.OperatorProgressionState = com.example.data.model.OperatorProgressionState(),
+  onConfirmWorkshopImport: (com.example.export.SteamWorkshopImportPreview, Boolean, Boolean) -> Unit = { _, _, _ -> },
 ) {
   val context = LocalContext.current
   val activeRig = rigs.firstOrNull { it.id == profile.activeRigId } ?: rigs.firstOrNull()
@@ -109,6 +111,12 @@ fun ExportCompatScreen(
       "bo3_py" ->
         if (activeRig != null) Bo3ModToolsExporter.generateCoDBlenderBo3Script(activeRig, bo3Options)
         else "# Create a rig in ForgeRig Studio first"
+      "prisma" ->
+        if (activeRig != null) Prisma3dExporter.generatePrismaSceneJson(activeRig)
+        else "// Create a rig in ForgeRig Studio first"
+      "prisma_obj" ->
+        if (activeRig != null) Prisma3dExporter.generateWavefrontObj(activeRig)
+        else "// Create a rig in ForgeRig Studio first"
       "console" -> PortablePackageGenerator.generateConsolePackageManifest(profile, progression, profile.consolePreset, graphicsTier)
       "xbox_xml" -> PortablePackageGenerator.generateConsolePackageManifest(profile, progression, "xbox_series", graphicsTier)
       "pc_hta" -> PortablePackageGenerator.generatePcExecutableHta(profile, armory, activeRig, progression, graphicsTier)
@@ -118,19 +126,90 @@ fun ExportCompatScreen(
   }
 
   var pendingFileContent by remember { mutableStateOf("") }
-  val createDocumentLauncher =
-    rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("*/*")) { uri ->
-      if (uri != null) {
-        try {
-          context.contentResolver.openOutputStream(uri)?.use { out ->
-            out.write(pendingFileContent.toByteArray(Charsets.UTF_8))
-          }
-          onStatusMessage("Exported package saved successfully!")
-        } catch (e: Exception) {
-          onStatusMessage("Export failed: ${e.localizedMessage}")
+  var pendingFileBytes by remember { mutableStateOf<ByteArray?>(null) }
+  val launchCreateDoc = com.example.util.rememberSafeCreateDocumentLauncher(
+    mimeType = "*/*",
+    onUnavailable = {
+      pendingFileBytes = null
+      onStatusMessage("File saver unavailable on this device.")
+    },
+  ) { uri ->
+    if (uri != null) {
+      try {
+        val data = pendingFileBytes ?: pendingFileContent.toByteArray(Charsets.UTF_8)
+        context.contentResolver.openOutputStream(uri)?.use { out ->
+          out.write(data)
         }
+        pendingFileBytes = null
+        onStatusMessage("Exported package saved successfully!")
+      } catch (t: Throwable) {
+        pendingFileBytes = null
+        onStatusMessage("Export failed: ${t.localizedMessage ?: "Write error"}")
+      }
+    } else {
+      pendingFileBytes = null
+    }
+  }
+
+  val importPrisma3dDocLauncher = com.example.util.rememberSafeOpenDocumentLauncher(
+    onUnavailable = {
+      onStatusMessage("File picker unavailable on this device.")
+    },
+  ) { uri ->
+    if (uri != null) {
+      try {
+        val fileName = com.example.util.resolveUriDisplayName(context, uri, "imported.p3d")
+        val maxBytes = 12 * 1024 * 1024 + 1
+        val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
+          val buffer = ByteArray(16 * 1024)
+          val baos = java.io.ByteArrayOutputStream()
+          var total = 0
+          while (total < maxBytes) {
+            val read = input.read(buffer, 0, minOf(buffer.size, maxBytes - total))
+            if (read <= 0) break
+            baos.write(buffer, 0, read)
+            total += read
+          }
+          baos.toByteArray()
+        } ?: ByteArray(0)
+        val res = com.example.export.Prisma3dImporter.importFromBytes(
+          bytes = bytes,
+          fileName = fileName,
+          targetUserId = profile.userId,
+        )
+        if (res.isSuccess) {
+          val imported = res.getOrThrow()
+          onConfirmWorkshopImport(imported.toWorkshopPreview(profile.userId), true, true)
+          onStatusMessage(imported.summary)
+        } else {
+          onStatusMessage(res.exceptionOrNull()?.localizedMessage ?: "Invalid Prisma3D file")
+        }
+      } catch (t: Throwable) {
+        onStatusMessage("Prisma3D import failed: ${t.localizedMessage ?: "Read error"}")
       }
     }
+  }
+
+  fun launchImportDoc() {
+    importPrisma3dDocLauncher(arrayOf("*/*"))
+  }
+
+  fun shareBundleSafe(subject: String, chooserTitle: String, text: String) {
+    try {
+      if (text.length > 200_000) {
+        onStatusMessage("Bundle too large to share inline (${text.length / 1024} KB). Use Save .JSON instead.")
+        return
+      }
+      val sendIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, subject)
+        putExtra(Intent.EXTRA_TEXT, text)
+      }
+      context.startActivity(Intent.createChooser(sendIntent, chooserTitle))
+    } catch (t: Throwable) {
+      onStatusMessage("Share unavailable: ${t.localizedMessage ?: "Unsupported"}")
+    }
+  }
 
   Column(
     modifier = Modifier
@@ -248,8 +327,9 @@ fun ExportCompatScreen(
           }
           Button(
             onClick = {
+              pendingFileBytes = null
               pendingFileContent = PortablePackageGenerator.generatePlayableHtmlPackage(profile, armory, activeRig, progression, graphicsTier, profile.consolePreset)
-              createDocumentLauncher.launch("unknown_universes_portable.html")
+              launchCreateDoc("unknown_universes_portable.html")
             },
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
             shape = RoundedCornerShape(12.dp),
@@ -263,9 +343,10 @@ fun ExportCompatScreen(
           Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             OutlinedButton(
               onClick = {
+                pendingFileBytes = null
                 pendingFileContent = PortablePackageGenerator.generatePcExecutableHta(profile, armory, activeRig, progression, graphicsTier)
                 previewKind = "pc_hta"
-                createDocumentLauncher.launch("UnknownUniverses_PC_Launcher.hta")
+                launchCreateDoc("UnknownUniverses_PC_Launcher.hta")
               },
               shape = RoundedCornerShape(10.dp),
               modifier = Modifier.weight(1f).height(44.dp).testTag("download_pc_hta_btn"),
@@ -274,9 +355,10 @@ fun ExportCompatScreen(
             }
             OutlinedButton(
               onClick = {
+                pendingFileBytes = null
                 pendingFileContent = PortablePackageGenerator.generateConsolePackageManifest(profile, progression, "xbox_series", graphicsTier)
                 previewKind = "xbox_xml"
-                createDocumentLauncher.launch("AppxManifest_Xbox.xml")
+                launchCreateDoc("AppxManifest_Xbox.xml")
               },
               shape = RoundedCornerShape(10.dp),
               modifier = Modifier.weight(1f).height(44.dp).testTag("download_xbox_xml_btn"),
@@ -288,9 +370,10 @@ fun ExportCompatScreen(
           Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             OutlinedButton(
               onClick = {
+                pendingFileBytes = null
                 pendingFileContent = PortablePackageGenerator.generateConsolePackageManifest(profile, progression, "ps5_dualsense", graphicsTier)
                 previewKind = "console"
-                createDocumentLauncher.launch("UnknownUniverses_PlayStation.pspkg.json")
+                launchCreateDoc("UnknownUniverses_PlayStation.pspkg.json")
               },
               shape = RoundedCornerShape(10.dp),
               modifier = Modifier.weight(1f).height(44.dp).testTag("download_ps_pkg_btn"),
@@ -299,9 +382,10 @@ fun ExportCompatScreen(
             }
             OutlinedButton(
               onClick = {
+                pendingFileBytes = null
                 pendingFileContent = PortablePackageGenerator.generateConsolePackageManifest(profile, progression, "switch_handheld", graphicsTier)
                 previewKind = "console"
-                createDocumentLauncher.launch("UnknownUniverses_Nintendo.nsp.json")
+                launchCreateDoc("UnknownUniverses_Nintendo.nsp.json")
               },
               shape = RoundedCornerShape(10.dp),
               modifier = Modifier.weight(1f).height(44.dp).testTag("download_switch_pkg_btn"),
@@ -310,9 +394,10 @@ fun ExportCompatScreen(
             }
             OutlinedButton(
               onClick = {
+                pendingFileBytes = null
                 pendingFileContent = PortablePackageGenerator.generatePlayableHtmlPackage(profile, armory, activeRig, progression, graphicsTier, "ios_safari")
                 previewKind = "html"
-                createDocumentLauncher.launch("UnknownUniverses_iOS_PWA.html")
+                launchCreateDoc("UnknownUniverses_iOS_PWA.html")
               },
               shape = RoundedCornerShape(10.dp),
               modifier = Modifier.weight(1f).height(44.dp).testTag("download_ios_pwa_btn"),
@@ -324,8 +409,9 @@ fun ExportCompatScreen(
           OutlinedButton(
             onClick = {
               if (activeRig != null) {
+                pendingFileBytes = null
                 pendingFileContent = PortablePackageGenerator.generateBlenderRigScript(activeRig)
-                createDocumentLauncher.launch("${activeRig.archetype}_rig_blender.py")
+                launchCreateDoc("${activeRig.archetype}_rig_blender.py")
               } else {
                 onStatusMessage("Open ForgeRig Studio first to select a rig.")
               }
@@ -338,11 +424,22 @@ fun ExportCompatScreen(
             Text(stringResource(R.string.export_blender_btn), style = MaterialTheme.typography.labelLarge)
           }
 
+          OutlinedButton(
+            onClick = { launchImportDoc() },
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().height(48.dp).testTag("export_tab_import_prisma3d_btn"),
+          ) {
+            Icon(AppIcons.UploadFile, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Import Prisma3D (.p3d / .prisma / .obj / .glb)", style = MaterialTheme.typography.labelLarge)
+          }
+
           Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
             OutlinedButton(
               onClick = {
+                pendingFileBytes = null
                 pendingFileContent = PortablePackageGenerator.generatePortableJsonBundle(profile, armory, rigs)
-                createDocumentLauncher.launch("unknown_universes_bundle.json")
+                launchCreateDoc("unknown_universes_bundle.json")
               },
               shape = RoundedCornerShape(12.dp),
               modifier = Modifier.weight(1f).height(48.dp).testTag("download_json_btn"),
@@ -355,12 +452,11 @@ fun ExportCompatScreen(
             OutlinedButton(
               onClick = {
                 val shareText = PortablePackageGenerator.generatePortableJsonBundle(profile, armory, rigs)
-                val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                  type = "text/plain"
-                  putExtra(Intent.EXTRA_SUBJECT, "The Unknown Universes — Portable Bundle")
-                  putExtra(Intent.EXTRA_TEXT, shareText)
-                }
-                context.startActivity(Intent.createChooser(sendIntent, "Send to iOS / Console / PC"))
+                shareBundleSafe(
+                  subject = "The Unknown Universes — Portable Bundle",
+                  chooserTitle = "Send to iOS / Console / PC",
+                  text = shareText,
+                )
               },
               shape = RoundedCornerShape(12.dp),
               modifier = Modifier.weight(1f).height(48.dp).testTag("share_bundle_btn"),
@@ -368,6 +464,135 @@ fun ExportCompatScreen(
               Icon(Icons.Filled.Share, contentDescription = null, modifier = Modifier.size(16.dp))
               Spacer(Modifier.width(6.dp))
               Text("Share Bundle", style = MaterialTheme.typography.labelLarge)
+            }
+          }
+        }
+      }
+
+    // Prisma3D 3D Scene & Rig Exporter (Android / iOS / Desktop)
+      val prismaSlug = activeRig?.let { Prisma3dExporter.sanitizeFileName(it.name) } ?: "prisma3d_rig"
+      Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier
+          .fillMaxWidth()
+          .border(1.dp, Color(0xFF00E5FF).copy(alpha = 0.55f), RoundedCornerShape(18.dp))
+          .testTag("prisma3d_export_card"),
+      ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Text(
+              text = "PRISMA3D 3D SCENE & RIG EXPORTER",
+              style = MaterialTheme.typography.titleMedium,
+              color = Color(0xFF00E5FF),
+            )
+            Surface(
+              shape = RoundedCornerShape(6.dp),
+              color = Color(0xFF00E5FF).copy(alpha = 0.16f),
+            ) {
+              Text(
+                text = ".PRISMA / .P3D / .OBJ / .GLTF",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFF00E5FF),
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+              )
+            }
+          }
+          Text(
+            text = "Export ${activeRig?.name ?: "your active ForgeRig"} to Prisma3D on Android & iOS — native scene projects (.prisma), complete 3D model packages (.p3d), 3D Wavefront meshes with materials (.obj + .mtl), or glTF 2.0.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+
+          Button(
+            onClick = {
+              if (activeRig != null) {
+                pendingFileBytes = null
+                pendingFileContent = Prisma3dExporter.generatePrismaSceneJson(activeRig)
+                previewKind = "prisma"
+                launchCreateDoc("${prismaSlug}.prisma")
+              } else {
+                onStatusMessage("Open ForgeRig Studio first to select a rig.")
+              }
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().height(48.dp).testTag("download_prisma_scene_btn"),
+          ) {
+            Icon(AppIcons.Download, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color(0xFF00363A))
+            Spacer(Modifier.width(8.dp))
+            Text("Export Prisma3D Scene (.PRISMA)", style = MaterialTheme.typography.labelLarge, color = Color(0xFF00363A))
+          }
+
+          Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+              onClick = {
+                if (activeRig != null) {
+                  pendingFileBytes = Prisma3dExporter.generatePrisma3dZipBundle(activeRig)
+                  launchCreateDoc("${prismaSlug}_bundle.p3d")
+                } else {
+                  onStatusMessage("Open ForgeRig Studio first to select a rig.")
+                }
+              },
+              shape = RoundedCornerShape(12.dp),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("download_prisma_bundle_btn"),
+            ) {
+              Icon(AppIcons.FolderZip, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(Modifier.width(6.dp))
+              Text("Package (.P3D)", style = MaterialTheme.typography.labelLarge)
+            }
+
+            OutlinedButton(
+              onClick = {
+                if (activeRig != null) {
+                  pendingFileBytes = null
+                  pendingFileContent = Prisma3dExporter.generateWavefrontObj(activeRig)
+                  previewKind = "prisma_obj"
+                  launchCreateDoc("${prismaSlug}_mesh.obj")
+                } else {
+                  onStatusMessage("Open ForgeRig Studio first to select a rig.")
+                }
+              },
+              shape = RoundedCornerShape(12.dp),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("download_prisma_obj_btn"),
+            ) {
+              Icon(AppIcons.Code, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(Modifier.width(6.dp))
+              Text("3D Mesh (.OBJ)", style = MaterialTheme.typography.labelLarge)
+            }
+          }
+
+          Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+              onClick = {
+                if (activeRig != null) {
+                  pendingFileBytes = null
+                  pendingFileContent = Prisma3dExporter.generateGlTFSceneJson(activeRig)
+                  launchCreateDoc("${prismaSlug}_scene.gltf")
+                } else {
+                  onStatusMessage("Open ForgeRig Studio first to select a rig.")
+                }
+              },
+              shape = RoundedCornerShape(12.dp),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("download_prisma_gltf_btn"),
+            ) {
+              Icon(AppIcons.Animation, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(Modifier.width(6.dp))
+              Text("glTF 2.0 (.GLTF)", style = MaterialTheme.typography.labelLarge)
+            }
+
+            OutlinedButton(
+              onClick = { launchImportDoc() },
+              shape = RoundedCornerShape(12.dp),
+              modifier = Modifier.weight(1f).height(48.dp).testTag("export_tab_import_prisma3d_card_btn"),
+            ) {
+              Icon(AppIcons.UploadFile, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(Modifier.width(6.dp))
+              Text("Import P3D", style = MaterialTheme.typography.labelLarge)
             }
           }
         }
@@ -461,9 +686,10 @@ fun ExportCompatScreen(
           Button(
             onClick = {
               if (activeRig != null) {
+                pendingFileBytes = null
                 pendingFileContent = Bo3ModToolsExporter.generateXModelExport(activeRig, bo3Options)
                 previewKind = "xmodel"
-                createDocumentLauncher.launch("${rigSlug}_rig.xmodel_export")
+                launchCreateDoc("${rigSlug}_rig.xmodel_export")
               } else {
                 onStatusMessage("Open ForgeRig Studio first to select a rig.")
               }
@@ -480,9 +706,10 @@ fun ExportCompatScreen(
           OutlinedButton(
             onClick = {
               if (activeRig != null) {
+                pendingFileBytes = null
                 pendingFileContent = Bo3ModToolsExporter.generateXAnimExport(activeRig, bo3Options)
                 previewKind = "xanim"
-                createDocumentLauncher.launch("${rigSlug}_${clipSlug}.xanim_export")
+                launchCreateDoc("${rigSlug}_${clipSlug}.xanim_export")
               } else {
                 onStatusMessage("Open ForgeRig Studio first to select a rig.")
               }
@@ -498,9 +725,10 @@ fun ExportCompatScreen(
           OutlinedButton(
             onClick = {
               if (activeRig != null) {
+                pendingFileBytes = null
                 pendingFileContent = Bo3ModToolsExporter.generateGdtPackage(profile, armory, activeRig, bo3Options)
                 previewKind = "gdt"
-                createDocumentLauncher.launch("${rigSlug}_bo3_assets.gdt")
+                launchCreateDoc("${rigSlug}_bo3_assets.gdt")
               } else {
                 onStatusMessage("Open ForgeRig Studio first to select a rig.")
               }
@@ -516,9 +744,10 @@ fun ExportCompatScreen(
           OutlinedButton(
             onClick = {
               if (activeRig != null) {
+                pendingFileBytes = null
                 pendingFileContent = Bo3ModToolsExporter.generateCoDBlenderBo3Script(activeRig, bo3Options)
                 previewKind = "bo3_py"
-                createDocumentLauncher.launch("${rigSlug}_bo3_blender.py")
+                launchCreateDoc("${rigSlug}_bo3_blender.py")
               } else {
                 onStatusMessage("Open ForgeRig Studio first to select a rig.")
               }
@@ -552,6 +781,8 @@ fun ExportCompatScreen(
               "xbox_xml" to "Xbox AppX XML",
               "pc_hta" to "PC .HTA App",
               "py" to "Blender .PY",
+              "prisma" to "Prisma3D .PRISMA",
+              "prisma_obj" to "Prisma3D .OBJ",
               "xmodel" to "BO3 .XMODEL",
               "xanim" to "BO3 .XANIM",
               "gdt" to "BO3 .GDT",
