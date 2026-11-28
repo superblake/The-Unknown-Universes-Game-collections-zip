@@ -137,9 +137,14 @@ class UniverseRepository(
           dao.upsertProfile(updated)
         }
         val existingArmory = dao.getArmoryItemsOnce(userId)
-        val outdated = existingArmory.filter { it.maxTier < 25L }
+        val outdated = existingArmory.filter { it.maxTier < 60L }
         if (outdated.isNotEmpty()) {
-          dao.upsertArmoryItems(outdated.map { it.copy(maxTier = 25L) })
+          dao.upsertArmoryItems(outdated.map { it.copy(maxTier = 60L) })
+        }
+        val existingIds = existingArmory.map { it.id }.toSet()
+        val missingStarters = starterArmoryItems(userId, System.currentTimeMillis()).filter { it.id !in existingIds }
+        if (missingStarters.isNotEmpty()) {
+          dao.upsertArmoryItems(missingStarters)
         }
       }
       Result.success(Unit)
@@ -204,7 +209,7 @@ class UniverseRepository(
         universeTag = universeTag.trim().take(40).ifEmpty { "UnknownOS" },
         description = description.trim().take(240),
         tier = 1L,
-        maxTier = 25L,
+        maxTier = 60L,
         cooldownSec = cooldownSec.coerceIn(0L, 120L),
         powerValue = powerValue.coerceIn(1L, 1500L),
         accentColorHex = accentColorHex.trim().take(10).ifEmpty { "#00E5FF" },
@@ -226,10 +231,21 @@ class UniverseRepository(
   suspend fun toggleArmoryEquipped(userId: String, item: ArmoryItem): Result<Unit> {
     require(item.id.isNotBlank()) { "ArmoryItem id required" }
     return try {
+      val now = System.currentTimeMillis()
+      val willEquip = !item.equipped
+      if (willEquip && item.category == "vehicle") {
+        val otherVehicles = dao.getArmoryItemsOnce(userId)
+          .filter { it.category == "vehicle" && it.id != item.id && it.equipped }
+          .map { it.copy(equipped = false, updatedAtMillis = now) }
+        if (otherVehicles.isNotEmpty()) {
+          dao.upsertArmoryItems(otherVehicles)
+          otherVehicles.forEach { v -> mirrorCloud(userId) { it.pushArmoryItem(v) } }
+        }
+      }
       val updated = item.copy(
         userId = userId,
-        equipped = !item.equipped,
-        updatedAtMillis = System.currentTimeMillis(),
+        equipped = willEquip,
+        updatedAtMillis = now,
       )
       dao.upsertArmoryItem(updated)
       mirrorCloud(userId) { it.pushArmoryItem(updated) }
@@ -254,7 +270,7 @@ class UniverseRepository(
     return try {
       val now = System.currentTimeMillis()
       val liveItem = dao.getArmoryItemsOnce(userId).firstOrNull { it.id == item.id } ?: item
-      val effectiveMaxTier = maxOf(liveItem.maxTier, 25L)
+      val effectiveMaxTier = maxOf(liveItem.maxTier, 60L)
       if (liveItem.tier >= effectiveMaxTier) {
         return Result.failure(IllegalStateException("Already at max Tier $effectiveMaxTier"))
       }
@@ -301,7 +317,7 @@ class UniverseRepository(
       val items = dao.getArmoryItemsOnce(userId)
       if (items.isEmpty()) return Result.success(0)
       val updatedList = items.map { item ->
-        val effectiveMax = maxOf(item.maxTier, 25L)
+        val effectiveMax = maxOf(item.maxTier, 60L)
         val newTier = (targetTier?.toLong() ?: (item.tier + delta)).coerceIn(1L, effectiveMax)
         item.copy(
           tier = newTier,
@@ -532,7 +548,7 @@ class UniverseRepository(
       }
 
       val resolvedArmory = bundle.armoryItems.map {
-        it.copy(userId = userId, maxTier = maxOf(it.maxTier, 25L), updatedAtMillis = now)
+        it.copy(userId = userId, maxTier = maxOf(it.maxTier, 60L), updatedAtMillis = now)
       }.ifEmpty { starterArmoryItems(userId, now) }
       val resolvedRigs = bundle.customRigs.map { it.copy(userId = userId, updatedAtMillis = now) }
         .ifEmpty { starterRigs(userId, now) }
@@ -579,10 +595,10 @@ class UniverseRepository(
     return try {
       val now = System.currentTimeMillis()
       val itemsToSave = buildList {
-        addAll(preview.armoryItems.map { it.copy(userId = userId, isCustom = true, maxTier = maxOf(it.maxTier, 25L), updatedAtMillis = now) })
+        addAll(preview.armoryItems.map { it.copy(userId = userId, isCustom = true, maxTier = maxOf(it.maxTier, 60L), updatedAtMillis = now) })
         if (preview.armoryItems.isEmpty() && importModulePreset) {
           preview.generatedModule?.let {
-            add(it.copy(userId = userId, isCustom = true, maxTier = maxOf(it.maxTier, 25L), updatedAtMillis = now))
+            add(it.copy(userId = userId, isCustom = true, maxTier = maxOf(it.maxTier, 60L), updatedAtMillis = now))
           }
         }
       }
@@ -671,7 +687,7 @@ class UniverseRepository(
       universeTag = "Sector Zero",
       description = "Reinforces kinetic armor shielding (+40 Max Shield per tier).",
       tier = 1L,
-      maxTier = 25L,
+      maxTier = 60L,
       cooldownSec = 0L,
       powerValue = 140L,
       accentColorHex = "#FF3D71",
@@ -688,7 +704,7 @@ class UniverseRepository(
       universeTag = "Sector Zero",
       description = "Accelerates dash cadence, reload speed, and movement agility.",
       tier = 1L,
-      maxTier = 25L,
+      maxTier = 60L,
       cooldownSec = 0L,
       powerValue = 125L,
       accentColorHex = "#00E676",
@@ -705,7 +721,7 @@ class UniverseRepository(
       universeTag = "Blacklight Conduit",
       description = "Unleashes radial bio-electric tendrils that stun and clear nearby hostiles.",
       tier = 2L,
-      maxTier = 25L,
+      maxTier = 60L,
       cooldownSec = 6L,
       powerValue = 220L,
       accentColorHex = "#7C4DFF",
@@ -722,7 +738,7 @@ class UniverseRepository(
       universeTag = "Aegis & Starblade",
       description = "Telekinetic blast wave paired with twin-core saber deflection.",
       tier = 1L,
-      maxTier = 25L,
+      maxTier = 60L,
       cooldownSec = 8L,
       powerValue = 250L,
       accentColorHex = "#00E5FF",
@@ -739,7 +755,7 @@ class UniverseRepository(
       universeTag = "Chrono-Vault",
       description = "Locks hostile waves inside a golden time-dilation field for 4 seconds.",
       tier = 1L,
-      maxTier = 25L,
+      maxTier = 60L,
       cooldownSec = 12L,
       powerValue = 190L,
       accentColorHex = "#FFD54F",
@@ -756,7 +772,7 @@ class UniverseRepository(
       universeTag = "Sector Zero",
       description = "Supercharges primary energy blaster fire rate and multishot spread.",
       tier = 2L,
-      maxTier = 25L,
+      maxTier = 60L,
       cooldownSec = 0L,
       powerValue = 210L,
       accentColorHex = "#FFAB40",
@@ -773,7 +789,7 @@ class UniverseRepository(
       universeTag = "Hellbreaker",
       description = "Converts close-range dashes into armor-piercing fury strikes.",
       tier = 1L,
-      maxTier = 25L,
+      maxTier = 60L,
       cooldownSec = 0L,
       powerValue = 180L,
       accentColorHex = "#FF5252",
@@ -790,7 +806,7 @@ class UniverseRepository(
       universeTag = "UnknownOS",
       description = "Instant tactical consumable: restores shields and resets all Power cooldowns.",
       tier = 1L,
-      maxTier = 25L,
+      maxTier = 60L,
       cooldownSec = 15L,
       powerValue = 300L,
       accentColorHex = "#00E5FF",
@@ -798,6 +814,142 @@ class UniverseRepository(
       isCustom = false,
       createdAtMillis = now + 7,
       updatedAtMillis = now + 7,
+    ),
+    ArmoryItem(
+      id = "vehicle_arkham_tumbler",
+      userId = userId,
+      name = "Arkham Batmobile Tumbler",
+      category = "vehicle",
+      universeTag = "Arkham Knight",
+      description = "WayneTech heavy urban assault tank with dual 60mm kinetic cannons and rocket salvo.",
+      tier = 1L,
+      maxTier = 60L,
+      cooldownSec = 0L,
+      powerValue = 280L,
+      accentColorHex = "#FFD54F",
+      equipped = true,
+      isCustom = false,
+      createdAtMillis = now + 8,
+      updatedAtMillis = now + 8,
+    ),
+    ArmoryItem(
+      id = "vehicle_stark_quinjet",
+      userId = userId,
+      name = "Stark Orbital Quinjet",
+      category = "vehicle",
+      universeTag = "Avengers Nexus",
+      description = "Stealth VTOL aerospace transport equipped with twin Stark Arc repulsors and laser targeting.",
+      tier = 1L,
+      maxTier = 60L,
+      cooldownSec = 0L,
+      powerValue = 310L,
+      accentColorHex = "#FF3D71",
+      equipped = false,
+      isCustom = false,
+      createdAtMillis = now + 9,
+      updatedAtMillis = now + 9,
+    ),
+    ArmoryItem(
+      id = "vehicle_cyber_interceptor",
+      userId = userId,
+      name = "Cyberpunk Quadra Interceptor",
+      category = "vehicle",
+      universeTag = "Sector Zero",
+      description = "Night City street-racing hovercar packed with twin kinetic turbochargers and nitro thrusters.",
+      tier = 1L,
+      maxTier = 60L,
+      cooldownSec = 0L,
+      powerValue = 260L,
+      accentColorHex = "#00E5FF",
+      equipped = false,
+      isCustom = false,
+      createdAtMillis = now + 10,
+      updatedAtMillis = now + 10,
+    ),
+    ArmoryItem(
+      id = "vehicle_rail_skimmer",
+      userId = userId,
+      name = "Cole's Lightning Rail-Skimmer",
+      category = "vehicle",
+      universeTag = "Empire City",
+      description = "Electrified monorail skimmer surfing magnetic shock rails with high-voltage ionic EMP pulse.",
+      tier = 1L,
+      maxTier = 60L,
+      cooldownSec = 0L,
+      powerValue = 275L,
+      accentColorHex = "#40C4FF",
+      equipped = false,
+      isCustom = false,
+      createdAtMillis = now + 11,
+      updatedAtMillis = now + 11,
+    ),
+    ArmoryItem(
+      id = "vehicle_bank_transport",
+      userId = userId,
+      name = "Federal Bullion Armored Transport",
+      category = "vehicle",
+      universeTag = "Central Bank Citadel",
+      description = "Concentric vault-titanium armored truck fitted with diamond-grated vacuum siphons.",
+      tier = 1L,
+      maxTier = 60L,
+      cooldownSec = 0L,
+      powerValue = 320L,
+      accentColorHex = "#00E676",
+      equipped = false,
+      isCustom = false,
+      createdAtMillis = now + 12,
+      updatedAtMillis = now + 12,
+    ),
+    ArmoryItem(
+      id = "vehicle_batwing_hypersonic",
+      userId = userId,
+      name = "Neo-Gotham Batwing Mk.IV",
+      category = "vehicle",
+      universeTag = "Batman Beyond",
+      description = "Hypersonic stealth combat jet capable of Mach 4 flight and plasma micro-torpedoes.",
+      tier = 1L,
+      maxTier = 60L,
+      cooldownSec = 0L,
+      powerValue = 340L,
+      accentColorHex = "#E040FB",
+      equipped = false,
+      isCustom = false,
+      createdAtMillis = now + 13,
+      updatedAtMillis = now + 13,
+    ),
+    ArmoryItem(
+      id = "vehicle_blacklight_apc",
+      userId = userId,
+      name = "Blacklight Bio-Siege APC",
+      category = "vehicle",
+      universeTag = "Blacklight Conduit",
+      description = "Heavy armored combat carrier infused with viral biomass tendrils that regenerate hull integrity.",
+      tier = 1L,
+      maxTier = 60L,
+      cooldownSec = 0L,
+      powerValue = 290L,
+      accentColorHex = "#7C4DFF",
+      equipped = false,
+      isCustom = false,
+      createdAtMillis = now + 14,
+      updatedAtMillis = now + 14,
+    ),
+    ArmoryItem(
+      id = "vehicle_sunset_cruiser",
+      userId = userId,
+      name = "Sunset Overdrive Hover-Cruiser",
+      category = "vehicle",
+      universeTag = "Sunset City",
+      description = "Fizzy-fueled retro neon hover buggy armed with bouncing sawblade disc launchers.",
+      tier = 1L,
+      maxTier = 60L,
+      cooldownSec = 0L,
+      powerValue = 270L,
+      accentColorHex = "#FFAB40",
+      equipped = false,
+      isCustom = false,
+      createdAtMillis = now + 15,
+      updatedAtMillis = now + 15,
     ),
   )
 

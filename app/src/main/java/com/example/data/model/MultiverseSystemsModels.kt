@@ -165,6 +165,11 @@ data class EssenceResonanceBonuses(
       customBuffTierSum: Int = 0,
       blastShardTier: Int = 1,
       companionBuffTier: Int = 1,
+      crystalsDamagePct: Int = 0,
+      crystalsShieldPct: Int = 0,
+      crystalsLuckPct: Int = 0,
+      magicBonusDmgMult: Float = 1.0f,
+      baseShieldBonus: Int = 0,
     ): EssenceResonanceBonuses {
       // Spent Blue Essence preserves and amplifies resonance so upgrading never weakens stats!
       val effectiveBlue = blueEssence.coerceAtLeast(0L) + (blueEssenceSpent.coerceAtLeast(0L) / 2L)
@@ -195,6 +200,10 @@ data class EssenceResonanceBonuses(
       val shardTierAbove = (blastShardTier - 1).coerceAtLeast(0)
       val companionTierAbove = (companionBuffTier - 1).coerceAtLeast(0)
       val globalPerkSynergy = 1f + (perkRankSum * 0.015f) + (perkStarSum * 0.03f)
+      val crystalDmgFrac = crystalsDamagePct.coerceAtLeast(0) / 100f
+      val crystalShdFrac = crystalsShieldPct.coerceAtLeast(0) / 100f
+      val crystalLuckFrac = crystalsLuckPct.coerceAtLeast(0) / 100f
+      val baseShdFrac = baseShieldBonus.coerceAtLeast(0) / 150f
 
       val arsenalDmg = (weaponTierSum * 0.03f) + (weaponStarSum * 0.035f) + (customWeaponCount * 0.08f) + (wonderTierSum * 0.025f)
       val gearShd = (gearTierSum * 0.045f) + (gearLevelSum * 0.008f) + (equipmentTierSum * 0.035f) +
@@ -204,15 +213,16 @@ data class EssenceResonanceBonuses(
       val clanAndNgBonus = (clanLevel * 0.03f) + (ngPlusTier * 0.12f) + (shardTierAbove * 0.05f)
 
       val finalDmg = (base.damageMult + mapDmg + modDmg + arsenalDmg + (perkRankSum * 0.024f * globalPerkSynergy) +
-        (perkStarSum * 0.04f) + (blastCoreLevelSum * 0.03f) + (customBuffTierSum * 0.03f) + clanAndNgBonus) * serverDamageMult
+        (perkStarSum * 0.04f) + (blastCoreLevelSum * 0.03f) + (customBuffTierSum * 0.03f) + clanAndNgBonus + crystalDmgFrac) *
+        serverDamageMult * magicBonusDmgMult.coerceAtLeast(1f)
       val finalShd = (base.shieldMult + mapShd + modShd + gearShd + (perkRankSum * 0.028f * globalPerkSynergy) +
-        (perkStarSum * 0.04f) + (blastCoreLevelSum * 0.03f) + clanAndNgBonus) * serverShieldMult
+        (perkStarSum * 0.04f) + (blastCoreLevelSum * 0.03f) + clanAndNgBonus + crystalShdFrac + baseShdFrac) * serverShieldMult
       val finalRate = (base.fireRateMult + mapRate + modRate + skillRate + (customWeaponCount * 0.05f) +
-        (customBuffTierSum * 0.025f) + (shardTierAbove * 0.03f)) * serverFireRateMult
+        (customBuffTierSum * 0.025f) + (shardTierAbove * 0.03f) + (crystalDmgFrac * 0.35f)) * serverFireRateMult
       val finalMove = base.moveSpeedMult + (effectiveMaps * 0.015f) + (armoryModTotalTiers * 0.006f) +
-        (perkRankSum * 0.014f * globalPerkSynergy) + (protectionRankSum * 0.008f) + (companionTierAbove * 0.015f)
+        (perkRankSum * 0.014f * globalPerkSynergy) + (protectionRankSum * 0.008f) + (companionTierAbove * 0.015f) + (crystalLuckFrac * 0.25f)
 
-      // Uncapped cumulative Cooldown Haste across all upgrades, skills, perks, gear, maps, and essences
+      // Uncapped cumulative Cooldown Haste across all upgrades, skills, perks, gear, maps, crystals, and essences
       val totalHaste = base.cooldownHasteBonus +
         (effectiveMaps * 0.018f) +
         (skillTierSum * 0.022f) +
@@ -225,11 +235,12 @@ data class EssenceResonanceBonuses(
         (customBuffTierSum * 0.025f) +
         (blastCoreLevelSum * 0.022f) +
         (shardTierAbove * 0.03f) +
-        (companionTierAbove * 0.025f)
+        (companionTierAbove * 0.025f) +
+        (crystalLuckFrac * 0.45f)
       val extraCdr = (1f - (1f / (1f + totalHaste))).coerceIn(0f, 0.99f)
       val finalRegen = base.regenBonusPerSec + (effectiveMaps * 0.45f) + (gearTierSum * 0.35f) +
-        (perkRankSum * 0.55f * globalPerkSynergy) + (protectionRankSum * 0.4f) + (customBuffTierSum * 0.4f)
-      val finalLuck = base.lootLuckBonus + (effectiveMaps * 0.04f) + (armoryModCount * 0.03f) + (shardTierAbove * 0.05f)
+        (perkRankSum * 0.55f * globalPerkSynergy) + (protectionRankSum * 0.4f) + (customBuffTierSum * 0.4f) + (crystalShdFrac * 3.5f)
+      val finalLuck = base.lootLuckBonus + (effectiveMaps * 0.04f) + (armoryModCount * 0.03f) + (shardTierAbove * 0.05f) + crystalLuckFrac
 
       val dmgPct = ((finalDmg - 1f) * 100f).toInt()
       val shdPct = ((finalShd - 1f) * 100f).toInt()
@@ -244,7 +255,7 @@ data class EssenceResonanceBonuses(
         regenBonusPerSec = finalRegen,
         lootLuckBonus = finalLuck,
         summary = "+${dmgPct}% DMG • +${shdPct}% SHD • +${spdPct}% RATE • +${hastePct}% HASTE",
-        extendedSourcesSummary = "Sources: Essences + ${blueEssenceSpent} Spent • $effectiveMaps/$MAX_SYNERGY_MAPS Maps • $armoryModCount Mods • Perks(x${String.format(java.util.Locale.US, "%.2f", globalPerkSynergy)}) • Prot($protectionRankSum) • Custom($customBuffTierSum) • ShardT$blastShardTier/CompT$companionBuffTier",
+        extendedSourcesSummary = "Sources: Essences + ${blueEssenceSpent} Spent • $effectiveMaps/$MAX_SYNERGY_MAPS Maps • $armoryModCount Mods • Crystals(+${crystalsDamagePct}%/+${crystalsShieldPct}%) • Perks(x${String.format(java.util.Locale.US, "%.2f", globalPerkSynergy)}) • Prot($protectionRankSum) • Custom($customBuffTierSum)",
         cooldownHasteBonus = totalHaste,
       )
     }
@@ -277,7 +288,7 @@ data class PerkDrinkSpec(
   val container: PerkContainerType,
   val colorHex: Long,
   val summary: String,
-  val maxRank: Int = 25,
+  val maxRank: Int = ProgressionCatalog.MAX_PERK_RANK,
 )
 
 enum class CharacterUniverseGroup(val id: String, val label: String) {
@@ -332,7 +343,21 @@ data class HeroOutfitSpec(
   val realLifeApparel: String = "",
   val realLifeDailyGear: String = "",
   val isRealLifeCreatorVersion: Boolean = false,
-)
+) {
+  fun isCreatorSelfForm(): Boolean = isRealLifeCreatorVersion ||
+    characterGroup in setOf(
+      CharacterUniverseGroup.ORIGINALS_PRIME,
+      CharacterUniverseGroup.MR_CROSSOVER,
+      CharacterUniverseGroup.COLE_MCGRATH,
+      CharacterUniverseGroup.PROTOTYPE,
+      CharacterUniverseGroup.SPACE_TIME,
+      CharacterUniverseGroup.GOD_OF_WAR,
+      CharacterUniverseGroup.SHIP_OF_HEROES,
+    ) ||
+    id.startsWith("mrcrossover_") ||
+    id.contains("_rl") ||
+    id.contains("me_")
+}
 
 @Immutable
 data class OutfitProgressState(
@@ -2028,6 +2053,17 @@ object MultiverseArsenalCatalog {
 
   val customAreas: List<CustomAreaSpec> = listOf(
     CustomAreaSpec(
+      id = "area_bank_vault",
+      name = "Federal Central Bank & Gold Vault Citadel",
+      linkedWorldId = "chrono_vault",
+      description = "Titanium Security Vaults, Diamond Depository, Laser Security Grid, Gold Bullion Vault & Central Bank ATM Exchange.",
+      accentHex = 0xFFFFD54F,
+      secondaryHex = 0xFF00E5FF,
+      buildingNames = listOf("Central Gold Bullion Vault", "Titanium Safe Deposit Hub", "Laser Security Grid Room", "Bank Teller Exchange", "Manager's Security Suite", "Subterranean Currency Depository"),
+      storyEraNote = "High-Stakes Bank Heist & Vault Sector",
+      uniqueTraits = "Massive Gold & Diamond Yields • Secure Bank Vault Mini-Games & Interest Dividends",
+    ),
+    CustomAreaSpec(
       id = "area_empire_city",
       name = "Empire City (Neon & Warren District)",
       linkedWorldId = "empire_city_infamous",
@@ -2435,3 +2471,159 @@ object MultiverseArsenalCatalog {
    */
   const val NO_APK_PLAY_GUIDE: String = UniverseCatalog.NO_APK_PLAY_GUIDE
 }
+
+@Immutable
+data class VehicleCollectionSpec(
+  val id: String,
+  val name: String,
+  val universeTag: String,
+  val vehicleType: String,
+  val description: String,
+  val speedRating: Int,
+  val armorRating: Int,
+  val firepowerRating: Int,
+  val specialAbility: String,
+  val passiveCombatBuff: String,
+  val accentHex: Long,
+  val unlockCostGold: Long = 2000L,
+  val unlockCostDiamonds: Long = 150L,
+  val unlockCostTuuCash: Long = 5000L,
+  val defaultEquipped: Boolean = false,
+)
+
+object MultiverseVehicleCatalog {
+  val vehicles: List<VehicleCollectionSpec> = listOf(
+    VehicleCollectionSpec(
+      id = "vehicle_arkham_tumbler",
+      name = "Arkham Batmobile Tumbler",
+      universeTag = "Arkham Knight",
+      vehicleType = "Battle Tank",
+      description = "WayneTech heavy urban assault tank with dual 60mm kinetic cannons, rocket salvo, and hydraulic ramming prow.",
+      speedRating = 80,
+      armorRating = 98,
+      firepowerRating = 92,
+      specialAbility = "Vulcan Salvo & Afterburner Ram",
+      passiveCombatBuff = "+80 Max Shield & 15% Damage Reduction",
+      accentHex = 0xFFFFD54FL,
+      unlockCostGold = 0L,
+      unlockCostDiamonds = 0L,
+      unlockCostTuuCash = 0L,
+      defaultEquipped = true,
+    ),
+    VehicleCollectionSpec(
+      id = "vehicle_stark_quinjet",
+      name = "Stark Orbital Quinjet",
+      universeTag = "Avengers Nexus",
+      vehicleType = "VTOL Dropship",
+      description = "Stealth VTOL aerospace transport equipped with twin Stark Arc repulsors, aerial cloaking, and precision laser targeting.",
+      speedRating = 95,
+      armorRating = 78,
+      firepowerRating = 96,
+      specialAbility = "Orbital Particle Laser Strike",
+      passiveCombatBuff = "+25% Fire Rate & Orbital Strafe every 15s",
+      accentHex = 0xFFFF3D71L,
+      unlockCostGold = 5000L,
+      unlockCostDiamonds = 250L,
+      unlockCostTuuCash = 8000L,
+    ),
+    VehicleCollectionSpec(
+      id = "vehicle_cyber_interceptor",
+      name = "Cyberpunk Quadra Interceptor",
+      universeTag = "Sector Zero",
+      vehicleType = "Hovercraft",
+      description = "Night City street-racing hovercar packed with twin kinetic turbochargers, nitro thrusters, and shock dispersal bumpers.",
+      speedRating = 99,
+      armorRating = 72,
+      firepowerRating = 84,
+      specialAbility = "Nitro Overdrive Drift Blast",
+      passiveCombatBuff = "+22% Movement Speed & Dash CDR -30%",
+      accentHex = 0xFF00E5FFL,
+      unlockCostGold = 3500L,
+      unlockCostDiamonds = 180L,
+      unlockCostTuuCash = 6000L,
+    ),
+    VehicleCollectionSpec(
+      id = "vehicle_rail_skimmer",
+      name = "Cole's Lightning Rail-Skimmer",
+      universeTag = "Empire City",
+      vehicleType = "Speed Bike",
+      description = "Electrified monorail skimmer surfing magnetic shock rails, discharging chain-lightning arcs at all nearby pursuers.",
+      speedRating = 92,
+      armorRating = 75,
+      firepowerRating = 88,
+      specialAbility = "High-Voltage Ionic EMP Pulse",
+      passiveCombatBuff = "+40 Max Mana & Chain Lightning Auto-Zap",
+      accentHex = 0xFF40C4FFL,
+      unlockCostGold = 4000L,
+      unlockCostDiamonds = 200L,
+      unlockCostTuuCash = 7000L,
+    ),
+    VehicleCollectionSpec(
+      id = "vehicle_bank_transport",
+      name = "Federal Bullion Armored Transport",
+      universeTag = "Central Bank Citadel",
+      vehicleType = "Armored Carrier",
+      description = "Concentric vault-titanium armored truck fitted with diamond-grated vacuum siphons and reinforced kinetic blast plating.",
+      speedRating = 68,
+      armorRating = 100,
+      firepowerRating = 80,
+      specialAbility = "Diamond Siphon & Vault Shield Wall",
+      passiveCombatBuff = "+150% Diamond & TUUCash Harvest Yield",
+      accentHex = 0xFF00E676L,
+      unlockCostGold = 6000L,
+      unlockCostDiamonds = 300L,
+      unlockCostTuuCash = 10000L,
+    ),
+    VehicleCollectionSpec(
+      id = "vehicle_batwing_hypersonic",
+      name = "Neo-Gotham Batwing Mk.IV",
+      universeTag = "Batman Beyond",
+      vehicleType = "Hypersonic Jet",
+      description = "Hypersonic stealth combat jet capable of Mach 4 flight, plasma micro-torpedoes, and active radar invisibility.",
+      speedRating = 100,
+      armorRating = 70,
+      firepowerRating = 95,
+      specialAbility = "Hypersonic Plasma Carpet Bomb",
+      passiveCombatBuff = "+20% Crit Multiplier & Guided Drone Assist",
+      accentHex = 0xFFE040FBL,
+      unlockCostGold = 7500L,
+      unlockCostDiamonds = 400L,
+      unlockCostTuuCash = 12000L,
+    ),
+    VehicleCollectionSpec(
+      id = "vehicle_blacklight_apc",
+      name = "Blacklight Bio-Siege APC",
+      universeTag = "Blacklight Conduit",
+      vehicleType = "Armored Carrier",
+      description = "Heavy armored combat carrier infused with viral biomass tendrils that regenerate hull integrity and impale hordes.",
+      speedRating = 74,
+      armorRating = 96,
+      firepowerRating = 88,
+      specialAbility = "Bio-Mass Tendril Devastator",
+      passiveCombatBuff = "+4.0/s Health/Armor Regen & Siphon +6 on Kill",
+      accentHex = 0xFF7C4DFFL,
+      unlockCostGold = 5500L,
+      unlockCostDiamonds = 280L,
+      unlockCostTuuCash = 9000L,
+    ),
+    VehicleCollectionSpec(
+      id = "vehicle_sunset_cruiser",
+      name = "Sunset Overdrive Hover-Cruiser",
+      universeTag = "Sunset City",
+      vehicleType = "Hovercraft",
+      description = "Fizzy-fueled retro neon hover buggy armed with bouncing sawblade disc launchers and soda-can rocket pods.",
+      speedRating = 90,
+      armorRating = 80,
+      firepowerRating = 89,
+      specialAbility = "Overcharge Soda Rocket Barrage",
+      passiveCombatBuff = "+25% Bounce/Explosion AoE & +15% Move Speed",
+      accentHex = 0xFFFFAB40L,
+      unlockCostGold = 4500L,
+      unlockCostDiamonds = 220L,
+      unlockCostTuuCash = 7500L,
+    ),
+  )
+
+  fun byId(id: String): VehicleCollectionSpec? = vehicles.firstOrNull { it.id == id }
+}
+

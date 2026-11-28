@@ -114,6 +114,7 @@ fun ForgeRigScreen(
   onOpenForgePerk: (() -> Unit)? = null,
   onOpenForgeGear: (() -> Unit)? = null,
   onOpenForgeEquipment: (() -> Unit)? = null,
+  onImportPrisma3dResult: ((com.example.export.Prisma3dImportResult) -> Unit)? = null,
 ) {
   val context = LocalContext.current
   val currentRig = rigs.firstOrNull { it.id == activeRigId } ?: rigs.firstOrNull()
@@ -225,21 +226,25 @@ fun ForgeRigScreen(
         )
         if (res.isSuccess) {
           val imported = res.getOrThrow()
-          val rig = imported.rig
-          onSaveRig(
-            null,
-            rig.name,
-            rig.archetype,
-            rig.activeClip,
-            rig.ikEnabled,
-            rig.rigScale,
-            rig.playbackSpeed,
-            rig.poseAngles,
-            rig.keyframeFrames,
-            true,
-          )
+          if (onImportPrisma3dResult != null) {
+            onImportPrisma3dResult(imported)
+          } else {
+            val rig = imported.rig
+            onSaveRig(
+              null,
+              rig.name,
+              rig.archetype,
+              rig.activeClip,
+              rig.ikEnabled,
+              rig.rigScale,
+              rig.playbackSpeed,
+              rig.poseAngles,
+              rig.keyframeFrames,
+              true,
+            )
+            onStatusMessage(imported.summary)
+          }
           showPrisma3dImportDialog = false
-          onStatusMessage(imported.summary)
         } else {
           onStatusMessage(res.exceptionOrNull()?.localizedMessage ?: "Invalid Prisma3D file")
         }
@@ -409,8 +414,9 @@ fun ForgeRigScreen(
                 onDragStart = { start ->
                   try {
                     if (size.width > 0 && size.height > 0 && start.x.isFinite() && start.y.isFinite()) {
-                      val origin = Offset(size.width * 0.5f, size.height * 0.56f)
-                      val safeScale = (size.height * 0.42f * (if (rigScale.isFinite()) rigScale else 1f)).takeIf { it.isFinite() && it > 0f } ?: 120f
+                      val origin = Offset(size.width * 0.5f, size.height * 0.54f)
+                      val safeRigScale = if (rigScale.isFinite()) rigScale.coerceIn(0.7f, 1.4f) else 1.0f
+                      val safeScale = (minOf(size.width * 0.48f, size.height * 0.38f) * safeRigScale).takeIf { it.isFinite() && it > 0f } ?: 120f
                       val safeCurFrame = if (currentFrame.isFinite()) currentFrame else 0f
                       val skel = RigEvaluator.evaluate(
                         origin = origin,
@@ -436,8 +442,9 @@ fun ForgeRigScreen(
                   try {
                     change.consume()
                     if (size.width > 0 && size.height > 0 && change.position.x.isFinite() && change.position.y.isFinite()) {
-                      val origin = Offset(size.width * 0.5f, size.height * 0.56f)
-                      val safeScale = (size.height * 0.42f * (if (rigScale.isFinite()) rigScale else 1f)).takeIf { it.isFinite() && it > 0f } ?: 120f
+                      val origin = Offset(size.width * 0.5f, size.height * 0.54f)
+                      val safeRigScale = if (rigScale.isFinite()) rigScale.coerceIn(0.7f, 1.4f) else 1.0f
+                      val safeScale = (minOf(size.width * 0.48f, size.height * 0.38f) * safeRigScale).takeIf { it.isFinite() && it > 0f } ?: 120f
                       val safeCurFrame = if (currentFrame.isFinite()) currentFrame else 0f
                       val skel = RigEvaluator.evaluate(
                         origin = origin,
@@ -493,7 +500,8 @@ fun ForgeRigScreen(
               val horizonY = h * 0.34f
               val vanishX = w * 0.5f
               val safeRigScale = if (rigScale.isFinite()) rigScale.coerceIn(0.7f, 1.4f) else 1.0f
-              val groundY = h * 0.56f + (h * 0.42f * safeRigScale) * 0.56f
+              val rigScalePx = minOf(w * 0.48f, h * 0.38f) * safeRigScale
+              val groundY = h * 0.54f + rigScalePx * 0.56f
 
               val ramRange = when (settings.ramGraphicsMode) {
                 RamGraphicsMode.LOW_RAM_BOOST -> 4
@@ -529,11 +537,11 @@ fun ForgeRigScreen(
                 drawLine(Color(0x6640A9FF), Offset(vanishX, 16f), Offset(vanishX, groundY), strokeWidth = 1.4f)
               }
 
-              val origin = Offset(vanishX, h * 0.56f)
+              val origin = Offset(vanishX, h * 0.54f)
               val safeCurFrame = if (currentFrame.isFinite()) currentFrame else 0f
               val skel = RigEvaluator.evaluate(
                 origin = origin,
-                scalePx = h * 0.42f * safeRigScale,
+                scalePx = rigScalePx,
                 poseAngles = poseMap,
                 clip = activeClip,
                 frame = safeCurFrame,
@@ -1257,21 +1265,25 @@ fun ForgeRigScreen(
                 selected = false,
                 onClick = {
                   val imported = Prisma3dImporter.getSamplePreset(presetKey, currentRig?.userId ?: "local_operator")
-                  val rig = imported.rig
-                  onSaveRig(
-                    null,
-                    rig.name,
-                    rig.archetype,
-                    rig.activeClip,
-                    rig.ikEnabled,
-                    rig.rigScale,
-                    rig.playbackSpeed,
-                    rig.poseAngles,
-                    rig.keyframeFrames,
-                    true,
-                  )
+                  if (onImportPrisma3dResult != null) {
+                    onImportPrisma3dResult(imported)
+                  } else {
+                    val rig = imported.rig
+                    onSaveRig(
+                      null,
+                      rig.name,
+                      rig.archetype,
+                      rig.activeClip,
+                      rig.ikEnabled,
+                      rig.rigScale,
+                      rig.playbackSpeed,
+                      rig.poseAngles,
+                      rig.keyframeFrames,
+                      true,
+                    )
+                    onStatusMessage(imported.summary)
+                  }
                   showPrisma3dImportDialog = false
-                  onStatusMessage(imported.summary)
                 },
                 label = { Text(label, style = MaterialTheme.typography.labelSmall) },
                 modifier = Modifier.height(48.dp).testTag("prisma3d_preset_$presetKey"),
@@ -1301,21 +1313,25 @@ fun ForgeRigScreen(
             )
             if (res.isSuccess) {
               val imported = res.getOrThrow()
-              val rig = imported.rig
-              onSaveRig(
-                null,
-                rig.name,
-                rig.archetype,
-                rig.activeClip,
-                rig.ikEnabled,
-                rig.rigScale,
-                rig.playbackSpeed,
-                rig.poseAngles,
-                rig.keyframeFrames,
-                true,
-              )
+              if (onImportPrisma3dResult != null) {
+                onImportPrisma3dResult(imported)
+              } else {
+                val rig = imported.rig
+                onSaveRig(
+                  null,
+                  rig.name,
+                  rig.archetype,
+                  rig.activeClip,
+                  rig.ikEnabled,
+                  rig.rigScale,
+                  rig.playbackSpeed,
+                  rig.poseAngles,
+                  rig.keyframeFrames,
+                  true,
+                )
+                onStatusMessage(imported.summary)
+              }
               showPrisma3dImportDialog = false
-              onStatusMessage(imported.summary)
             } else {
               onStatusMessage(res.exceptionOrNull()?.localizedMessage ?: "Invalid Prisma3D text")
             }

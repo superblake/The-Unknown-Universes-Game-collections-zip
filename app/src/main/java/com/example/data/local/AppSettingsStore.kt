@@ -325,8 +325,19 @@ data class AppSettings(
 
   // 9. Controller & Virtual Gamepad Customization
   val controllerStyle: String = "console_gamepad",
-  val controllerOpacity: Float = 0.85f,
-  val controllerScale: Float = 1.0f,
+  val controllerOpacity: Float = 0.82f,
+  val controllerScale: Float = 0.85f,
+  val controllerShowDpad: Boolean = false,
+  val controllerSpacingDp: Int = 4,
+  val controllerButtonShape: String = "gamepad_circle", // "gamepad_circle", "tactical_hex", "pill"
+  val controllerActionA: String = "fire",
+  val controllerActionB: String = "melee",
+  val controllerActionX: String = "interact",
+  val controllerActionY: String = "power",
+  val controllerActionL1: String = "dash",
+  val controllerActionR1: String = "magic",
+  val controllerActionL2: String = "tactical",
+  val controllerActionR2: String = "lethal",
 ) {
   fun shouldHideSystemBars(inArena: Boolean): Boolean =
     immersiveFullscreen && when (fullscreenMode) {
@@ -577,6 +588,19 @@ class AppSettingsStore(context: Context) {
       fullscreenMode = normalizedFullscreenMode,
       immersiveFullscreen = normalizedFullscreenMode != FullscreenMode.OFF,
       selectedLanguageCode = AppLanguage.fromCode(s.selectedLanguageCode).code,
+      controllerStyle = s.controllerStyle.takeIf { it in setOf("console_gamepad", "codm_tactical", "floating_classic") } ?: "console_gamepad",
+      controllerOpacity = sanitizeFloat(s.controllerOpacity, 0.30f, 1.0f, 0.85f),
+      controllerScale = sanitizeFloat(s.controllerScale, 0.65f, 1.40f, 0.85f),
+      controllerSpacingDp = s.controllerSpacingDp.coerceIn(2, 14),
+      controllerButtonShape = s.controllerButtonShape.takeIf { it in setOf("gamepad_circle", "tactical_hex", "pill") } ?: "gamepad_circle",
+      controllerActionA = s.controllerActionA.ifBlank { "fire" },
+      controllerActionB = s.controllerActionB.ifBlank { "melee" },
+      controllerActionX = s.controllerActionX.ifBlank { "interact" },
+      controllerActionY = s.controllerActionY.ifBlank { "power" },
+      controllerActionL1 = s.controllerActionL1.ifBlank { "dash" },
+      controllerActionR1 = s.controllerActionR1.ifBlank { "magic" },
+      controllerActionL2 = s.controllerActionL2.ifBlank { "tactical" },
+      controllerActionR2 = s.controllerActionR2.ifBlank { "lethal" },
     )
   }
 
@@ -647,6 +671,17 @@ class AppSettingsStore(context: Context) {
         controllerStyle = prefs.getString("controller_style", d.controllerStyle) ?: d.controllerStyle,
         controllerOpacity = prefs.getFloat("controller_opacity", d.controllerOpacity),
         controllerScale = prefs.getFloat("controller_scale", d.controllerScale),
+        controllerShowDpad = prefs.getBoolean("controller_show_dpad", d.controllerShowDpad),
+        controllerSpacingDp = prefs.getInt("controller_spacing_dp", d.controllerSpacingDp),
+        controllerButtonShape = prefs.getString("controller_button_shape", d.controllerButtonShape) ?: d.controllerButtonShape,
+        controllerActionA = prefs.getString("controller_action_a", d.controllerActionA) ?: d.controllerActionA,
+        controllerActionB = prefs.getString("controller_action_b", d.controllerActionB) ?: d.controllerActionB,
+        controllerActionX = prefs.getString("controller_action_x", d.controllerActionX) ?: d.controllerActionX,
+        controllerActionY = prefs.getString("controller_action_y", d.controllerActionY) ?: d.controllerActionY,
+        controllerActionL1 = prefs.getString("controller_action_l1", d.controllerActionL1) ?: d.controllerActionL1,
+        controllerActionR1 = prefs.getString("controller_action_r1", d.controllerActionR1) ?: d.controllerActionR1,
+        controllerActionL2 = prefs.getString("controller_action_l2", d.controllerActionL2) ?: d.controllerActionL2,
+        controllerActionR2 = prefs.getString("controller_action_r2", d.controllerActionR2) ?: d.controllerActionR2,
       )
     )
   }
@@ -699,6 +734,17 @@ class AppSettingsStore(context: Context) {
       putString("controller_style", s.controllerStyle)
       putFloat("controller_opacity", s.controllerOpacity)
       putFloat("controller_scale", s.controllerScale)
+      putBoolean("controller_show_dpad", s.controllerShowDpad)
+      putInt("controller_spacing_dp", s.controllerSpacingDp)
+      putString("controller_button_shape", s.controllerButtonShape)
+      putString("controller_action_a", s.controllerActionA)
+      putString("controller_action_b", s.controllerActionB)
+      putString("controller_action_x", s.controllerActionX)
+      putString("controller_action_y", s.controllerActionY)
+      putString("controller_action_l1", s.controllerActionL1)
+      putString("controller_action_r1", s.controllerActionR1)
+      putString("controller_action_l2", s.controllerActionL2)
+      putString("controller_action_r2", s.controllerActionR2)
     }
   }
 

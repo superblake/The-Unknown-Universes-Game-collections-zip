@@ -44,6 +44,7 @@ import com.example.data.model.RigAsset
 import com.example.data.model.SocialCatalog
 import com.example.data.model.UpgradeCosts
 import com.example.data.model.StarRankMeta
+import com.example.data.model.MultiverseSystemsCatalog
 import com.example.data.model.UniverseCatalog
 import com.example.data.model.UserCustomGameMapSpec
 import com.example.data.model.UserCustomWeaponSpec
@@ -463,9 +464,26 @@ class UniverseViewModel(
       val res = repository.upgradeArmoryItem(currentUserId, liveItem, cost, currentEssence)
       if (res.isSuccess) {
         val updated = repository.getArmoryItem(currentUserId, item.id) ?: liveItem
-        _statusBanner.value = "${updated.name} upgraded to Tier ${updated.tier}/25 (${ProgressionCatalog.tierMeta(updated.tier.toInt()).label})!"
+        _statusBanner.value = "${updated.name} upgraded to Tier ${updated.tier}/${PowerTier.MAX_TIER} (${ProgressionCatalog.tierMeta(updated.tier.toInt()).label})!"
       } else {
         _statusBanner.value = res.exceptionOrNull()?.message ?: "Upgrade failed"
+      }
+    }
+  }
+
+  fun importPrisma3dAsset(result: com.example.export.Prisma3dImportResult) {
+    viewModelScope.launch {
+      val preview = result.toWorkshopPreview(currentUserId)
+      val res = repository.importSteamWorkshopPreview(
+        userId = currentUserId,
+        preview = preview,
+        importModulePreset = true,
+        importRigPreset = true,
+      )
+      _statusBanner.value = if (res.isSuccess) {
+        "Prisma3D imported: Rig '${result.rig.id}' & Module '${result.armoryModule.name}' equipped!"
+      } else {
+        res.exceptionOrNull()?.localizedMessage ?: "Prisma3D import failed"
       }
     }
   }
@@ -476,18 +494,26 @@ class UniverseViewModel(
       _statusBanner.value = "Progression store offline"
       return
     }
-    val res = store.applyProtocolCode(code)
+    val itemIds = (uiState.value as? UniverseUiState.Ready)?.armory?.map { it.id } ?: emptyList()
+    val res = store.applyProtocolCode(code, armoryItemIds = itemIds)
     if (res.isSuccess) {
       viewModelScope.launch {
         val upper = code.trim().uppercase(java.util.Locale.US)
         when {
-          upper.contains("25") || upper.contains("MAX") || upper.contains("GOD") -> {
-            repository.boostAllArmoryTiers(currentUserId, targetTier = 25)
+          upper.contains("60") || upper.contains("TRANSCEND") || upper.contains("MAXTIER") || upper.contains("GOD") || upper.contains("UNLOCKALL") -> {
+            repository.boostAllArmoryTiers(currentUserId, targetTier = PowerTier.MAX_TIER)
           }
+          upper.contains("BOOST10") || upper.contains("+10") -> {
+            repository.boostAllArmoryTiers(currentUserId, delta = 10)
+          }
+          upper.contains("50") -> repository.boostAllArmoryTiers(currentUserId, targetTier = 50)
+          upper.contains("25") && !upper.contains("STAR") -> repository.boostAllArmoryTiers(currentUserId, targetTier = 25)
           upper.contains("20") -> repository.boostAllArmoryTiers(currentUserId, targetTier = 20)
-          upper.contains("15") -> repository.boostAllArmoryTiers(currentUserId, targetTier = 15)
-          upper.contains("10") -> repository.boostAllArmoryTiers(currentUserId, targetTier = 10)
-          upper.contains("BOOST") || upper.contains("+5") -> repository.boostAllArmoryTiers(currentUserId, delta = 5)
+          upper.contains("15") && !upper.contains("STAR") -> repository.boostAllArmoryTiers(currentUserId, targetTier = 15)
+          upper.contains("10") && !upper.contains("STAR") -> repository.boostAllArmoryTiers(currentUserId, targetTier = 10)
+          upper.contains("BOOST") || upper.contains("+5") || upper == "BO3PERKS" || upper == "TREYARCH" || upper == "ZOMBIES" -> {
+            repository.boostAllArmoryTiers(currentUserId, delta = if (upper == "BOOST5" || upper.contains("+5")) 5 else 10)
+          }
         }
         if (upper == "ESSENCE999" || upper == "RICH") {
           repository.adjustOperatorEssence(currentUserId, 500_000L)
@@ -507,17 +533,36 @@ class UniverseViewModel(
     _statusBanner.value = "All systems boosted +$delta Tiers!"
   }
 
-  fun maxAllTiers() {
-    progressionStore?.setAllTiers(25)
+  fun boostAllStars(delta: Int = 10) {
+    val itemIds = (uiState.value as? UniverseUiState.Ready)?.armory?.map { it.id } ?: emptyList()
+    progressionStore?.boostAllStars(delta = delta, armoryItemIds = itemIds)
+    _statusBanner.value = "All systems boosted +$delta★ Stars!"
+  }
+
+  fun boostEverythingPlusTen() {
+    val store = progressionStore ?: return
+    val itemIds = (uiState.value as? UniverseUiState.Ready)?.armory?.map { it.id } ?: emptyList()
+    store.boostAllTiers(10)
+    store.boostAllStars(10, armoryItemIds = itemIds)
+    store.boostAllLevels(10)
     viewModelScope.launch {
-      repository.boostAllArmoryTiers(currentUserId, targetTier = 25)
+      repository.boostAllArmoryTiers(currentUserId, delta = 10)
     }
-    _statusBanner.value = "All systems maxed to TIER 25 MULTIVERSAL!"
+    _statusBanner.value = "+10 Levels, +10 Tiers & +10★ Stars applied across ALL systems!"
+  }
+
+  fun maxAllTiers() {
+    progressionStore?.setAllTiers(PowerTier.MAX_TIER)
+    viewModelScope.launch {
+      repository.boostAllArmoryTiers(currentUserId, targetTier = PowerTier.MAX_TIER)
+    }
+    _statusBanner.value = "All systems maxed to TIER ${PowerTier.MAX_TIER} ETERNIUM APEX!"
   }
 
   fun maxAllStars() {
-    progressionStore?.setAllStars(10)
-    _statusBanner.value = "All systems maxed to 10★ Omniverse Nova!"
+    val itemIds = (uiState.value as? UniverseUiState.Ready)?.armory?.map { it.id } ?: emptyList()
+    progressionStore?.setAllStars(StarRankMeta.MAX_STARS, armoryItemIds = itemIds)
+    _statusBanner.value = "All systems maxed to ${StarRankMeta.MAX_STARS}★ ${StarRankMeta.forStars(StarRankMeta.MAX_STARS).label}!"
   }
 
   fun grantEssenceBonus(amount: Long = 50_000L) {
@@ -525,6 +570,11 @@ class UniverseViewModel(
       repository.adjustOperatorEssence(currentUserId, amount)
       _statusBanner.value = "+$amount Blue Essence granted!"
     }
+  }
+
+  fun grantDiamondBonus(amount: Long = 50_000L) {
+    progressionStore?.grantDiamondBonus(amount)
+    _statusBanner.value = "+$amount Diamonds, Gold & TUUCash granted!"
   }
 
   fun importBo3ModToolsCuratedPack() {
@@ -1000,7 +1050,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeEquipmentTier(slotId, currentBlueEssence), "Cannot upgrade Equipment Tier") {
       val nextTier = progressionState.value.equipmentState(slotId).tier
-      "Equipment Tier ${ProgressionCatalog.tierMeta(nextTier).label} (T$nextTier/25)!"
+      "Equipment Tier ${ProgressionCatalog.tierMeta(nextTier).label} (T$nextTier/${PowerTier.MAX_TIER})!"
     }
   }
 
@@ -1025,7 +1075,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeGearTier(slot, currentBlueEssence), "Cannot upgrade Gear Tier") {
       val nextTier = progressionState.value.gearMap[slot.id]?.tier ?: 1
-      "${slot.displayName} Tier ${ProgressionCatalog.tierMeta(nextTier).label} (T$nextTier/25)!"
+      "${slot.displayName} Tier ${ProgressionCatalog.tierMeta(nextTier).label} (T$nextTier/${PowerTier.MAX_TIER})!"
     }
   }
 
@@ -1038,7 +1088,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.unlockSkillNode(nodeId, currentEssence), "Cannot upgrade skill") { cost ->
       val tier = progressionState.value.skillNodes[nodeId]?.tier ?: 1
-      "Skill Tier $tier/25 Active! (-$cost Blue Essence)"
+      "Skill Tier $tier/${PowerTier.MAX_TIER} Active! (-$cost Blue Essence)"
     }
   }
 
@@ -1046,7 +1096,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeWeaponTier(weaponId, currentBlueEssence), "Cannot upgrade Weapon Tier") {
       val nextTier = progressionState.value.weaponTier(weaponId)
-      "${ProgressionCatalog.weaponById(weaponId, progressionState.value.customWeapons).name} Tier $nextTier/25 (${ProgressionCatalog.tierMeta(nextTier).label})!"
+      "${ProgressionCatalog.weaponById(weaponId, progressionState.value.customWeapons).name} Tier $nextTier/${PowerTier.MAX_TIER} (${ProgressionCatalog.tierMeta(nextTier).label})!"
     }
   }
 
@@ -1054,7 +1104,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeWonderTier(wonderId, currentBlueEssence), "Cannot upgrade Wonder Tier") {
       val nextTier = progressionState.value.wonderTier(wonderId)
-      "Wonder Weapon upgraded to Tier $nextTier/25 (${ProgressionCatalog.tierMeta(nextTier).label})!"
+      "Wonder Weapon upgraded to Tier $nextTier/${PowerTier.MAX_TIER} (${ProgressionCatalog.tierMeta(nextTier).label})!"
     }
   }
 
@@ -1090,7 +1140,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeCharacterTier(currentBlueEssence), "Cannot upgrade Character Tier") {
       val nextTier = progressionState.value.characterTier
-      "Operator Character Tier $nextTier/25 (${ProgressionCatalog.tierMeta(nextTier).label})!"
+      "Operator Character Tier $nextTier/${PowerTier.MAX_TIER} (${ProgressionCatalog.tierMeta(nextTier).label})!"
     }
   }
 
@@ -1098,7 +1148,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeCharacterStar(currentBlueEssence), "Cannot upgrade Character Star") {
       val stars = progressionState.value.characterStarLevel
-      "Operator Character ${StarRankMeta.forStars(stars).label} (${stars}★/10★)!"
+      "Operator Character ${StarRankMeta.forStars(stars).label} (${stars}★/${StarRankMeta.MAX_STARS}★)!"
     }
   }
 
@@ -1107,7 +1157,7 @@ class UniverseViewModel(
     runEssenceUpgrade(store.upgradeOutfitStar(outfitId, currentBlueEssence), "Cannot upgrade Outfit Star") {
       val stars = progressionState.value.outfitState(outfitId).starLevel
       val name = MultiverseArsenalCatalog.outfitById(outfitId).nameWithVersion
-      "$name elevated to $stars★/10★ (${StarRankMeta.forStars(stars).label})!"
+      "$name elevated to $stars★/${StarRankMeta.MAX_STARS}★ (${StarRankMeta.forStars(stars).label})!"
     }
   }
 
@@ -1115,7 +1165,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeArmoryItemStar(itemId, currentBlueEssence), "Cannot upgrade Mod Star") {
       val stars = progressionState.value.armoryItemStar(itemId)
-      "Armory Mod elevated to $stars★/10★ (${StarRankMeta.forStars(stars).label})!"
+      "Armory Mod elevated to $stars★/${StarRankMeta.MAX_STARS}★ (${StarRankMeta.forStars(stars).label})!"
     }
   }
 
@@ -1123,7 +1173,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeWeaponStar(weaponId, currentBlueEssence), "Cannot upgrade Weapon Star") {
       val stars = progressionState.value.weaponStar(weaponId)
-      "${ProgressionCatalog.weaponById(weaponId, progressionState.value.customWeapons).name} elevated to $stars★/10★!"
+      "${ProgressionCatalog.weaponById(weaponId, progressionState.value.customWeapons).name} elevated to $stars★/${StarRankMeta.MAX_STARS}★!"
     }
   }
 
@@ -1131,7 +1181,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeWonderStar(wonderId, currentBlueEssence), "Cannot upgrade Wonder Star") {
       val stars = progressionState.value.wonderStar(wonderId)
-      "Wonder Weapon elevated to $stars★/10★!"
+      "Wonder Weapon elevated to $stars★/${StarRankMeta.MAX_STARS}★!"
     }
   }
 
@@ -1139,7 +1189,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeGearStar(slot, currentBlueEssence), "Cannot upgrade Gear Star") {
       val stars = progressionState.value.gearMap[slot.id]?.starLevel ?: 1
-      "${slot.displayName} elevated to $stars★/10★!"
+      "${slot.displayName} elevated to $stars★/${StarRankMeta.MAX_STARS}★!"
     }
   }
 
@@ -1147,7 +1197,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeEquipmentStar(slotId, currentBlueEssence), "Cannot upgrade Equipment Star") {
       val stars = progressionState.value.equipmentState(slotId).starLevel
-      "Equipment elevated to $stars★/10★!"
+      "Equipment elevated to $stars★/${StarRankMeta.MAX_STARS}★!"
     }
   }
 
@@ -1155,7 +1205,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeSkillStar(nodeId, currentBlueEssence), "Cannot upgrade Skill Star") {
       val stars = progressionState.value.skillNodes[nodeId]?.starLevel ?: 1
-      "Skill Node elevated to $stars★/10★!"
+      "Skill Node elevated to $stars★/${StarRankMeta.MAX_STARS}★!"
     }
   }
 
@@ -1163,7 +1213,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeVacuumBotStar(currentBlueEssence), "Cannot upgrade Vacuum Bot Star") {
       val stars = progressionState.value.vacuumBot.starLevel
-      "Vacuum Bot elevated to $stars★/10★!"
+      "Vacuum Bot elevated to $stars★/${StarRankMeta.MAX_STARS}★!"
     }
   }
 
@@ -1296,6 +1346,10 @@ class UniverseViewModel(
     if (playerLvlUps > 0L) notes.add("PLAYER LV UP (+$playerLvlUps)")
     if (wpnLvlUps > 0L) notes.add("WEAPON LV UP (+$wpnLvlUps)")
     if (report.blastShardsEarned > 0L) notes.add("+${report.blastShardsEarned} Shards")
+    if (report.goldEarned > 0L) notes.add("+${report.goldEarned} Gold")
+    if (report.diamondsEarned > 0L) notes.add("+${report.diamondsEarned} Diamonds")
+    if (report.tuuCashEarned > 0L) notes.add("+${report.tuuCashEarned} TUUCash")
+    if (report.baseDefenseWon) notes.add("BASE DEFENDED!")
     _statusBanner.value = notes.joinToString(" • ")
   }
 
@@ -1320,7 +1374,7 @@ class UniverseViewModel(
     val res = progressionStore?.equipOutfit(outfitId, syncSignatureEquipment = true) ?: return
     val spec = MultiverseArsenalCatalog.outfitById(outfitId)
     val originSuffix = if (spec.isOriginalCharacter) " • Original Hero +25% Buff" else ""
-    _statusBanner.value = "Equipped ${res.nameWithVersion} (Lv.${res.progress.level} T${res.progress.tier}/25)$originSuffix"
+    _statusBanner.value = "Equipped ${res.nameWithVersion} (Lv.${res.progress.level} T${res.progress.tier}/${PowerTier.MAX_TIER})$originSuffix"
   }
 
   fun upgradeOutfit(outfitId: String, currentBlueEssence: Long) {
@@ -1328,7 +1382,7 @@ class UniverseViewModel(
     runEssenceUpgrade(store.upgradeOutfit(outfitId, currentBlueEssence), "Outfit upgrade failed") {
       val st = progressionState.value.outfitState(outfitId)
       val name = MultiverseArsenalCatalog.outfitById(outfitId).nameWithVersion
-      "$name -> Lv.${st.level} Tier ${st.tier}/25!"
+      "$name -> Lv.${st.level} Tier ${st.tier}/${PowerTier.MAX_TIER}!"
     }
   }
 
@@ -1341,7 +1395,7 @@ class UniverseViewModel(
         "gear" -> st.gearRank
         else -> st.equipmentRank
       }
-      "Outfit $part upgraded to Rank $rank/20!"
+      "Outfit $part upgraded to Rank $rank/${PowerTier.MAX_TIER}!"
     }
   }
 
@@ -1448,7 +1502,7 @@ class UniverseViewModel(
     runEssenceUpgrade(store.upgradePerkDrink(perkId, currentBlueEssence), "Perk upgrade failed") {
       val rank = progressionState.value.perkRank(perkId)
       val name = MultiverseArsenalCatalog.perkDrinks.firstOrNull { it.id == perkId }?.name ?: perkId
-      "$name upgraded to Rank $rank/25!"
+      "$name upgraded to Rank $rank/${PowerTier.MAX_TIER}!"
     }
   }
 
@@ -1456,7 +1510,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     val res = store.upgradeBlastCore(color)
     _statusBanner.value = if (res.isSuccess) {
-      "${color.displayName} Level ${res.getOrThrow()}/20 Activated!"
+      "${color.displayName} Level ${res.getOrThrow()}/${PowerTier.MAX_TIER} Activated!"
     } else {
       res.exceptionOrNull()?.message ?: "Blast Core upgrade failed"
     }
@@ -1467,7 +1521,7 @@ class UniverseViewModel(
     runEssenceUpgrade(store.upgradePerkStar(perkId, currentBlueEssence), "Perk star upgrade failed") {
       val star = progressionState.value.perkStar(perkId)
       val name = MultiverseArsenalCatalog.perkDrinks.firstOrNull { it.id == perkId }?.name ?: perkId
-      "$name Star Level upgraded to $star/10★!"
+      "$name Star Level upgraded to $star/${StarRankMeta.MAX_STARS}★!"
     }
   }
 
@@ -1483,7 +1537,7 @@ class UniverseViewModel(
     runEssenceUpgrade(store.upgradeProtection(protId, currentBlueEssence), "Protection upgrade failed") {
       val rank = progressionState.value.protectionRank(protId)
       val spec = ProgressionCatalog.protectionUpgrades.firstOrNull { it.id == protId }
-      "${spec?.title ?: protId} upgraded to Rank $rank/25!"
+      "${spec?.title ?: protId} upgraded to Rank $rank/${PowerTier.MAX_TIER}!"
     }
   }
 
@@ -1492,7 +1546,7 @@ class UniverseViewModel(
     runEssenceUpgrade(store.upgradeProtectionStar(protId, currentBlueEssence), "Protection star upgrade failed") {
       val star = progressionState.value.protectionStar(protId)
       val spec = ProgressionCatalog.protectionUpgrades.firstOrNull { it.id == protId }
-      "${spec?.title ?: protId} Star Level upgraded to $star/10★!"
+      "${spec?.title ?: protId} Star Level upgraded to $star/${StarRankMeta.MAX_STARS}★!"
     }
   }
 
@@ -1500,7 +1554,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeBlastShardTier(currentBlueEssence), "Blast Shard tier upgrade failed") {
       val tier = progressionState.value.blastShardTier
-      "Blast Shard Channeling Tier upgraded to T$tier/25!"
+      "Blast Shard Channeling Tier upgraded to T$tier/${PowerTier.MAX_TIER}!"
     }
   }
 
@@ -1508,7 +1562,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeCompanionBuffTier(currentBlueEssence), "Companion buff tier upgrade failed") {
       val tier = progressionState.value.companionBuffTier
-      "Companion Squad Buff Tier upgraded to T$tier/25!"
+      "Companion Squad Buff Tier upgraded to T$tier/${PowerTier.MAX_TIER}!"
     }
   }
 
@@ -1516,7 +1570,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeBlastCoreWithEssence(color, currentBlueEssence), "Blast Core essence upgrade failed") {
       val lvl = progressionState.value.blastCoreLevel(color)
-      "${color.displayName} Core upgraded to Level $lvl/20 using Blue Essence!"
+      "${color.displayName} Core upgraded to Level $lvl/${PowerTier.MAX_TIER} using Blue Essence!"
     }
   }
 
@@ -1535,7 +1589,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeCustomPerkTier(perkId, currentBlueEssence), "Custom perk tier upgrade failed") {
       val perk = progressionState.value.customPerks.firstOrNull { it.id == perkId }
-      "${perk?.name ?: "Custom Perk"} upgraded to Tier ${perk?.tier ?: 1}/25!"
+      "${perk?.name ?: "Custom Perk"} upgraded to Tier ${perk?.tier ?: 1}/${PowerTier.MAX_TIER}!"
     }
   }
 
@@ -1543,7 +1597,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeCustomPerkStar(perkId, currentBlueEssence), "Custom perk star upgrade failed") {
       val perk = progressionState.value.customPerks.firstOrNull { it.id == perkId }
-      "${perk?.name ?: "Custom Perk"} upgraded to Star ${perk?.starLevel ?: 0}/10★!"
+      "${perk?.name ?: "Custom Perk"} upgraded to Star ${perk?.starLevel ?: 0}/${StarRankMeta.MAX_STARS}★!"
     }
   }
 
@@ -1575,7 +1629,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeCustomGearTier(gearId, currentBlueEssence), "Custom gear tier upgrade failed") {
       val gear = progressionState.value.customGear.firstOrNull { it.id == gearId }
-      "${gear?.name ?: "Gear"} upgraded to Tier ${gear?.tier ?: 1}/25!"
+      "${gear?.name ?: "Gear"} upgraded to Tier ${gear?.tier ?: 1}/${PowerTier.MAX_TIER}!"
     }
   }
 
@@ -1583,7 +1637,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeCustomGearStar(gearId, currentBlueEssence), "Custom gear star upgrade failed") {
       val gear = progressionState.value.customGear.firstOrNull { it.id == gearId }
-      "${gear?.name ?: "Gear"} upgraded to Star ${gear?.starLevel ?: 0}/10★!"
+      "${gear?.name ?: "Gear"} upgraded to Star ${gear?.starLevel ?: 0}/${StarRankMeta.MAX_STARS}★!"
     }
   }
 
@@ -1607,7 +1661,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeCustomEquipmentTier(itemId, currentBlueEssence), "Equipment tier upgrade failed") {
       val eq = progressionState.value.customEquipment.firstOrNull { it.id == itemId }
-      "${eq?.name ?: "Equipment"} upgraded to Tier ${eq?.tier ?: 1}/25!"
+      "${eq?.name ?: "Equipment"} upgraded to Tier ${eq?.tier ?: 1}/${PowerTier.MAX_TIER}!"
     }
   }
 
@@ -1615,7 +1669,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeCustomEquipmentStar(itemId, currentBlueEssence), "Equipment star upgrade failed") {
       val eq = progressionState.value.customEquipment.firstOrNull { it.id == itemId }
-      "${eq?.name ?: "Equipment"} upgraded to Star ${eq?.starLevel ?: 0}/10★!"
+      "${eq?.name ?: "Equipment"} upgraded to Star ${eq?.starLevel ?: 0}/${StarRankMeta.MAX_STARS}★!"
     }
   }
 
@@ -1628,7 +1682,7 @@ class UniverseViewModel(
     val store = progressionStore ?: return
     runEssenceUpgrade(store.upgradeVacuumBot(currentBlueEssence), "Vacuum Bot upgrade failed") { cost ->
       val bot = progressionState.value.vacuumBot
-      "Vacuum Bot -> Lv.${bot.level} • Tier ${bot.tier}/25 (-$cost Blue Essence)"
+      "Vacuum Bot -> Lv.${bot.level} • Tier ${bot.tier}/${PowerTier.MAX_TIER} (-$cost Blue Essence)"
     }
   }
 
@@ -1651,6 +1705,109 @@ class UniverseViewModel(
       if (blueDelta != 0L) repository.adjustOperatorEssence(currentUserId, blueDelta)
       _statusBanner.value = "Traded: ${offer?.title ?: offerId} (+${offer?.outputAmount ?: 0} ${offer?.outputKind?.label ?: ""})"
     }
+  }
+
+  // ---- Multiverse Magic, Crystals, Base Defense, Multi-Currency & Shards ----
+
+  fun selectMagicSpell(spellId: String) {
+    val store = progressionStore ?: return
+    store.selectMagicSpell(spellId)
+    val spec = MultiverseSystemsCatalog.spellById(spellId)
+    _statusBanner.value = "Active Spell: ${spec.name} (Mana ${spec.manaCost})"
+  }
+
+  fun unlockOrUpgradeMagicSpell(spellId: String, currency: String = "gold") {
+    val store = progressionStore ?: return
+    val res = store.unlockOrUpgradeMagicSpell(spellId, currency)
+    _statusBanner.value = res.getOrElse { it.message ?: "Spell upgrade failed" }
+  }
+
+  fun upgradeMagicTier(currency: String = "gold") {
+    val store = progressionStore ?: return
+    val res = store.upgradeMagicTier(currency)
+    _statusBanner.value = res.getOrElse { it.message ?: "Magic tier upgrade failed" }
+  }
+
+  fun adjustMagicDifficulty(delta: Float) {
+    val store = progressionStore ?: return
+    val next = store.adjustMagicDifficulty(delta)
+    _statusBanner.value = "Magic Difficulty Overcharge x${String.format(java.util.Locale.US, "%.2f", next)} (+Loot & +Enemy Threat)"
+  }
+
+  fun toggleMagicOvercharge() {
+    val store = progressionStore ?: return
+    val enabled = store.toggleMagicOvercharge()
+    _statusBanner.value = if (enabled) "Overcharge Difficulty ENABLED (Harder enemies, higher magic & loot!)" else "Overcharge Difficulty PAUSED"
+  }
+
+  fun craftCrystal(templateId: String) {
+    val store = progressionStore ?: return
+    val res = store.craftCrystal(templateId)
+    _statusBanner.value = res.fold(
+      onSuccess = { "Crafted ${it.name} (+${it.statBonusSummary})" },
+      onFailure = { it.message ?: "Crystal crafting failed" },
+    )
+  }
+
+  fun upgradeCrystal(crystalId: String, currency: String = "gold") {
+    val store = progressionStore ?: return
+    val res = store.upgradeCrystal(crystalId, currency)
+    _statusBanner.value = res.fold(
+      onSuccess = { "${it.name} upgraded to Lv.${it.level}/${PowerTier.MAX_TIER}!" },
+      onFailure = { it.message ?: "Crystal upgrade failed" },
+    )
+  }
+
+  fun socketCrystal(crystalId: String, slot: String?) {
+    val store = progressionStore ?: return
+    val updated = store.socketCrystal(crystalId, slot)
+    if (updated != null) {
+      _statusBanner.value = if (slot == null) {
+        "${updated.name} unsocketed"
+      } else {
+        "${updated.name} socketed into ${slot.uppercase()}!"
+      }
+    }
+  }
+
+  fun customizePlayerBase(baseName: String? = null, layoutTheme: String? = null, primaryHex: Long? = null) {
+    val store = progressionStore ?: return
+    val next = store.customizePlayerBase(baseName, layoutTheme, primaryHex)
+    val themeName = MultiverseSystemsCatalog.baseThemeById(next.layoutTheme).name
+    _statusBanner.value = "Base '${next.baseName}' updated ($themeName)"
+  }
+
+  fun upgradePlayerBaseModule(module: String, currency: String = "gold") {
+    val store = progressionStore ?: return
+    val res = store.upgradePlayerBaseModule(module, currency)
+    _statusBanner.value = res.getOrElse { it.message ?: "Base upgrade failed" }
+  }
+
+  fun collectBaseVault() {
+    val store = progressionStore ?: return
+    val res = store.collectBaseVault()
+    _statusBanner.value = res.fold(
+      onSuccess = { (gold, diamonds, tuu) -> "Base Vault collected: +$gold Gold, +$diamonds Diamonds, +$tuu TUUCash!" },
+      onFailure = { it.message ?: "Vault empty" },
+    )
+  }
+
+  fun triggerOrResolveBaseAttack(defendNow: Boolean) {
+    val store = progressionStore ?: return
+    val res = store.triggerOrResolveBaseAttack(defendNow)
+    _statusBanner.value = res.getOrElse { it.message ?: "Base Defense update failed" }
+  }
+
+  fun convertCurrencyOrResource(actionId: String) {
+    val store = progressionStore ?: return
+    val res = store.convertCurrencyOrResource(actionId)
+    _statusBanner.value = res.getOrElse { it.message ?: "Conversion failed" }
+  }
+
+  fun upgradeTargetWithCurrency(targetType: String, targetId: String, currency: String) {
+    val store = progressionStore ?: return
+    val res = store.upgradeTargetWithCurrency(targetType, targetId, currency)
+    _statusBanner.value = res.getOrElse { it.message ?: "Alternate currency upgrade failed" }
   }
 
   fun submitMatchResult(

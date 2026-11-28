@@ -227,7 +227,7 @@ object SaveDataSerializer {
           val name = obj.optString("name").trim().take(50)
           if (name.isEmpty()) continue
           val rawId = obj.optString("id").ifBlank { "imp_arm_${i}_${name.hashCode().toUInt()}" }
-          val maxTier = maxOf(obj.optLong("maxTier", 25L), 25L).coerceIn(1L, 25L)
+          val maxTier = maxOf(obj.optLong("maxTier", 60L), 60L).coerceIn(1L, 60L)
           val tier = obj.optLong("tier", 1L).coerceIn(1L, maxTier)
           add(
             ArmoryItem(

@@ -80,6 +80,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.example.data.local.AppSettings
+import com.example.data.local.CollectionResolutionMode
 import com.example.data.local.ColorBlindMode
 import com.example.data.local.GraphicsQuality
 import com.example.data.local.LocalGameStrings
@@ -125,6 +126,7 @@ fun ArenaScreen(
   onSelectMode: ((String) -> Unit)? = null,
   onUpdateCollectionCustomMode: (((com.example.data.model.CollectionCustomModeConfig) -> com.example.data.model.CollectionCustomModeConfig) -> Unit)? = null,
   onDeployCollectionCustomMode: (() -> Unit)? = null,
+  onUpdateSettings: (((AppSettings) -> AppSettings) -> Unit)? = null,
   externalSimProvider: ((String, () -> ArenaSimState) -> ArenaSimState)? = null,
   onSaveMatchAndExit: (score: Long, wave: Long, eliminations: Long, extracted: Boolean, durationSec: Long) -> Unit,
 ) {
@@ -227,7 +229,32 @@ fun ArenaScreen(
   var showTacticalLiveChatDialog by remember { mutableStateOf(false) }
   var showMapSwitcherDialog by remember { mutableStateOf(false) }
   var showCustomModeDialog by remember { mutableStateOf(false) }
+  var showQuickControllerDialog by remember { mutableStateOf(false) }
+  var showFieldUpgradesDialog by remember { mutableStateOf(false) }
   val gamepad by GamepadInputBridge.state.collectAsStateWithLifecycle()
+
+  fun executeControllerAction(actionId: String) {
+    when (actionId) {
+      "fire" -> sim.fireVolley(forceManual = true)
+      "melee" -> sim.triggerMeleeStrike()
+      "power" -> sim.triggerPower()
+      "magic" -> sim.triggerMagicSpell()
+      "spirit_heal" -> sim.triggerSpiritThoughtHeal()
+      "aegis_ward" -> sim.triggerAegisBarrier()
+      "dash" -> sim.triggerDash()
+      "interact" -> sim.interactNearestWorldObject()
+      "surge" -> sim.triggerConsumable()
+      "lethal" -> sim.triggerLethal()
+      "tactical" -> sim.triggerTactical()
+      "wonder" -> sim.activateEquippedWonderSlot()
+      "traps" -> sim.triggerAllTraps()
+      "swap_wpn" -> sim.cycleActiveWeapon()
+      "pack" -> sim.upgradePackAPunch()
+      "base_raid" -> sim.triggerBaseDefenseRaid()
+      "spell_cycle" -> sim.cycleMagicSpell()
+      else -> sim.fireVolley(forceManual = true)
+    }
+  }
 
   LaunchedEffect(
     gamepad.connected,
@@ -253,23 +280,23 @@ fun ArenaScreen(
       sim.aimY = ry / len
       sim.fireVolley()
     } else if (gamepad.r2Trigger > 0.35f) {
-      sim.fireVolley()
+      executeControllerAction(settings.controllerActionR2)
     }
     if (gamepad.l2Trigger > 0.40f) {
-      sim.triggerPower()
+      executeControllerAction(settings.controllerActionL2)
     }
   }
 
   LaunchedEffect(gamepad.actionSeq) {
     if (gamepad.actionSeq <= 0L || isPausedForSettings || sim.hudRunEnded) return@LaunchedEffect
     when (gamepad.lastActionButtonCode) {
-      KeyEvent.KEYCODE_BUTTON_A -> sim.triggerDash()
-      KeyEvent.KEYCODE_BUTTON_X -> sim.interactNearestWorldObject()
-      KeyEvent.KEYCODE_BUTTON_Y -> sim.activateEquippedWonderSlot()
-      KeyEvent.KEYCODE_BUTTON_B -> sim.triggerConsumable()
-      KeyEvent.KEYCODE_BUTTON_L1 -> sim.triggerLethal()
-      KeyEvent.KEYCODE_BUTTON_R1 -> sim.cycleActiveWeapon()
-      KeyEvent.KEYCODE_BUTTON_THUMBR -> sim.triggerAllTraps()
+      KeyEvent.KEYCODE_BUTTON_A -> executeControllerAction(settings.controllerActionA)
+      KeyEvent.KEYCODE_BUTTON_X -> executeControllerAction(settings.controllerActionX)
+      KeyEvent.KEYCODE_BUTTON_Y -> executeControllerAction(settings.controllerActionY)
+      KeyEvent.KEYCODE_BUTTON_B -> executeControllerAction(settings.controllerActionB)
+      KeyEvent.KEYCODE_BUTTON_L1 -> executeControllerAction(settings.controllerActionL1)
+      KeyEvent.KEYCODE_BUTTON_R1 -> executeControllerAction(settings.controllerActionR1)
+      KeyEvent.KEYCODE_BUTTON_THUMBR -> sim.triggerMeleeStrike()
     }
   }
 
@@ -334,7 +361,22 @@ fun ArenaScreen(
     Color(0xFF0A101E).copy(alpha = settings.hudOpacity)
   }
 
-  activeArenaZoomScale = settings.collectionResolutionMode.arenaZoomScale
+  val resMode = settings.collectionResolutionMode
+  activeArenaZoomScale = resMode.arenaZoomScale
+  activeArenaResolutionScale = when (resMode) {
+    CollectionResolutionMode.SD_480P -> 0.86f
+    CollectionResolutionMode.QHD_540P -> 0.90f
+    CollectionResolutionMode.HD_720 -> 0.94f
+    CollectionResolutionMode.WXGA_800 -> 0.96f
+    CollectionResolutionMode.HD_PLUS_900 -> 0.98f
+    CollectionResolutionMode.AUTO, CollectionResolutionMode.FHD_1080 -> 1.00f
+    CollectionResolutionMode.FHD_PLUS_20_9 -> 1.02f
+    CollectionResolutionMode.TABLET_WUXGA_1200 -> 1.06f
+    CollectionResolutionMode.QHD_1440 -> 1.12f
+    CollectionResolutionMode.WQXGA_1600 -> 1.14f
+    CollectionResolutionMode.ULTRAWIDE_1440 -> 1.16f
+    CollectionResolutionMode.UHD_4K -> 1.20f
+  }
 
   BoxWithConstraints(
     modifier = Modifier
@@ -342,6 +384,7 @@ fun ArenaScreen(
       .background(if (settings.effectiveHighContrast) Color.Black else Color(0xFF060911)),
   ) {
     val rightActionMaxWidth = (maxWidth * 0.58f).coerceAtLeast(180.dp)
+    val isCompactHeight = maxHeight < 580.dp
   Column(
     modifier = Modifier
       .fillMaxSize()
@@ -373,6 +416,11 @@ fun ArenaScreen(
             KeyEvent.KEYCODE_CTRL_LEFT, KeyEvent.KEYCODE_CTRL_RIGHT -> { sim.toggleStance(); true }
             KeyEvent.KEYCODE_L -> { sim.toggleLockOn(); true }
             KeyEvent.KEYCODE_P -> { sim.upgradePackAPunch(); true }
+            KeyEvent.KEYCODE_M -> { sim.triggerMagicSpell(); true }
+            KeyEvent.KEYCODE_H -> { sim.triggerSpiritThoughtHeal(); true }
+            KeyEvent.KEYCODE_K -> { sim.triggerAegisBarrier(); true }
+            KeyEvent.KEYCODE_U -> { showFieldUpgradesDialog = !showFieldUpgradesDialog; true }
+            KeyEvent.KEYCODE_B -> { sim.triggerBaseDefenseRaid(); true }
             KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_BUTTON_B -> { sim.triggerDash(); true }
             else -> false
           }
@@ -392,8 +440,8 @@ fun ArenaScreen(
       Column(
         modifier = Modifier
           .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top))
-          .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp),
+          .padding(horizontal = 10.dp, vertical = if (isCompactHeight) 4.dp else 6.dp),
+        verticalArrangement = Arrangement.spacedBy(if (isCompactHeight) 3.dp else 4.dp),
       ) {
         var showPlacesBar by remember { mutableStateOf(false) }
         Row(
@@ -429,13 +477,20 @@ fun ArenaScreen(
                 maxLines = 1,
               )
               Text(
-                text = "SEC: ${sim.hudCurrentSectionName} • ${sim.hudCurrentPlaceName.substringBefore(" •")} • SCORE ${sim.hudScore} • ELIMS $elimTarget • SHD ${sim.hudShield}/${sim.loadout.maxShield}",
+                text = "SEC: ${sim.hudCurrentSectionName} • SCORE ${sim.hudScore} • ELIMS $elimTarget • SHD ${sim.hudShield}/${sim.effectiveMaxShield()} • MP ${sim.hudMana.toInt()}/${sim.hudManaMax.toInt()}",
                 style = MaterialTheme.typography.labelSmall,
                 color = Color.White,
                 maxLines = 1,
               )
               Text(
-                text = "${activeOutfit.nameWithVersion} (${sim.loadout.characterRarity.label}) • ${sim.loadout.activePassVersion.title.substringBefore(":")} • LV ${sim.loadout.playerLevel} (RWD x${String.format(Locale.US, "%.2f", sim.gameplayRewardMultiplier)}) • ${sim.hudActiveWeaponName}",
+                text = "DOA x${String.format(Locale.US, "%.1f", sim.hudDoaMultiplier)} • ${sim.hudEpoch.shortTag} • LV ${sim.hudMatchLevel} • PLATES ${sim.hudArmorPlates}/${sim.hudMaxArmorPlates} • TURRETS ${sim.hudTurretCount} • BASE ${sim.hudBaseHp}",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(sim.hudEpoch.accentHex),
+                modifier = Modifier.testTag("arena_survival_protection_hud"),
+                maxLines = 1,
+              )
+              Text(
+                text = "${activeOutfit.nameWithVersion} • 🚗 ${sim.activeVehicleSpec?.name ?: "Escort"} • ${sim.hudActiveWeaponName} • G:${sim.goldEarned} D:${sim.availableDiamondsInMatch()} $:${sim.availableTuuCashInMatch()}",
                 style = MaterialTheme.typography.labelSmall,
                 color = Color(sim.loadout.activePassVersion.accentHex),
                 modifier = Modifier.testTag("arena_level_weapon_hud"),
@@ -527,6 +582,19 @@ fun ArenaScreen(
               }
             }
             OutlinedButton(
+              onClick = { showFieldUpgradesDialog = true },
+              shape = RoundedCornerShape(10.dp),
+              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+              modifier = Modifier.height(48.dp).testTag("arena_field_upgrades_btn"),
+            ) {
+              Text(
+                text = if (sim.hudPendingDraftCount > 0) "UPG (${sim.hudPendingDraftCount})" else "UPG/AGE",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = if (sim.hudPendingDraftCount > 0) Color(0xFFFFD54F) else MaterialTheme.colorScheme.primary,
+              )
+            }
+            OutlinedButton(
               onClick = { showPlacesBar = !showPlacesBar },
               shape = RoundedCornerShape(10.dp),
               contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
@@ -616,27 +684,52 @@ fun ArenaScreen(
           }
         }
 
-        // Segmented Shield Bar + Building / Wonder / Resonance / Multi-Essence Strip
+        // Segmented Shield Bar + Survival XP Bar + Building / Wonder / Resonance / Multi-Essence Strip
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          Box(
-            modifier = Modifier
-              .weight(1f)
-              .height(if (settings.effectiveHighContrast) 10.dp else 7.dp)
-              .clip(RoundedCornerShape(4.dp))
-              .background(Color(0xFF1C2742))
-          ) {
-            val pct = (sim.hudShield.toFloat() / sim.loadout.maxShield.coerceAtLeast(1)).let { if (it.isFinite()) it.coerceIn(0f, 1f) else 0f }
+          Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Box(
               modifier = Modifier
-                .fillMaxWidth(pct)
+                .fillMaxWidth()
                 .height(if (settings.effectiveHighContrast) 10.dp else 7.dp)
-                .background(if (sim.hudOverdriveActive) palette.dropBuff else palette.playerAccent)
-            )
+                .clip(RoundedCornerShape(4.dp))
+                .background(Color(0xFF1C2742))
+            ) {
+              val pct = (sim.hudShield.toFloat() / sim.effectiveMaxShield().coerceAtLeast(1)).let { if (it.isFinite()) it.coerceIn(0f, 1f) else 0f }
+              Box(
+                modifier = Modifier
+                  .fillMaxWidth(pct)
+                  .height(if (settings.effectiveHighContrast) 10.dp else 7.dp)
+                  .background(if (sim.hudAegisDomeActive) Color(0xFF38BDF8) else if (sim.hudOverdriveActive) palette.dropBuff else palette.playerAccent)
+              )
+            }
+            Box(
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(Color(0xFF0E1B24))
+            ) {
+              val xpPct = (sim.hudMatchXp.toFloat() / sim.hudMatchXpNext.coerceAtLeast(1L)).let { if (it.isFinite()) it.coerceIn(0f, 1f) else 0f }
+              Box(
+                modifier = Modifier
+                  .fillMaxWidth(xpPct)
+                  .height(4.dp)
+                  .background(Color(0xFF69F0AE))
+              )
+            }
           }
           val activeWonder = sim.hudActiveWonder
           val dropText = sim.hudActiveDropText
           val bld = sim.hudActiveBuildingName
           when {
+            sim.hudBaseRaidActive -> {
+              Text(
+                text = "CITADEL SIEGE: ${sim.hudBaseHp}/${sim.hudBaseMaxHp} HP (${sim.hudBaseRaidSecLeft}s)",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFFF3D71),
+              )
+            }
             sim.hudInRestCamp -> {
               Text(
                 text = "CAMP SAFE ZONE: x3 SHIELD REGEN",
@@ -744,6 +837,8 @@ fun ArenaScreen(
         val camX = sim.cameraOriginX()
         val camY = sim.cameraOriginY()
         if (!camX.isFinite() || !camY.isFinite()) return@Canvas
+        val resScale = canvasDensityScale(w, h)
+        val worldAxis = worldAxisPx(w, h) * currentWorldViewZoom()
         val glowOn = settings.dynamicGlowEffects &&
           settings.graphicsQuality != GraphicsQuality.LOW &&
           settings.ramGraphicsMode != com.example.data.local.RamGraphicsMode.LOW_RAM_BOOST
@@ -799,14 +894,14 @@ fun ArenaScreen(
 
         if (mode.id == "br") {
           val brC = worldToPerspectiveScreen(ARENA_CENTER, ARENA_CENTER, camX, camY, w, h)
-          val brScale = perspectiveScaleForRelY(ARENA_CENTER - camY)
-          val brR = sim.brRingRadius * minOf(w, h) * brScale
+          val brDepth = perspectiveScaleForRelY(ARENA_CENTER - camY)
+          val brR = sim.brRingRadius * worldAxis * brDepth
           if (brR.isFinite() && brR > 0f && brC.x.isFinite() && brC.y.isFinite()) {
             drawOval(
               color = palette.dropHazard,
-              topLeft = Offset(brC.x - brR, brC.y - brR * 0.72f),
-              size = Size(brR * 2f, brR * 1.44f),
-              style = Stroke(width = if (highContrast) 6f else 4f),
+              topLeft = Offset(brC.x - brR, brC.y - brR * 0.78f),
+              size = Size(brR * 2f, brR * 1.56f),
+              style = Stroke(width = (if (highContrast) 6f else 4f) * resScale),
             )
           }
         }
@@ -814,29 +909,32 @@ fun ArenaScreen(
         if (mode.id == "dmz") {
           val exfilReady = sim.hudIntelCollected >= 3
           val exfilCenter = worldToPerspectiveScreen(ARENA_CENTER, ARENA_CENTER - 2.4f, camX, camY, w, h)
+          val exScale = perspectiveScaleForRelY((ARENA_CENTER - 2.4f) - camY, w, h)
           drawCircle(
             color = if (exfilReady) palette.safeExfil else palette.dropBuff.copy(alpha = 0.65f),
-            radius = 32f,
+            radius = 32f * exScale,
             center = exfilCenter,
-            style = Stroke(width = if (highContrast) 6f else 4f),
+            style = Stroke(width = (if (highContrast) 6f else 4f) * exScale),
           )
           if (sim.hudExfilRatio > 0f) {
+            val arcR = 40f * exScale
             drawArc(
               color = palette.playerAccent,
               startAngle = -90f,
               sweepAngle = sim.hudExfilRatio * 360f,
               useCenter = false,
-              topLeft = Offset(exfilCenter.x - 40f, exfilCenter.y - 40f),
-              size = Size(80f, 80f),
-              style = Stroke(width = 5f, cap = StrokeCap.Round),
+              topLeft = Offset(exfilCenter.x - arcR, exfilCenter.y - arcR),
+              size = Size(arcR * 2f, arcR * 2f),
+              style = Stroke(width = 5f * exScale, cap = StrokeCap.Round),
             )
           }
           for (i in 0 until sim.intels.size) {
             val intel = sim.intels.getOrNull(i) ?: continue
             if (!intel.collected) {
               val ip = worldToPerspectiveScreen(intel.x, intel.y, camX, camY, w, h)
-              if (glowOn) drawCircle(palette.dropBuff.copy(alpha = 0.25f), radius = 20f, center = ip)
-              drawCircle(palette.dropBuff, radius = 11f, center = ip)
+              val iScale = perspectiveScaleForRelY(intel.y - camY, w, h)
+              if (glowOn) drawCircle(palette.dropBuff.copy(alpha = 0.25f), radius = 20f * iScale, center = ip)
+              drawCircle(palette.dropBuff, radius = 11f * iScale, center = ip)
             }
           }
         }
@@ -853,16 +951,19 @@ fun ArenaScreen(
         for (i in 0 until sim.drops.size) {
           val d = sim.drops.getOrNull(i) ?: continue
           val pos = worldToPerspectiveScreen(d.x, d.y, camX, camY, w, h)
-          val dScale = perspectiveScaleForRelY(d.y - camY)
-          if (pos.x < -30f || pos.x > w + 30f || pos.y < -30f || pos.y > h + 30f) continue
+          val dScale = perspectiveScaleForRelY(d.y - camY, w, h)
+          if (pos.x < -30f * resScale || pos.x > w + 30f * resScale || pos.y < -30f * resScale || pos.y > h + 30f * resScale) continue
           val dCol = when (d.kind) {
             ArenaDropKind.NUKE -> palette.playerAccent
             ArenaDropKind.INSTA_KILL -> palette.dropHazard
             ArenaDropKind.MAX_ARMOR -> palette.safeExfil
             ArenaDropKind.DOUBLE_ESSENCE -> palette.dropBuff
+            ArenaDropKind.AEGIS_RING -> Color(0xFF38BDF8)
+            ArenaDropKind.FATE_BLESSING -> Color(0xFFFFAB40)
+            ArenaDropKind.EPOCH_SURGE -> Color(0xFF69F0AE)
           }
           if (glowOn) drawCircle(dCol.copy(alpha = 0.24f + pulse * 0.18f), radius = 18f * dScale, center = pos)
-          drawCircle(dCol, radius = (if (highContrast) 12f else 10f) * dScale, center = pos, style = Stroke(width = 3f))
+          drawCircle(dCol, radius = (if (highContrast) 12f else 10f) * dScale, center = pos, style = Stroke(width = 3f * resScale))
           drawCircle(Color.White, radius = 4f * dScale, center = pos)
         }
 
@@ -870,25 +971,25 @@ fun ArenaScreen(
         for (i in 0 until sim.wonderPickups.size) {
           val wp = sim.wonderPickups.getOrNull(i) ?: continue
           val pos = worldToPerspectiveScreen(wp.x, wp.y, camX, camY, w, h)
-          val wpScale = perspectiveScaleForRelY(wp.y - camY)
-          if (pos.x < -30f || pos.x > w + 30f || pos.y < -30f || pos.y > h + 30f) continue
+          val wpScale = perspectiveScaleForRelY(wp.y - camY, w, h)
+          if (pos.x < -30f * resScale || pos.x > w + 30f * resScale || pos.y < -30f * resScale || pos.y > h + 30f * resScale) continue
           val wCol = Color(wp.kind.accentHex)
           val boxHalf = 11f * wpScale
           if (glowOn) drawCircle(wCol.copy(alpha = 0.28f + pulse * 0.22f), radius = 22f * wpScale, center = pos)
           drawRect(color = Color(0xFF0A1222), topLeft = Offset(pos.x - boxHalf, pos.y - boxHalf), size = Size(boxHalf * 2f, boxHalf * 2f))
-          drawRect(color = wCol, topLeft = Offset(pos.x - boxHalf, pos.y - boxHalf), size = Size(boxHalf * 2f, boxHalf * 2f), style = Stroke(width = 3f))
+          drawRect(color = wCol, topLeft = Offset(pos.x - boxHalf, pos.y - boxHalf), size = Size(boxHalf * 2f, boxHalf * 2f), style = Stroke(width = 3f * resScale))
           drawCircle(Color.White, radius = 4.5f * wpScale, center = pos)
         }
 
         if (sim.pulseRingRadius > 0f && !settings.reduceFlashes) {
           val pCenter = worldToPerspectiveScreen(sim.playerX, sim.playerY, camX, camY, w, h)
-          val pR = sim.pulseRingRadius * minOf(w, h) * 0.8f
+          val pR = sim.pulseRingRadius * worldAxis
           if (pR.isFinite() && pR > 0f && pCenter.x.isFinite() && pCenter.y.isFinite()) {
             drawOval(
               color = palette.playerAccent.copy(alpha = 0.65f),
-              topLeft = Offset(pCenter.x - pR, pCenter.y - pR * 0.68f),
-              size = Size(pR * 2f, pR * 1.36f),
-              style = Stroke(width = 7f),
+              topLeft = Offset(pCenter.x - pR, pCenter.y - pR * 0.78f),
+              size = Size(pR * 2f, pR * 1.56f),
+              style = Stroke(width = 7f * resScale),
             )
           }
         }
@@ -900,17 +1001,17 @@ fun ArenaScreen(
           val p1 = worldToPerspectiveScreen(arc.x1, arc.y1, camX, camY, w, h)
           val p2 = worldToPerspectiveScreen(arc.x2, arc.y2, camX, camY, w, h)
           if (glowOn) {
-            drawLine(color = arc.color.copy(alpha = a * 0.78f), start = p1, end = p2, strokeWidth = 6f * a, cap = StrokeCap.Round)
+            drawLine(color = arc.color.copy(alpha = a * 0.78f), start = p1, end = p2, strokeWidth = 6f * a * resScale, cap = StrokeCap.Round)
           }
-          drawLine(color = Color.White.copy(alpha = a), start = p1, end = p2, strokeWidth = 2.5f, cap = StrokeCap.Round)
+          drawLine(color = Color.White.copy(alpha = a), start = p1, end = p2, strokeWidth = 2.5f * resScale, cap = StrokeCap.Round)
         }
 
         // Projectiles
         for (i in 0 until sim.bolts.size) {
           val b = sim.bolts.getOrNull(i) ?: continue
           val head = worldToPerspectiveScreen(b.x, b.y, camX, camY, w, h)
-          val bScale = perspectiveScaleForRelY(b.y - camY)
-          if (head.x < -30f || head.x > w + 30f || head.y < -30f || head.y > h + 30f) continue
+          val bScale = perspectiveScaleForRelY(b.y - camY, w, h)
+          if (head.x < -30f * resScale || head.x > w + 30f * resScale || head.y < -30f * resScale || head.y > h + 30f * resScale) continue
           if (b.isEnemyShot) {
             val eShotCol = if (b.isMirroredElemental) b.damageType.color else palette.enemyShot
             if (glowOn) drawCircle(eShotCol.copy(alpha = 0.50f), radius = 11.5f * bScale, center = head)
@@ -933,14 +1034,14 @@ fun ArenaScreen(
           for (i in 0 until sim.sparks.size) {
             val sp = sim.sparks.getOrNull(i) ?: continue
             val spPos = worldToPerspectiveScreen(sp.x, sp.y, camX, camY, w, h)
-            val spScale = perspectiveScaleForRelY(sp.y - camY)
+            val spScale = perspectiveScaleForRelY(sp.y - camY, w, h)
             val r = (sp.maxLife - sp.life).coerceAtLeast(3f) * 1.8f * spScale
             if (!r.isFinite() || r <= 0f || !spPos.x.isFinite() || !spPos.y.isFinite()) continue
             drawCircle(
               color = sp.color.copy(alpha = (sp.life / sp.maxLife).coerceIn(0f, 1f)),
               radius = r,
               center = spPos,
-              style = Stroke(width = 2.5f),
+              style = Stroke(width = 2.5f * resScale),
             )
           }
         }
@@ -950,8 +1051,8 @@ fun ArenaScreen(
         for (i in 0 until sim.hostiles.size) {
           val e = sim.hostiles.getOrNull(i) ?: continue
           val ePos = worldToPerspectiveScreen(e.x, e.y, camX, camY, w, h)
-          if (ePos.x < -130f || ePos.x > w + 130f || ePos.y < -130f || ePos.y > h + 130f) continue
-          val eScale = perspectiveScaleForRelY(e.y - camY)
+          if (ePos.x < -130f * resScale || ePos.x > w + 130f * resScale || ePos.y < -130f * resScale || ePos.y > h + 130f * resScale) continue
+          val eScale = perspectiveScaleForRelY(e.y - camY, w, h)
           drawArenaHostile(
             center = ePos,
             worldId = world.id,
@@ -978,18 +1079,18 @@ fun ArenaScreen(
           val bot = sim.arenaBots.getOrNull(i) ?: continue
           if (bot.hp <= 0) continue
           val botOrigin = worldToPerspectiveScreen(bot.x, bot.y, camX, camY, w, h)
-          if (botOrigin.x < -50f || botOrigin.x > w + 50f || botOrigin.y < -50f || botOrigin.y > h + 50f) continue
-          val botScale = perspectiveScaleForRelY(bot.y - camY)
+          if (botOrigin.x < -50f * resScale || botOrigin.x > w + 50f * resScale || botOrigin.y < -50f * resScale || botOrigin.y > h + 50f * resScale) continue
+          val botScale = perspectiveScaleForRelY(bot.y - camY, w, h)
           val botRingCol = if (bot.isAllied) palette.safeExfil else palette.dropBuff
           drawOval(
             color = botRingCol.copy(alpha = 0.72f),
             topLeft = Offset(botOrigin.x - 20f * botScale, botOrigin.y - 12f * botScale),
             size = Size(40f * botScale, 24f * botScale),
-            style = Stroke(width = 2.4f),
+            style = Stroke(width = 2.4f * resScale),
           )
           val botSkel = RigEvaluator.evaluate(
             origin = botOrigin,
-            scalePx = 56f * botScale,
+            scalePx = 68f * botScale,
             poseAngles = UniverseCatalog.defaultPoseMap(),
             clip = if (settings.reduceMotion) "idle" else "sprint",
             frame = if (settings.reduceMotion) 0f else (sim.frameTick + i * 11f),
@@ -1021,8 +1122,17 @@ fun ArenaScreen(
         val opticCol = if (settings.colorBlindMode == ColorBlindMode.NONE && !highContrast) {
           sim.loadout.tracerColor
         } else palette.playerAccent
-        drawCircle(opticCol.copy(alpha = 0.85f), radius = 10f, center = retPos, style = Stroke(width = 2.4f))
-        drawCircle(Color.White.copy(alpha = 0.9f), radius = 2.5f, center = retPos)
+        drawCircle(opticCol.copy(alpha = 0.85f), radius = 10f * resScale, center = retPos, style = Stroke(width = 2.4f * resScale))
+        drawCircle(Color.White.copy(alpha = 0.9f), radius = 2.5f * resScale, center = retPos)
+
+        // Draw protection aura, orbitals, wingman, and escort vehicle behind player rig so full hero shows unobstructed
+        drawPlayerProtectionAndCompanions(
+          sim = sim,
+          camX = camX,
+          camY = camY,
+          glowOn = glowOn,
+          pulse = pulse,
+        )
 
         // Player Character with Active Outfit & Rig
         val isMoving = (sim.joyDx * sim.joyDx + sim.joyDy * sim.joyDy) > 0.0064f
@@ -1032,10 +1142,10 @@ fun ArenaScreen(
           else -> activeRig?.activeClip ?: "idle"
         }
         val playerScreen = worldToPerspectiveScreen(sim.playerX, sim.playerY, camX, camY, w, h)
-        val playerPerspScale = perspectiveScaleForRelY(sim.playerY - camY)
+        val playerPerspScale = perspectiveScaleForRelY(sim.playerY - camY, w, h)
         val skel = RigEvaluator.evaluate(
           origin = playerScreen,
-          scalePx = 74f * (activeRig?.rigScale?.toFloat() ?: 1f) * playerPerspScale,
+          scalePx = 88f * (activeRig?.rigScale?.toFloat() ?: 1f) * playerPerspScale,
           poseAngles = activeRig?.poseAngles ?: UniverseCatalog.defaultPoseMap(),
           clip = playerClip,
           frame = if (settings.reduceMotion) 0f else sim.frameTick,
@@ -1071,15 +1181,15 @@ fun ArenaScreen(
 
         // Player-Centered 24x24 Bordered Multi-Section Mini-Radar
         if (settings.showMiniRadar && !settings.simplifiedHud) {
-          val radarR = 46f
-          val radarCenter = Offset(w - radarR - 14f, radarR + 14f)
+          val radarR = (44f * resScale).coerceIn(34f, 88f)
+          val radarCenter = Offset(w - radarR - 12f * resScale, radarR + 12f * resScale)
           val radarScope = 8.5f
           drawCircle(Color(0xD2080D1A), radius = radarR, center = radarCenter)
           drawCircle(
             color = (if (sim.hudInOuterFrontier) Color(0xFFE040FB) else palette.playerAccent).copy(alpha = 0.85f),
             radius = radarR,
             center = radarCenter,
-            style = Stroke(width = 2.2f),
+            style = Stroke(width = 2.2f * resScale),
           )
           fun plotRadarUnbounded(wx: Float, wy: Float): Offset =
             Offset(
@@ -1115,33 +1225,43 @@ fun ArenaScreen(
                 color = if (isOuter) Color(0xFFE040FB).copy(alpha = 0.7f) else Color(0xFF40C4FF).copy(alpha = 0.45f),
                 start = Offset(xL, hy),
                 end = Offset(xR, hy),
-                strokeWidth = if (isOuter) 1.8f else 1f,
+                strokeWidth = (if (isOuter) 1.8f else 1f) * resScale,
               )
             }
           }
+          val rScale = radarR / 44f
           for (bi in 0 until sim.buildings.size) {
             val b = sim.buildings.getOrNull(bi) ?: continue
             plotRadar(b.x + b.width * 0.5f, b.y + b.height * 0.5f)?.let { pt ->
-              drawCircle(if (b.explored) Color(0xFF00E676) else b.accentColor, radius = 2.5f, center = pt)
+              drawCircle(if (b.explored) Color(0xFF00E676) else b.accentColor, radius = 2.5f * rScale, center = pt)
+            }
+          }
+          plotRadar(sim.baseX, sim.baseY)?.let { bPt ->
+            drawRect(color = Color(0xFF38BDF8), topLeft = Offset(bPt.x - 4f * rScale, bPt.y - 4f * rScale), size = Size(8f * rScale, 8f * rScale))
+          }
+          for (ti in 0 until sim.defenseTurrets.size) {
+            val t = sim.defenseTurrets.getOrNull(ti) ?: continue
+            plotRadar(t.x, t.y)?.let { tPt ->
+              drawCircle(t.accentColor, radius = 1.9f * rScale, center = tPt)
             }
           }
           for (ci in 0 until sim.restCamps.size) {
             val camp = sim.restCamps.getOrNull(ci) ?: continue
             plotRadar(camp.x, camp.y)?.let { pt ->
-              drawCircle(Color(0xFF00E676), radius = 3f, center = pt, style = Stroke(width = 1.6f))
+              drawCircle(Color(0xFF00E676), radius = 3f * rScale, center = pt, style = Stroke(width = 1.6f * rScale))
             }
           }
           for (si in 0 until sim.worldStations.size) {
             val st = sim.worldStations.getOrNull(si) ?: continue
             plotRadar(st.x, st.y)?.let { pt ->
-              drawCircle(st.kind.color, radius = 2.4f, center = pt)
+              drawCircle(st.kind.color, radius = 2.4f * rScale, center = pt)
             }
           }
           for (li in 0 until sim.lootCrates.size) {
             val cr = sim.lootCrates.getOrNull(li) ?: continue
             if (!cr.opened) {
               plotRadar(cr.x, cr.y)?.let { pt ->
-                drawCircle(Color(cr.rarity.colorHex), radius = 2.2f, center = pt)
+                drawCircle(Color(cr.rarity.colorHex), radius = 2.2f * rScale, center = pt)
               }
             }
           }
@@ -1149,7 +1269,7 @@ fun ArenaScreen(
             val cat = sim.catEasterEggs.getOrNull(ei) ?: continue
             if (!cat.found) {
               plotRadar(cat.x, cat.y)?.let { pt ->
-                drawCircle(Color(0xFFFFD54F), radius = 2.4f, center = pt)
+                drawCircle(Color(0xFFFFD54F), radius = 2.4f * rScale, center = pt)
               }
             }
           }
@@ -1158,16 +1278,16 @@ fun ArenaScreen(
             plotRadar(e.x, e.y)?.let { pt ->
               drawCircle(
                 color = if (e.isBoss) palette.boss else palette.hostile,
-                radius = if (e.isBoss) 3.8f else 2.2f,
+                radius = (if (e.isBoss) 3.8f else 2.2f) * rScale,
                 center = pt,
               )
             }
           }
-          drawCircle(palette.radarPlayer, radius = 3.8f, center = radarCenter)
+          drawCircle(palette.radarPlayer, radius = 3.8f * rScale, center = radarCenter)
         }
 
         if (sim.damageFlashTicks > 0f && !settings.reduceFlashes) {
-          drawRect(color = palette.enemyShot.copy(alpha = 0.35f), topLeft = Offset.Zero, size = Size(w, h), style = Stroke(width = 22f))
+          drawRect(color = palette.enemyShot.copy(alpha = 0.35f), topLeft = Offset.Zero, size = Size(w, h), style = Stroke(width = 22f * resScale))
         }
         } catch (t: Throwable) {
           android.util.Log.e("ArenaCanvas", "draw error", t)
@@ -1260,13 +1380,20 @@ fun ArenaScreen(
               ) { Text("+Boss", style = MaterialTheme.typography.labelSmall) }
               OutlinedButton(
                 onClick = {
-                  sim.hudPackTier = 25
-                  sim.maxPackTierReached = 25
-                  sim.postCallout("SANDBOX PACK-A-TIER XXV (MULTIVERSAL) MAXED!")
+                  sim.hudPackTier = com.example.data.model.PowerTier.MAX_TIER
+                  sim.maxPackTierReached = com.example.data.model.PowerTier.MAX_TIER
+                  sim.manaCurrent = sim.manaMax
+                  sim.hudMana = sim.manaMax
+                  sim.postCallout("SANDBOX PACK-A-TIER LX (${com.example.data.model.PowerTier.MAX_TIER}) & FULL MANA!")
                 },
                 modifier = Modifier.height(48.dp),
                 shape = RoundedCornerShape(8.dp),
-              ) { Text("Tier XXV", style = MaterialTheme.typography.labelSmall) }
+              ) { Text("Tier LX (60)", style = MaterialTheme.typography.labelSmall) }
+              OutlinedButton(
+                onClick = { sim.triggerBaseDefenseRaid() },
+                modifier = Modifier.height(48.dp).testTag("sandbox_base_raid_btn"),
+                shape = RoundedCornerShape(8.dp),
+              ) { Text("+Base Raid", style = MaterialTheme.typography.labelSmall) }
               OutlinedButton(
                 onClick = { sim.spawnRandomWonderWeapon() },
                 modifier = Modifier.height(48.dp).testTag("sandbox_spawn_wonder_btn"),
@@ -1274,17 +1401,79 @@ fun ArenaScreen(
               ) { Text("+Wonder", style = MaterialTheme.typography.labelSmall) }
               OutlinedButton(
                 onClick = {
+                  sim.hudPendingDraftCount++
+                  sim.rollInGameUpgradeDraft()
+                  sim.postCallout("SANDBOX IN-GAME DRAFT TRIGGERED!")
+                },
+                modifier = Modifier.height(48.dp).testTag("sandbox_draft_btn"),
+                shape = RoundedCornerShape(8.dp),
+              ) { Text("+Draft", style = MaterialTheme.typography.labelSmall) }
+              OutlinedButton(
+                onClick = {
                   sim.powerCd = 0f
                   sim.interactCd = 0f
                   sim.consumableCd = 0f
                   sim.lethalCd = 0f
                   sim.tacticalCd = 0f
+                  sim.magicCd = 0f
+                  sim.spiritHealCd = 0f
+                  sim.manaCurrent = sim.manaMax
+                  sim.hudMana = sim.manaMax
                   sim.overdriveTicks = 300f
-                  sim.postCallout("ALL COOLDOWNS RESET!")
+                  sim.postCallout("ALL COOLDOWNS & MANA RESET!")
                 },
                 modifier = Modifier.height(48.dp),
                 shape = RoundedCornerShape(8.dp),
               ) { Text("Reset CD", style = MaterialTheme.typography.labelSmall) }
+            }
+          }
+        }
+      }
+
+      if (sim.hudPendingDraftChoices.isNotEmpty() && !sim.hudRunEnded && !settings.simplifiedHud) {
+        Surface(
+          shape = RoundedCornerShape(12.dp),
+          color = Color(0xEC08101E),
+          modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(horizontal = 10.dp, vertical = if (mode.id == "sandbox") 64.dp else 8.dp)
+            .border(1.5.dp, Color(0xFFFFD54F), RoundedCornerShape(12.dp))
+            .testTag("arena_upgrade_draft_panel"),
+        ) {
+          Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+              text = "SURVIVAL LV.${sim.hudMatchLevel} DRAFT — PICK 1 BUFF (${sim.hudPendingDraftCount} READY)",
+              style = MaterialTheme.typography.labelSmall,
+              fontWeight = FontWeight.Bold,
+              color = Color(0xFFFFD54F),
+            )
+            Row(
+              modifier = Modifier.horizontalScroll(rememberScrollState()),
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+              sim.hudPendingDraftChoices.forEachIndexed { idx, spec ->
+                val curRank = sim.inGameUpgradeRanks[spec.id] ?: 0
+                val accent = Color(spec.accentHex)
+                Surface(
+                  onClick = {
+                    triggerHaptic()
+                    sim.selectInGameUpgrade(spec.id)
+                  },
+                  shape = RoundedCornerShape(10.dp),
+                  color = accent.copy(alpha = 0.16f),
+                  modifier = Modifier
+                    .widthIn(min = 148.dp, max = 185.dp)
+                    .heightIn(min = 48.dp)
+                    .border(1.2.dp, accent, RoundedCornerShape(10.dp))
+                    .testTag("arena_draft_pick_$idx"),
+                ) {
+                  Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("${spec.category} • R${curRank + 1}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = accent, maxLines = 1)
+                    Text(spec.title, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
+                    Text(spec.summary, style = MaterialTheme.typography.labelSmall, color = Color(0xFFD0DCF0), maxLines = 2)
+                  }
+                }
+              }
             }
           }
         }
@@ -1335,15 +1524,25 @@ fun ArenaScreen(
       }
     }
 
-    // Bottom Responsive Gamepad & Multi-Touch Deck (zero-slop joystick + scrollable full action rows)
+    // Bottom Compact Console/PC Multi-Action Controller Bar
+    val controllerDeckBg = hudSurfaceBg.copy(
+      alpha = (settings.hudOpacity * settings.controllerOpacity * 0.78f).coerceIn(0.24f, 0.88f)
+    )
     Surface(
-      color = hudSurfaceBg,
-      modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outline),
+      color = controllerDeckBg,
+      modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)),
     ) {
-      val stickDiameter = (90f * settings.joystickScale).dp
-      val aimStickDiameter = (76f * settings.joystickScale).dp
-      val puckDiameter = (32f * settings.joystickScale).dp
-      val btnHeight = (48f * settings.buttonScale).coerceAtLeast(48f).dp
+      val cScale = settings.controllerScale.coerceIn(0.65f, 1.35f)
+      val stickDiameter = (58f * settings.joystickScale * cScale).coerceIn(50f, 92f).dp
+      val aimStickDiameter = (52f * settings.joystickScale * cScale).coerceIn(48f, 84f).dp
+      val puckDiameter = (22f * settings.joystickScale * cScale).coerceIn(18f, 34f).dp
+      val btnHeight = (48f * settings.buttonScale * cScale).coerceIn(48f, 56f).dp
+      val btnSpacing = settings.controllerSpacingDp.coerceIn(2, 10).dp
+      val actionShape = when (settings.controllerButtonShape) {
+        "gamepad_circle" -> CircleShape
+        "tactical_hex" -> RoundedCornerShape(6.dp)
+        else -> RoundedCornerShape(10.dp)
+      }
       var aimThumbOffsetX by remember { mutableFloatStateOf(0f) }
       var aimThumbOffsetY by remember { mutableFloatStateOf(0f) }
 
@@ -1352,9 +1551,9 @@ fun ArenaScreen(
           modifier = Modifier
             .size(stickDiameter)
             .clip(CircleShape)
-            .background(Color(0xFF141E36))
+            .background(Color(0xFF141E36).copy(alpha = settings.controllerOpacity.coerceIn(0.35f, 0.95f)))
             .border(
-              width = if (sim.hudSprinting) 2.5.dp else 1.5.dp,
+              width = if (sim.hudSprinting) 2.dp else 1.4.dp,
               color = if (sim.hudSprinting) Color(0xFF00E676) else palette.playerAccent.copy(alpha = 0.75f),
               shape = CircleShape,
             )
@@ -1369,8 +1568,8 @@ fun ArenaScreen(
                   val ny = ((posY - cy) / cy.coerceAtLeast(1f)).coerceIn(-1f, 1f)
                   sim.joyDx = nx
                   sim.joyDy = ny
-                  thumbOffsetX = nx * 24f * settings.joystickScale
-                  thumbOffsetY = ny * 24f * settings.joystickScale
+                  thumbOffsetX = nx * 16f * settings.joystickScale
+                  thumbOffsetY = ny * 16f * settings.joystickScale
                 }
                 down.consume()
                 updateStick(down.position.x, down.position.y)
@@ -1398,12 +1597,6 @@ fun ArenaScreen(
               .clip(CircleShape)
               .background(if (sim.hudSprinting) Color(0xFF00E676) else palette.playerAccent)
           )
-          Text(
-            text = if (sim.hudSprinting) LocalGameStrings.current.sprintLabel else if (sim.hudCrouching) LocalGameStrings.current.crouchLabel else "MOVE",
-            style = MaterialTheme.typography.labelSmall,
-            color = Color.White.copy(alpha = 0.75f),
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 5.dp),
-          )
         }
       }
 
@@ -1412,8 +1605,8 @@ fun ArenaScreen(
           modifier = Modifier
             .size(aimStickDiameter)
             .clip(CircleShape)
-            .background(Color(0xFF1A1228))
-            .border(1.5.dp, Color(0xFFFF3D71).copy(alpha = 0.85f), CircleShape)
+            .background(Color(0xFF1A1228).copy(alpha = settings.controllerOpacity.coerceIn(0.35f, 0.95f)))
+            .border(1.4.dp, Color(0xFFFF3D71).copy(alpha = 0.85f), CircleShape)
             .testTag("arena_aim_joystick")
             .pointerInput(sim, settings.joystickScale) {
               awaitEachGesture {
@@ -1428,8 +1621,8 @@ fun ArenaScreen(
                     val len = sqrt(magSq).coerceAtLeast(0.01f)
                     sim.setTouchAim(sim.playerX + (nx / len) * 0.45f, sim.playerY + (ny / len) * 0.45f, active = true)
                   }
-                  aimThumbOffsetX = nx * 20f * settings.joystickScale
-                  aimThumbOffsetY = ny * 20f * settings.joystickScale
+                  aimThumbOffsetX = nx * 14f * settings.joystickScale
+                  aimThumbOffsetY = ny * 14f * settings.joystickScale
                 }
                 down.consume()
                 updateAim(down.position.x, down.position.y)
@@ -1453,189 +1646,273 @@ fun ArenaScreen(
           Box(
             modifier = Modifier
               .offset { IntOffset(aimThumbOffsetX.roundToInt(), aimThumbOffsetY.roundToInt()) }
-              .size(26.dp)
+              .size((puckDiameter * 0.9f))
               .clip(CircleShape)
               .background(Color(0xFFFF3D71))
-          )
-          Text(
-            text = "AIM/FIRE",
-            style = MaterialTheme.typography.labelSmall,
-            color = Color.White.copy(alpha = 0.78f),
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp),
           )
         }
       }
 
-      val buttonsAlign = if (settings.leftHandedDeck) Alignment.Start else Alignment.End
+      val dpadWidget: @Composable () -> Unit = {
+        Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+          OutlinedButton(
+            onClick = { triggerHaptic(); sim.cycleElementalPrism() },
+            shape = actionShape,
+            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+            modifier = Modifier.height(48.dp).testTag("arena_dpad_left"),
+          ) { Text("◀", style = MaterialTheme.typography.labelSmall) }
+          OutlinedButton(
+            onClick = { triggerHaptic(); sim.cycleMagicSpell() },
+            shape = actionShape,
+            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+            modifier = Modifier.height(48.dp).testTag("arena_dpad_up"),
+          ) { Text("▲", style = MaterialTheme.typography.labelSmall) }
+          OutlinedButton(
+            onClick = { triggerHaptic(); sim.toggleStance() },
+            shape = actionShape,
+            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+            modifier = Modifier.height(48.dp).testTag("arena_dpad_down"),
+          ) { Text("▼", style = MaterialTheme.typography.labelSmall) }
+          OutlinedButton(
+            onClick = { triggerHaptic(); sim.cycleActiveWeapon() },
+            shape = actionShape,
+            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+            modifier = Modifier.height(48.dp).testTag("arena_dpad_right"),
+          ) { Text("▶", style = MaterialTheme.typography.labelSmall) }
+        }
+      }
+
+      val isConsolePad = settings.controllerStyle == "console_gamepad"
       val actionsWidget: @Composable () -> Unit = {
-        Column(
-          horizontalAlignment = buttonsAlign,
+        val activeSpellSpec = com.example.data.model.MultiverseSystemsCatalog.spellById(sim.hudActiveSpellId)
+        @OptIn(ExperimentalFoundationApi::class)
+        @Composable
+        fun ConsoleMultiButton(
+          primary: String,
+          secondary: String,
+          bgColor: Color,
+          fgColor: Color = Color.Black,
+          enabled: Boolean = true,
+          tag: String,
+          onTap: () -> Unit,
+          onHold: () -> Unit,
         ) {
-          Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-          ) {
-            if (!settings.simplifiedHud) {
-              Text(
-                text = console.buttonLegend.take(2).joinToString(" • ") + if (sim.hudOverdriveActive) " • OVERDRIVE" else "",
-                style = MaterialTheme.typography.labelSmall,
-                color = if (sim.hudOverdriveActive) palette.dropBuff else MaterialTheme.colorScheme.onSurfaceVariant,
+          Surface(
+            shape = actionShape,
+            color = if (enabled) bgColor else bgColor.copy(alpha = 0.35f),
+            modifier = Modifier
+              .height(btnHeight.coerceAtLeast(48.dp))
+              .widthIn(min = 54.dp)
+              .clip(actionShape)
+              .border(1.dp, fgColor.copy(alpha = 0.28f), actionShape)
+              .combinedClickable(
+                enabled = enabled,
+                onClick = { triggerHaptic(); onTap() },
+                onLongClick = { triggerHaptic(); onHold() },
               )
-            }
-            OutlinedButton(
-              onClick = {
-                triggerHaptic()
-                sim.cycleElementalPrism()
-              },
-              shape = RoundedCornerShape(10.dp),
-              contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-              modifier = Modifier.heightIn(min = 48.dp).testTag("arena_prism_cycle_btn"),
+              .testTag(tag),
+          ) {
+            Column(
+              modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+              horizontalAlignment = Alignment.CenterHorizontally,
+              verticalArrangement = Arrangement.Center,
             ) {
-              Text(
-                text = if (sim.selectedElementOverride == null) "DMG:${sim.hudActiveDamageType.shortTag}" else "PRISM:${sim.hudActiveDamageType.shortTag}",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = sim.hudActiveDamageType.color,
-              )
+              Text(primary, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.ExtraBold, color = fgColor, maxLines = 1)
+              Text(secondary, style = MaterialTheme.typography.labelSmall, color = fgColor.copy(alpha = 0.72f), maxLines = 1)
             }
-            FilterChip(
-              selected = sim.hudAutoFire,
-              onClick = {
-                triggerHaptic()
-                sim.hudAutoFire = !sim.hudAutoFire
-              },
-              label = { Text("AUTO", style = MaterialTheme.typography.labelSmall) },
-              modifier = Modifier.heightIn(min = 48.dp).testTag("arena_autofire_chip"),
-            )
-            FilterChip(
-              selected = sim.gtaLockOnEnabled,
-              onClick = {
-                triggerHaptic()
-                sim.toggleLockOn()
-              },
-              label = { Text(LocalGameStrings.current.lockOnLabel, style = MaterialTheme.typography.labelSmall) },
-              modifier = Modifier.heightIn(min = 48.dp).testTag("arena_lockon_btn"),
-            )
-            FilterChip(
-              selected = sim.hudCrouching,
-              onClick = {
-                triggerHaptic()
-                sim.toggleStance()
-              },
-              label = { Text(if (sim.hudCrouching) LocalGameStrings.current.crouchLabel else LocalGameStrings.current.standLabel, style = MaterialTheme.typography.labelSmall) },
-              modifier = Modifier.heightIn(min = 48.dp).testTag("arena_stance_btn"),
-            )
           }
-          Spacer(Modifier.height(5.dp))
-          Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-          ) {
-            Button(
-              onClick = { triggerHaptic(); sim.fireVolley(forceManual = true) },
-              colors = ButtonDefaults.buttonColors(containerColor = palette.playerAccent, contentColor = Color.Black),
-              shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.height(btnHeight).testTag("arena_fire_btn"),
-            ) { Text("FIRE") }
-            Button(
-              onClick = { triggerHaptic(); sim.triggerMeleeStrike() },
-              enabled = sim.hudMeleeCdSec == 0,
-              colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF3D71), contentColor = Color.White),
-              shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.height(btnHeight).testTag("arena_melee_btn"),
-            ) { Text(if (sim.hudMeleeCdSec == 0) LocalGameStrings.current.meleeLabel else "${sim.hudMeleeCdSec}s") }
-            Button(
-              onClick = { triggerHaptic(); sim.triggerPower() },
-              enabled = sim.hudPowerCdSec == 0,
-              colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C4DFF)),
-              shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.height(btnHeight).testTag("arena_power_btn"),
-            ) { Text(if (sim.hudPowerCdSec == 0) "POWER" else "${sim.hudPowerCdSec}s") }
-            Button(
-              onClick = { triggerHaptic(); sim.upgradePackAPunch() },
-              colors = ButtonDefaults.buttonColors(
-                containerColor = if (sim.hudPackTier >= 25) Color(0xFF00E5FF) else Color(0xFFE040FB),
-                contentColor = Color.Black,
-              ),
-              shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.height(btnHeight).testTag("arena_pack_btn"),
-            ) { Text("PACK ${formatRoundRoman(sim.hudPackTier.toLong())}") }
-            OutlinedButton(
-              onClick = { triggerHaptic(); sim.cycleActiveWeapon() },
-              shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.height(btnHeight).testTag("arena_swap_wpn_btn"),
-            ) { Text("WPN ${sim.activeWeaponIndex + 1}/${sim.equippedWeaponIds.size}") }
-            OutlinedButton(
-              onClick = { triggerHaptic(); sim.activateEquippedWonderSlot() },
-              shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.height(btnHeight).testTag("arena_wonder_swap_btn"),
-            ) { Text("WNDR") }
-          }
-          Spacer(Modifier.height(5.dp))
-          Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
-          ) {
-            OutlinedButton(
-              onClick = { triggerHaptic(); sim.triggerAllTraps() },
-              shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.height(btnHeight).testTag("arena_trap_btn"),
-            ) { Text("TRAPS", color = Color(0xFFFFAB40), style = MaterialTheme.typography.labelSmall) }
-            OutlinedButton(
-              onClick = { triggerHaptic(); sim.triggerConsumable() },
-              enabled = sim.hudConsumableCdSec == 0,
-              shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.height(btnHeight).testTag("arena_surge_btn"),
-            ) { Text(if (sim.hudConsumableCdSec == 0) "SURGE" else "${sim.hudConsumableCdSec}s", style = MaterialTheme.typography.labelSmall) }
-            OutlinedButton(
-              onClick = { triggerHaptic(); sim.interactNearestWorldObject() },
-              enabled = sim.hudInteractCdSec == 0 || sim.hudNearbyPrompt != null,
-              shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.height(btnHeight).testTag("arena_interact_btn"),
-            ) {
-              Text(
-                text = sim.hudNearbyPrompt ?: if (sim.hudInteractCdSec == 0) world.interactActionLabel else "${sim.hudInteractCdSec}s",
-                style = MaterialTheme.typography.labelSmall,
-              )
-            }
-            OutlinedButton(
-              onClick = { triggerHaptic(); sim.triggerLethal() },
-              enabled = sim.hudLethalCdSec == 0,
-              shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.height(btnHeight).testTag("arena_lethal_btn"),
-            ) { Text(if (sim.hudLethalCdSec == 0) sim.hudLethalName else "${sim.hudLethalCdSec}s", style = MaterialTheme.typography.labelSmall) }
-            OutlinedButton(
-              onClick = { triggerHaptic(); sim.triggerTactical() },
-              enabled = sim.hudTacticalCdSec == 0,
-              shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.height(btnHeight).testTag("arena_tactical_btn"),
-            ) { Text(if (sim.hudTacticalCdSec == 0) sim.hudTacticalName else "${sim.hudTacticalCdSec}s", style = MaterialTheme.typography.labelSmall) }
-            OutlinedButton(
-              onClick = { triggerHaptic(); sim.triggerDash() },
-              enabled = sim.hudDashReady,
-              shape = RoundedCornerShape(10.dp),
-              modifier = Modifier.height(btnHeight).testTag("arena_dash_btn"),
-            ) { Text(if (sim.loadout.hasClawEdge) LocalGameStrings.current.glideLabel else LocalGameStrings.current.dashLabel, style = MaterialTheme.typography.labelSmall) }
-          }
+        }
+
+        // Single Slim Row of Console/PC Multi-Action Buttons (Tap = Primary, Hold = Secondary)
+        Row(
+          modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+          horizontalArrangement = Arrangement.spacedBy(btnSpacing),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          ConsoleMultiButton(
+            primary = if (isConsolePad) "A:ATK" else "ATK",
+            secondary = if (sim.hudMeleeCdSec == 0) "MELEE" else "${sim.hudMeleeCdSec}s",
+            bgColor = palette.playerAccent,
+            fgColor = Color.Black,
+            tag = "arena_fire_btn",
+            onTap = { sim.fireVolley(forceManual = true) },
+            onHold = { sim.triggerMeleeStrike() },
+          )
+          ConsoleMultiButton(
+            primary = if (sim.hudMagicCdSec == 0) (if (isConsolePad) "RB:${activeSpellSpec.shortTag.take(3)}" else activeSpellSpec.shortTag.take(4)) else "${sim.hudMagicCdSec}s",
+            secondary = if (sim.hudCanSpiritHeal && sim.hudSpiritHealCdSec == 0) "HEAL" else "SPELL",
+            bgColor = Color(activeSpellSpec.colorHex),
+            fgColor = Color.Black,
+            tag = "arena_magic_btn",
+            onTap = {
+              if (sim.hudMana >= activeSpellSpec.manaCost && sim.hudMagicCdSec == 0) {
+                sim.triggerMagicSpell()
+              } else {
+                sim.cycleMagicSpell()
+              }
+            },
+            onHold = {
+              if (sim.hudCanSpiritHeal && sim.hudShield < sim.effectiveMaxShield() * 0.75f && sim.hudSpiritHealCdSec == 0) {
+                sim.triggerSpiritThoughtHeal()
+              } else {
+                sim.cycleMagicSpell()
+              }
+            },
+          )
+          ConsoleMultiButton(
+            primary = if (sim.hudPowerCdSec == 0) (if (isConsolePad) "X:PWR" else "PWR") else "${sim.hudPowerCdSec}s",
+            secondary = if (sim.hudLethalCdSec == 0 || sim.hudConsumableCdSec == 0) "SRG+LTH" else "CD",
+            bgColor = Color(0xFF7C4DFF),
+            fgColor = Color.White,
+            tag = "arena_power_btn",
+            onTap = { sim.triggerPower() },
+            onHold = {
+              sim.triggerConsumable()
+              if (sim.hudLethalCdSec == 0) sim.triggerLethal()
+              if (sim.hudTacticalCdSec == 0) sim.triggerTactical()
+            },
+          )
+          ConsoleMultiButton(
+            primary = if (sim.hudNearbyPrompt != null) (if (isConsolePad) "Y:USE" else "USE") else "PK ${formatRoundRoman(sim.hudPackTier.toLong())}",
+            secondary = "WPN ${sim.activeWeaponIndex + 1}/${sim.equippedWeaponIds.size}",
+            bgColor = if (sim.hudPackTier >= com.example.data.model.PowerTier.MAX_TIER) Color(0xFF00E5FF) else Color(0xFFE040FB),
+            fgColor = Color.Black,
+            tag = "arena_interact_btn",
+            onTap = {
+              if (sim.hudNearbyPrompt != null) {
+                sim.interactNearestWorldObject()
+              } else {
+                sim.upgradePackAPunch()
+              }
+            },
+            onHold = {
+              sim.cycleActiveWeapon()
+              sim.triggerAllTraps()
+            },
+          )
+          ConsoleMultiButton(
+            primary = if (sim.hudDashReady) (if (isConsolePad) "B:DSH" else LocalGameStrings.current.dashLabel.take(4)) else "CD",
+            secondary = if (sim.hudBaseRaidActive) "RAID" else "WNDR",
+            bgColor = Color(0xFF00E676),
+            fgColor = Color.Black,
+            tag = "arena_dash_btn",
+            onTap = { sim.triggerDash() },
+            onHold = {
+              if (!sim.hudBaseRaidActive) sim.triggerBaseDefenseRaid() else sim.activateEquippedWonderSlot()
+            },
+          )
+          ConsoleMultiButton(
+            primary = if (sim.hudAegisDomeActive) "DOME!" else if (sim.hudAegisDomeCdSec == 0) "AEGIS" else "${sim.hudAegisDomeCdSec}s",
+            secondary = "UPG",
+            bgColor = Color(0xFF38BDF8),
+            fgColor = Color.Black,
+            tag = "arena_aegis_btn",
+            onTap = { sim.triggerAegisBarrier() },
+            onHold = { showFieldUpgradesDialog = true },
+          )
+          ConsoleMultiButton(
+            primary = sim.hudActiveDamageType.shortTag,
+            secondary = if (sim.hudAutoFire) "AUTO" else "MAN",
+            bgColor = Color(0xFF172036),
+            fgColor = sim.hudActiveDamageType.color,
+            tag = "arena_prism_cycle_btn",
+            onTap = { sim.cycleElementalPrism() },
+            onHold = { sim.hudAutoFire = !sim.hudAutoFire },
+          )
+          ConsoleMultiButton(
+            primary = "PAD",
+            secondary = if (sim.hudCrouching) "CRCH" else if (sim.gtaLockOnEnabled) "LOCK" else "FREE",
+            bgColor = Color(0xFF141C2E),
+            fgColor = Color(0xFFE2E8F0),
+            tag = "arena_pad_tune_btn",
+            onTap = {
+              if (onUpdateSettings != null) showQuickControllerDialog = true else onOpenSettings()
+            },
+            onHold = {
+              sim.toggleLockOn()
+              sim.toggleStance()
+            },
+          )
         }
       }
 
       Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp).testTag("arena_controls_deck"),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp).testTag("arena_controls_deck"),
+        horizontalArrangement = Arrangement.spacedBy(btnSpacing),
         verticalAlignment = Alignment.CenterVertically,
       ) {
         if (settings.leftHandedDeck) {
           aimStickWidget()
           Box(modifier = Modifier.weight(1f)) { actionsWidget() }
+          if (settings.controllerShowDpad) dpadWidget()
           stickWidget()
         } else {
           stickWidget()
+          if (settings.controllerShowDpad) dpadWidget()
           Box(modifier = Modifier.weight(1f)) { actionsWidget() }
           aimStickWidget()
         }
       }
+    }
+
+    if (showQuickControllerDialog && onUpdateSettings != null) {
+      val styleChoices = listOf("console_gamepad" to "Console Gamepad", "codm_tactical" to "CoDM Tactical", "floating_classic" to "Floating Classic")
+      val shapeChoices = listOf("gamepad_circle" to "Circle", "tactical_hex" to "Hex", "pill" to "Pill")
+      val actionChoices = listOf("fire", "melee", "power", "aegis_ward", "magic", "spirit_heal", "dash", "interact", "surge", "lethal", "tactical", "wonder", "traps", "swap_wpn", "pack", "base_raid")
+      AlertDialog(
+        onDismissRequest = { showQuickControllerDialog = false },
+        title = { Text("CUSTOMIZE CONTROLLER DECK", fontWeight = FontWeight.Bold) },
+        text = {
+          Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("CONTROLLER LAYOUT STYLE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+              styleChoices.forEach { (id, label) ->
+                FilterChip(
+                  selected = settings.controllerStyle == id,
+                  onClick = { onUpdateSettings { s -> s.copy(controllerStyle = id) } },
+                  label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                  modifier = Modifier.heightIn(min = 48.dp),
+                )
+              }
+            }
+            Text("BUTTON SHAPE & D-PAD", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+              shapeChoices.forEach { (id, label) ->
+                FilterChip(
+                  selected = settings.controllerButtonShape == id,
+                  onClick = { onUpdateSettings { s -> s.copy(controllerButtonShape = id) } },
+                  label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                  modifier = Modifier.heightIn(min = 48.dp),
+                )
+              }
+              FilterChip(
+                selected = settings.controllerShowDpad,
+                onClick = { onUpdateSettings { s -> s.copy(controllerShowDpad = !s.controllerShowDpad) } },
+                label = { Text("Show D-Pad", style = MaterialTheme.typography.labelSmall) },
+                modifier = Modifier.heightIn(min = 48.dp),
+              )
+            }
+            Text("SCALE (${String.format(Locale.US, "%.2fx", settings.controllerScale)}) & OPACITY (${(settings.controllerOpacity * 100).toInt()}%)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+              OutlinedButton(onClick = { onUpdateSettings { s -> s.copy(controllerScale = (s.controllerScale - 0.1f).coerceIn(0.65f, 1.35f)) } }, modifier = Modifier.height(48.dp)) { Text("-Scale") }
+              OutlinedButton(onClick = { onUpdateSettings { s -> s.copy(controllerScale = (s.controllerScale + 0.1f).coerceIn(0.65f, 1.35f)) } }, modifier = Modifier.height(48.dp)) { Text("+Scale") }
+              OutlinedButton(onClick = { onUpdateSettings { s -> s.copy(controllerOpacity = (s.controllerOpacity - 0.15f).coerceIn(0.30f, 1.0f)) } }, modifier = Modifier.height(48.dp)) { Text("-Opac") }
+              OutlinedButton(onClick = { onUpdateSettings { s -> s.copy(controllerOpacity = (s.controllerOpacity + 0.15f).coerceIn(0.30f, 1.0f)) } }, modifier = Modifier.height(48.dp)) { Text("+Opac") }
+            }
+            Text("TAP BUTTON TO CYCLE BINDING (A/B/X/Y/L1/R1)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+              val cycle: (String) -> String = { cur -> actionChoices[(actionChoices.indexOf(cur) + 1) % actionChoices.size] }
+              OutlinedButton(onClick = { onUpdateSettings { s -> s.copy(controllerActionA = cycle(s.controllerActionA)) } }, modifier = Modifier.height(48.dp)) { Text("A:${settings.controllerActionA.take(5)}") }
+              OutlinedButton(onClick = { onUpdateSettings { s -> s.copy(controllerActionB = cycle(s.controllerActionB)) } }, modifier = Modifier.height(48.dp)) { Text("B:${settings.controllerActionB.take(5)}") }
+              OutlinedButton(onClick = { onUpdateSettings { s -> s.copy(controllerActionX = cycle(s.controllerActionX)) } }, modifier = Modifier.height(48.dp)) { Text("X:${settings.controllerActionX.take(5)}") }
+              OutlinedButton(onClick = { onUpdateSettings { s -> s.copy(controllerActionY = cycle(s.controllerActionY)) } }, modifier = Modifier.height(48.dp)) { Text("Y:${settings.controllerActionY.take(5)}") }
+              OutlinedButton(onClick = { onUpdateSettings { s -> s.copy(controllerActionL1 = cycle(s.controllerActionL1)) } }, modifier = Modifier.height(48.dp)) { Text("L1:${settings.controllerActionL1.take(5)}") }
+              OutlinedButton(onClick = { onUpdateSettings { s -> s.copy(controllerActionR1 = cycle(s.controllerActionR1)) } }, modifier = Modifier.height(48.dp)) { Text("R1:${settings.controllerActionR1.take(5)}") }
+            }
+          }
+        },
+        confirmButton = { TextButton(onClick = { showQuickControllerDialog = false }) { Text("Done") } },
+      )
     }
 
     if (showTacticalLiveChatDialog) {
@@ -1746,6 +2023,7 @@ fun ArenaScreen(
       var mapCategoryFilter by remember { mutableStateOf("all") }
       val visibleAreas = remember(allAreas, mapCategoryFilter) {
         when (mapCategoryFilter) {
+          "bank_vault" -> allAreas.filter { it.id.contains("bank", true) || it.id.contains("vault", true) || it.name.contains("bank", true) || it.name.contains("vault", true) }
           "bo3" -> allAreas.filter { it.id.startsWith("area_bo3_") || it.id == "area_zombies_der_riese" }
           "collections" -> allAreas.filter { it.id.startsWith("area_col_custom_") || it.storyEraNote.contains("Custom Map", ignoreCase = true) }
           else -> allAreas
@@ -1806,8 +2084,8 @@ fun ArenaScreen(
               }
             }
             Text("ALL MAPS & CUSTOM ARENAS (${visibleAreas.size})", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-              listOf("all" to "All Maps", "bo3" to "BO3 Custom", "collections" to "Collection Custom").forEach { (k, lbl) ->
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+              listOf("all" to "All Maps", "bank_vault" to "Bank & Vault", "bo3" to "BO3 Custom", "collections" to "Collection Custom").forEach { (k, lbl) ->
                 FilterChip(
                   selected = mapCategoryFilter == k,
                   onClick = { mapCategoryFilter = k },
@@ -1838,7 +2116,7 @@ fun ArenaScreen(
                     .testTag("arena_quick_map_${area.id}"),
                 ) {
                   Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text("${area.name} • Grid T${aSt.powerGridTier}/25 • ${aSt.starLevel}★", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = accent)
+                    Text("${area.name} • Grid T${aSt.powerGridTier}/${com.example.data.model.PowerTier.MAX_TIER} • ${aSt.starLevel}★", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = accent)
                     Text("${area.storyEraNote} • ${area.buildingNames.take(3).joinToString(" / ")}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                   }
                 }
@@ -1861,6 +2139,109 @@ fun ArenaScreen(
         onDeploy = onDeployCollectionCustomMode ?: { showCustomModeDialog = false },
         onDismiss = { showCustomModeDialog = false },
         customGameMaps = progression.customGameMaps,
+      )
+    }
+
+    if (showFieldUpgradesDialog) {
+      val nextEpoch = sim.hudEpoch.next()
+      val epochCost = 350L + (sim.hudEpoch.tier * 150L)
+      AlertDialog(
+        onDismissRequest = { showFieldUpgradesDialog = false },
+        title = { Text("SURVIVAL EPOCH, BARRIERS & IN-GAME BUFFS", fontWeight = FontWeight.Bold) },
+        text = {
+          Column(modifier = Modifier.fillMaxWidth().heightIn(min = 200.dp, max = 420.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+              text = "Score: ${sim.hudScore} • Diamonds: ${sim.availableDiamondsInMatch()} • TUUCash: ${sim.availableTuuCashInMatch()} • Turrets: ${sim.hudTurretCount}",
+              style = MaterialTheme.typography.labelSmall,
+              color = Color(sim.hudEpoch.accentHex),
+              fontWeight = FontWeight.Bold,
+            )
+            Text(
+              text = "DOA x${String.format(Locale.US, "%.1f", sim.hudDoaMultiplier)} • ${sim.hudEpoch.label} • Plates ${sim.hudArmorPlates}/${sim.hudMaxArmorPlates} • Sentinels ${sim.hudOrbitalBladesCount}",
+              style = MaterialTheme.typography.labelSmall,
+              color = Color(0xFF80D8FF),
+            )
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+              Button(
+                onClick = { sim.buyFieldUpgrade("plate_refill") },
+                modifier = Modifier.height(48.dp).testTag("field_upg_plates_btn"),
+              ) { Text("Plates (150 Sc)", style = MaterialTheme.typography.labelSmall) }
+              Button(
+                onClick = { sim.buyFieldUpgrade("orbital_blade") },
+                modifier = Modifier.height(48.dp).testTag("field_upg_blade_btn"),
+              ) { Text("+Sentinel (300 Sc)", style = MaterialTheme.typography.labelSmall) }
+              Button(
+                onClick = { sim.buyFieldUpgrade("draft_roll") },
+                modifier = Modifier.height(48.dp).testTag("field_upg_draft_btn"),
+              ) { Text("+Buff Draft (250 Sc)", style = MaterialTheme.typography.labelSmall) }
+              Button(
+                onClick = { sim.buyFieldUpgrade("magic_surge") },
+                modifier = Modifier.height(48.dp).testTag("field_upg_magic_btn"),
+              ) { Text("Magic Surge (200 Sc)", style = MaterialTheme.typography.labelSmall) }
+              Button(
+                onClick = { sim.buyFieldUpgrade("deploy_turret_cash") },
+                modifier = Modifier.height(48.dp).testTag("field_upg_turret_cash_btn"),
+              ) { Text("+Turret (1,200 $)", style = MaterialTheme.typography.labelSmall) }
+              Button(
+                onClick = { sim.buyFieldUpgrade("tuu_airstrike_call") },
+                modifier = Modifier.height(48.dp).testTag("field_upg_airstrike_cash_btn"),
+              ) { Text("Gunship (1,800 $)", style = MaterialTheme.typography.labelSmall) }
+              Button(
+                onClick = { sim.buyFieldUpgrade("diamond_overclock") },
+                modifier = Modifier.height(48.dp).testTag("field_upg_diamond_overclock_btn"),
+              ) { Text("Overclock (40 D)", style = MaterialTheme.typography.labelSmall) }
+              Button(
+                onClick = { sim.buyFieldUpgrade("diamond_laser_overload") },
+                modifier = Modifier.height(48.dp).testTag("field_upg_diamond_laser_btn"),
+              ) { Text("Prism Beam (50 D)", style = MaterialTheme.typography.labelSmall) }
+              Button(
+                onClick = { sim.buyFieldUpgrade("diamond_harvest") },
+                modifier = Modifier.height(48.dp).testTag("field_upg_diamond_drop_btn"),
+              ) { Text("+Diamonds (300 Sc)", style = MaterialTheme.typography.labelSmall) }
+              Button(
+                onClick = { sim.buyFieldUpgrade("tuu_bounty") },
+                modifier = Modifier.height(48.dp).testTag("field_upg_cash_drop_btn"),
+              ) { Text("+TUUCash (220 Sc)", style = MaterialTheme.typography.labelSmall) }
+              if (nextEpoch != null) {
+                Button(
+                  onClick = { sim.buyFieldUpgrade("advance_epoch") },
+                  modifier = Modifier.height(48.dp).testTag("field_upg_epoch_btn"),
+                ) { Text("-> ${nextEpoch.shortTag} ($epochCost Sc)", style = MaterialTheme.typography.labelSmall) }
+              }
+            }
+            if (sim.hudPendingDraftChoices.isNotEmpty()) {
+              Text("PENDING DRAFT PICKS (${sim.hudPendingDraftCount})", style = MaterialTheme.typography.labelSmall, color = Color(0xFFFFD54F), fontWeight = FontWeight.Bold)
+              sim.hudPendingDraftChoices.forEach { spec ->
+                OutlinedButton(
+                  onClick = { sim.selectInGameUpgrade(spec.id) },
+                  modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                ) {
+                  Text("${spec.title}: ${spec.summary}", style = MaterialTheme.typography.labelSmall, maxLines = 2)
+                }
+              }
+            }
+            Text("ACTIVE IN-MATCH UPGRADES (${sim.inGameUpgradeRanks.size})", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+              items(InGameUpgradeCatalog.upgrades, key = { it.id }) { spec ->
+                val rank = sim.inGameUpgradeRanks[spec.id] ?: 0
+                Surface(
+                  shape = RoundedCornerShape(8.dp),
+                  color = if (rank > 0) Color(spec.accentHex).copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant,
+                  modifier = Modifier.fillMaxWidth().border(1.dp, if (rank > 0) Color(spec.accentHex) else MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp)),
+                ) {
+                  Row(modifier = Modifier.padding(8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                      Text("${spec.title} (${spec.category})", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                      Text(spec.summary, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Text("Lv.$rank/${spec.maxStacks}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color(spec.accentHex))
+                  }
+                }
+              }
+            }
+          }
+        },
+        confirmButton = { TextButton(onClick = { showFieldUpgradesDialog = false }) { Text("Close") } },
       )
     }
   }

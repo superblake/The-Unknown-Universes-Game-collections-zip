@@ -438,6 +438,7 @@ object UniverseCatalog {
     "ship_of_heroes_apotheosis" -> "area_ship_of_heroes_deck"
     "mr_crossover_nexus" -> "area_hero_frontier"
     "campaign_origins" -> "area_campaign_nexus"
+    "sector_star_wars_nexus" -> "area_star_wars_nexus"
     else -> "area_sector_zero"
   }
 

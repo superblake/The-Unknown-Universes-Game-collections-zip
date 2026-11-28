@@ -117,15 +117,15 @@ fun OutfitsMenuTab(
           ) {
             Box(
               modifier = Modifier
-                .size(width = 96.dp, height = 118.dp)
+                .size(width = 114.dp, height = 128.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(Color(0xFF0A101E))
                 .border(1.dp, Color(activeSpec.secondaryHex).copy(alpha = 0.6f), RoundedCornerShape(12.dp)),
             ) {
               Canvas(modifier = Modifier.fillMaxSize()) {
                 val skel = RigEvaluator.evaluate(
-                  origin = Offset(size.width * 0.5f, size.height * 0.56f),
-                  scalePx = size.height * 0.52f,
+                  origin = Offset(size.width * 0.46f, size.height * 0.54f),
+                  scalePx = minOf(size.width * 0.68f, size.height * 0.48f),
                   poseAngles = UniverseCatalog.defaultPoseMap(),
                   clip = "idle",
                   frame = 10f,

@@ -18,10 +18,12 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -52,13 +54,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.graphics.toColorInt
 import com.example.R
 import com.example.data.local.AppSettings
@@ -79,6 +84,7 @@ import com.example.data.model.GearSlot
 import com.example.data.model.LevelCustomization
 import com.example.data.model.MissionScope
 import com.example.data.model.MissionState
+import com.example.data.model.MultiverseVehicleCatalog
 import com.example.data.model.OperatorProgressionState
 import com.example.data.model.ProgressionCatalog
 import com.example.data.model.RigAsset
@@ -89,28 +95,37 @@ import com.example.data.model.UserCustomGameMapSpec
 import com.example.data.model.UserCustomGearSpec
 import com.example.data.model.UserCustomPerkSpec
 import com.example.data.model.UserCustomWeaponSpec
+import com.example.data.model.VehicleCollectionSpec
 import com.example.data.model.WeaponCustomization
 import androidx.compose.foundation.verticalScroll
 
-enum class ArmorySection(val label: String, val tag: String) {
-  MODS("Mods", "mods"),
-  OUTFITS("Characters", "outfits"),
-  WEAPONS("Weapons", "weapons"),
-  GEAR("Gear", "gear"),
-  EQUIPMENT("Equipment", "equipment"),
-  SHARDS_CORES("Shards & Cores", "shards_cores"),
-  AREAS("Areas & Aging", "areas"),
-  SKILLS("Skill Tree", "skills"),
-  CHARACTER("Character", "character"),
-  LEVELS("Levels", "levels"),
-  MISSIONS("Missions", "missions"),
-  PASS_CHALLENGES("Pass & Challenges", "pass"),
-  STORE("Store", "store"),
-  ACHIEVEMENTS("Achievements", "achievements"),
-  WORKSHOP_BO3("BO3 & Workshop", "workshop_bo3");
+enum class ArmorySection(
+  val label: String,
+  val tag: String,
+  val icon: ImageVector,
+  val accentHex: Long,
+  val gameRelation: String,
+) {
+  MODS("Mods", "mods", AppIcons.Bolt, 0xFF00E676, "BO3 Perks & Buffs"),
+  VEHICLES("Vehicles", "vehicles", AppIcons.VehicleFleet, 0xFF00E5FF, "Wayne & Stark Fleet"),
+  OUTFITS("Characters", "outfits", AppIcons.Group, 0xFFE040FB, "Gotham & Spider"),
+  WEAPONS("Weapons", "weapons", AppIcons.MyLocation, 0xFFFF3D71, "Halo & BO3 Arms"),
+  GEAR("Gear", "gear", AppIcons.Shield, 0xFF38BDF8, "SHD Division Rig"),
+  EQUIPMENT("Equipment", "equipment", AppIcons.FlashOn, 0xFFFFAB40, "Bat & Conduit"),
+  SHARDS_CORES("Shards & Cores", "shards_cores", AppIcons.DiamondShard, 0xFF40C4FF, "Blacklight & Gem"),
+  AREAS("Areas & Aging", "areas", AppIcons.BankVault, 0xFFFFD54F, "Vault & Planets"),
+  SKILLS("Skill Tree", "skills", AppIcons.AutoAwesome, 0xFFB388FF, "InFAMOUS Magic"),
+  CHARACTER("Character", "character", AppIcons.Accessibility, 0xFF69F0AE, "Symbiote & Aura"),
+  LEVELS("Levels", "levels", AppIcons.Speed, 0xFFFF9100, "NG+ & Difficulty"),
+  MISSIONS("Missions", "missions", AppIcons.CompassOps, 0xFF00E676, "Stargate Trials"),
+  PASS_CHALLENGES("Pass & Trials", "pass", AppIcons.BookmarkAdd, 0xFFFFD54F, "Season Bounties"),
+  STORE("Store", "store", AppIcons.StorefrontBag, 0xFF00E5FF, "Essence Vault"),
+  ACHIEVEMENTS("Trophies", "achievements", AppIcons.TrophyCup, 0xFFFFD54F, "Arkham Valor"),
+  WORKSHOP_BO3("BO3 Workshop", "workshop_bo3", AppIcons.BuildForge, 0xFFFF5722, "Mod Tools Lab");
 
   fun localizedLabel(s: GameStrings): String = when (this) {
     MODS -> s.armoryMods
+    VEHICLES -> "Vehicles"
     OUTFITS -> s.armoryCharacters
     WEAPONS -> s.armoryWeapons
     GEAR -> s.armoryGear
@@ -258,7 +273,7 @@ fun ArmoryScreen(
   onPersistCategory: ((String) -> Unit)? = null,
 ) {
   val gameStrings = LocalGameStrings.current
-  val categories = listOf("all", "perk", "power", "upgrade", "consumable", "workshop_bo3")
+  val categories = listOf("all", "vehicle", "perk", "power", "upgrade", "consumable", "workshop_bo3")
   var localSection by remember { mutableStateOf(ArmorySection.MODS) }
   var localCategory by remember { mutableStateOf("all") }
   val selectedSection = if (onPersistSectionTag != null && persistedSectionTag != null) {
@@ -402,6 +417,7 @@ fun ArmoryScreen(
         val orderedSections = remember(sections) {
           listOf(
             ArmorySection.MODS,
+            ArmorySection.VEHICLES,
             ArmorySection.OUTFITS,
             ArmorySection.WEAPONS,
             ArmorySection.CHARACTER,
@@ -418,17 +434,73 @@ fun ArmoryScreen(
             ArmorySection.WORKSHOP_BO3,
           )
         }
+        @OptIn(ExperimentalFoundationApi::class)
         Row(
           modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
           horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
           orderedSections.forEach { sec ->
-            FilterChip(
-              selected = selectedSection == sec,
-              onClick = { setSelectedSection(sec) },
-              label = { Text(sec.localizedLabel(gameStrings), style = MaterialTheme.typography.labelSmall, fontWeight = if (selectedSection == sec) FontWeight.Bold else FontWeight.Medium) },
-              modifier = Modifier.height(48.dp).testTag("armory_tab_${sec.tag}"),
-            )
+            val isSel = selectedSection == sec
+            val secAccent = Color(sec.accentHex)
+            Surface(
+              shape = RoundedCornerShape(12.dp),
+              color = if (isSel) secAccent.copy(alpha = 0.20f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+              modifier = Modifier
+                .widthIn(min = 84.dp, max = 104.dp)
+                .heightIn(min = 62.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .combinedClickable(
+                  onClick = { setSelectedSection(sec) },
+                  onLongClick = { setSelectedSection(sec) },
+                )
+                .border(
+                  width = if (isSel) 1.6.dp else 1.dp,
+                  color = if (isSel) secAccent else MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                  shape = RoundedCornerShape(12.dp),
+                )
+                .testTag("armory_tab_${sec.tag}"),
+            ) {
+              Column(
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+              ) {
+                Box(
+                  modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(secAccent.copy(alpha = if (isSel) 0.28f else 0.14f)),
+                  contentAlignment = Alignment.Center,
+                ) {
+                  Icon(
+                    imageVector = sec.icon,
+                    contentDescription = sec.localizedLabel(gameStrings),
+                    tint = secAccent,
+                    modifier = Modifier.size(15.dp),
+                  )
+                }
+                Text(
+                  text = sec.localizedLabel(gameStrings),
+                  style = MaterialTheme.typography.labelSmall,
+                  fontSize = 10.sp,
+                  fontWeight = if (isSel) FontWeight.ExtraBold else FontWeight.SemiBold,
+                  color = if (isSel) secAccent else MaterialTheme.colorScheme.onSurface,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                  textAlign = TextAlign.Center,
+                )
+                Text(
+                  text = sec.gameRelation,
+                  style = MaterialTheme.typography.labelSmall,
+                  fontSize = 8.5.sp,
+                  lineHeight = 10.sp,
+                  color = MaterialTheme.colorScheme.onSurfaceVariant,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                  textAlign = TextAlign.Center,
+                )
+              }
+            }
           }
         }
       }
@@ -452,6 +524,7 @@ fun ArmoryScreen(
                       Text(
                         text = when (cat) {
                           "all" -> "All (${armory.size})"
+                          "vehicle" -> "Vehicles"
                           "perk" -> "Perks"
                           "power" -> "Powers"
                           "upgrade" -> "Upgrades"
@@ -515,6 +588,17 @@ fun ArmoryScreen(
             }
           }
         }
+
+        ArmorySection.VEHICLES -> VehiclesCollectionTab(
+          armory = armory,
+          totalEssence = totalEssence,
+          progression = progression,
+          onToggleEquip = onToggleEquip,
+          onUpgradeItem = onUpgradeItem,
+          onUpgradeArmoryItemStar = onUpgradeArmoryItemStar,
+          onOpenForgeVehicle = { showCreateDialog = true },
+          onDeleteItem = onDeleteItem,
+        )
 
         ArmorySection.OUTFITS -> OutfitsMenuTab(
           progression = progression,
@@ -1423,7 +1507,7 @@ fun ForgeArmoryItemDialog(
   var powerStr by remember { mutableStateOf("260") }
   var cooldownStr by remember { mutableStateOf("6") }
 
-  val categoryOptions = listOf("perk", "power", "upgrade", "consumable")
+  val categoryOptions = listOf("vehicle", "perk", "power", "upgrade", "consumable")
   val quickPresets = listOf(
     Triple("Rift Nova Surge", "power", "320"),
     Triple("Real-Life Grit Core", "perk", "280"),
@@ -1538,6 +1622,195 @@ fun ForgeArmoryItemDialog(
       TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) { Text("Cancel") }
     },
   )
+}
+
+@Composable
+private fun VehiclesCollectionTab(
+  armory: List<ArmoryItem>,
+  totalEssence: Long,
+  progression: OperatorProgressionState,
+  onToggleEquip: (ArmoryItem) -> Unit,
+  onUpgradeItem: (ArmoryItem) -> Unit,
+  onUpgradeArmoryItemStar: (String) -> Unit,
+  onOpenForgeVehicle: () -> Unit,
+  onDeleteItem: (String) -> Unit,
+) {
+  val vehicleItems = remember(armory) { armory.filter { it.category == "vehicle" } }
+  val activeVehicleItem = vehicleItems.firstOrNull { it.equipped } ?: vehicleItems.firstOrNull()
+  val activeSpec = activeVehicleItem?.let { MultiverseVehicleCatalog.byId(it.id) }
+    ?: MultiverseVehicleCatalog.vehicles.first()
+  val customVehicles = vehicleItems.filter { item -> MultiverseVehicleCatalog.byId(item.id) == null }
+
+  LazyColumn(
+    modifier = Modifier.fillMaxSize().testTag("vehicles_collection_list"),
+    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 92.dp),
+    verticalArrangement = Arrangement.spacedBy(12.dp),
+  ) {
+    item {
+      val vColor = Color(activeSpec.accentHex)
+      Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = vColor.copy(alpha = 0.12f),
+        modifier = Modifier.fillMaxWidth().border(1.5.dp, vColor, RoundedCornerShape(16.dp)),
+      ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Text(
+              text = "ACTIVE COLLECTION VEHICLE",
+              style = MaterialTheme.typography.labelLarge,
+              fontWeight = FontWeight.Bold,
+              color = vColor,
+            )
+            OutlinedButton(
+              onClick = onOpenForgeVehicle,
+              modifier = Modifier.heightIn(min = 48.dp).testTag("forge_custom_vehicle_btn"),
+            ) {
+              Text("+ Forge Vehicle", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            }
+          }
+          Text(
+            text = "${activeSpec.name} (${activeSpec.vehicleType})",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+          )
+          Text(
+            text = "Ability: ${activeSpec.specialAbility} • Buff: ${activeSpec.passiveCombatBuff}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+          )
+          Text(
+            text = "SPD ${activeSpec.speedRating} • ARM ${activeSpec.armorRating} • FP ${activeSpec.firepowerRating} • Tier ${activeVehicleItem?.tier ?: 1} / ${activeVehicleItem?.let { progression.armoryItemStar(it.id) } ?: 1}★",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = vColor,
+          )
+        }
+      }
+    }
+
+    items(MultiverseVehicleCatalog.vehicles, key = { it.id }) { spec: VehicleCollectionSpec ->
+      val item = vehicleItems.firstOrNull { it.id == spec.id }
+      val isEquipped = item?.equipped == true
+      val tier = item?.tier?.toInt() ?: 1
+      val starLevel = progression.armoryItemStar(spec.id)
+      val maxTier = maxOf(item?.maxTier ?: 60L, 60L).toInt()
+      val upgradeCost = UpgradeCosts.armoryModTier(tier)
+      val starCost = UpgradeCosts.armoryModStar(starLevel)
+      val accent = Color(spec.accentHex)
+
+      Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = if (isEquipped) accent.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surface,
+        modifier = Modifier
+          .fillMaxWidth()
+          .border(if (isEquipped) 2.dp else 1.dp, if (isEquipped) accent else MaterialTheme.colorScheme.outline, RoundedCornerShape(16.dp)),
+      ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Surface(shape = RoundedCornerShape(6.dp), color = accent.copy(alpha = 0.2f)) {
+                  Text(
+                    text = spec.vehicleType.uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = accent,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                  )
+                }
+                Text(
+                  text = "${spec.universeTag} • T$tier/$maxTier • $starLevel★",
+                  style = MaterialTheme.typography.labelSmall,
+                  fontWeight = FontWeight.Bold,
+                  color = Color(ProgressionCatalog.starMeta(starLevel).colorHex),
+                )
+              }
+              Spacer(Modifier.height(2.dp))
+              Text(spec.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            }
+            Button(
+              onClick = { if (item != null) onToggleEquip(item) },
+              enabled = item != null,
+              colors = ButtonDefaults.buttonColors(
+                containerColor = if (isEquipped) Color(0xFF00E676) else accent,
+                contentColor = Color.Black,
+              ),
+              modifier = Modifier.heightIn(min = 48.dp).testTag("equip_vehicle_btn_${spec.id}"),
+            ) {
+              Text(if (isEquipped) "DEPLOYED" else "EQUIP", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+            }
+          }
+
+          Text(spec.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+          Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("SPD ${spec.speedRating}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(0xFF00E5FF))
+            Text("ARM ${spec.armorRating}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(0xFF00E676))
+            Text("FP ${spec.firepowerRating}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color(0xFFFF3D71))
+          }
+          Text(
+            text = "Ability: ${spec.specialAbility} • Passive: ${spec.passiveCombatBuff}",
+            style = MaterialTheme.typography.labelSmall,
+            color = accent,
+            fontWeight = FontWeight.SemiBold,
+          )
+
+          if (item != null) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+              OutlinedButton(
+                onClick = { onUpgradeItem(item) },
+                enabled = tier < maxTier && totalEssence >= upgradeCost,
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("upgrade_vehicle_tier_${spec.id}"),
+              ) {
+                Text(
+                  text = if (tier >= maxTier) "TIER MAX" else "Tier ${tier + 1} ($upgradeCost B)",
+                  style = MaterialTheme.typography.labelSmall,
+                  fontWeight = FontWeight.Bold,
+                )
+              }
+              OutlinedButton(
+                onClick = { onUpgradeArmoryItemStar(item.id) },
+                enabled = starLevel < StarRankMeta.MAX_STARS && totalEssence >= starCost,
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp).testTag("upgrade_vehicle_star_${spec.id}"),
+              ) {
+                Text(
+                  text = if (starLevel >= StarRankMeta.MAX_STARS) "STAR MAX" else "Star ${starLevel + 1}★ ($starCost B)",
+                  style = MaterialTheme.typography.labelSmall,
+                  fontWeight = FontWeight.Bold,
+                )
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (customVehicles.isNotEmpty()) {
+      item {
+        Text("CUSTOM FORGED VEHICLES", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Color(0xFF00E5FF))
+      }
+      items(customVehicles, key = { it.id }) { customItem ->
+        ArmoryModuleCard(
+          item = customItem,
+          totalEssence = totalEssence,
+          starLevel = progression.armoryItemStar(customItem.id),
+          onToggleEquip = { onToggleEquip(customItem) },
+          onUpgrade = { onUpgradeItem(customItem) },
+          onUpgradeStar = { onUpgradeArmoryItemStar(customItem.id) },
+          onDelete = if (customItem.isCustom) ({ onDeleteItem(customItem.id) }) else null,
+        )
+      }
+    }
+  }
 }
 
 fun parseHexSafe(hex: String, fallback: Color): Color {

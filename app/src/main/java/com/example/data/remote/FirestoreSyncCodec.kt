@@ -125,7 +125,7 @@ object FirestoreSyncCodec {
   // --- ArmoryItem (/users/{userId}/armoryItems/{itemId}) ---
 
   fun ArmoryItem.toFirestoreCreateMap(uid: String): Map<String, Any> {
-    val safeMaxTier = maxTier.coerceIn(1L, 25L)
+    val safeMaxTier = maxTier.coerceIn(1L, 60L)
     val safeTier = tier.coerceIn(1L, safeMaxTier)
     return mapOf(
       "userId" to uid,
@@ -146,7 +146,7 @@ object FirestoreSyncCodec {
   }
 
   fun ArmoryItem.toFirestoreUpdateMap(): Map<String, Any> {
-    val safeMaxTier = maxTier.coerceIn(1L, 25L)
+    val safeMaxTier = maxTier.coerceIn(1L, 60L)
     val safeTier = tier.coerceIn(1L, safeMaxTier)
     return mapOf(
       "name" to name.trim().take(50).ifEmpty { "Module" },
@@ -166,7 +166,7 @@ object FirestoreSyncCodec {
   fun DocumentSnapshot.toArmoryItemOrNull(fallbackUserId: String): ArmoryItem? {
     val data = data ?: return null
     val now = System.currentTimeMillis()
-    val maxTier = ((data["maxTier"] as? Number)?.toLong() ?: 25L).coerceIn(1L, 25L)
+    val maxTier = ((data["maxTier"] as? Number)?.toLong() ?: 60L).coerceIn(1L, 60L)
     val tier = ((data["tier"] as? Number)?.toLong() ?: 1L).coerceIn(1L, maxTier)
     return ArmoryItem(
       id = id,

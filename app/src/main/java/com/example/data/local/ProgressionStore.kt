@@ -63,6 +63,13 @@ import com.example.data.model.UserCustomPerkSpec
 import com.example.data.model.GearSlotCustomization
 import com.example.data.model.WonderWeaponKind
 import com.example.data.model.WorldDifficultyTier
+import com.example.data.model.CrystalItem
+import com.example.data.model.MagicSystemState
+import com.example.data.model.MultiverseSystemsCatalog
+import com.example.data.model.PlayerBaseState
+import com.example.data.model.defaultCrystals
+import com.example.data.model.defaultEnvironmentalResources
+import com.example.data.model.defaultSystemShards
 import com.example.security.AppSecurityManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -523,9 +530,10 @@ class ProgressionStore(
     if (totalBlueEssence < essenceAmount) return Result.failure(IllegalStateException("Need $essenceAmount Blue Essence"))
     val curClan = current.clan
     val nextDonated = curClan.totalEssenceDonated + essenceAmount
-    val newLevel = (1 + (nextDonated / 5000L).toInt()).coerceIn(1, 25)
-    val newTier = (1 + (newLevel / 2)).coerceIn(1, 25)
-    val newStar = (1 + (newLevel / 3)).coerceIn(1, 10)
+    val computedLevel = (1 + (nextDonated / 5000L).toInt()).coerceIn(1, ProgressionCatalog.MAX_CLAN_LEVEL)
+    val newLevel = maxOf(curClan.level, computedLevel)
+    val newTier = maxOf(curClan.tier, (1 + (newLevel / 2)).coerceIn(1, PowerTier.MAX_TIER))
+    val newStar = maxOf(curClan.starLevel, (1 + (newLevel / 3)).coerceIn(1, StarRankMeta.MAX_STARS))
     val leveledUp = newLevel > curClan.level
     val updatedMembers = curClan.members.map { m ->
       if (m.callsign.equals(memberCallsign, ignoreCase = true)) {
@@ -574,7 +582,7 @@ class ProgressionStore(
   fun upgradeGear(slot: GearSlot) {
     val cur = current
     val gear = cur.gearMap[slot.id] ?: GearState(slot)
-    if (gear.level >= 50) return
+    if (gear.level >= ProgressionCatalog.MAX_GEAR_LEVEL) return
     val nextLvl = gear.level + 1
     val minXpForNext = ProgressionCatalog.totalXpForGearLevel(nextLvl)
     val nextGear = gear.copy(
@@ -626,9 +634,9 @@ class ProgressionStore(
 
   fun prestigeGear() {
     val cur = current
-    if (cur.gearPrestige >= 30) return
+    if (cur.gearPrestige >= ProgressionCatalog.MAX_PRESTIGE) return
     val resetGear = cur.gearMap.mapValues { (_, g) ->
-      g.copy(level = 1, xp = 0L, prestige = (g.prestige + 1).coerceAtMost(30))
+      g.copy(level = 1, xp = 0L, prestige = (g.prestige + 1).coerceAtMost(ProgressionCatalog.MAX_PRESTIGE))
     }
     save(cur.copy(gearMap = resetGear, gearPrestige = cur.gearPrestige + 1))
   }
@@ -636,7 +644,7 @@ class ProgressionStore(
   fun upgradeEquipment(slotId: String) {
     val cur = current
     val eq = cur.equipmentState(slotId)
-    if (eq.level >= 60) return
+    if (eq.level >= ProgressionCatalog.MAX_EQUIPMENT_LEVEL) return
     val nextLvl = eq.level + 1
     val minXpForNext = ProgressionCatalog.totalXpForEquipmentLevel(nextLvl)
     val nextEq = eq.copy(
@@ -689,8 +697,12 @@ class ProgressionStore(
   fun prestigeEquipment(slotId: String): Result<Long> {
     val cur = current
     val eq = cur.equipmentMap[slotId] ?: return Result.failure(IllegalStateException("Equipment not found"))
-    if (eq.level < 60 || eq.prestige >= 30) {
-      return Result.failure(IllegalStateException("Must reach Level 60 to Prestige Equipment (Max 30)"))
+    if (eq.level < ProgressionCatalog.MAX_EQUIPMENT_LEVEL || eq.prestige >= ProgressionCatalog.MAX_PRESTIGE) {
+      return Result.failure(
+        IllegalStateException(
+          "Must reach Level ${ProgressionCatalog.MAX_EQUIPMENT_LEVEL} to Prestige Equipment (Max ${ProgressionCatalog.MAX_PRESTIGE})"
+        )
+      )
     }
     val nextEq = eq.copy(level = 1, prestige = eq.prestige + 1, xp = 0L)
     save(cur.copy(equipmentMap = cur.equipmentMap + (slotId to nextEq)))
@@ -759,10 +771,10 @@ class ProgressionStore(
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence to upgrade outfit"))
     }
-    val nextTier = if (st.level % 10 == 0 && st.tier < 25) st.tier + 1 else st.tier
+    val nextTier = if (st.level % 10 == 0 && st.tier < PowerTier.MAX_TIER) st.tier + 1 else st.tier
     val nextSt = st.copy(
-      level = (st.level + 5).coerceAtMost(1000),
-      tier = nextTier.coerceIn(1, 25),
+      level = (st.level + 5).coerceAtMost(ProgressionCatalog.MAX_OUTFIT_LEVEL),
+      tier = nextTier.coerceIn(1, PowerTier.MAX_TIER),
     )
     save(
       cur.copy(
@@ -833,7 +845,7 @@ class ProgressionStore(
     val cur = current
     val curRarity = cur.outfitRarity(outfitId)
     val nextRarity = curRarity.nextRarity()
-      ?: return Result.failure(IllegalStateException("Already at max ${CharacterRarity.MYTHIC.label} rarity!"))
+      ?: return Result.failure(IllegalStateException("Already at max ${CharacterRarity.OMNIVERSE.label} rarity!"))
     val curShards = cur.outfitShards(outfitId)
     val req = curRarity.shardsForNext.toLong()
     if (curShards < req) {
@@ -895,15 +907,15 @@ class ProgressionStore(
       "gear" -> st.gearRank
       else -> st.equipmentRank
     }
-    if (curRank >= 20) {
-      return Result.failure(IllegalStateException("Outfit $part already at max Rank 20"))
+    if (curRank >= PowerTier.MAX_TIER) {
+      return Result.failure(IllegalStateException("Outfit $part already at max Rank ${PowerTier.MAX_TIER}"))
     }
     val cost = UpgradeCosts.outfitSubSystem(curRank)
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence"))
     }
     val nextSt = when (part) {
-      "skill" -> st.copy(skillRank = curRank + 1, tier = (st.tier + if ((curRank + 1) % 2 == 0) 1 else 0).coerceAtMost(25))
+      "skill" -> st.copy(skillRank = curRank + 1, tier = (st.tier + if ((curRank + 1) % 2 == 0) 1 else 0).coerceAtMost(PowerTier.MAX_TIER))
       "gear" -> st.copy(gearRank = curRank + 1)
       else -> st.copy(equipmentRank = curRank + 1)
     }
@@ -937,8 +949,8 @@ class ProgressionStore(
       "traps" -> area.trapDensityTier
       else -> area.lootRichnessTier
     }
-    if (curTier >= 25) {
-      return Result.failure(IllegalStateException("$feature already at max Tier 25"))
+    if (curTier >= PowerTier.MAX_TIER) {
+      return Result.failure(IllegalStateException("$feature already at max Tier ${PowerTier.MAX_TIER}"))
     }
     val cost = UpgradeCosts.areaFeatureTier(curTier)
     if (currentBlueEssence < cost) {
@@ -1077,7 +1089,7 @@ class ProgressionStore(
       return Result.failure(IllegalStateException("Need $shardCost Blast Shards"))
     }
     val nextBot = cur.vacuumBot.copy(
-      level = (cur.vacuumBot.level + 1).coerceAtMost(50),
+      level = (cur.vacuumBot.level + 1).coerceAtMost(ProgressionCatalog.MAX_BOT_LEVEL),
     )
     save(
       cur.copy(
@@ -1204,8 +1216,8 @@ class ProgressionStore(
 
   fun upgradeBlastShardTier(currentBlueEssence: Long): Result<Long> {
     val cur = current
-    if (cur.blastShardTier >= 25) {
-      return Result.failure(IllegalStateException("Blast Shard Channeling already at max Tier 25"))
+    if (cur.blastShardTier >= PowerTier.MAX_TIER) {
+      return Result.failure(IllegalStateException("Blast Shard Channeling already at max Tier ${PowerTier.MAX_TIER}"))
     }
     val cost = UpgradeCosts.blastShardTier(cur.blastShardTier)
     if (currentBlueEssence < cost) {
@@ -1222,8 +1234,8 @@ class ProgressionStore(
 
   fun upgradeCompanionBuffTier(currentBlueEssence: Long): Result<Long> {
     val cur = current
-    if (cur.companionBuffTier >= 25) {
-      return Result.failure(IllegalStateException("Companion Squad Buff already at max Tier 25"))
+    if (cur.companionBuffTier >= PowerTier.MAX_TIER) {
+      return Result.failure(IllegalStateException("Companion Squad Buff already at max Tier ${PowerTier.MAX_TIER}"))
     }
     val cost = UpgradeCosts.companionBuffTier(cur.companionBuffTier)
     if (currentBlueEssence < cost) {
@@ -1240,11 +1252,19 @@ class ProgressionStore(
 
   fun addOrUpdateCustomPerk(spec: UserCustomPerkSpec) {
     val cur = current
-    val updatedList = (cur.customPerks.filterNot { it.id == spec.id } + spec)
+    val existing = cur.customPerks.firstOrNull { it.id == spec.id }
+    val preserved = if (existing != null) {
+      spec.copy(
+        tier = maxOf(existing.tier, spec.tier).coerceIn(1, PowerTier.MAX_TIER),
+        maxTier = maxOf(existing.maxTier, spec.maxTier).coerceIn(1, PowerTier.MAX_TIER),
+        starLevel = maxOf(existing.starLevel, spec.starLevel).coerceIn(1, StarRankMeta.MAX_STARS),
+      )
+    } else spec
+    val updatedList = (cur.customPerks.filterNot { it.id == spec.id } + preserved)
     save(
       cur.copy(
         customPerks = updatedList,
-        equippedCustomPerkIds = cur.equippedCustomPerkIds + spec.id,
+        equippedCustomPerkIds = cur.equippedCustomPerkIds + preserved.id,
       )
     )
   }
@@ -1322,11 +1342,19 @@ class ProgressionStore(
 
   fun addOrUpdateCustomGear(spec: UserCustomGearSpec) {
     val cur = current
-    val nextList = cur.customGear.filterNot { it.id == spec.id } + spec
+    val existing = cur.customGear.firstOrNull { it.id == spec.id }
+    val preserved = if (existing != null) {
+      spec.copy(
+        tier = maxOf(existing.tier, spec.tier).coerceIn(1, PowerTier.MAX_TIER),
+        maxTier = maxOf(existing.maxTier, spec.maxTier).coerceIn(1, PowerTier.MAX_TIER),
+        starLevel = maxOf(existing.starLevel, spec.starLevel).coerceIn(1, StarRankMeta.MAX_STARS),
+      )
+    } else spec
+    val nextList = cur.customGear.filterNot { it.id == spec.id } + preserved
     save(
       cur.copy(
         customGear = nextList,
-        equippedCustomGearMap = cur.equippedCustomGearMap + (spec.slot.id to spec.id),
+        equippedCustomGearMap = cur.equippedCustomGearMap + (preserved.slot.id to preserved.id),
       )
     )
   }
@@ -1405,18 +1433,26 @@ class ProgressionStore(
 
   fun addOrUpdateCustomEquipment(spec: UserCustomEquipmentSpec) {
     val cur = current
-    val nextList = cur.customEquipment.filterNot { it.id == spec.id } + spec
-    val slotId = if (spec.slotType == EquipmentSlotType.LETHAL) "lethal" else "tactical"
+    val existing = cur.customEquipment.firstOrNull { it.id == spec.id }
+    val preserved = if (existing != null) {
+      spec.copy(
+        tier = maxOf(existing.tier, spec.tier).coerceIn(1, PowerTier.MAX_TIER),
+        maxTier = maxOf(existing.maxTier, spec.maxTier).coerceIn(1, PowerTier.MAX_TIER),
+        starLevel = maxOf(existing.starLevel, spec.starLevel).coerceIn(1, StarRankMeta.MAX_STARS),
+      )
+    } else spec
+    val nextList = cur.customEquipment.filterNot { it.id == spec.id } + preserved
+    val slotId = if (preserved.slotType == EquipmentSlotType.LETHAL) "lethal" else "tactical"
     val eqSt = cur.equipmentState(slotId)
     save(
       cur.copy(
         customEquipment = nextList,
-        equipmentMap = cur.equipmentMap + (slotId to eqSt.copy(equippedItemId = spec.id)),
-        equippedLethalIds = if (spec.slotType == EquipmentSlotType.LETHAL) {
-          (listOf(spec.id) + cur.equippedLethalIds).distinct().take(2)
+        equipmentMap = cur.equipmentMap + (slotId to eqSt.copy(equippedItemId = preserved.id)),
+        equippedLethalIds = if (preserved.slotType == EquipmentSlotType.LETHAL) {
+          (listOf(preserved.id) + cur.equippedLethalIds).distinct().take(2)
         } else cur.equippedLethalIds,
-        equippedTacticalIds = if (spec.slotType == EquipmentSlotType.TACTICAL) {
-          (listOf(spec.id) + cur.equippedTacticalIds).distinct().take(2)
+        equippedTacticalIds = if (preserved.slotType == EquipmentSlotType.TACTICAL) {
+          (listOf(preserved.id) + cur.equippedTacticalIds).distinct().take(2)
         } else cur.equippedTacticalIds,
       )
     )
@@ -1487,8 +1523,8 @@ class ProgressionStore(
     val cur = current
     val count = cur.blastCoreCount(color)
     val curLvl = cur.blastCoreLevel(color)
-    if (curLvl >= 20) {
-      return Result.failure(IllegalStateException("${color.displayName} is already Max Level 20"))
+    if (curLvl >= ProgressionCatalog.MAX_CORE_LEVEL) {
+      return Result.failure(IllegalStateException("${color.displayName} is already Max Level ${ProgressionCatalog.MAX_CORE_LEVEL}"))
     }
     if (count < 1L) {
       return Result.failure(IllegalStateException("Need 1 ${color.displayName} (collect in Arena or forge in Trading Post)"))
@@ -1502,8 +1538,8 @@ class ProgressionStore(
   fun upgradeBlastCoreWithEssence(color: BlastCoreColor, currentBlueEssence: Long): Result<Long> {
     val cur = current
     val curLvl = cur.blastCoreLevel(color)
-    if (curLvl >= 20) {
-      return Result.failure(IllegalStateException("${color.displayName} is already Max Level 20"))
+    if (curLvl >= ProgressionCatalog.MAX_CORE_LEVEL) {
+      return Result.failure(IllegalStateException("${color.displayName} is already Max Level ${ProgressionCatalog.MAX_CORE_LEVEL}"))
     }
     val cost = UpgradeCosts.blastCoreBlueEssence(curLvl)
     if (currentBlueEssence < cost) {
@@ -1522,15 +1558,15 @@ class ProgressionStore(
   fun upgradeVacuumBot(currentBlueEssence: Long): Result<Long> {
     val cur = current
     val bot = cur.vacuumBot
-    if (bot.tier >= 25 && bot.level >= 50) {
-      return Result.failure(IllegalStateException("Vacuum Bot is already Tier 25 Multiversal Max"))
+    if (bot.tier >= PowerTier.MAX_TIER && bot.level >= ProgressionCatalog.MAX_BOT_LEVEL) {
+      return Result.failure(IllegalStateException("Vacuum Bot is already Tier ${PowerTier.MAX_TIER} Multiversal Max"))
     }
     val cost = UpgradeCosts.vacuumBot(bot.tier)
     if (currentBlueEssence < cost) {
       return Result.failure(IllegalStateException("Need $cost Blue Essence"))
     }
-    val nextLvl = (bot.level + 3).coerceAtMost(50)
-    val nextTier = (bot.tier + 1).coerceAtMost(25)
+    val nextLvl = (bot.level + 3).coerceAtMost(ProgressionCatalog.MAX_BOT_LEVEL)
+    val nextTier = (bot.tier + 1).coerceAtMost(PowerTier.MAX_TIER)
     save(
       cur.copy(
         vacuumBot = bot.copy(level = nextLvl, tier = nextTier),
@@ -1708,8 +1744,8 @@ class ProgressionStore(
   fun upgradeWeaponTier(weaponId: String, currentBlueEssence: Long): Result<Long> {
     val cur = current
     val curTier = cur.weaponTier(weaponId)
-    if (curTier >= 25) {
-      return Result.failure(IllegalStateException("Weapon already at max Tier 25 Multiversal"))
+    if (curTier >= PowerTier.MAX_TIER) {
+      return Result.failure(IllegalStateException("Weapon already at max Tier ${PowerTier.MAX_TIER} Transcendent"))
     }
     val cost = UpgradeCosts.weaponTier(curTier)
     if (currentBlueEssence < cost) {
@@ -1747,8 +1783,8 @@ class ProgressionStore(
   fun upgradeWonderTier(wonderId: String, currentBlueEssence: Long): Result<Long> {
     val cur = current
     val curTier = cur.wonderTier(wonderId)
-    if (curTier >= 25) {
-      return Result.failure(IllegalStateException("Wonder Weapon already at max Tier 25 Multiversal"))
+    if (curTier >= PowerTier.MAX_TIER) {
+      return Result.failure(IllegalStateException("Wonder Weapon already at max Tier ${PowerTier.MAX_TIER} Transcendent"))
     }
     val cost = UpgradeCosts.wonderTier(curTier)
     if (currentBlueEssence < cost) {
@@ -1785,8 +1821,12 @@ class ProgressionStore(
 
   fun prestigePlayer(): Result<Long> {
     val cur = current
-    if (cur.playerLevel < 1000 || cur.playerPrestige >= 30) {
-      return Result.failure(IllegalStateException("Must reach Level 1000 to Prestige (Max 30)"))
+    if (cur.playerLevel < ProgressionCatalog.MAX_PLAYER_LEVEL || cur.playerPrestige >= ProgressionCatalog.MAX_PRESTIGE) {
+      return Result.failure(
+        IllegalStateException(
+          "Must reach Level ${ProgressionCatalog.MAX_PLAYER_LEVEL} to Prestige (Max ${ProgressionCatalog.MAX_PRESTIGE})"
+        )
+      )
     }
     val rewardBlueEssence = (cur.playerPrestige + 1) * 2500L
     val next = cur.copy(
@@ -1801,8 +1841,12 @@ class ProgressionStore(
     val cur = current
     val wpnLvl = cur.weaponLevel(weaponId)
     val wpnPrestige = cur.weaponPrestigeMap[weaponId] ?: 0
-    if (wpnLvl < 60 || wpnPrestige >= 30) {
-      return Result.failure(IllegalStateException("Must reach Weapon Level 60 to Prestige (Max 30)"))
+    if (wpnLvl < ProgressionCatalog.MAX_WEAPON_LEVEL || wpnPrestige >= ProgressionCatalog.MAX_PRESTIGE) {
+      return Result.failure(
+        IllegalStateException(
+          "Must reach Weapon Level ${ProgressionCatalog.MAX_WEAPON_LEVEL} to Prestige (Max ${ProgressionCatalog.MAX_PRESTIGE})"
+        )
+      )
     }
     val nextMap = cur.weaponXpMap + (weaponId to 0L)
     val nextPrestigeMap = cur.weaponPrestigeMap + (weaponId to wpnPrestige + 1)
@@ -1811,11 +1855,21 @@ class ProgressionStore(
     return Result.success(rewardBlueEssence)
   }
 
+  private fun allKnownArmoryStarKeys(cur: OperatorProgressionState, extraIds: Collection<String>): List<String> =
+    (listOf(
+      "perk_juggernaut", "perk_overdrive", "power_tendril", "power_repulse",
+      "power_chevron", "upgrade_packtier", "upgrade_claws", "consumable_maxcharge",
+    ) + cur.armoryItemStarMap.keys + extraIds).distinct()
+
   fun boostAllTiers(delta: Int = 1): Int {
     val cur = current
     val targetCharTier = (cur.characterTier + delta).coerceIn(1, PowerTier.MAX_TIER)
-    val nextWeapons = cur.weaponTierMap.mapValues { (_, t) -> (t + delta).coerceIn(1, PowerTier.MAX_TIER) }
-    val nextWonders = cur.wonderTierMap.mapValues { (_, t) -> (t + delta).coerceIn(1, PowerTier.MAX_TIER) }
+    val nextWeapons = ProgressionCatalog.allWeapons(cur.customWeapons).associate { w ->
+      w.id to (cur.weaponTier(w.id) + delta).coerceIn(1, PowerTier.MAX_TIER)
+    }
+    val nextWonders = WonderWeaponKind.entries.associate { w ->
+      w.id to (cur.wonderTier(w.id) + delta).coerceIn(1, PowerTier.MAX_TIER)
+    }
     val nextGear = cur.gearMap.mapValues { (_, g) -> g.copy(tier = (g.tier + delta).coerceIn(1, PowerTier.MAX_TIER)) }
     val nextEq = cur.equipmentMap.mapValues { (_, e) -> e.copy(tier = (e.tier + delta).coerceIn(1, PowerTier.MAX_TIER)) }
     val nextSkills = cur.skillNodes.mapValues { (_, s) -> s.copy(tier = (s.tier + delta).coerceIn(1, s.maxTier), unlocked = true) }
@@ -1824,7 +1878,7 @@ class ProgressionStore(
     val nextCustomPerks = cur.customPerks.map { it.copy(tier = (it.tier + delta).coerceIn(1, it.maxTier)) }
     val nextCustomGear = cur.customGear.map { it.copy(tier = (it.tier + delta).coerceIn(1, it.maxTier)) }
     val nextCustomEq = cur.customEquipment.map { it.copy(tier = (it.tier + delta).coerceIn(1, it.maxTier)) }
-    val nextCores = cur.blastCoreLevels.mapValues { (_, l) -> (l + delta).coerceIn(1, 20) }
+    val nextCores = cur.blastCoreLevels.mapValues { (_, l) -> (l + delta).coerceIn(1, ProgressionCatalog.MAX_CORE_LEVEL) }
     val allAreaIds = (cur.allPlayableAreas().map { it.id } + cur.areaStates.keys).distinct()
     val nextAreas = allAreaIds.associateWith { areaId ->
       val a = cur.areaState(areaId)
@@ -1839,6 +1893,35 @@ class ProgressionStore(
     val nextModeTiers = allModeIds.associateWith { modeId ->
       (cur.modeTier(modeId) + delta).coerceIn(1, PowerTier.MAX_TIER)
     }
+    val nextOutfits = (MultiverseArsenalCatalog.outfits.map { it.id } + cur.outfitStates.keys).distinct().associateWith { oid ->
+      val o = cur.outfitState(oid)
+      o.copy(
+        tier = (o.tier + delta).coerceIn(1, PowerTier.MAX_TIER),
+        skillRank = (o.skillRank + delta).coerceIn(1, PowerTier.MAX_TIER),
+        gearRank = (o.gearRank + delta).coerceIn(1, PowerTier.MAX_TIER),
+        equipmentRank = (o.equipmentRank + delta).coerceIn(1, PowerTier.MAX_TIER),
+      )
+    }
+    val nextMagic = cur.magicState.copy(
+      magicTier = (cur.magicState.magicTier + delta).coerceIn(1, PowerTier.MAX_TIER),
+      spellTiers = MultiverseSystemsCatalog.magicSpells.associate { s ->
+        s.id to (cur.magicState.spellTier(s.id) + delta).coerceIn(1, PowerTier.MAX_TIER)
+      },
+    )
+    val nextBase = cur.playerBaseState.copy(
+      wallTier = (cur.playerBaseState.wallTier + delta).coerceIn(1, PowerTier.MAX_TIER),
+      turretTier = (cur.playerBaseState.turretTier + delta).coerceIn(1, PowerTier.MAX_TIER),
+      shieldGeneratorTier = (cur.playerBaseState.shieldGeneratorTier + delta).coerceIn(1, PowerTier.MAX_TIER),
+      resourceVaultTier = (cur.playerBaseState.resourceVaultTier + delta).coerceIn(1, PowerTier.MAX_TIER),
+    ).let { it.copy(baseHpMax = it.maxIntegrity(), baseHpCurrent = it.maxIntegrity()) }
+    val nextBot = cur.vacuumBot.copy(
+      tier = (cur.vacuumBot.tier + delta).coerceIn(1, PowerTier.MAX_TIER),
+      level = (cur.vacuumBot.level + delta).coerceIn(1, ProgressionCatalog.MAX_BOT_LEVEL),
+    )
+    val nextClan = cur.clan.copy(
+      tier = (cur.clan.tier + delta).coerceIn(1, PowerTier.MAX_TIER),
+      level = (cur.clan.level + delta).coerceIn(1, ProgressionCatalog.MAX_CLAN_LEVEL),
+    )
     save(
       cur.copy(
         characterTier = targetCharTier,
@@ -1852,21 +1935,26 @@ class ProgressionStore(
         customPerks = nextCustomPerks,
         customGear = nextCustomGear,
         customEquipment = nextCustomEq,
-        blastShardTier = (cur.blastShardTier + delta).coerceIn(1, 25),
-        companionBuffTier = (cur.companionBuffTier + delta).coerceIn(1, 25),
+        blastShardTier = (cur.blastShardTier + delta).coerceIn(1, PowerTier.MAX_TIER),
+        companionBuffTier = (cur.companionBuffTier + delta).coerceIn(1, PowerTier.MAX_TIER),
         blastCoreLevels = nextCores,
         areaStates = nextAreas,
         modeTierMap = nextModeTiers,
+        outfitStates = nextOutfits,
+        magicState = nextMagic,
+        playerBaseState = nextBase,
+        vacuumBot = nextBot,
+        clan = nextClan,
       )
     )
     return delta
   }
 
-  fun setAllTiers(targetTier: Int = 25): Int {
+  fun setAllTiers(targetTier: Int = PowerTier.MAX_TIER): Int {
     val clamped = targetTier.coerceIn(1, PowerTier.MAX_TIER)
     val cur = current
-    val nextWeapons = cur.weaponTierMap.mapValues { _ -> clamped }
-    val nextWonders = cur.wonderTierMap.mapValues { _ -> clamped }
+    val nextWeapons = ProgressionCatalog.allWeapons(cur.customWeapons).associate { it.id to clamped }
+    val nextWonders = WonderWeaponKind.entries.associate { it.id to clamped }
     val nextGear = cur.gearMap.mapValues { (_, g) -> g.copy(tier = clamped) }
     val nextEq = cur.equipmentMap.mapValues { (_, e) -> e.copy(tier = clamped) }
     val nextSkills = cur.skillNodes.mapValues { (_, s) -> s.copy(tier = minOf(clamped, s.maxTier), unlocked = true) }
@@ -1875,7 +1963,7 @@ class ProgressionStore(
     val nextCustomPerks = cur.customPerks.map { it.copy(tier = minOf(clamped, it.maxTier)) }
     val nextCustomGear = cur.customGear.map { it.copy(tier = minOf(clamped, it.maxTier)) }
     val nextCustomEq = cur.customEquipment.map { it.copy(tier = minOf(clamped, it.maxTier)) }
-    val nextCores = cur.blastCoreLevels.mapValues { _ -> minOf(clamped, 20) }
+    val nextCores = cur.blastCoreLevels.mapValues { _ -> minOf(clamped, ProgressionCatalog.MAX_CORE_LEVEL) }
     val allAreaIds = (cur.allPlayableAreas().map { it.id } + cur.areaStates.keys).distinct()
     val nextAreas = allAreaIds.associateWith { areaId ->
       cur.areaState(areaId).copy(
@@ -1887,6 +1975,24 @@ class ProgressionStore(
     }
     val allModeIds = (UniverseCatalog.modes.map { it.id } + cur.modeTierMap.keys + cur.modeStarMap.keys).distinct()
     val nextModeTiers = allModeIds.associateWith { clamped }
+    val nextOutfits = (MultiverseArsenalCatalog.outfits.map { it.id } + cur.outfitStates.keys).distinct().associateWith { oid ->
+      cur.outfitState(oid).copy(
+        tier = clamped,
+        skillRank = clamped,
+        gearRank = clamped,
+        equipmentRank = clamped,
+      )
+    }
+    val nextMagic = cur.magicState.copy(
+      magicTier = clamped,
+      spellTiers = MultiverseSystemsCatalog.magicSpells.associate { it.id to clamped },
+    )
+    val nextBase = cur.playerBaseState.copy(
+      wallTier = clamped,
+      turretTier = clamped,
+      shieldGeneratorTier = clamped,
+      resourceVaultTier = clamped,
+    ).let { it.copy(baseHpMax = it.maxIntegrity(), baseHpCurrent = it.maxIntegrity()) }
     save(
       cur.copy(
         characterTier = clamped,
@@ -1905,19 +2011,132 @@ class ProgressionStore(
         blastCoreLevels = nextCores,
         areaStates = nextAreas,
         modeTierMap = nextModeTiers,
+        outfitStates = nextOutfits,
+        magicState = nextMagic,
+        playerBaseState = nextBase,
+        vacuumBot = cur.vacuumBot.copy(tier = clamped),
+        clan = cur.clan.copy(tier = clamped),
       )
     )
     return clamped
   }
 
-  fun setAllStars(targetStars: Int = 10): Int {
+  fun boostAllStars(delta: Int = 10, armoryItemIds: Collection<String> = emptyList()): Int {
+    val cur = current
+    val nextWeapons = ProgressionCatalog.allWeapons(cur.customWeapons).associate { w ->
+      w.id to (cur.weaponStar(w.id) + delta).coerceIn(1, StarRankMeta.MAX_STARS)
+    }
+    val nextWonders = WonderWeaponKind.entries.associate { w ->
+      w.id to (cur.wonderStar(w.id) + delta).coerceIn(1, StarRankMeta.MAX_STARS)
+    }
+    val nextArmoryStars = allKnownArmoryStarKeys(cur, armoryItemIds).associateWith { id ->
+      (cur.armoryItemStar(id) + delta).coerceIn(1, StarRankMeta.MAX_STARS)
+    }
+    val nextGear = cur.gearMap.mapValues { (_, g) -> g.copy(starLevel = (g.starLevel + delta).coerceIn(1, StarRankMeta.MAX_STARS)) }
+    val nextEq = cur.equipmentMap.mapValues { (_, e) -> e.copy(starLevel = (e.starLevel + delta).coerceIn(1, StarRankMeta.MAX_STARS)) }
+    val nextOutfits = (MultiverseArsenalCatalog.outfits.map { it.id } + cur.outfitStates.keys).distinct().associateWith { oid ->
+      val o = cur.outfitState(oid)
+      o.copy(starLevel = (o.starLevel + delta).coerceIn(1, StarRankMeta.MAX_STARS))
+    }
+    val nextSkills = cur.skillNodes.mapValues { (_, s) -> s.copy(starLevel = (s.starLevel + delta).coerceIn(1, StarRankMeta.MAX_STARS)) }
+    val nextPerkStars = MultiverseArsenalCatalog.perkDrinks.associate { it.id to (cur.perkStar(it.id) + delta).coerceIn(1, StarRankMeta.MAX_STARS) }
+    val nextProtStars = ProgressionCatalog.protectionUpgrades.associate { it.id to (cur.protectionStar(it.id) + delta).coerceIn(1, StarRankMeta.MAX_STARS) }
+    val nextCustomPerks = cur.customPerks.map { it.copy(starLevel = (it.starLevel + delta).coerceIn(1, StarRankMeta.MAX_STARS)) }
+    val nextCustomGear = cur.customGear.map { it.copy(starLevel = (it.starLevel + delta).coerceIn(1, StarRankMeta.MAX_STARS)) }
+    val nextCustomEq = cur.customEquipment.map { it.copy(starLevel = (it.starLevel + delta).coerceIn(1, StarRankMeta.MAX_STARS)) }
+    val allAreaIds = (cur.allPlayableAreas().map { it.id } + cur.areaStates.keys).distinct()
+    val nextAreas = allAreaIds.associateWith { areaId ->
+      val a = cur.areaState(areaId)
+      a.copy(starLevel = (a.starLevel + delta).coerceIn(1, StarRankMeta.MAX_STARS))
+    }
+    val allModeIds = (UniverseCatalog.modes.map { it.id } + cur.modeTierMap.keys + cur.modeStarMap.keys).distinct()
+    val nextModeStars = allModeIds.associateWith { modeId ->
+      (cur.modeStar(modeId) + delta).coerceIn(1, StarRankMeta.MAX_STARS)
+    }
+    save(
+      cur.copy(
+        characterStarLevel = (cur.characterStarLevel + delta).coerceIn(1, StarRankMeta.MAX_STARS),
+        weaponStarMap = nextWeapons,
+        wonderStarMap = nextWonders,
+        armoryItemStarMap = nextArmoryStars,
+        gearMap = nextGear,
+        equipmentMap = nextEq,
+        outfitStates = nextOutfits,
+        skillNodes = nextSkills,
+        perkStarMap = nextPerkStars,
+        protectionStarMap = nextProtStars,
+        customPerks = nextCustomPerks,
+        customGear = nextCustomGear,
+        customEquipment = nextCustomEq,
+        areaStates = nextAreas,
+        modeStarMap = nextModeStars,
+        vacuumBot = cur.vacuumBot.copy(starLevel = (cur.vacuumBot.starLevel + delta).coerceIn(1, StarRankMeta.MAX_STARS)),
+        clan = cur.clan.copy(starLevel = (cur.clan.starLevel + delta).coerceIn(1, StarRankMeta.MAX_STARS)),
+      )
+    )
+    return delta
+  }
+
+  fun boostAllLevels(delta: Int = 10): Int {
+    val cur = current
+    val nextPlayerLvl = (cur.playerLevel + delta).coerceIn(1, ProgressionCatalog.MAX_PLAYER_LEVEL)
+    val nextPlayerXp = maxOf(cur.playerXp, ProgressionCatalog.totalXpForLevel(nextPlayerLvl))
+    val nextWpnXp = ProgressionCatalog.allWeapons(cur.customWeapons).associate { w ->
+      val targetLvl = (cur.weaponLevel(w.id) + delta).coerceIn(1, ProgressionCatalog.MAX_WEAPON_LEVEL)
+      w.id to maxOf(cur.weaponXp(w.id), ProgressionCatalog.totalXpForWeaponLevel(targetLvl))
+    }
+    val nextGear = cur.gearMap.mapValues { (_, g) ->
+      val lvl = (g.level + delta).coerceIn(1, ProgressionCatalog.MAX_GEAR_LEVEL)
+      g.copy(level = lvl, xp = maxOf(g.xp, ProgressionCatalog.totalXpForGearLevel(lvl)))
+    }
+    val nextEq = cur.equipmentMap.mapValues { (_, e) ->
+      val lvl = (e.level + delta).coerceIn(1, ProgressionCatalog.MAX_EQUIPMENT_LEVEL)
+      e.copy(level = lvl, xp = maxOf(e.xp, ProgressionCatalog.totalXpForEquipmentLevel(lvl)))
+    }
+    val nextOutfits = (MultiverseArsenalCatalog.outfits.map { it.id } + cur.outfitStates.keys).distinct().associateWith { oid ->
+      val o = cur.outfitState(oid)
+      o.copy(level = (o.level + delta).coerceIn(1, ProgressionCatalog.MAX_OUTFIT_LEVEL))
+    }
+    val nextCrystals = cur.crystals.map { c -> c.copy(level = (c.level + delta).coerceIn(1, PowerTier.MAX_TIER)) }
+    val nextCores = cur.blastCoreLevels.mapValues { (_, l) -> (l + delta).coerceIn(1, ProgressionCatalog.MAX_CORE_LEVEL) }
+    val nextNg = (cur.unlockedNgPlusTier + delta).coerceIn(0, NewGamePlusVersion.MAX_NG_PLUS_TIER)
+    save(
+      cur.copy(
+        playerXp = nextPlayerXp,
+        weaponXpMap = nextWpnXp,
+        gearMap = nextGear,
+        equipmentMap = nextEq,
+        outfitStates = nextOutfits,
+        crystals = nextCrystals,
+        blastCoreLevels = nextCores,
+        vacuumBot = cur.vacuumBot.copy(level = (cur.vacuumBot.level + delta).coerceIn(1, ProgressionCatalog.MAX_BOT_LEVEL)),
+        clan = cur.clan.copy(level = (cur.clan.level + delta).coerceIn(1, ProgressionCatalog.MAX_CLAN_LEVEL)),
+        unlockedNgPlusTier = nextNg,
+        activeNgPlusTier = maxOf(cur.activeNgPlusTier, nextNg).coerceIn(0, NewGamePlusVersion.MAX_NG_PLUS_TIER),
+      )
+    )
+    return delta
+  }
+
+  fun grantDiamondBonus(amount: Long = 50_000L) {
+    val cur = current
+    save(cur.copy(diamonds = cur.diamonds + amount, gold = cur.gold + amount, tuuCash = cur.tuuCash + (amount * 2)))
+  }
+
+  fun setAllStars(
+    targetStars: Int = StarRankMeta.MAX_STARS,
+    armoryItemIds: Collection<String> = emptyList(),
+  ): Int {
     val clamped = targetStars.coerceIn(1, StarRankMeta.MAX_STARS)
     val cur = current
-    val nextWeapons = cur.weaponStarMap.mapValues { _ -> clamped }
-    val nextWonders = cur.wonderStarMap.mapValues { _ -> clamped }
+    val nextWeapons = ProgressionCatalog.allWeapons(cur.customWeapons).associate { it.id to clamped }
+    val nextWonders = WonderWeaponKind.entries.associate { it.id to clamped }
+    val nextArmoryStars = allKnownArmoryStarKeys(cur, armoryItemIds).associateWith { clamped }
     val nextGear = cur.gearMap.mapValues { (_, g) -> g.copy(starLevel = clamped) }
     val nextEq = cur.equipmentMap.mapValues { (_, e) -> e.copy(starLevel = clamped) }
-    val nextOutfits = cur.outfitStates.mapValues { (_, o) -> o.copy(starLevel = clamped) }
+    val nextOutfits = (MultiverseArsenalCatalog.outfits.map { it.id } + cur.outfitStates.keys).distinct().associateWith { oid ->
+      cur.outfitState(oid).copy(starLevel = clamped)
+    }
     val nextSkills = cur.skillNodes.mapValues { (_, s) -> s.copy(starLevel = clamped) }
     val nextPerkStars = MultiverseArsenalCatalog.perkDrinks.associate { it.id to clamped }
     val nextProtStars = ProgressionCatalog.protectionUpgrades.associate { it.id to clamped }
@@ -1935,6 +2154,7 @@ class ProgressionStore(
         characterStarLevel = clamped,
         weaponStarMap = nextWeapons,
         wonderStarMap = nextWonders,
+        armoryItemStarMap = nextArmoryStars,
         gearMap = nextGear,
         equipmentMap = nextEq,
         outfitStates = nextOutfits,
@@ -1946,16 +2166,35 @@ class ProgressionStore(
         customEquipment = nextCustomEq,
         areaStates = nextAreas,
         modeStarMap = nextModeStars,
+        vacuumBot = cur.vacuumBot.copy(starLevel = clamped),
+        clan = cur.clan.copy(starLevel = clamped),
       )
     )
     return clamped
   }
 
-  fun applyProtocolCode(rawCode: String): Result<String> {
+  fun applyProtocolCode(
+    rawCode: String,
+    armoryItemIds: Collection<String> = emptyList(),
+  ): Result<String> {
     val code = rawCode.trim().uppercase(Locale.US)
     return when {
       code.isEmpty() -> Result.failure(IllegalArgumentException("Please enter a protocol code."))
-      code == "TIER25" || code == "MAXTIERS" || code == "MAXTIER" || code == "MULTIVERSAL" -> {
+      code == "TIER60" || code == "T60" || code == "MAXTIERS" || code == "MAXTIER" || code == "TRANSCENDENT" -> {
+        setAllTiers(PowerTier.MAX_TIER)
+        Result.success("PROTOCOL ACCEPTED: All systems elevated to TIER ${PowerTier.MAX_TIER} ETERNIUM APEX!")
+      }
+      code == "TIER50" || code == "T50" -> {
+        setAllTiers(50)
+        Result.success("PROTOCOL ACCEPTED: All systems set to TIER 50 (Omniversal)!")
+      }
+      code == "BOOST10" || code == "+10ALL" || code == "+10TIERS" || code == "TIER+10" || code == "STARS+10" -> {
+        boostAllTiers(10)
+        boostAllStars(10, armoryItemIds)
+        boostAllLevels(10)
+        Result.success("PROTOCOL ACCEPTED: +10 Levels, +10 Tiers & +10★ applied across ALL systems!")
+      }
+      code == "TIER25" || code == "MULTIVERSAL" -> {
         setAllTiers(25)
         Result.success("PROTOCOL ACCEPTED: All systems elevated to TIER 25 MULTIVERSAL!")
       }
@@ -1975,27 +2214,66 @@ class ProgressionStore(
         boostAllTiers(5)
         Result.success("PROTOCOL ACCEPTED: +5 Tiers applied to all weapons, gear, character & systems!")
       }
-      code == "STARS10" || code == "MAXSTARS" || code == "10STARS" -> {
-        setAllStars(10)
+      code == "STARS25" || code == "MAXSTARS" || code == "25STARS" -> {
+        setAllStars(StarRankMeta.MAX_STARS, armoryItemIds)
+        Result.success("PROTOCOL ACCEPTED: ${StarRankMeta.MAX_STARS}★ Eternium Sovereign star ranks unlocked across all equipment!")
+      }
+      code == "STARS15" || code == "15STARS" -> {
+        setAllStars(15, armoryItemIds)
+        Result.success("PROTOCOL ACCEPTED: 15★ Omniverse Sovereign star ranks unlocked across all equipment!")
+      }
+      code == "STARS10" || code == "10STARS" -> {
+        setAllStars(10, armoryItemIds)
         Result.success("PROTOCOL ACCEPTED: 10★ Omniverse Nova star ranks unlocked across all equipment!")
       }
       code == "ESSENCE999" || code == "MAXESSENCE" || code == "RICH" -> {
         val cur = current
-        save(cur.copy(redEssence = cur.redEssence + 100_000L, yellowEssence = cur.yellowEssence + 100_000L, greenEssence = cur.greenEssence + 100_000L, combinedEssence = cur.combinedEssence + 50_000L, blastShards = cur.blastShards + 500L))
-        Result.success("PROTOCOL ACCEPTED: +100k Multi-Color Essence & +500 Blast Shards granted!")
+        val nextShards = cur.systemShards.toMutableMap().apply {
+          MultiverseSystemsCatalog.systemShardDomains.forEach { (id, _) ->
+            this[id] = (this[id] ?: 0L) + 120L
+          }
+        }
+        val nextRes = cur.environmentalResources.toMutableMap().apply {
+          MultiverseSystemsCatalog.environmentalResourceSpecs.forEach { (id, _) ->
+            this[id] = (this[id] ?: 0L) + 250L
+          }
+        }
+        save(
+          cur.copy(
+            redEssence = cur.redEssence + 100_000L,
+            yellowEssence = cur.yellowEssence + 100_000L,
+            greenEssence = cur.greenEssence + 100_000L,
+            combinedEssence = cur.combinedEssence + 50_000L,
+            blastShards = cur.blastShards + 500L,
+            gold = cur.gold + 50_000L,
+            diamonds = cur.diamonds + 5_000L,
+            tuuCash = cur.tuuCash + 150_000L,
+            systemShards = nextShards,
+            environmentalResources = nextRes,
+          )
+        )
+        Result.success("PROTOCOL ACCEPTED: +100k Essence, +50k Gold, +5k Diamonds, +150k TUUCash, +120 All Shards & Resources!")
       }
       code == "UNLOCKALL" || code == "ALLUNLOCKED" || code == "GODMODE" -> {
-        setAllTiers(25)
-        setAllStars(10)
+        setAllTiers(PowerTier.MAX_TIER)
+        setAllStars(StarRankMeta.MAX_STARS, armoryItemIds)
+        boostAllLevels(10)
         val cur = current
-        save(cur.copy(unlockedNgPlusTier = 5, activeNgPlusTier = 5))
-        Result.success("PROTOCOL ACCEPTED: Full Universe Unlocked (T25, 10★, NG+5, All Skills)!")
+        val allSpells = MultiverseSystemsCatalog.magicSpells.map { it.id }.toSet()
+        save(
+          cur.copy(
+            unlockedNgPlusTier = NewGamePlusVersion.MAX_NG_PLUS_TIER,
+            activeNgPlusTier = NewGamePlusVersion.MAX_NG_PLUS_TIER,
+            magicState = cur.magicState.copy(unlockedSpells = allSpells, manaMax = 240f, manaCurrent = 240f),
+          )
+        )
+        Result.success("PROTOCOL ACCEPTED: Full Universe Unlocked (T${PowerTier.MAX_TIER}, ${StarRankMeta.MAX_STARS}★, NG+${NewGamePlusVersion.MAX_NG_PLUS_TIER}, All Spells & Skills)!")
       }
       code == "BO3PERKS" || code == "TREYARCH" || code == "ZOMBIES" -> {
-        boostAllTiers(5)
-        Result.success("BO3 MOD TOOLS OVERDRIVE: +5 Tiers applied & Treyarch perks supercharged!")
+        boostAllTiers(10)
+        Result.success("BO3 MOD TOOLS OVERDRIVE: +10 Tiers applied & Treyarch perks supercharged!")
       }
-      else -> Result.failure(IllegalArgumentException("Unknown protocol code '$code'. Try TIER25, STARS10, BOOST5, ESSENCE999, or UNLOCKALL."))
+      else -> Result.failure(IllegalArgumentException("Unknown protocol code '$code'. Try TIER60, STARS25, BOOST10, ESSENCE999, or UNLOCKALL."))
     }
   }
 
@@ -2040,7 +2318,7 @@ class ProgressionStore(
     } else cur.weaponXpMap
 
     val nextClaimed = cur.claimedPassTiers + key
-    val nextCycle = if (tier >= 6 + cycle * 6 && cur.battlePassPrestige < 30) {
+    val nextCycle = if (tier >= 6 + cycle * 6 && cur.battlePassPrestige < ProgressionCatalog.MAX_PRESTIGE) {
       cur.copy(battlePassPrestige = cur.battlePassPrestige + 1, bpCycleCount = cur.bpCycleCount + 1)
     } else cur
 
@@ -2073,7 +2351,7 @@ class ProgressionStore(
 
     val nextProgress = cur.challengeProgress - challengeId
     val nextClaimed = cur.claimedChallenges + key
-    val nextPrestige = if (cur.claimedChallenges.size >= 15 && cur.challengePrestige < 30) cur.challengePrestige + 1 else cur.challengePrestige
+    val nextPrestige = if (cur.claimedChallenges.size >= 15 && cur.challengePrestige < ProgressionCatalog.MAX_PRESTIGE) cur.challengePrestige + 1 else cur.challengePrestige
 
     save(
       cur.copy(
@@ -2095,6 +2373,623 @@ class ProgressionStore(
         claimedChallenges = emptySet(),
       )
     )
+  }
+
+  // MULTIVERSE SYSTEMS: CRYSTALS, MAGIC, PLAYER BASE, TRANSMUTER & MULTI-CURRENCY UPGRADES
+
+  fun selectMagicSpell(spellId: String) {
+    val cur = current
+    if (spellId !in cur.magicState.unlockedSpells) return
+    save(cur.copy(magicState = cur.magicState.copy(activeSpellId = spellId)))
+  }
+
+  fun unlockOrUpgradeMagicSpell(spellId: String, currency: String = "gold"): Result<String> {
+    val cur = current
+    val spec = MultiverseSystemsCatalog.magicSpells.firstOrNull { it.id == spellId }
+      ?: return Result.failure(IllegalStateException("Spell not found"))
+    val magic = cur.magicState
+    if (spellId !in magic.unlockedSpells) {
+      return when (currency) {
+        "diamonds" -> {
+          val cost = spec.unlockDiamonds.coerceAtLeast(40L)
+          if (cur.diamonds < cost) return Result.failure(IllegalStateException("Need $cost Diamonds"))
+          save(
+            cur.copy(
+              diamonds = cur.diamonds - cost,
+              magicState = magic.copy(
+                unlockedSpells = magic.unlockedSpells + spellId,
+                activeSpellId = spellId,
+                spellTiers = magic.spellTiers + (spellId to 1),
+              ),
+            )
+          )
+          Result.success("Unlocked ${spec.name} (-$cost Diamonds)")
+        }
+        "shards" -> {
+          val cost = 10L
+          val have = cur.systemShardCount("magic")
+          if (have < cost) return Result.failure(IllegalStateException("Need $cost Magic Shards"))
+          save(
+            cur.copy(
+              systemShards = cur.systemShards + ("magic" to (have - cost)),
+              magicState = magic.copy(
+                unlockedSpells = magic.unlockedSpells + spellId,
+                activeSpellId = spellId,
+                spellTiers = magic.spellTiers + (spellId to 1),
+              ),
+            )
+          )
+          Result.success("Unlocked ${spec.name} (-$cost Magic Shards)")
+        }
+        else -> {
+          val cost = spec.unlockGold.coerceAtLeast(300L)
+          if (cur.gold < cost) return Result.failure(IllegalStateException("Need $cost Gold"))
+          save(
+            cur.copy(
+              gold = cur.gold - cost,
+              magicState = magic.copy(
+                unlockedSpells = magic.unlockedSpells + spellId,
+                activeSpellId = spellId,
+                spellTiers = magic.spellTiers + (spellId to 1),
+              ),
+            )
+          )
+          Result.success("Unlocked ${spec.name} (-$cost Gold)")
+        }
+      }
+    }
+    val curTier = magic.spellTier(spellId)
+    if (curTier >= PowerTier.MAX_TIER) {
+      return Result.failure(IllegalStateException("${spec.name} already at Max Tier ${PowerTier.MAX_TIER}"))
+    }
+    return upgradeMagicSubTarget(
+      curTier = curTier,
+      currency = currency,
+      label = spec.name,
+    ) { updatedCur ->
+      updatedCur.copy(
+        magicState = updatedCur.magicState.copy(
+          spellTiers = updatedCur.magicState.spellTiers + (spellId to (curTier + 1)),
+          activeSpellId = spellId,
+        )
+      )
+    }
+  }
+
+  fun upgradeMagicTier(currency: String = "gold"): Result<String> {
+    val cur = current
+    val curTier = cur.magicState.magicTier.coerceIn(1, PowerTier.MAX_TIER)
+    if (curTier >= PowerTier.MAX_TIER) {
+      return Result.failure(IllegalStateException("Arcane Conduit already at Max Tier ${PowerTier.MAX_TIER}"))
+    }
+    return upgradeMagicSubTarget(curTier, currency, "Arcane Conduit") { updatedCur ->
+      val nextTier = (curTier + 1).coerceAtMost(PowerTier.MAX_TIER)
+      val nextManaMax = (100f + nextTier * 4f).coerceAtMost(320f)
+      updatedCur.copy(
+        magicState = updatedCur.magicState.copy(
+          magicTier = nextTier,
+          manaMax = nextManaMax,
+          manaCurrent = nextManaMax,
+        )
+      )
+    }
+  }
+
+  private fun upgradeMagicSubTarget(
+    curTier: Int,
+    currency: String,
+    label: String,
+    mutate: (OperatorProgressionState) -> OperatorProgressionState,
+  ): Result<String> {
+    val cur = current
+    return when (currency) {
+      "diamonds" -> {
+        val cost = UpgradeCosts.magicTierCostDiamonds(curTier)
+        if (cur.diamonds < cost) return Result.failure(IllegalStateException("Need $cost Diamonds"))
+        save(mutate(cur.copy(diamonds = cur.diamonds - cost)))
+        Result.success("$label upgraded to T${curTier + 1}/${PowerTier.MAX_TIER} (-$cost Diamonds)")
+      }
+      "shards" -> {
+        val cost = UpgradeCosts.systemShardCost(curTier)
+        val have = cur.systemShardCount("magic")
+        if (have < cost) return Result.failure(IllegalStateException("Need $cost Arcane Magic Shards"))
+        save(mutate(cur.copy(systemShards = cur.systemShards + ("magic" to (have - cost)))))
+        Result.success("$label upgraded to T${curTier + 1}/${PowerTier.MAX_TIER} (-$cost Magic Shards)")
+      }
+      "energy_cell" -> {
+        val cost = 6L + curTier
+        val have = cur.resourceCount("energy_cell")
+        if (have < cost) return Result.failure(IllegalStateException("Need $cost Fusion Energy Cells"))
+        save(mutate(cur.copy(environmentalResources = cur.environmentalResources + ("energy_cell" to (have - cost)))))
+        Result.success("$label upgraded to T${curTier + 1}/${PowerTier.MAX_TIER} (-$cost Energy Cells)")
+      }
+      else -> {
+        val cost = UpgradeCosts.magicTierCostGold(curTier)
+        if (cur.gold < cost) return Result.failure(IllegalStateException("Need $cost Gold"))
+        save(mutate(cur.copy(gold = cur.gold - cost)))
+        Result.success("$label upgraded to T${curTier + 1}/${PowerTier.MAX_TIER} (-$cost Gold)")
+      }
+    }
+  }
+
+  fun adjustMagicDifficulty(delta: Float): Float {
+    val cur = current
+    val nextScale = (cur.magicState.difficultyScalingFactor + delta).coerceIn(1.0f, 3.5f)
+    save(cur.copy(magicState = cur.magicState.copy(difficultyScalingFactor = nextScale)))
+    return nextScale
+  }
+
+  fun toggleMagicOvercharge(): Boolean {
+    val cur = current
+    val nextOn = !cur.magicState.overchargeDifficultyEnabled
+    save(cur.copy(magicState = cur.magicState.copy(overchargeDifficultyEnabled = nextOn)))
+    return nextOn
+  }
+
+  fun craftCrystal(templateId: String): Result<CrystalItem> {
+    val cur = current
+    val tpl = MultiverseSystemsCatalog.craftableCrystalTemplates.firstOrNull { it.id == templateId }
+      ?: return Result.failure(IllegalStateException("Crystal template not found"))
+    val fragCost = 20L
+    val kyberCost = 6L
+    val goldCost = 500L
+    if (cur.resourceCount("crystal_shard") < fragCost) {
+      return Result.failure(IllegalStateException("Need $fragCost Prism Crystal Frags"))
+    }
+    if (cur.resourceCount("kyber_fragment") < kyberCost) {
+      return Result.failure(IllegalStateException("Need $kyberCost Kyber Force Fragments"))
+    }
+    if (cur.gold < goldCost) {
+      return Result.failure(IllegalStateException("Need $goldCost Gold"))
+    }
+    val existingCount = cur.crystals.count { it.id.startsWith(tpl.id) }
+    val crafted = tpl.copy(
+      id = if (existingCount == 0 && cur.crystals.none { it.id == tpl.id }) tpl.id else "${tpl.id}_${System.currentTimeMillis() % 10000}",
+      level = 1,
+      socketedSlot = null,
+    )
+    save(
+      cur.copy(
+        gold = cur.gold - goldCost,
+        environmentalResources = cur.environmentalResources +
+          ("crystal_shard" to (cur.resourceCount("crystal_shard") - fragCost)) +
+          ("kyber_fragment" to (cur.resourceCount("kyber_fragment") - kyberCost)),
+        crystals = cur.crystals + crafted,
+      )
+    )
+    return Result.success(crafted)
+  }
+
+  fun upgradeCrystal(crystalId: String, currency: String = "gold"): Result<CrystalItem> {
+    val cur = current
+    val item = cur.crystals.firstOrNull { it.id == crystalId }
+      ?: return Result.failure(IllegalStateException("Crystal not found"))
+    if (item.level >= PowerTier.MAX_TIER) {
+      return Result.failure(IllegalStateException("${item.name} is already Max Level ${PowerTier.MAX_TIER}"))
+    }
+    val nextLevel = item.level + 1
+    val updatedCrystal = item.copy(level = nextLevel)
+    when (currency) {
+      "diamonds" -> {
+        val cost = UpgradeCosts.crystalUpgradeDiamonds(item.level)
+        if (cur.diamonds < cost) return Result.failure(IllegalStateException("Need $cost Diamonds"))
+        save(cur.copy(diamonds = cur.diamonds - cost, crystals = cur.crystals.map { if (it.id == crystalId) updatedCrystal else it }))
+      }
+      "shards" -> {
+        val cost = UpgradeCosts.systemShardCost(item.level)
+        val have = cur.systemShardCount("crystal")
+        if (have < cost) return Result.failure(IllegalStateException("Need $cost Crystal Shards"))
+        save(
+          cur.copy(
+            systemShards = cur.systemShards + ("crystal" to (have - cost)),
+            crystals = cur.crystals.map { if (it.id == crystalId) updatedCrystal else it },
+          )
+        )
+      }
+      "crystal_shard" -> {
+        val cost = 10L + item.level * 2L
+        val have = cur.resourceCount("crystal_shard")
+        if (have < cost) return Result.failure(IllegalStateException("Need $cost Prism Crystal Frags"))
+        save(
+          cur.copy(
+            environmentalResources = cur.environmentalResources + ("crystal_shard" to (have - cost)),
+            crystals = cur.crystals.map { if (it.id == crystalId) updatedCrystal else it },
+          )
+        )
+      }
+      else -> {
+        val cost = UpgradeCosts.crystalUpgradeGold(item.level)
+        if (cur.gold < cost) return Result.failure(IllegalStateException("Need $cost Gold"))
+        save(cur.copy(gold = cur.gold - cost, crystals = cur.crystals.map { if (it.id == crystalId) updatedCrystal else it }))
+      }
+    }
+    return Result.success(updatedCrystal)
+  }
+
+  fun socketCrystal(crystalId: String, slot: String?): CrystalItem? {
+    val cur = current
+    val target = cur.crystals.firstOrNull { it.id == crystalId } ?: return null
+    val nextCrystals = cur.crystals.map { c ->
+      when {
+        c.id == crystalId -> c.copy(socketedSlot = slot)
+        slot != null && c.socketedSlot == slot -> c.copy(socketedSlot = null)
+        else -> c
+      }
+    }
+    save(cur.copy(crystals = nextCrystals))
+    return nextCrystals.firstOrNull { it.id == crystalId }
+  }
+
+  fun customizePlayerBase(
+    baseName: String? = null,
+    layoutTheme: String? = null,
+    primaryHex: Long? = null,
+  ): PlayerBaseState {
+    val cur = current
+    val b = cur.playerBaseState
+    val next = b.copy(
+      baseName = baseName?.trim()?.take(40)?.ifBlank { b.baseName } ?: b.baseName,
+      layoutTheme = layoutTheme ?: b.layoutTheme,
+      primaryHex = primaryHex ?: b.primaryHex,
+    )
+    save(cur.copy(playerBaseState = next))
+    return next
+  }
+
+  fun upgradePlayerBaseModule(module: String, currency: String = "gold"): Result<String> {
+    val cur = current
+    val b = cur.playerBaseState
+    val curTier = when (module) {
+      "wall" -> b.wallTier
+      "turret" -> b.turretTier
+      "shield" -> b.shieldGeneratorTier
+      else -> b.resourceVaultTier
+    }
+    if (curTier >= PowerTier.MAX_TIER) {
+      return Result.failure(IllegalStateException("Base $module already at Max Tier ${PowerTier.MAX_TIER}"))
+    }
+    val nextTier = curTier + 1
+    fun applyBase(s: OperatorProgressionState): OperatorProgressionState {
+      val updatedBase = when (module) {
+        "wall" -> b.copy(wallTier = nextTier)
+        "turret" -> b.copy(turretTier = nextTier)
+        "shield" -> b.copy(shieldGeneratorTier = nextTier)
+        else -> b.copy(resourceVaultTier = nextTier)
+      }.let { it.copy(baseHpMax = it.maxIntegrity(), baseHpCurrent = it.maxIntegrity()) }
+      return s.copy(playerBaseState = updatedBase)
+    }
+    return when (currency) {
+      "tuu_cash" -> {
+        val cost = UpgradeCosts.baseModuleTuuCash(curTier)
+        if (cur.tuuCash < cost) return Result.failure(IllegalStateException("Need $cost TUUCash"))
+        save(applyBase(cur.copy(tuuCash = cur.tuuCash - cost)))
+        Result.success("Base $module upgraded to Tier $nextTier/${PowerTier.MAX_TIER} (-$cost TUUCash)")
+      }
+      "shards" -> {
+        val cost = UpgradeCosts.systemShardCost(curTier)
+        val have = cur.systemShardCount("base")
+        if (have < cost) return Result.failure(IllegalStateException("Need $cost Citadel Base Shards"))
+        save(applyBase(cur.copy(systemShards = cur.systemShards + ("base" to (have - cost)))))
+        Result.success("Base $module upgraded to Tier $nextTier/${PowerTier.MAX_TIER} (-$cost Base Shards)")
+      }
+      "metal_scrap" -> {
+        val cost = 18L + (curTier * 5L)
+        val have = cur.resourceCount("metal_scrap")
+        if (have < cost) return Result.failure(IllegalStateException("Need $cost Beskar / Alloy Scrap"))
+        save(applyBase(cur.copy(environmentalResources = cur.environmentalResources + ("metal_scrap" to (have - cost)))))
+        Result.success("Base $module upgraded to Tier $nextTier/${PowerTier.MAX_TIER} (-$cost Alloy Scrap)")
+      }
+      else -> {
+        val cost = UpgradeCosts.baseModuleGold(curTier)
+        if (cur.gold < cost) return Result.failure(IllegalStateException("Need $cost Gold"))
+        save(applyBase(cur.copy(gold = cur.gold - cost)))
+        Result.success("Base $module upgraded to Tier $nextTier/${PowerTier.MAX_TIER} (-$cost Gold)")
+      }
+    }
+  }
+
+  fun collectBaseVault(): Result<Triple<Long, Long, Long>> {
+    val cur = current
+    val b = cur.playerBaseState
+    if (b.storedGold <= 0L && b.storedDiamonds <= 0L && b.storedTuuCash <= 0L) {
+      return Result.failure(IllegalStateException("Base Vault is currently empty — play matches to generate income!"))
+    }
+    val g = b.storedGold
+    val d = b.storedDiamonds
+    val c = b.storedTuuCash
+    save(
+      cur.copy(
+        gold = cur.gold + g,
+        diamonds = cur.diamonds + d,
+        tuuCash = cur.tuuCash + c,
+        playerBaseState = b.copy(storedGold = 0L, storedDiamonds = 0L, storedTuuCash = 0L),
+      )
+    )
+    return Result.success(Triple(g, d, c))
+  }
+
+  fun triggerOrResolveBaseAttack(defendNow: Boolean): Result<String> {
+    val cur = current
+    val b = cur.playerBaseState
+    if (!b.underAttack && !defendNow) {
+      save(cur.copy(playerBaseState = b.copy(underAttack = true, attackWaveCountdownSec = 0)))
+      return Result.success("ALERT: Hostile strike force is sieging ${b.baseName}!")
+    }
+    val defensePower = (b.wallTier * 22) + (b.turretTier * 30) + (b.shieldGeneratorTier * 25) + (cur.characterTier * 8)
+    val rewardGold = 350L + (b.resourceVaultTier * 90L)
+    val rewardDiamonds = 45L + (b.shieldGeneratorTier * 8L)
+    val rewardCash = 900L + (b.turretTier * 180L)
+    val baseShardsGain = 8L
+    val maxHp = b.maxIntegrity()
+    save(
+      cur.copy(
+        gold = cur.gold + rewardGold,
+        diamonds = cur.diamonds + rewardDiamonds,
+        tuuCash = cur.tuuCash + rewardCash,
+        systemShards = cur.systemShards + ("base" to (cur.systemShardCount("base") + baseShardsGain)),
+        playerBaseState = b.copy(
+          underAttack = false,
+          attackWaveCountdownSec = 240,
+          defenseSuccessCount = b.defenseSuccessCount + 1,
+          baseHpMax = maxHp,
+          baseHpCurrent = maxHp,
+        ),
+      )
+    )
+    return Result.success(
+      "Base Defended (Power $defensePower)! +$rewardGold Gold, +$rewardDiamonds Diamonds, +$rewardCash TUUCash & +$baseShardsGain Base Shards!"
+    )
+  }
+
+  fun convertCurrencyOrResource(actionId: String): Result<String> {
+    val cur = current
+    return when (actionId) {
+      "tuucash_to_gold" -> {
+        if (cur.tuuCash < 1500L) return Result.failure(IllegalStateException("Need 1,500 TUUCash"))
+        save(cur.copy(tuuCash = cur.tuuCash - 1500L, gold = cur.gold + 600L))
+        Result.success("Exchanged 1,500 TUUCash -> +600 Gold")
+      }
+      "gold_to_diamonds" -> {
+        if (cur.gold < 800L) return Result.failure(IllegalStateException("Need 800 Gold"))
+        save(cur.copy(gold = cur.gold - 800L, diamonds = cur.diamonds + 120L))
+        Result.success("Transmuted 800 Gold -> +120 Diamonds")
+      }
+      "diamonds_to_all_shards" -> {
+        if (cur.diamonds < 100L) return Result.failure(IllegalStateException("Need 100 Diamonds"))
+        val nextShards = cur.systemShards.toMutableMap()
+        MultiverseSystemsCatalog.systemShardDomains.forEach { (id, _) ->
+          nextShards[id] = (nextShards[id] ?: 0L) + 12L
+        }
+        save(cur.copy(diamonds = cur.diamonds - 100L, systemShards = nextShards))
+        Result.success("Refined 100 Diamonds -> +12 Shards across ALL 15 systems!")
+      }
+      "resources_to_combined_essence" -> {
+        val frag = cur.resourceCount("crystal_shard")
+        val scrap = cur.resourceCount("metal_scrap")
+        val cell = cur.resourceCount("energy_cell")
+        if (frag < 15L || scrap < 20L || cell < 10L) {
+          return Result.failure(IllegalStateException("Need 15 Crystal Frags, 20 Alloy Scrap & 10 Energy Cells"))
+        }
+        save(
+          cur.copy(
+            environmentalResources = cur.environmentalResources +
+              ("crystal_shard" to (frag - 15L)) +
+              ("metal_scrap" to (scrap - 20L)) +
+              ("energy_cell" to (cell - 10L)),
+            combinedEssence = cur.combinedEssence + 150L,
+            blastShards = cur.blastShards + 25L,
+          )
+        )
+        Result.success("Synthesized Env Resources -> +150 Combined Essence & +25 Blast Shards!")
+      }
+      "tuucash_to_resources" -> {
+        if (cur.tuuCash < 1200L) return Result.failure(IllegalStateException("Need 1,200 TUUCash"))
+        val nextRes = cur.environmentalResources.toMutableMap()
+        MultiverseSystemsCatalog.environmentalResourceSpecs.forEach { (id, _) ->
+          nextRes[id] = (nextRes[id] ?: 0L) + 20L
+        }
+        save(cur.copy(tuuCash = cur.tuuCash - 1200L, environmentalResources = nextRes))
+        Result.success("Procured Supply Crate (-1,200 TUUCash) -> +20 of EVERY Environmental Resource!")
+      }
+      "tuucash_bank_exchange" -> {
+        if (cur.tuuCash < 2500L) return Result.failure(IllegalStateException("Need 2,500 TUUCash"))
+        save(
+          cur.copy(
+            tuuCash = cur.tuuCash - 2500L,
+            gold = cur.gold + 1500L,
+            diamonds = cur.diamonds + 150L,
+          )
+        )
+        Result.success("Bank Exchange (-2,500 TUUCash) -> +1,500 Gold & +150 Diamonds!")
+      }
+      "diamonds_to_tuucash_shards" -> {
+        if (cur.diamonds < 300L) return Result.failure(IllegalStateException("Need 300 Diamonds"))
+        save(
+          cur.copy(
+            diamonds = cur.diamonds - 300L,
+            tuuCash = cur.tuuCash + 12_000L,
+            blastShards = cur.blastShards + 40L,
+          )
+        )
+        Result.success("Vault Liquidation (-300 Diamonds) -> +12,000 TUUCash & +40 Blast Shards!")
+      }
+      "diamonds_magic_overclock" -> {
+        if (cur.diamonds < 180L) return Result.failure(IllegalStateException("Need 180 Diamonds"))
+        val m = cur.magicState
+        val nextTier = (m.magicTier + 1).coerceAtMost(PowerTier.MAX_TIER)
+        val nextManaMax = (m.manaMax + 20f).coerceAtMost(450f)
+        val boostedSpells = m.spellTiers.toMutableMap()
+        m.unlockedSpells.forEach { spId ->
+          val curSp = boostedSpells[spId] ?: 1
+          boostedSpells[spId] = (curSp + 1).coerceAtMost(PowerTier.MAX_TIER)
+        }
+        save(
+          cur.copy(
+            diamonds = cur.diamonds - 180L,
+            magicState = m.copy(
+              magicTier = nextTier,
+              manaMax = nextManaMax,
+              manaCurrent = nextManaMax,
+              spellTiers = boostedSpells,
+            ),
+          )
+        )
+        Result.success("Diamond Magic Overclock (-180 D) -> Magic T$nextTier, Max Mana ${nextManaMax.toInt()}, All Unlocked Spells +1 Tier!")
+      }
+      "diamonds_fortify_turrets" -> {
+        if (cur.diamonds < 200L) return Result.failure(IllegalStateException("Need 200 Diamonds"))
+        val b = cur.playerBaseState
+        val nextTurret = (b.turretTier + 2).coerceAtMost(PowerTier.MAX_TIER)
+        val nextWall = (b.wallTier + 2).coerceAtMost(PowerTier.MAX_TIER)
+        val nextShield = (b.shieldGeneratorTier + 1).coerceAtMost(PowerTier.MAX_TIER)
+        val updatedBase = b.copy(
+          turretTier = nextTurret,
+          wallTier = nextWall,
+          shieldGeneratorTier = nextShield,
+        ).let { it.copy(baseHpMax = it.maxIntegrity(), baseHpCurrent = it.maxIntegrity()) }
+        save(cur.copy(diamonds = cur.diamonds - 200L, playerBaseState = updatedBase))
+        Result.success("Fortified Citadel (-200 Diamonds) -> Turrets T$nextTurret, Walls T$nextWall, Shield Gen T$nextShield!")
+      }
+      "tuucash_deploy_turret_fleet" -> {
+        if (cur.tuuCash < 3000L) return Result.failure(IllegalStateException("Need 3,000 TUUCash"))
+        val b = cur.playerBaseState
+        val nextTurret = (b.turretTier + 2).coerceAtMost(PowerTier.MAX_TIER)
+        val nextVault = (b.resourceVaultTier + 2).coerceAtMost(PowerTier.MAX_TIER)
+        val updatedBase = b.copy(
+          turretTier = nextTurret,
+          resourceVaultTier = nextVault,
+          storedGold = b.storedGold + 300L,
+        ).let { it.copy(baseHpMax = it.maxIntegrity(), baseHpCurrent = it.maxIntegrity()) }
+        save(cur.copy(tuuCash = cur.tuuCash - 3000L, playerBaseState = updatedBase))
+        Result.success("Deployed TUUCash Turret Fleet (-3,000 TUUCash) -> Turrets T$nextTurret, Vault T$nextVault & +300 Vault Gold!")
+      }
+      "magic_arcane_infusion" -> {
+        if (cur.tuuCash < 1000L || cur.diamonds < 100L) {
+          return Result.failure(IllegalStateException("Need 1,000 TUUCash & 100 Diamonds"))
+        }
+        val nextCells = cur.resourceCount("energy_cell") + 25L
+        val nextMagicShards = cur.systemShardCount("magic") + 15L
+        save(
+          cur.copy(
+            tuuCash = cur.tuuCash - 1000L,
+            diamonds = cur.diamonds - 100L,
+            combinedEssence = cur.combinedEssence + 50L,
+            systemShards = cur.systemShards + ("magic" to nextMagicShards),
+            environmentalResources = cur.environmentalResources + ("energy_cell" to nextCells),
+          )
+        )
+        Result.success("Arcane Infusion Complete -> +50 Combined Essence, +15 Magic Shards & +25 Energy Cells!")
+      }
+      else -> Result.failure(IllegalArgumentException("Unknown exchange action"))
+    }
+  }
+
+  /**
+   * Alternate currency upgrade path across every system using Shards, Gold, Diamonds, TUUCash, or Colored Essence.
+   */
+  fun upgradeTargetWithCurrency(
+    targetType: String,
+    targetId: String,
+    currency: String,
+  ): Result<String> {
+    val cur = current
+    val (currentLevel, maxLevel, shardDomain) = when (targetType) {
+      "character" -> Triple(cur.characterTier, PowerTier.MAX_TIER, "outfit")
+      "weapon" -> Triple(cur.weaponTier(targetId), PowerTier.MAX_TIER, "weapon")
+      "wonder" -> Triple(cur.wonderTier(targetId), PowerTier.MAX_TIER, "wonder")
+      "gear" -> Triple((cur.gearMap[targetId]?.tier ?: 1), PowerTier.MAX_TIER, "gear")
+      "equipment" -> Triple(cur.equipmentState(targetId).tier, PowerTier.MAX_TIER, "equipment")
+      "perk" -> Triple(cur.perkRank(targetId), ProgressionCatalog.MAX_PERK_RANK, "perk")
+      "protection" -> Triple(cur.protectionRank(targetId), ProgressionCatalog.MAX_PROT_RANK, "protection")
+      "skill" -> Triple((cur.skillNodes[targetId]?.tier ?: 0), PowerTier.MAX_TIER, "skill")
+      "bot" -> Triple(cur.vacuumBot.tier, PowerTier.MAX_TIER, "bot")
+      "blast_shard" -> Triple(cur.blastShardTier, PowerTier.MAX_TIER, "core")
+      "companion" -> Triple(cur.companionBuffTier, PowerTier.MAX_TIER, "outfit")
+      "mode" -> Triple(cur.modeTier(targetId), PowerTier.MAX_TIER, "mode")
+      "area" -> Triple(cur.areaState(targetId).powerGridTier, PowerTier.MAX_TIER, "area")
+      else -> return Result.failure(IllegalArgumentException("Unknown upgrade target $targetType"))
+    }
+    if (currentLevel >= maxLevel) {
+      return Result.failure(IllegalStateException("$targetType already at max Tier $maxLevel"))
+    }
+
+    val nextStateBase: OperatorProgressionState
+    val costLabel: String
+    when (currency) {
+      "shards" -> {
+        val cost = UpgradeCosts.systemShardCost(currentLevel)
+        val have = cur.systemShardCount(shardDomain)
+        if (have < cost) return Result.failure(IllegalStateException("Need $cost $shardDomain Shards (have $have)"))
+        nextStateBase = cur.copy(systemShards = cur.systemShards + (shardDomain to (have - cost)))
+        costLabel = "-$cost $shardDomain Shards"
+      }
+      "gold" -> {
+        val cost = UpgradeCosts.goldCostForTierUpgrade(currentLevel)
+        if (cur.gold < cost) return Result.failure(IllegalStateException("Need $cost Gold"))
+        nextStateBase = cur.copy(gold = cur.gold - cost)
+        costLabel = "-$cost Gold"
+      }
+      "diamonds" -> {
+        val cost = UpgradeCosts.diamondCostForTierUpgrade(currentLevel)
+        if (cur.diamonds < cost) return Result.failure(IllegalStateException("Need $cost Diamonds"))
+        nextStateBase = cur.copy(diamonds = cur.diamonds - cost)
+        costLabel = "-$cost Diamonds"
+      }
+      "tuu_cash" -> {
+        val cost = UpgradeCosts.tuuCashCostForTierUpgrade(currentLevel)
+        if (cur.tuuCash < cost) return Result.failure(IllegalStateException("Need $cost TUUCash"))
+        nextStateBase = cur.copy(tuuCash = cur.tuuCash - cost)
+        costLabel = "-$cost TUUCash"
+      }
+      "combined_essence" -> {
+        val cost = 20L + currentLevel * 12L
+        if (cur.combinedEssence < cost) return Result.failure(IllegalStateException("Need $cost Combined Essence"))
+        nextStateBase = cur.copy(combinedEssence = cur.combinedEssence - cost)
+        costLabel = "-$cost Combined Essence"
+      }
+      else -> return Result.failure(IllegalArgumentException("Unsupported payment currency: $currency"))
+    }
+
+    val nextTier = (currentLevel + 1).coerceAtMost(maxLevel)
+    val finalState = when (targetType) {
+      "character" -> nextStateBase.copy(characterTier = nextTier)
+      "weapon" -> nextStateBase.copy(weaponTierMap = nextStateBase.weaponTierMap + (targetId to nextTier))
+      "wonder" -> nextStateBase.copy(wonderTierMap = nextStateBase.wonderTierMap + (targetId to nextTier))
+      "gear" -> {
+        val slot = GearSlot.entries.firstOrNull { it.id == targetId } ?: GearSlot.HELMET
+        val g = nextStateBase.gearMap[targetId] ?: GearState(slot)
+        nextStateBase.copy(gearMap = nextStateBase.gearMap + (targetId to g.copy(tier = nextTier)))
+      }
+      "equipment" -> {
+        val eq = nextStateBase.equipmentState(targetId)
+        nextStateBase.copy(equipmentMap = nextStateBase.equipmentMap + (targetId to eq.copy(tier = nextTier)))
+      }
+      "perk" -> nextStateBase.copy(perkRanks = nextStateBase.perkRanks + (targetId to nextTier))
+      "protection" -> nextStateBase.copy(protectionRanks = nextStateBase.protectionRanks + (targetId to nextTier))
+      "skill" -> {
+        val node = nextStateBase.skillNodes[targetId]
+          ?: return Result.failure(IllegalStateException("Skill node not found"))
+        nextStateBase.copy(
+          skillNodes = nextStateBase.skillNodes + (targetId to node.copy(unlocked = true, tier = nextTier.coerceAtMost(node.maxTier)))
+        )
+      }
+      "bot" -> nextStateBase.copy(
+        vacuumBot = nextStateBase.vacuumBot.copy(
+          tier = nextTier,
+          level = (nextStateBase.vacuumBot.level + 2).coerceAtMost(ProgressionCatalog.MAX_BOT_LEVEL),
+        )
+      )
+      "blast_shard" -> nextStateBase.copy(blastShardTier = nextTier)
+      "companion" -> nextStateBase.copy(companionBuffTier = nextTier)
+      "mode" -> nextStateBase.copy(modeTierMap = nextStateBase.modeTierMap + (targetId to nextTier))
+      "area" -> {
+        val a = nextStateBase.areaState(targetId)
+        nextStateBase.copy(areaStates = nextStateBase.areaStates + (targetId to a.copy(powerGridTier = nextTier)))
+      }
+      else -> nextStateBase
+    }
+    save(finalState)
+    return Result.success("Upgraded $targetType ($targetId) to T$nextTier/$maxLevel ($costLabel)!")
   }
 
   fun achievementStates(state: OperatorProgressionState = current): List<AchievementState> {
@@ -2177,29 +3072,29 @@ class ProgressionStore(
       "store_weapon_tier_up" -> {
         val wpnId = cur.weaponCustom.equippedWeaponId
         val curTier = cur.weaponTier(wpnId)
-        if (curTier >= 25) return Result.failure(IllegalStateException("Equipped weapon is already Tier 25 Multiversal"))
+        if (curTier >= PowerTier.MAX_TIER) return Result.failure(IllegalStateException("Equipped weapon is already Tier ${PowerTier.MAX_TIER} Transcendent"))
         val newTier = curTier + 1
         next = next.copy(weaponTierMap = cur.weaponTierMap + (wpnId to newTier))
         "Elevated weapon to Tier $newTier (${ProgressionCatalog.tierMeta(newTier).label})"
       }
       "store_wonder_tier_up" -> {
         val nextWonderTiers = WonderWeaponKind.entries.associate {
-          it.id to (cur.wonderTier(it.id) + 1).coerceAtMost(25)
+          it.id to (cur.wonderTier(it.id) + 1).coerceAtMost(PowerTier.MAX_TIER)
         }
         next = next.copy(wonderTierMap = nextWonderTiers)
         "All 6 Wonder Weapons upgraded +1 Tier!"
       }
       "store_gear_eq_pack" -> {
         val nextGear = cur.gearMap.mapValues { (_, g) ->
-          val nextLvl = (g.level + 5).coerceAtMost(50)
+          val nextLvl = (g.level + 5).coerceAtMost(ProgressionCatalog.MAX_GEAR_LEVEL)
           val minXp = ProgressionCatalog.totalXpForGearLevel(nextLvl)
-          val nextTier = if (g.level >= 50) (g.tier + 1).coerceAtMost(25) else g.tier
+          val nextTier = if (g.level >= ProgressionCatalog.MAX_GEAR_LEVEL) (g.tier + 1).coerceAtMost(PowerTier.MAX_TIER) else g.tier
           g.copy(level = nextLvl, xp = maxOf(g.xp, minXp), tier = nextTier)
         }
         val nextEq = cur.equipmentMap.mapValues { (_, e) ->
-          val nextLvl = (e.level + 5).coerceAtMost(60)
+          val nextLvl = (e.level + 5).coerceAtMost(ProgressionCatalog.MAX_EQUIPMENT_LEVEL)
           val minXp = ProgressionCatalog.totalXpForEquipmentLevel(nextLvl)
-          val nextTier = if (e.level >= 60) (e.tier + 1).coerceAtMost(25) else e.tier
+          val nextTier = if (e.level >= ProgressionCatalog.MAX_EQUIPMENT_LEVEL) (e.tier + 1).coerceAtMost(PowerTier.MAX_TIER) else e.tier
           e.copy(level = nextLvl, xp = maxOf(e.xp, minXp), tier = nextTier)
         }
         next = next.copy(gearMap = nextGear, equipmentMap = nextEq)
@@ -2275,7 +3170,7 @@ class ProgressionStore(
       val derivedLvl = ProgressionCatalog.equipmentLevelForXp(nextXp)
       eq.copy(
         xp = nextXp,
-        level = maxOf(eq.level, derivedLvl).coerceAtMost(60),
+        level = maxOf(eq.level, derivedLvl).coerceAtMost(ProgressionCatalog.MAX_EQUIPMENT_LEVEL),
       )
     }
     val nextGearMap = cur.gearMap.mapValues { (_, g) ->
@@ -2283,7 +3178,7 @@ class ProgressionStore(
       val derivedLvl = ProgressionCatalog.gearLevelForXp(nextXp)
       g.copy(
         xp = nextXp,
-        level = maxOf(g.level, derivedLvl).coerceAtMost(50),
+        level = maxOf(g.level, derivedLvl).coerceAtMost(ProgressionCatalog.MAX_GEAR_LEVEL),
       )
     }
 
@@ -2303,7 +3198,7 @@ class ProgressionStore(
     // Level active outfit slightly on every match
     val curOutfit = cur.outfitState(cur.equippedOutfitId)
     val nextOutfit = curOutfit.copy(
-      level = (curOutfit.level + 1).coerceAtMost(1000),
+      level = (curOutfit.level + 1).coerceAtMost(ProgressionCatalog.MAX_OUTFIT_LEVEL),
     )
 
     val redGain = (report.redEssenceEarned.coerceAtLeast(report.eliminations * 4L + 20L) * ngPlusAndCollectionMult).toLong()
@@ -2328,15 +3223,79 @@ class ProgressionStore(
     }
     val nextCatWorlds = if (report.catsFound > 0) cur.discoveredCatWorlds + report.areaId else cur.discoveredCatWorlds
     val runCompletedForNgPlus = report.extracted || report.waveReached >= 5L
-    val nextNgPlusCompletions = if (runCompletedForNgPlus) cur.ngPlusCompletions + 1 else cur.ngPlusCompletions
-    val nextUnlockedNgPlusTier = if (runCompletedForNgPlus) {
-      maxOf(
-        cur.unlockedNgPlusTier,
-        (cur.activeNgPlusTier + 1).coerceAtMost(NewGamePlusVersion.MAX_NG_PLUS_TIER),
-      )
+    val ngPlusCompletionsNext = if (runCompletedForNgPlus) cur.ngPlusCompletions + 1 else cur.ngPlusCompletions
+
+    val overchargeMult = if (cur.magicState.overchargeDifficultyEnabled) {
+      cur.magicState.difficultyScalingFactor.coerceIn(1f, 3.5f)
+    } else 1.0f
+    val totalRewardScale = ngPlusAndCollectionMult * overchargeMult
+
+    val goldGain = (report.goldEarned.coerceAtLeast(
+      (report.eliminations * 14L + report.bossEliminations * 120L + report.waveReached * 35L + if (report.extracted) 200L else 60L)
+    ) * totalRewardScale).toLong().coerceAtLeast(80L)
+    val diamondsGain = (report.diamondsEarned.coerceAtLeast(
+      (report.bossEliminations * 18L + report.waveReached * 4L + if (report.extracted) 25L else 8L)
+    ) * totalRewardScale).toLong().coerceAtLeast(8L)
+    val tuuCashGain = (report.tuuCashEarned.coerceAtLeast(
+      (report.eliminations * 45L + report.bossEliminations * 350L + report.waveReached * 110L + if (report.extracted) 600L else 180L)
+    ) * totalRewardScale).toLong().coerceAtLeast(250L)
+
+    val nextEnvRes = cur.environmentalResources.toMutableMap()
+    val defaultDrops = mapOf(
+      "crystal_shard" to (2L + report.waveReached + report.wonderPickupsCollected * 2L),
+      "metal_scrap" to (4L + report.eliminations / 3L + report.buildingsExplored * 2L),
+      "energy_cell" to (2L + report.magicCastsCount.toLong() + report.waveReached),
+      "aether_herb" to (2L + report.perkDrinksCollected.toLong() + if (report.extracted) 3L else 1L),
+      "kyber_fragment" to (1L + report.bossEliminations * 2L + if (report.worldId.contains("star_wars") || report.areaId.contains("star_wars")) 6L else 1L),
+    )
+    defaultDrops.forEach { (id, baseAmt) ->
+      val reported = report.environmentalResourcesEarned[id] ?: 0L
+      val gain = ((maxOf(baseAmt, reported)) * ngPlusAndCollectionMult).toLong().coerceAtLeast(1L)
+      nextEnvRes[id] = (nextEnvRes[id] ?: 0L) + gain
+    }
+    report.environmentalResourcesEarned.forEach { (id, amt) ->
+      if (id !in defaultDrops && amt > 0L) {
+        nextEnvRes[id] = (nextEnvRes[id] ?: 0L) + amt
+      }
+    }
+
+    val nextSystemShards = cur.systemShards.toMutableMap()
+    MultiverseSystemsCatalog.systemShardDomains.forEach { (domainId, _) ->
+      val reported = report.systemShardsEarned[domainId] ?: 0L
+      val passiveDomainGain = when (domainId) {
+        "weapon", "wonder" -> 2L + report.eliminations / 10L
+        "crystal", "magic" -> 2L + report.magicCastsCount.toLong()
+        "base" -> if (report.baseDefenseWon) 10L else 3L
+        "area", "mode" -> 2L + report.buildingsExplored.toLong()
+        else -> 2L
+      }
+      val totalDomainGain = (maxOf(reported, passiveDomainGain) * totalRewardScale).toLong().coerceAtLeast(2L)
+      nextSystemShards[domainId] = (nextSystemShards[domainId] ?: 0L) + totalDomainGain
+    }
+
+    val vaultTickGold = 60L + (cur.playerBaseState.resourceVaultTier * 35L)
+    val vaultTickDiamonds = 12L + (cur.playerBaseState.resourceVaultTier * 6L)
+    val vaultTickCash = 240L + (cur.playerBaseState.resourceVaultTier * 140L)
+    val prevBase = cur.playerBaseState
+    val nextCountdown = (prevBase.attackWaveCountdownSec - 85).let { if (it <= 0) 240 else it }
+    val nextUnderAttack = if (report.baseDefenseWon) false else (prevBase.underAttack || nextCountdown == 240)
+    val nextBase = prevBase.copy(
+      storedGold = prevBase.storedGold + vaultTickGold,
+      storedDiamonds = prevBase.storedDiamonds + vaultTickDiamonds,
+      storedTuuCash = prevBase.storedTuuCash + vaultTickCash,
+      underAttack = nextUnderAttack,
+      attackWaveCountdownSec = nextCountdown,
+      defenseSuccessCount = prevBase.defenseSuccessCount + if (report.baseDefenseWon) 1 else 0,
+      baseHpMax = prevBase.maxIntegrity(),
+      baseHpCurrent = if (report.baseDefenseWon) prevBase.maxIntegrity() else prevBase.baseHpCurrent.coerceIn(1, prevBase.maxIntegrity()),
+    )
+
+    val nextUnlockedNgPlusTier = if (report.extracted && cur.activeNgPlusTier >= cur.unlockedNgPlusTier) {
+      (cur.unlockedNgPlusTier + 1).coerceAtMost(NewGamePlusVersion.MAX_NG_PLUS_TIER)
     } else {
       cur.unlockedNgPlusTier
     }
+    val ngPlusCompletionsReport = if (report.extracted) cur.ngPlusCompletions + 1 else cur.ngPlusCompletions
 
     val nextState = cur.copy(
       playerXp = cur.playerXp + xpGained,
@@ -2366,7 +3325,13 @@ class ProgressionStore(
       discoveredCatWorlds = nextCatWorlds,
       lootCratesOpenedTotal = cur.lootCratesOpenedTotal + report.lootCratesOpened.toLong(),
       unlockedNgPlusTier = nextUnlockedNgPlusTier,
-      ngPlusCompletions = nextNgPlusCompletions,
+      ngPlusCompletions = ngPlusCompletionsReport,
+      gold = cur.gold + goldGain,
+      diamonds = (cur.diamonds + diamondsGain - report.diamondsSpent).coerceAtLeast(0L),
+      tuuCash = (cur.tuuCash + tuuCashGain - report.tuuCashSpent).coerceAtLeast(0L),
+      environmentalResources = nextEnvRes,
+      systemShards = nextSystemShards,
+      playerBaseState = nextBase,
     )
     save(nextState)
 
@@ -2477,7 +3442,7 @@ class ProgressionStore(
     val jsonString = root.toString()
     val integritySeal = AppSecurityManager.signPayload(jsonString)
     lastLoadedIntegrityValid = true
-    prefs.edit {
+    prefs.edit(commit = true) {
       putString(KEY_STATE_JSON, jsonString)
       putString(KEY_STATE_JSON_LEGACY, jsonString)
       putString(KEY_STATE_HASH, integritySeal)
@@ -2949,6 +3914,63 @@ class ProgressionStore(
           })
         }
       })
+      put("gold", next.gold)
+      put("diamonds", next.diamonds)
+      put("tuuCash", next.tuuCash)
+      put("environmentalResources", JSONObject().apply {
+        next.environmentalResources.forEach { (k, v) -> put(k, v) }
+      })
+      put("systemShards", JSONObject().apply {
+        next.systemShards.forEach { (k, v) -> put(k, v) }
+      })
+      put("magicState", JSONObject().apply {
+        val m = next.magicState
+        put("unlocked", m.unlocked)
+        put("activeSpellId", m.activeSpellId)
+        put("manaCurrent", m.manaCurrent.toDouble())
+        put("manaMax", m.manaMax.toDouble())
+        put("magicTier", m.magicTier)
+        put("difficultyScalingFactor", m.difficultyScalingFactor.toDouble())
+        put("overchargeDifficultyEnabled", m.overchargeDifficultyEnabled)
+        put("unlockedSpells", JSONArray(m.unlockedSpells.toList()))
+        put("spellTiers", JSONObject().apply {
+          m.spellTiers.forEach { (k, v) -> put(k, v) }
+        })
+      })
+      put("playerBaseState", JSONObject().apply {
+        val b = next.playerBaseState
+        put("baseName", b.baseName)
+        put("layoutTheme", b.layoutTheme)
+        put("primaryHex", b.primaryHex)
+        put("wallTier", b.wallTier)
+        put("turretTier", b.turretTier)
+        put("shieldGeneratorTier", b.shieldGeneratorTier)
+        put("resourceVaultTier", b.resourceVaultTier)
+        put("storedGold", b.storedGold)
+        put("storedDiamonds", b.storedDiamonds)
+        put("storedTuuCash", b.storedTuuCash)
+        put("baseHpCurrent", b.baseHpCurrent)
+        put("baseHpMax", b.baseHpMax)
+        put("underAttack", b.underAttack)
+        put("attackWaveCountdownSec", b.attackWaveCountdownSec)
+        put("defenseSuccessCount", b.defenseSuccessCount)
+      })
+      put("crystals", JSONArray().apply {
+        next.crystals.forEach { c ->
+          put(JSONObject().apply {
+            put("id", c.id)
+            put("name", c.name)
+            put("rarity", c.rarity)
+            put("element", c.element)
+            put("statBonusSummary", c.statBonusSummary)
+            put("damageBoostPct", c.damageBoostPct)
+            put("shieldBoostPct", c.shieldBoostPct)
+            put("luckBoostPct", c.luckBoostPct)
+            put("socketedSlot", c.socketedSlot ?: "")
+            put("level", c.level)
+          })
+        }
+      })
     }
   }
 
@@ -3035,7 +4057,7 @@ class ProgressionStore(
     val wpnTierMap = safeParse(fallback.weaponTierMap) {
       val map = ProgressionCatalog.weapons.associate { it.id to 1 }.toMutableMap()
       root.optJSONObject("weaponTierMap")?.let { obj ->
-        obj.keys().forEach { k -> map[k] = obj.optInt(k, 1).coerceIn(1, 25) }
+        obj.keys().forEach { k -> map[k] = obj.optInt(k, 1).coerceIn(1, PowerTier.MAX_TIER) }
       }
       map
     }
@@ -3049,7 +4071,7 @@ class ProgressionStore(
     val wonderTierMap = safeParse(fallback.wonderTierMap) {
       val map = WonderWeaponKind.entries.associate { it.id to 1 }.toMutableMap()
       root.optJSONObject("wonderTierMap")?.let { obj ->
-        obj.keys().forEach { k -> map[k] = obj.optInt(k, 1).coerceIn(1, 25) }
+        obj.keys().forEach { k -> map[k] = obj.optInt(k, 1).coerceIn(1, PowerTier.MAX_TIER) }
       }
       map
     }
@@ -3082,14 +4104,14 @@ class ProgressionStore(
           val gObj = obj.optJSONObject(k)
           if (gObj != null) {
             val slot = GearSlot.entries.firstOrNull { it.id == k } ?: GearSlot.HELMET
-            val lvl = gObj.optInt("level", 1).coerceIn(1, 50)
+            val lvl = gObj.optInt("level", 1).coerceIn(1, ProgressionCatalog.MAX_GEAR_LEVEL)
             val xp = gObj.optLong("xp", ProgressionCatalog.totalXpForGearLevel(lvl))
             map[k] = GearState(
               slot = slot,
               level = maxOf(lvl, ProgressionCatalog.gearLevelForXp(xp)),
               prestige = gObj.optInt("prestige", 0),
               xp = xp,
-              tier = gObj.optInt("tier", 1).coerceIn(1, 25),
+              tier = gObj.optInt("tier", 1).coerceIn(1, PowerTier.MAX_TIER),
               colorHex = gObj.optLong("colorHex", 0xFF00E5FF),
               starLevel = gObj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
             )
@@ -3108,7 +4130,7 @@ class ProgressionStore(
         obj.keys().forEach { k ->
           val eObj = obj.optJSONObject(k)
           if (eObj != null) {
-            val lvl = eObj.optInt("level", 1).coerceIn(1, 60)
+            val lvl = eObj.optInt("level", 1).coerceIn(1, ProgressionCatalog.MAX_EQUIPMENT_LEVEL)
             val xp = eObj.optLong("xp", ProgressionCatalog.totalXpForEquipmentLevel(lvl))
             map[k] = EquipmentState(
               slotId = k,
@@ -3117,7 +4139,7 @@ class ProgressionStore(
               prestige = eObj.optInt("prestige", 0),
               xp = xp,
               variantId = eObj.optString("variantId", "standard"),
-              tier = eObj.optInt("tier", 1).coerceIn(1, 25),
+              tier = eObj.optInt("tier", 1).coerceIn(1, PowerTier.MAX_TIER),
               starLevel = eObj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
             )
           }
@@ -3298,7 +4320,7 @@ class ProgressionStore(
     val perkRanks = safeParse(fallback.perkRanks) {
       val map = mutableMapOf<String, Int>()
       root.optJSONObject("perkRanks")?.let { obj ->
-        obj.keys().forEach { k -> map[k] = obj.optInt(k, 0).coerceIn(0, 25) }
+        obj.keys().forEach { k -> map[k] = obj.optInt(k, 0).coerceIn(0, ProgressionCatalog.MAX_PERK_RANK) }
         map
       } ?: fallback.perkRanks
     }
@@ -3314,7 +4336,7 @@ class ProgressionStore(
     val coreLvls = safeParse(fallback.blastCoreLevels) {
       val map = BlastCoreColor.entries.associate { it.id to 1 }.toMutableMap()
       root.optJSONObject("blastCoreLevels")?.let { obj ->
-        obj.keys().forEach { k -> map[k] = obj.optInt(k, 1).coerceIn(1, 20) }
+        obj.keys().forEach { k -> map[k] = obj.optInt(k, 1).coerceIn(1, ProgressionCatalog.MAX_CORE_LEVEL) }
       }
       map
     }
@@ -3329,11 +4351,11 @@ class ProgressionStore(
           if (oObj != null) {
             map[k] = OutfitProgressState(
               outfitId = k,
-              level = oObj.optInt("level", 1).coerceIn(1, 1000),
-              tier = oObj.optInt("tier", 1).coerceIn(1, 25),
-              skillRank = oObj.optInt("skillRank", 1).coerceIn(1, 20),
-              gearRank = oObj.optInt("gearRank", 1).coerceIn(1, 20),
-              equipmentRank = oObj.optInt("equipmentRank", 1).coerceIn(1, 20),
+              level = oObj.optInt("level", 1).coerceIn(1, ProgressionCatalog.MAX_OUTFIT_LEVEL),
+              tier = oObj.optInt("tier", 1).coerceIn(1, PowerTier.MAX_TIER),
+              skillRank = oObj.optInt("skillRank", 1).coerceIn(1, PowerTier.MAX_TIER),
+              gearRank = oObj.optInt("gearRank", 1).coerceIn(1, PowerTier.MAX_TIER),
+              equipmentRank = oObj.optInt("equipmentRank", 1).coerceIn(1, PowerTier.MAX_TIER),
               starLevel = oObj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
             )
           }
@@ -3354,10 +4376,10 @@ class ProgressionStore(
               areaId = k,
               ageYears = aObj.optInt("ageYears", 12).coerceIn(0, 99),
               rebirthCycles = aObj.optInt("rebirthCycles", 0).coerceAtLeast(0),
-              powerGridTier = aObj.optInt("powerGridTier", 1).coerceIn(1, 25),
-              defenseTurretTier = aObj.optInt("defenseTurretTier", 1).coerceIn(1, 25),
-              trapDensityTier = aObj.optInt("trapDensityTier", 1).coerceIn(1, 25),
-              lootRichnessTier = aObj.optInt("lootRichnessTier", 1).coerceIn(1, 25),
+              powerGridTier = aObj.optInt("powerGridTier", 1).coerceIn(1, PowerTier.MAX_TIER),
+              defenseTurretTier = aObj.optInt("defenseTurretTier", 1).coerceIn(1, PowerTier.MAX_TIER),
+              trapDensityTier = aObj.optInt("trapDensityTier", 1).coerceIn(1, PowerTier.MAX_TIER),
+              lootRichnessTier = aObj.optInt("lootRichnessTier", 1).coerceIn(1, PowerTier.MAX_TIER),
               starLevel = aObj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
             )
           }
@@ -3370,8 +4392,8 @@ class ProgressionStore(
       val vacObj = root.optJSONObject("vacuumBot")
       if (vacObj != null) {
         VacuumBotState(
-          level = vacObj.optInt("level", 1).coerceIn(1, 50),
-          tier = vacObj.optInt("tier", 1).coerceIn(1, 25),
+          level = vacObj.optInt("level", 1).coerceIn(1, ProgressionCatalog.MAX_BOT_LEVEL),
+          tier = vacObj.optInt("tier", 1).coerceIn(1, PowerTier.MAX_TIER),
           autoUpgradeEnabled = vacObj.optBoolean("autoUpgradeEnabled", true),
           autoCollectEnabled = vacObj.optBoolean("autoCollectEnabled", true),
           starLevel = vacObj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
@@ -3442,9 +4464,9 @@ class ProgressionStore(
           name = clanObj.optString("name", SocialCatalog.defaultClan.name),
           tag = clanObj.optString("tag", SocialCatalog.defaultClan.tag),
           motto = clanObj.optString("motto", SocialCatalog.defaultClan.motto),
-          level = clanObj.optInt("level", 4).coerceIn(1, 25),
-          tier = clanObj.optInt("tier", 4).coerceIn(1, 25),
-          starLevel = clanObj.optInt("starLevel", 3).coerceIn(1, 10),
+          level = clanObj.optInt("level", 4).coerceIn(1, ProgressionCatalog.MAX_CLAN_LEVEL),
+          tier = clanObj.optInt("tier", 4).coerceIn(1, PowerTier.MAX_TIER),
+          starLevel = clanObj.optInt("starLevel", 3).coerceIn(1, StarRankMeta.MAX_STARS),
           totalEssenceDonated = clanObj.optLong("totalEssenceDonated", 18500L),
           leaderCallsign = clanObj.optString("leaderCallsign", SocialCatalog.defaultClan.leaderCallsign),
           colorHex = clanObj.optLong("colorHex", SocialCatalog.defaultClan.colorHex),
@@ -3645,7 +4667,7 @@ class ProgressionStore(
     val protRanks = safeParse(fallback.protectionRanks) {
       val map = mutableMapOf<String, Int>()
       root.optJSONObject("protectionRanks")?.let { obj ->
-        obj.keys().forEach { k -> map[k] = obj.optInt(k, 0).coerceIn(0, 25) }
+        obj.keys().forEach { k -> map[k] = obj.optInt(k, 0).coerceIn(0, ProgressionCatalog.MAX_PROT_RANK) }
         map
       } ?: fallback.protectionRanks
     }
@@ -3682,8 +4704,8 @@ class ProgressionStore(
               moveSpeedPctPerRank = obj.optInt("moveSpeedPctPerRank", 3).coerceIn(0, 30),
               regenPerSecPerRank = obj.optDouble("regenPerSecPerRank", 1.0).toFloat().coerceIn(0f, 15f),
               siphonPerKillPerRank = obj.optInt("siphonPerKillPerRank", 1).coerceIn(0, 20),
-              tier = obj.optInt("tier", 1).coerceIn(1, 25),
-              maxTier = obj.optInt("maxTier", 25).coerceIn(1, 25),
+              tier = obj.optInt("tier", 1).coerceIn(1, PowerTier.MAX_TIER),
+              maxTier = obj.optInt("maxTier", PowerTier.MAX_TIER).coerceIn(1, PowerTier.MAX_TIER),
               starLevel = obj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
             )
           )
@@ -3741,8 +4763,8 @@ class ProgressionStore(
               bonusRatePct = obj.optInt("bonusRatePct", 6).coerceIn(0, 60),
               bonusCooldownHastePct = obj.optInt("bonusCooldownHastePct", 10).coerceIn(0, 80),
               bonusProtectionPct = obj.optInt("bonusProtectionPct", 4).coerceIn(0, 40),
-              tier = obj.optInt("tier", 1).coerceIn(1, 25),
-              maxTier = obj.optInt("maxTier", 25).coerceIn(1, 25),
+              tier = obj.optInt("tier", 1).coerceIn(1, PowerTier.MAX_TIER),
+              maxTier = obj.optInt("maxTier", PowerTier.MAX_TIER).coerceIn(1, PowerTier.MAX_TIER),
               starLevel = obj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
             )
           )
@@ -3779,8 +4801,8 @@ class ProgressionStore(
               cooldownSeconds = obj.optDouble("cooldownSeconds", 5.5).toFloat().coerceIn(1.5f, 25f),
               cooldownHastePct = obj.optInt("cooldownHastePct", 6).coerceIn(0, 60),
               accentHex = obj.optLong("accentHex", 0xFFFF6D00L),
-              tier = obj.optInt("tier", 1).coerceIn(1, 25),
-              maxTier = obj.optInt("maxTier", 25).coerceIn(1, 25),
+              tier = obj.optInt("tier", 1).coerceIn(1, PowerTier.MAX_TIER),
+              maxTier = obj.optInt("maxTier", PowerTier.MAX_TIER).coerceIn(1, PowerTier.MAX_TIER),
               starLevel = obj.optInt("starLevel", 1).coerceIn(1, StarRankMeta.MAX_STARS),
             )
           )
@@ -3802,6 +4824,103 @@ class ProgressionStore(
         obj.keys().forEach { k -> map[k] = obj.optInt(k, 1).coerceIn(1, StarRankMeta.MAX_STARS) }
       }
       map
+    }
+
+    val parsedEnvRes = safeParse(fallback.environmentalResources) {
+      val map = defaultEnvironmentalResources().toMutableMap()
+      root.optJSONObject("environmentalResources")?.let { obj ->
+        obj.keys().forEach { k -> map[k] = obj.optLong(k, map[k] ?: 0L).coerceAtLeast(0L) }
+      }
+      map
+    }
+
+    val parsedSystemShards = safeParse(fallback.systemShards) {
+      val map = defaultSystemShards().toMutableMap()
+      root.optJSONObject("systemShards")?.let { obj ->
+        obj.keys().forEach { k -> map[k] = obj.optLong(k, map[k] ?: 0L).coerceAtLeast(0L) }
+      }
+      map
+    }
+
+    val parsedMagicState = safeParse(fallback.magicState) {
+      val mObj = root.optJSONObject("magicState")
+      if (mObj != null) {
+        val unlockedSpells = mutableSetOf<String>().apply {
+          mObj.optJSONArray("unlockedSpells")?.let { arr ->
+            for (i in 0 until arr.length()) {
+              val s = arr.optString(i)
+              if (s.isNotBlank()) add(s)
+            }
+          }
+          if (isEmpty()) addAll(fallback.magicState.unlockedSpells)
+        }
+        val spellTiers = mutableMapOf<String, Int>().apply {
+          unlockedSpells.forEach { put(it, 1) }
+          mObj.optJSONObject("spellTiers")?.let { stObj ->
+            stObj.keys().forEach { k -> put(k, stObj.optInt(k, 1).coerceIn(1, PowerTier.MAX_TIER)) }
+          }
+        }
+        MagicSystemState(
+          unlocked = mObj.optBoolean("unlocked", true),
+          activeSpellId = mObj.optString("activeSpellId", fallback.magicState.activeSpellId).ifBlank { "spell_abyssal_nova" },
+          manaCurrent = mObj.optDouble("manaCurrent", fallback.magicState.manaCurrent.toDouble()).toFloat().coerceIn(0f, 350f),
+          manaMax = mObj.optDouble("manaMax", fallback.magicState.manaMax.toDouble()).toFloat().coerceIn(50f, 350f),
+          magicTier = mObj.optInt("magicTier", fallback.magicState.magicTier).coerceIn(1, PowerTier.MAX_TIER),
+          difficultyScalingFactor = mObj.optDouble("difficultyScalingFactor", fallback.magicState.difficultyScalingFactor.toDouble()).toFloat().coerceIn(1f, 3.5f),
+          overchargeDifficultyEnabled = mObj.optBoolean("overchargeDifficultyEnabled", fallback.magicState.overchargeDifficultyEnabled),
+          unlockedSpells = unlockedSpells,
+          spellTiers = spellTiers,
+        )
+      } else fallback.magicState
+    }
+
+    val parsedBaseState = safeParse(fallback.playerBaseState) {
+      val bObj = root.optJSONObject("playerBaseState")
+      if (bObj != null) {
+        val baseObj = PlayerBaseState(
+          baseName = bObj.optString("baseName", fallback.playerBaseState.baseName).ifBlank { "Nexus Command Citadel" },
+          layoutTheme = bObj.optString("layoutTheme", fallback.playerBaseState.layoutTheme).ifBlank { "citadel" },
+          primaryHex = bObj.optLong("primaryHex", fallback.playerBaseState.primaryHex),
+          wallTier = bObj.optInt("wallTier", 1).coerceIn(1, PowerTier.MAX_TIER),
+          turretTier = bObj.optInt("turretTier", 1).coerceIn(1, PowerTier.MAX_TIER),
+          shieldGeneratorTier = bObj.optInt("shieldGeneratorTier", 1).coerceIn(1, PowerTier.MAX_TIER),
+          resourceVaultTier = bObj.optInt("resourceVaultTier", 1).coerceIn(1, PowerTier.MAX_TIER),
+          storedGold = bObj.optLong("storedGold", fallback.playerBaseState.storedGold).coerceAtLeast(0L),
+          storedDiamonds = bObj.optLong("storedDiamonds", fallback.playerBaseState.storedDiamonds).coerceAtLeast(0L),
+          storedTuuCash = bObj.optLong("storedTuuCash", fallback.playerBaseState.storedTuuCash).coerceAtLeast(0L),
+          baseHpCurrent = bObj.optInt("baseHpCurrent", 1000).coerceAtLeast(1),
+          baseHpMax = bObj.optInt("baseHpMax", 1000).coerceAtLeast(500),
+          underAttack = bObj.optBoolean("underAttack", false),
+          attackWaveCountdownSec = bObj.optInt("attackWaveCountdownSec", 240).coerceAtLeast(0),
+          defenseSuccessCount = bObj.optInt("defenseSuccessCount", 0).coerceAtLeast(0),
+        )
+        baseObj.copy(baseHpMax = maxOf(baseObj.baseHpMax, baseObj.maxIntegrity()))
+      } else fallback.playerBaseState
+    }
+
+    val parsedCrystals = safeParse(fallback.crystals) {
+      val arr = root.optJSONArray("crystals")
+      if (arr != null) {
+        val list = ArrayList<CrystalItem>(arr.length())
+        for (i in 0 until arr.length()) {
+          val obj = arr.optJSONObject(i) ?: continue
+          list.add(
+            CrystalItem(
+              id = obj.optString("id", "crystal_$i").ifBlank { "crystal_$i" },
+              name = obj.optString("name", "Resonance Crystal $i"),
+              rarity = obj.optString("rarity", "Epic"),
+              element = obj.optString("element", "energy"),
+              statBonusSummary = obj.optString("statBonusSummary", "+10% DMG & Shield"),
+              damageBoostPct = obj.optInt("damageBoostPct", 10).coerceIn(0, 100),
+              shieldBoostPct = obj.optInt("shieldBoostPct", 10).coerceIn(0, 100),
+              luckBoostPct = obj.optInt("luckBoostPct", 5).coerceIn(0, 100),
+              socketedSlot = obj.optString("socketedSlot", "").ifBlank { null },
+              level = obj.optInt("level", 1).coerceIn(1, PowerTier.MAX_TIER),
+            )
+          )
+        }
+        list.ifEmpty { defaultCrystals() }.distinctBy { it.id }
+      } else fallback.crystals
     }
 
     return OperatorProgressionState(
@@ -3860,7 +4979,7 @@ class ProgressionStore(
       totalBossesLifetime = root.optLong("totalBossesLifetime", fallback.totalBossesLifetime).coerceAtLeast(0L),
       totalMatchesPlayed = root.optLong("totalMatchesPlayed", fallback.totalMatchesPlayed).coerceAtLeast(0L),
       totalBlueEssenceSpent = root.optLong("totalBlueEssenceSpent", fallback.totalBlueEssenceSpent).coerceAtLeast(0L),
-      highestPackTierReached = root.optInt("highestPackTierReached", fallback.highestPackTierReached).coerceIn(1, 25),
+      highestPackTierReached = root.optInt("highestPackTierReached", fallback.highestPackTierReached).coerceIn(1, PowerTier.MAX_TIER),
       largestLobbyPlayed = root.optInt("largestLobbyPlayed", fallback.largestLobbyPlayed).coerceIn(1, 250),
       storePurchasesCount = root.optInt("storePurchasesCount", fallback.storePurchasesCount).coerceAtLeast(0),
       purchasedStoreItems = purchasedStoreItems,
@@ -3891,8 +5010,16 @@ class ProgressionStore(
       customGear = customGearList,
       equippedCustomGearMap = equippedCustomGear,
       customEquipment = customEquipList,
-      blastShardTier = root.optInt("blastShardTier", fallback.blastShardTier).coerceIn(1, 25),
-      companionBuffTier = root.optInt("companionBuffTier", fallback.companionBuffTier).coerceIn(1, 25),
+      blastShardTier = root.optInt("blastShardTier", fallback.blastShardTier).coerceIn(1, PowerTier.MAX_TIER),
+      companionBuffTier = root.optInt("companionBuffTier", fallback.companionBuffTier).coerceIn(1, PowerTier.MAX_TIER),
+      gold = root.optLong("gold", fallback.gold).coerceAtLeast(0L),
+      diamonds = root.optLong("diamonds", fallback.diamonds).coerceAtLeast(0L),
+      tuuCash = root.optLong("tuuCash", fallback.tuuCash).coerceAtLeast(0L),
+      environmentalResources = parsedEnvRes,
+      systemShards = parsedSystemShards,
+      magicState = parsedMagicState,
+      playerBaseState = parsedBaseState,
+      crystals = parsedCrystals,
     )
   }
 
@@ -4068,6 +5195,32 @@ class ProgressionStore(
       customEquipment = (base.customEquipment + incoming.customEquipment).distinctBy { it.id },
       blastShardTier = maxOf(base.blastShardTier, incoming.blastShardTier),
       companionBuffTier = maxOf(base.companionBuffTier, incoming.companionBuffTier),
+      gold = maxOf(base.gold, incoming.gold),
+      diamonds = maxOf(base.diamonds, incoming.diamonds),
+      tuuCash = maxOf(base.tuuCash, incoming.tuuCash),
+      environmentalResources = mergeLongMap(base.environmentalResources, incoming.environmentalResources),
+      systemShards = mergeLongMap(base.systemShards, incoming.systemShards),
+      magicState = base.magicState.copy(
+        magicTier = maxOf(base.magicState.magicTier, incoming.magicState.magicTier),
+        manaMax = maxOf(base.magicState.manaMax, incoming.magicState.manaMax),
+        manaCurrent = maxOf(base.magicState.manaCurrent, incoming.magicState.manaCurrent),
+        unlockedSpells = base.magicState.unlockedSpells + incoming.magicState.unlockedSpells,
+        spellTiers = mergeIntMap(base.magicState.spellTiers, incoming.magicState.spellTiers, 1),
+      ),
+      playerBaseState = base.playerBaseState.copy(
+        wallTier = maxOf(base.playerBaseState.wallTier, incoming.playerBaseState.wallTier),
+        turretTier = maxOf(base.playerBaseState.turretTier, incoming.playerBaseState.turretTier),
+        shieldGeneratorTier = maxOf(base.playerBaseState.shieldGeneratorTier, incoming.playerBaseState.shieldGeneratorTier),
+        resourceVaultTier = maxOf(base.playerBaseState.resourceVaultTier, incoming.playerBaseState.resourceVaultTier),
+        storedGold = maxOf(base.playerBaseState.storedGold, incoming.playerBaseState.storedGold),
+        storedDiamonds = maxOf(base.playerBaseState.storedDiamonds, incoming.playerBaseState.storedDiamonds),
+        storedTuuCash = maxOf(base.playerBaseState.storedTuuCash, incoming.playerBaseState.storedTuuCash),
+        defenseSuccessCount = maxOf(base.playerBaseState.defenseSuccessCount, incoming.playerBaseState.defenseSuccessCount),
+      ),
+      crystals = (base.crystals + incoming.crystals)
+        .groupBy { it.id }
+        .values
+        .map { list -> list.maxBy { it.level } },
     )
   }
 
@@ -4090,7 +5243,7 @@ class ProgressionStore(
           ?: p.getString("progression_state", null)
         if (!s.isNullOrBlank()) {
           raw = s
-          prefs.edit {
+          prefs.edit(commit = true) {
             putString(KEY_STATE_JSON, s)
             putString(KEY_STATE_JSON_LEGACY, s)
           }
@@ -4104,9 +5257,23 @@ class ProgressionStore(
     }
     val storedSeal = prefs.getString(KEY_STATE_HASH, null)
     lastLoadedIntegrityValid = storedSeal == null || AppSecurityManager.verifyPayload(raw, storedSeal)
-    return runCatching {
+    val parsedPrimary = runCatching {
       parseProgressionJson(JSONObject(raw), OperatorProgressionState())
     }.getOrDefault(OperatorProgressionState())
+
+    if (safeUserId != "local_operator") {
+      val localRaw = appContext.getSharedPreferences("${PREFS_PREFIX}_local_operator", Context.MODE_PRIVATE)
+        .getString(KEY_STATE_JSON, null)
+      if (!localRaw.isNullOrBlank() && localRaw != raw) {
+        val localParsed = runCatching {
+          parseProgressionJson(JSONObject(localRaw), OperatorProgressionState())
+        }.getOrNull()
+        if (localParsed != null) {
+          return mergeStatesPreferHigher(parsedPrimary, localParsed)
+        }
+      }
+    }
+    return parsedPrimary
   }
 
   data class HeroOutfitResult(

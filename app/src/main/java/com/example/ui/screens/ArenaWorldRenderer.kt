@@ -18,17 +18,36 @@ import kotlin.math.sin
 
 private const val HORIZON_RATIO = 0.14f
 private const val PERSP_TILT = 0.24f
-private const val BASE_WORLD_VIEW_ZOOM = 0.62f
+private const val BASE_WORLD_VIEW_ZOOM = 0.64f
+private const val PERSP_Y_FORESHORTEN = 0.78f
 
 @Volatile
 var activeArenaZoomScale: Float = 1.0f
 
+@Volatile
+var activeArenaResolutionScale: Float = 1.0f
+
 fun currentWorldViewZoom(): Float =
   (BASE_WORLD_VIEW_ZOOM * (if (activeArenaZoomScale.isFinite()) activeArenaZoomScale else 1.0f))
-    .coerceIn(0.48f, 0.80f)
+    .coerceIn(0.48f, 0.85f)
+
+fun canvasDensityScale(w: Float, h: Float): Float {
+  val shortSide = minOf(w, h).coerceAtLeast(1f)
+  val viewportScale = (shortSide / 720f).coerceIn(0.68f, 2.40f)
+  val modeScale = if (activeArenaResolutionScale.isFinite()) activeArenaResolutionScale.coerceIn(0.75f, 1.35f) else 1.0f
+  return (viewportScale * modeScale).coerceIn(0.65f, 2.60f)
+}
+
+fun worldAxisPx(w: Float, h: Float): Float {
+  val groundH = (h * (1f - HORIZON_RATIO)).coerceAtLeast(1f)
+  return minOf(w * 1.02f, groundH * 1.24f).coerceAtLeast(1f)
+}
 
 fun perspectiveScaleForRelY(relY: Float): Float =
   (0.78f + (relY - 0.5f) * PERSP_TILT).coerceIn(0.46f, 1.32f)
+
+fun perspectiveScaleForRelY(relY: Float, w: Float, h: Float): Float =
+  perspectiveScaleForRelY(relY) * canvasDensityScale(w, h)
 
 fun worldToPerspectiveScreen(
   wx: Float,
@@ -43,10 +62,10 @@ fun worldToPerspectiveScreen(
   val relY = wy - camY
   val depthScale = perspectiveScaleForRelY(relY)
   val horizonPx = h * HORIZON_RATIO
-  val groundH = h - horizonPx
-  val sx = w * 0.5f + (relX - 0.5f) * w * depthScale * zoom
-  val normalizedY = ((relY - 0.5f) * depthScale * zoom + 0.5f)
-  val sy = horizonPx + normalizedY * groundH
+  val groundH = (h - horizonPx).coerceAtLeast(1f)
+  val axis = worldAxisPx(w, h)
+  val sx = w * 0.5f + (relX - 0.5f) * axis * depthScale * zoom
+  val sy = horizonPx + groundH * 0.5f + (relY - 0.5f) * (axis * PERSP_Y_FORESHORTEN) * depthScale * zoom
   return Offset(sx, sy)
 }
 
@@ -61,14 +80,15 @@ fun screenToWorldCoords(
   val zoom = currentWorldViewZoom()
   val horizonPx = h * HORIZON_RATIO
   val groundH = (h - horizonPx).coerceAtLeast(1f)
-  val normY = (py - horizonPx) / groundH
-  var relY = 0.5f + (normY - 0.5f) / zoom
+  val axis = worldAxisPx(w, h)
+  val normY = (py - (horizonPx + groundH * 0.5f)) / (axis * PERSP_Y_FORESHORTEN).coerceAtLeast(1f)
+  var relY = 0.5f + normY / zoom
   for (it in 0..2) {
     val ds = perspectiveScaleForRelY(relY)
-    relY = 0.5f + (normY - 0.5f) / (ds * zoom).coerceAtLeast(0.20f)
+    relY = 0.5f + normY / (ds * zoom).coerceAtLeast(0.20f)
   }
   val ds = perspectiveScaleForRelY(relY).coerceAtLeast(0.25f)
-  val relX = 0.5f + (px - w * 0.5f) / (w.coerceAtLeast(1f) * ds * zoom)
+  val relX = 0.5f + (px - w * 0.5f) / (axis * ds * zoom).coerceAtLeast(1f)
   return Pair(camX + relX, camY + relY)
 }
 
@@ -174,6 +194,7 @@ class ArenaBackdropCache {
         "ship_of_heroes_apotheosis" -> Color(0xFF160B2E)
         "mr_crossover_nexus" -> Color(0xFF081F1A)
         "campaign_origins" -> Color(0xFF181430)
+        "sector_star_wars_nexus" -> Color(0xFF1F1608)
         else -> Color(0xFF081024)
       }
     }
@@ -345,36 +366,120 @@ fun DrawScope.drawWorldArenaBackdrop(
     }
   }
 
-  // Fortified 24x24 Perimeter Border Wall & Corner Bastions
+  // Fortified 24x24 Perimeter Border Wall, Bastion Buttresses, Searchlight Watchtowers & Shield Pylons
   val fTL = worldToPerspectiveScreen(0f, 0f, camX, camY, w, h)
   val fTR = worldToPerspectiveScreen(ARENA_WORLD_SIZE, 0f, camX, camY, w, h)
   val fBR = worldToPerspectiveScreen(ARENA_WORLD_SIZE, ARENA_WORLD_SIZE, camX, camY, w, h)
   val fBL = worldToPerspectiveScreen(0f, ARENA_WORLD_SIZE, camX, camY, w, h)
   val outerWallGlow = (if (highContrast) Color.White else Color(0xFFFF3D71)).copy(alpha = 0.34f + pulse * 0.16f)
   val outerWallCore = if (highContrast) Color(0xFFFFD54F) else Color(0xFFE040FB)
-  fun drawPerimeterWall(a: Offset, b: Offset) {
-    if ((a.x < -120f && b.x < -120f) || (a.x > w + 120f && b.x > w + 120f)) return
-    if ((a.y < -120f && b.y < -120f) || (a.y > h + 120f && b.y > h + 120f)) return
-    drawLine(Color(0xFF0A0D18), a, b, strokeWidth = 18f, cap = StrokeCap.Square)
-    drawLine(outerWallGlow, a, b, strokeWidth = 11f, cap = StrokeCap.Square)
+  fun drawPerimeterWallWithStructures(wx1: Float, wy1: Float, wx2: Float, wy2: Float, isHorizontal: Boolean) {
+    val a = worldToPerspectiveScreen(wx1, wy1, camX, camY, w, h)
+    val b = worldToPerspectiveScreen(wx2, wy2, camX, camY, w, h)
+    if ((a.x < -140f && b.x < -140f) || (a.x > w + 140f && b.x > w + 140f)) return
+    if ((a.y < -140f && b.y < -140f) || (a.y > h + 140f && b.y > h + 140f)) return
+    // Armored lower parapet shadow + barrier core
+    drawLine(Color(0xFF090D1A), a, b, strokeWidth = 22f, cap = StrokeCap.Square)
+    drawLine(outerWallGlow, a, b, strokeWidth = 12f, cap = StrokeCap.Square)
     drawLine(outerWallCore, a, b, strokeWidth = 3.5f, cap = StrokeCap.Square)
+    if (!lowGraphics) {
+      // Build architectural buttress bunkers & energy shield pylons along the boundary every 3.0 world units
+      var step = 3.0f
+      while (step < ARENA_WORLD_SIZE - 0.5f) {
+        val bx = if (isHorizontal) step else wx1
+        val by = if (isHorizontal) wy1 else step
+        if (kotlin.math.abs(bx - (camX + 0.5f)) < 6.5f && kotlin.math.abs(by - (camY + 0.5f)) < 6.5f) {
+          val p = worldToPerspectiveScreen(bx, by, camX, camY, w, h)
+          val pScale = perspectiveScaleForRelY(by - camY, w, h)
+          if (p.x in -60f..w + 60f && p.y in horizonY - 40f..h + 60f) {
+            val bw = 20f * pScale
+            val bh = 16f * pScale
+            drawRoundRect(
+              color = Color(0xFF141B2E),
+              topLeft = Offset(p.x - bw * 0.5f, p.y - bh * 0.65f),
+              size = Size(bw, bh),
+              cornerRadius = CornerRadius(4f, 4f),
+            )
+            drawRoundRect(
+              color = outerWallCore.copy(alpha = 0.85f),
+              topLeft = Offset(p.x - bw * 0.5f, p.y - bh * 0.65f),
+              size = Size(bw, bh),
+              cornerRadius = CornerRadius(4f, 4f),
+              style = Stroke(width = 2.2f * pScale),
+            )
+            // Vertical shield pylon mast + glowing beacon tip
+            drawLine(
+              color = outerWallCore,
+              start = Offset(p.x, p.y - bh * 0.5f),
+              end = Offset(p.x, p.y - bh * 1.45f),
+              strokeWidth = 3f * pScale,
+            )
+            drawCircle(
+              color = Color(0xFFFFD54F).copy(alpha = 0.72f + pulse * 0.25f),
+              radius = 3.8f * pScale,
+              center = Offset(p.x, p.y - bh * 1.45f),
+            )
+          }
+        }
+        step += 3.0f
+      }
+    }
   }
-  drawPerimeterWall(fTL, fTR)
-  drawPerimeterWall(fBL, fBR)
-  drawPerimeterWall(fTL, fBL)
-  drawPerimeterWall(fTR, fBR)
-  for (corner in arrayOf(fTL, fTR, fBR, fBL)) {
-    if (corner.x in -60f..w + 60f && corner.y in -60f..h + 60f) {
-      drawCircle(outerWallGlow, radius = 22f, center = corner)
-      drawCircle(outerWallCore, radius = 9f, center = corner)
+  drawPerimeterWallWithStructures(0f, 0f, ARENA_WORLD_SIZE, 0f, isHorizontal = true)
+  drawPerimeterWallWithStructures(0f, ARENA_WORLD_SIZE, ARENA_WORLD_SIZE, ARENA_WORLD_SIZE, isHorizontal = true)
+  drawPerimeterWallWithStructures(0f, 0f, 0f, ARENA_WORLD_SIZE, isHorizontal = false)
+  drawPerimeterWallWithStructures(ARENA_WORLD_SIZE, 0f, ARENA_WORLD_SIZE, ARENA_WORLD_SIZE, isHorizontal = false)
+  val cornerWorlds = arrayOf(
+    Pair(0f, 0f),
+    Pair(ARENA_WORLD_SIZE, 0f),
+    Pair(ARENA_WORLD_SIZE, ARENA_WORLD_SIZE),
+    Pair(0f, ARENA_WORLD_SIZE),
+  )
+  cornerWorlds.forEachIndexed { cIdx, (cwx, cwy) ->
+    val corner = worldToPerspectiveScreen(cwx, cwy, camX, camY, w, h)
+    if (corner.x in -100f..w + 100f && corner.y in -100f..h + 100f) {
+      val cScale = perspectiveScaleForRelY(cwy - camY, w, h)
+      // Corner Citadel Watchtower + Rotating Searchlight Cone
+      drawCircle(Color(0xFF101628), radius = 26f * cScale, center = corner)
+      drawCircle(outerWallGlow, radius = 26f * cScale, center = corner, style = Stroke(width = 4f * cScale))
+      drawCircle(outerWallCore, radius = 11f * cScale, center = corner)
+      if (!lowGraphics) {
+        val beamAng = elapsedTicks * 0.025f + cIdx * 1.57f
+        val beamLen = 95f * cScale
+        val beamPath = Path().apply {
+          moveTo(corner.x, corner.y)
+          lineTo(corner.x + cos(beamAng - 0.22f) * beamLen, corner.y + sin(beamAng - 0.22f) * beamLen * 0.72f)
+          lineTo(corner.x + cos(beamAng + 0.22f) * beamLen, corner.y + sin(beamAng + 0.22f) * beamLen * 0.72f)
+          close()
+        }
+        drawPath(beamPath, color = outerWallCore.copy(alpha = 0.14f + pulse * 0.08f))
+      }
     }
   }
 
   // Center World Landmark projected in 2.5D
   val cCenter = worldToPerspectiveScreen(ARENA_CENTER, ARENA_CENTER, camX, camY, w, h)
-  val cScale = perspectiveScaleForRelY(ARENA_CENTER - camY)
+  val cScale = perspectiveScaleForRelY(ARENA_CENTER - camY, w, h)
+  val worldAxis = worldAxisPx(w, h) * currentWorldViewZoom()
   if (cCenter.x in -240f..w + 240f && cCenter.y in -240f..h + 240f) {
     when {
+      areaId.contains("bank") || areaId.contains("vault") -> {
+        val r = minOf(w, h) * 0.24f * cScale
+        drawCircle(Color(0xFF0F172A), radius = r * 0.95f, center = cCenter)
+        drawCircle(Color(0xFFFFD54F), radius = r * 0.95f, center = cCenter, style = Stroke(width = 6f * cScale))
+        drawCircle(Color(0xFF00E5FF).copy(alpha = 0.5f + pulse * 0.3f), radius = r * 0.65f, center = cCenter, style = Stroke(width = 4f * cScale, pathEffect = PathEffect.dashPathEffect(floatArrayOf(16f, 10f))))
+        for (sp in 0..7) {
+          val ang = sp * (PI.toFloat() / 4f) + (elapsedTicks * 0.02f)
+          val spX = cCenter.x + cos(ang) * r * 0.8f
+          val spY = cCenter.y + sin(ang) * r * 0.58f
+          drawLine(Color(0xFFFFD54F), cCenter, Offset(spX, spY), strokeWidth = 3.5f * cScale)
+          drawCircle(Color(0xFF00E5FF), radius = 6f * cScale, center = Offset(spX, spY))
+        }
+        drawCircle(Color(0xFF00E5FF).copy(alpha = 0.85f), radius = 18f * cScale, center = cCenter)
+        drawCircle(Color.White, radius = 9f * cScale, center = cCenter)
+        drawRect(Color(0xFFFFD54F), topLeft = Offset(cCenter.x - r * 0.7f, cCenter.y + r * 0.35f), size = Size(24f * cScale, 14f * cScale))
+        drawRect(Color(0xFFFFD54F), topLeft = Offset(cCenter.x + r * 0.45f, cCenter.y + r * 0.35f), size = Size(24f * cScale, 14f * cScale))
+      }
       areaId.contains("abyss") -> {
         val r = minOf(w, h) * 0.22f * cScale
         drawOval(Color(0xFFB388FF).copy(alpha = 0.24f + pulse * 0.16f), topLeft = Offset(cCenter.x - r, cCenter.y - r * 0.65f), size = Size(r * 2f, r * 1.3f), style = Stroke(width = 5f * cScale))
@@ -450,6 +555,14 @@ fun DrawScope.drawWorldArenaBackdrop(
         drawOval(Color(0xFF00E5FF).copy(alpha = 0.30f + pulse * 0.14f), topLeft = Offset(cCenter.x - r, cCenter.y - r * 0.60f), size = Size(r * 2f, r * 1.20f), style = Stroke(width = 3.5f * cScale))
         drawLine(Color(0xFFE040FB).copy(alpha = 0.75f), Offset(cCenter.x - r * 0.65f, cCenter.y - r * 0.3f), Offset(cCenter.x + r * 0.65f, cCenter.y + r * 0.3f), strokeWidth = 3f * cScale)
         drawLine(Color(0xFF00E5FF).copy(alpha = 0.75f), Offset(cCenter.x + r * 0.65f, cCenter.y - r * 0.3f), Offset(cCenter.x - r * 0.65f, cCenter.y + r * 0.3f), strokeWidth = 3f * cScale)
+      }
+      "sector_star_wars_nexus" -> {
+        val r = minOf(w, h) * 0.23f * cScale
+        // Death Star Kyber Trench Ring + Twin Orbiting Suns
+        drawOval(Color(0xFF40C4FF).copy(alpha = 0.28f + pulse * 0.14f), topLeft = Offset(cCenter.x - r, cCenter.y - r * 0.64f), size = Size(r * 2f, r * 1.28f), style = Stroke(width = 4.5f * cScale))
+        drawCircle(Color(0xFFFFD54F).copy(alpha = 0.75f), radius = 11f * cScale, center = Offset(cCenter.x - r * 0.45f, cCenter.y - r * 0.20f))
+        drawCircle(Color(0xFFFF7043).copy(alpha = 0.75f), radius = 8f * cScale, center = Offset(cCenter.x + r * 0.48f, cCenter.y - r * 0.12f))
+        drawCircle(Color(0xFF00E676).copy(alpha = 0.65f), radius = 14f * cScale, center = cCenter, style = Stroke(width = 3f * cScale))
       }
       "empire_city_infamous" -> {
         val r = minOf(w, h) * 0.21f * cScale
@@ -530,63 +643,171 @@ fun DrawScope.drawSectionBiomesAndBorders(
     drawPath(quad, color = groundTint)
 
     val secAccent = Color(sec.accentHex)
-    if (!lowGraphics && pCenter.x in -180f..w + 180f && pCenter.y in horizonY - 80f..h + 180f) {
-      val sScale = perspectiveScaleForRelY(sec.centerY - camY)
-      val r = minOf(w, h) * 0.16f * sScale
+    if (!lowGraphics && pCenter.x in -220f..w + 220f && pCenter.y in horizonY - 120f..h + 220f) {
+      val sScale = perspectiveScaleForRelY(sec.centerY - camY, w, h)
+      val r = minOf(w, h) * 0.19f * perspectiveScaleForRelY(sec.centerY - camY)
       when (sec.floorStyle) {
         SectionFloorStyle.CRYO -> {
-          drawCircle(secAccent.copy(alpha = 0.20f), radius = r, center = pCenter, style = Stroke(width = 2.5f * sScale))
-          drawLine(secAccent.copy(alpha = 0.35f), Offset(pCenter.x - r * 0.8f, pCenter.y), Offset(pCenter.x + r * 0.8f, pCenter.y), strokeWidth = 2f)
+          val tipOffset = Offset(pCenter.x, pCenter.y - r * 1.8f)
+          val baseRect = Size(r * 0.9f, r * 0.7f)
+          drawRect(Color(0xFF06283D), topLeft = Offset(pCenter.x - baseRect.width * 0.5f, pCenter.y - baseRect.height * 0.5f), size = baseRect)
+          val iceSpire = Path().apply {
+            moveTo(pCenter.x - baseRect.width * 0.5f, pCenter.y)
+            lineTo(pCenter.x + baseRect.width * 0.5f, pCenter.y)
+            lineTo(tipOffset.x, tipOffset.y)
+            close()
+          }
+          drawPath(iceSpire, color = Color(0xFF00E5FF).copy(alpha = 0.45f + pulse * 0.15f))
+          drawPath(iceSpire, color = Color.White.copy(alpha = 0.85f), style = Stroke(width = 3f * sScale))
+          drawCircle(Color(0xFFFFD54F).copy(alpha = 0.8f + pulse * 0.2f), radius = 5f * sScale, center = tipOffset)
+        }
+        SectionFloorStyle.FOUNDRY -> {
+          val towerRect = Size(r * 1.1f, r * 1.4f)
+          val topCenter = Offset(pCenter.x, pCenter.y - r * 1.3f)
+          drawRect(Color(0xFF160A06), topLeft = Offset(pCenter.x - towerRect.width * 0.5f, pCenter.y - towerRect.height * 0.6f), size = towerRect)
+          drawRect(Color(0xFFFF5722).copy(alpha = 0.85f), topLeft = Offset(pCenter.x - towerRect.width * 0.5f, pCenter.y - towerRect.height * 0.6f), size = towerRect, style = Stroke(width = 3f * sScale))
+          drawOval(Color(0xFFFFAB40).copy(alpha = 0.75f + pulse * 0.25f), topLeft = Offset(pCenter.x - r * 0.5f, pCenter.y - r * 0.2f), size = Size(r, r * 0.4f))
+          drawLine(Color(0xFF37474F), topCenter, Offset(topCenter.x, topCenter.y - r * 0.5f), strokeWidth = 8f * sScale)
+          drawCircle(Color(0xFFFFD54F).copy(alpha = 0.9f), radius = 6f * sScale, center = Offset(topCenter.x, topCenter.y - r * 0.5f))
         }
         SectionFloorStyle.BIO -> {
-          drawOval(secAccent.copy(alpha = 0.14f + pulse * 0.08f), topLeft = Offset(pCenter.x - r, pCenter.y - r * 0.6f), size = Size(r * 2f, r * 1.2f))
+          val bulbCenter = Offset(pCenter.x, pCenter.y - r * 0.8f)
+          drawCircle(Color(0xFF1B2E05).copy(alpha = 0.85f), radius = r * 0.55f, center = bulbCenter)
+          drawCircle(Color(0xFF76FF03).copy(alpha = 0.75f + pulse * 0.25f), radius = r * 0.55f, center = bulbCenter, style = Stroke(width = 3.5f * sScale))
+          for (tendril in 0..4) {
+            val ang = tendril * 1.2f
+            val endPoint = Offset(pCenter.x + cos(ang) * r * 1.1f, pCenter.y + sin(ang) * r * 0.6f)
+            drawLine(Color(0xFF00E676).copy(alpha = 0.8f), bulbCenter, endPoint, strokeWidth = 4f * sScale, cap = StrokeCap.Round)
+            drawCircle(Color(0xFFCCFF90), radius = 4f * sScale, center = endPoint)
+          }
         }
         SectionFloorStyle.SOLAR -> {
-          drawCircle(secAccent.copy(alpha = 0.18f + pulse * 0.08f), radius = r * 0.85f, center = pCenter, style = Stroke(width = 3f * sScale))
+          drawCircle(Color(0xFFFF8F00).copy(alpha = 0.25f + pulse * 0.15f), radius = r * 0.9f, center = pCenter)
+          drawCircle(Color(0xFFFFD54F).copy(alpha = 0.9f), radius = r * 0.85f, center = pCenter, style = Stroke(width = 4f * sScale, pathEffect = PathEffect.dashPathEffect(floatArrayOf(16f, 10f))))
+          drawCircle(Color(0xFF00E5FF).copy(alpha = 0.85f), radius = r * 0.4f, center = pCenter, style = Stroke(width = 3f * sScale))
+          drawLine(Color(0xFFFFD54F), Offset(pCenter.x, pCenter.y - r * 0.7f), Offset(pCenter.x, pCenter.y - r * 1.6f), strokeWidth = 4f * sScale)
+          drawCircle(Color.White, radius = 5.5f * sScale, center = Offset(pCenter.x, pCenter.y - r * 1.6f))
         }
         SectionFloorStyle.CRYPT -> {
-          drawRect(secAccent.copy(alpha = 0.25f), topLeft = Offset(pCenter.x - r * 0.65f, pCenter.y - r * 0.45f), size = Size(r * 1.3f, r * 0.9f), style = Stroke(width = 2.5f * sScale))
+          val tombRect = Size(r * 1.2f, r * 0.8f)
+          drawRect(Color(0xFF0A120E), topLeft = Offset(pCenter.x - tombRect.width * 0.5f, pCenter.y - tombRect.height * 0.6f), size = tombRect)
+          drawRect(Color(0xFF00E676).copy(alpha = 0.8f), topLeft = Offset(pCenter.x - tombRect.width * 0.5f, pCenter.y - tombRect.height * 0.6f), size = tombRect, style = Stroke(width = 3f * sScale))
+          drawLine(Color(0xFF00E676), Offset(pCenter.x, pCenter.y - r * 1.1f), Offset(pCenter.x, pCenter.y), strokeWidth = 5f * sScale)
+          drawLine(Color(0xFF00E676), Offset(pCenter.x - r * 0.35f, pCenter.y - r * 0.7f), Offset(pCenter.x + r * 0.35f, pCenter.y - r * 0.7f), strokeWidth = 4f * sScale)
+          drawCircle(Color(0xFFFF3D71).copy(alpha = 0.85f + pulse * 0.2f), radius = 6f * sScale, center = Offset(pCenter.x, pCenter.y - r * 1.1f))
         }
         SectionFloorStyle.VOID -> {
-          drawCircle(secAccent.copy(alpha = 0.24f + pulse * 0.12f), radius = r * 0.72f, center = pCenter, style = Stroke(width = 3f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f))))
+          val ringR = r * 0.75f
+          drawCircle(Color(0xFF14082B), radius = ringR, center = pCenter)
+          drawCircle(Color(0xFF9C27B0).copy(alpha = 0.85f + pulse * 0.2f), radius = ringR, center = pCenter, style = Stroke(width = 4.5f * sScale, pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 8f))))
+          drawCircle(Color(0xFF00E5FF).copy(alpha = 0.9f), radius = ringR * 0.45f, center = pCenter)
+          for (shard in 0..3) {
+            val a = shard * 1.57f + sim.elapsedTicks * 0.03f
+            val sp = Offset(pCenter.x + cos(a) * ringR * 1.25f, pCenter.y + sin(a) * ringR * 0.75f)
+            drawRect(Color(0xFFE040FB), topLeft = Offset(sp.x - 4f, sp.y - 4f), size = Size(8f, 8f))
+          }
         }
-        SectionFloorStyle.URBAN, SectionFloorStyle.NEON -> {
-          drawRoundRect(secAccent.copy(alpha = 0.22f), topLeft = Offset(pCenter.x - r * 0.7f, pCenter.y - r * 0.5f), size = Size(r * 1.4f, r * 1.0f), cornerRadius = CornerRadius(12f, 12f), style = Stroke(width = 2f * sScale))
+        SectionFloorStyle.URBAN -> {
+          val bldgRect = Size(r * 1.3f, r * 1.6f)
+          drawRect(Color(0xFF0B1329), topLeft = Offset(pCenter.x - bldgRect.width * 0.5f, pCenter.y - bldgRect.height * 0.7f), size = bldgRect)
+          drawRect(Color(0xFFFFD54F).copy(alpha = 0.85f), topLeft = Offset(pCenter.x - bldgRect.width * 0.5f, pCenter.y - bldgRect.height * 0.7f), size = bldgRect, style = Stroke(width = 3f * sScale))
+          for (wx in -1..1) {
+            for (wy in -2..1) {
+              drawRect(
+                Color(0xFFFFD54F).copy(alpha = if ((wx + wy + sim.elapsedTicks.toInt()) % 2 == 0) 0.85f else 0.3f),
+                topLeft = Offset(pCenter.x + wx * 12f * sScale - 4f, pCenter.y + wy * 14f * sScale - 6f),
+                size = Size(8f * sScale, 10f * sScale),
+              )
+            }
+          }
+        }
+        SectionFloorStyle.NEON -> {
+          val pyrPath = Path().apply {
+            moveTo(pCenter.x, pCenter.y - r * 1.5f)
+            lineTo(pCenter.x + r * 0.75f, pCenter.y)
+            lineTo(pCenter.x - r * 0.75f, pCenter.y)
+            close()
+          }
+          drawPath(pyrPath, color = Color(0xFF240A38))
+          drawPath(pyrPath, color = Color(0xFFFF3D71).copy(alpha = 0.9f), style = Stroke(width = 3.5f * sScale))
+          drawLine(Color(0xFFFF3D71), Offset(pCenter.x, pCenter.y - r * 1.5f), Offset(pCenter.x, pCenter.y - r * 2.5f), strokeWidth = 5f * sScale)
+          drawCircle(Color.White, radius = 6f * sScale, center = Offset(pCenter.x, pCenter.y - r * 2.5f))
         }
         else -> {
-          drawOval(secAccent.copy(alpha = 0.20f), topLeft = Offset(pCenter.x - r * 0.8f, pCenter.y - r * 0.5f), size = Size(r * 1.6f, r * 1.0f), style = Stroke(width = 2f * sScale))
+          val colRect = Size(r * 0.9f, r * 1.3f)
+          drawRect(Color(0xFF0A192F), topLeft = Offset(pCenter.x - colRect.width * 0.5f, pCenter.y - colRect.height * 0.6f), size = colRect)
+          drawRect(Color(0xFF00E5FF).copy(alpha = 0.85f), topLeft = Offset(pCenter.x - colRect.width * 0.5f, pCenter.y - colRect.height * 0.6f), size = colRect, style = Stroke(width = 3f * sScale))
+          drawCircle(Color(0xFF00E5FF).copy(alpha = 0.9f), radius = 8f * sScale, center = Offset(pCenter.x, pCenter.y - colRect.height * 0.6f))
         }
       }
     }
   }
 
-  // 2. Internal Section Border Walls along x=8,16 and y=8,16 with Open Checkpoint Gateways (at 4, 12, 20 ± ARENA_BORDER_HALF_GATE)
+  // 2. Architectural Internal Section Border Walls along x=8,16 and y=8,16 with Parapet Towers & Gateway Archways
   val wallCore = if (highContrast) Color(0xFF00F0FF) else Color(0xFF40C4FF)
   val gateCol = Color(0xFF00E676)
   val gateHalf = ARENA_BORDER_HALF_GATE
   val gateCenters = floatArrayOf(4.0f, 12.0f, 20.0f)
 
-  fun drawWallSegment(x1: Float, y1: Float, x2: Float, y2: Float) {
+  fun drawWallSegmentWithStructures(x1: Float, y1: Float, x2: Float, y2: Float) {
     val a = worldToPerspectiveScreen(x1, y1, camX, camY, w, h)
     val b = worldToPerspectiveScreen(x2, y2, camX, camY, w, h)
-    if ((a.x < -100f && b.x < -100f) || (a.x > w + 100f && b.x > w + 100f)) return
-    if ((a.y < horizonY - 40f && b.y < horizonY - 40f) || (a.y > h + 100f && b.y > h + 100f)) return
-    drawLine(Color(0xFF090F1E), a, b, strokeWidth = 14f, cap = StrokeCap.Square)
-    if (glowOn) drawLine(wallCore.copy(alpha = 0.28f + pulse * 0.14f), a, b, strokeWidth = 9f, cap = StrokeCap.Square)
-    drawLine(wallCore.copy(alpha = 0.88f), a, b, strokeWidth = 2.6f, cap = StrokeCap.Square)
+    if ((a.x < -120f && b.x < -120f) || (a.x > w + 120f && b.x > w + 120f)) return
+    if ((a.y < horizonY - 60f && b.y < horizonY - 60f) || (a.y > h + 120f && b.y > h + 120f)) return
+    drawLine(Color(0xFF090F1E), a, b, strokeWidth = 18f, cap = StrokeCap.Square)
+    if (glowOn) drawLine(wallCore.copy(alpha = 0.28f + pulse * 0.14f), a, b, strokeWidth = 10f, cap = StrokeCap.Square)
+    drawLine(wallCore.copy(alpha = 0.88f), a, b, strokeWidth = 2.8f, cap = StrokeCap.Square)
+    if (!lowGraphics) {
+      // Midpoint & quarter-span border buttress structures (biome-tinted colonnade / conduit nodes)
+      val midX = (x1 + x2) * 0.5f
+      val midY = (y1 + y2) * 0.5f
+      if (kotlin.math.abs(midX - (camX + 0.5f)) < 6.0f && kotlin.math.abs(midY - (camY + 0.5f)) < 6.0f) {
+        val mp = worldToPerspectiveScreen(midX, midY, camX, camY, w, h)
+        val sc = perspectiveScaleForRelY(midY - camY, w, h)
+        val secAccentCol = Color(sim.sectionAt(midX, midY).accentHex)
+        val pw = 16f * sc
+        val ph = 20f * sc
+        drawRoundRect(
+          color = Color(0xFF10192D),
+          topLeft = Offset(mp.x - pw * 0.5f, mp.y - ph),
+          size = Size(pw, ph),
+          cornerRadius = CornerRadius(4f, 4f),
+        )
+        drawRoundRect(
+          color = secAccentCol.copy(alpha = 0.9f),
+          topLeft = Offset(mp.x - pw * 0.5f, mp.y - ph),
+          size = Size(pw, ph),
+          cornerRadius = CornerRadius(4f, 4f),
+          style = Stroke(width = 2.2f * sc),
+        )
+        drawCircle(secAccentCol.copy(alpha = 0.75f + pulse * 0.2f), radius = 4f * sc, center = Offset(mp.x, mp.y - ph * 0.65f))
+      }
+    }
   }
 
-  fun drawGatewayBeacon(gx1: Float, gy1: Float, gx2: Float, gy2: Float) {
+  fun drawGatewayArchway(gx1: Float, gy1: Float, gx2: Float, gy2: Float) {
     val p1 = worldToPerspectiveScreen(gx1, gy1, camX, camY, w, h)
     val p2 = worldToPerspectiveScreen(gx2, gy2, camX, camY, w, h)
-    if (p1.x in -80f..w + 80f && p1.y in horizonY - 40f..h + 80f) {
-      drawCircle(gateCol, radius = 6.5f, center = p1)
+    val s1 = perspectiveScaleForRelY(gy1 - camY, w, h)
+    val s2 = perspectiveScaleForRelY(gy2 - camY, w, h)
+    val visible1 = p1.x in -100f..w + 100f && p1.y in horizonY - 60f..h + 100f
+    val visible2 = p2.x in -100f..w + 100f && p2.y in horizonY - 60f..h + 100f
+    if (visible1 || visible2) {
+      // Overhead Checkpoint Archway span + threshold pad
+      val top1 = Offset(p1.x, p1.y - 26f * s1)
+      val top2 = Offset(p2.x, p2.y - 26f * s2)
+      drawLine(gateCol.copy(alpha = 0.42f + pulse * 0.22f), p1, p2, strokeWidth = 4f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f)))
+      drawLine(gateCol.copy(alpha = 0.78f), top1, top2, strokeWidth = 3.2f)
     }
-    if (p2.x in -80f..w + 80f && p2.y in horizonY - 40f..h + 80f) {
-      drawCircle(gateCol, radius = 6.5f, center = p2)
+    if (visible1) {
+      drawRect(Color(0xFF0D1E22), topLeft = Offset(p1.x - 6f * s1, p1.y - 26f * s1), size = Size(12f * s1, 28f * s1))
+      drawRect(gateCol, topLeft = Offset(p1.x - 6f * s1, p1.y - 26f * s1), size = Size(12f * s1, 28f * s1), style = Stroke(width = 2f * s1))
+      drawCircle(gateCol, radius = 4.5f * s1, center = Offset(p1.x, p1.y - 28f * s1))
     }
-    if ((p1.x in -80f..w + 80f || p2.x in -80f..w + 80f) && (p1.y in horizonY - 40f..h + 80f || p2.y in horizonY - 40f..h + 80f)) {
-      drawLine(gateCol.copy(alpha = 0.45f + pulse * 0.20f), p1, p2, strokeWidth = 3f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f)))
+    if (visible2) {
+      drawRect(Color(0xFF0D1E22), topLeft = Offset(p2.x - 6f * s2, p2.y - 26f * s2), size = Size(12f * s2, 28f * s2))
+      drawRect(gateCol, topLeft = Offset(p2.x - 6f * s2, p2.y - 26f * s2), size = Size(12f * s2, 28f * s2), style = Stroke(width = 2f * s2))
+      drawCircle(gateCol, radius = 4.5f * s2, center = Offset(p2.x, p2.y - 28f * s2))
     }
   }
 
@@ -595,11 +816,11 @@ fun DrawScope.drawSectionBiomesAndBorders(
     for (gc in gateCenters) {
       val gStart = (gc - gateHalf).coerceAtLeast(0f)
       val gEnd = (gc + gateHalf).coerceAtMost(ARENA_WORLD_SIZE)
-      if (gStart > cursor) drawWallSegment(wallX, cursor, wallX, gStart)
-      drawGatewayBeacon(wallX, gStart, wallX, gEnd)
+      if (gStart > cursor) drawWallSegmentWithStructures(wallX, cursor, wallX, gStart)
+      drawGatewayArchway(wallX, gStart, wallX, gEnd)
       cursor = gEnd
     }
-    if (cursor < ARENA_WORLD_SIZE) drawWallSegment(wallX, cursor, wallX, ARENA_WORLD_SIZE)
+    if (cursor < ARENA_WORLD_SIZE) drawWallSegmentWithStructures(wallX, cursor, wallX, ARENA_WORLD_SIZE)
   }
 
   for (wallY in floatArrayOf(8.0f, 16.0f)) {
@@ -607,11 +828,11 @@ fun DrawScope.drawSectionBiomesAndBorders(
     for (gc in gateCenters) {
       val gStart = (gc - gateHalf).coerceAtLeast(0f)
       val gEnd = (gc + gateHalf).coerceAtMost(ARENA_WORLD_SIZE)
-      if (gStart > cursor) drawWallSegment(cursor, wallY, gStart, wallY)
-      drawGatewayBeacon(gStart, wallY, gEnd, wallY)
+      if (gStart > cursor) drawWallSegmentWithStructures(cursor, wallY, gStart, wallY)
+      drawGatewayArchway(gStart, wallY, gEnd, wallY)
       cursor = gEnd
     }
-    if (cursor < ARENA_WORLD_SIZE) drawWallSegment(cursor, wallY, ARENA_WORLD_SIZE, wallY)
+    if (cursor < ARENA_WORLD_SIZE) drawWallSegmentWithStructures(cursor, wallY, ARENA_WORLD_SIZE, wallY)
   }
 }
 
@@ -626,13 +847,17 @@ fun DrawScope.drawBuildingsAndTraps(
   val h = size.height
   if (!w.isFinite() || !h.isFinite() || w <= 1f || h <= 1f) return
 
+  val worldAxis = worldAxisPx(w, h) * currentWorldViewZoom()
+  val resScale = canvasDensityScale(w, h)
+
   // 1. Elemental Hazard Zones (Ice, Fire, Toxic, Electric, Windy)
   for (i in 0 until sim.hazards.size) {
     val hz = sim.hazards.getOrNull(i) ?: continue
     val p = worldToPerspectiveScreen(hz.x, hz.y, camX, camY, w, h)
-    val scale = perspectiveScaleForRelY(hz.y - camY)
-    val rx = hz.radius * w * 0.46f * scale
-    val ry = rx * 0.62f
+    val depthOnly = perspectiveScaleForRelY(hz.y - camY)
+    val scale = depthOnly * resScale
+    val rx = hz.radius * worldAxis * depthOnly
+    val ry = rx * PERSP_Y_FORESHORTEN
     if (p.x + rx < -40f || p.x - rx > w + 40f || p.y + ry < -40f || p.y - ry > h + 40f) continue
 
     val col = hz.kind.color
@@ -640,12 +865,12 @@ fun DrawScope.drawBuildingsAndTraps(
     drawOval(col.copy(alpha = 0.85f), topLeft = Offset(p.x - rx, p.y - ry), size = Size(rx * 2f, ry * 2f), style = Stroke(width = 2.6f * scale))
     when (hz.kind) {
       ArenaHazardKind.ICE -> {
-        drawLine(Color.White, Offset(p.x - 14f * scale, p.y), Offset(p.x + 14f * scale, p.y), strokeWidth = 2.2f)
-        drawLine(Color.White, Offset(p.x, p.y - 10f * scale), Offset(p.x, p.y + 10f * scale), strokeWidth = 2.2f)
+        drawLine(Color.White, Offset(p.x - 14f * scale, p.y), Offset(p.x + 14f * scale, p.y), strokeWidth = 2.2f * resScale)
+        drawLine(Color.White, Offset(p.x, p.y - 10f * scale), Offset(p.x, p.y + 10f * scale), strokeWidth = 2.2f * resScale)
       }
       ArenaHazardKind.WINDY -> {
         for (l in -1..1) {
-          drawLine(col, Offset(p.x - rx * 0.5f, p.y + l * 10f * scale), Offset(p.x + rx * 0.5f, p.y + l * 10f * scale - 6f * scale), strokeWidth = 2.4f, cap = StrokeCap.Round)
+          drawLine(col, Offset(p.x - rx * 0.5f, p.y + l * 10f * scale), Offset(p.x + rx * 0.5f, p.y + l * 10f * scale - 6f * scale), strokeWidth = 2.4f * resScale, cap = StrokeCap.Round)
         }
       }
       else -> {
@@ -658,11 +883,12 @@ fun DrawScope.drawBuildingsAndTraps(
   for (i in 0 until sim.restCamps.size) {
     val camp = sim.restCamps.getOrNull(i) ?: continue
     val p = worldToPerspectiveScreen(camp.x, camp.y, camX, camY, w, h)
-    val scale = perspectiveScaleForRelY(camp.y - camY)
-    val r = camp.radius * w * 0.52f * scale
+    val depthOnly = perspectiveScaleForRelY(camp.y - camY)
+    val scale = depthOnly * resScale
+    val r = camp.radius * worldAxis * depthOnly
     if (p.x + r < -40f || p.x - r > w + 40f || p.y + r < -40f || p.y - r > h + 40f) continue
-    drawOval(Color(0xFF00E676).copy(alpha = 0.14f + pulse * 0.08f), topLeft = Offset(p.x - r, p.y - r * 0.65f), size = Size(r * 2f, r * 1.3f))
-    drawOval(Color(0xFF00E676).copy(alpha = 0.85f), topLeft = Offset(p.x - r, p.y - r * 0.65f), size = Size(r * 2f, r * 1.3f), style = Stroke(width = 2.4f * scale))
+    drawOval(Color(0xFF00E676).copy(alpha = 0.14f + pulse * 0.08f), topLeft = Offset(p.x - r, p.y - r * PERSP_Y_FORESHORTEN), size = Size(r * 2f, r * 2f * PERSP_Y_FORESHORTEN))
+    drawOval(Color(0xFF00E676).copy(alpha = 0.85f), topLeft = Offset(p.x - r, p.y - r * PERSP_Y_FORESHORTEN), size = Size(r * 2f, r * 2f * PERSP_Y_FORESHORTEN), style = Stroke(width = 2.4f * scale))
     // Tent triangle + Warm Campfire
     val tentPath = Path().apply {
       moveTo(p.x - 16f * scale, p.y + 4f * scale)
@@ -680,12 +906,12 @@ fun DrawScope.drawBuildingsAndTraps(
     val b = sim.buildings.getOrNull(i) ?: continue
     val tl = worldToPerspectiveScreen(b.x, b.y, camX, camY, w, h)
     val br = worldToPerspectiveScreen(b.x + b.width, b.y + b.height, camX, camY, w, h)
-    val sw = (br.x - tl.x).coerceAtLeast(18f)
-    val sh = (br.y - tl.y).coerceAtLeast(14f)
+    val sw = (br.x - tl.x).coerceAtLeast(18f * resScale)
+    val sh = (br.y - tl.y).coerceAtLeast(14f * resScale)
     if (tl.x + sw < -60f || tl.x > w + 60f || tl.y + sh < -60f || tl.y > h + 60f) continue
 
-    val midScale = perspectiveScaleForRelY((b.y + b.height * 0.5f) - camY)
-    val extrudeH = (26f * midScale).coerceAtLeast(12f)
+    val midScale = perspectiveScaleForRelY((b.y + b.height * 0.5f) - camY, w, h)
+    val extrudeH = (26f * midScale).coerceAtLeast(12f * resScale)
     val strokeCol = if (b.explored) Color(0xFF00E676) else b.accentColor
 
     // Drop Shadow
@@ -730,25 +956,53 @@ fun DrawScope.drawBuildingsAndTraps(
     drawLine(strokeCol.copy(alpha = 0.65f), Offset(tl.x, tl.y + sh), Offset(roofTL.x, roofTL.y + sh * 0.85f), strokeWidth = 2f)
     drawLine(strokeCol.copy(alpha = 0.65f), Offset(tl.x + sw, tl.y + sh), Offset(roofTL.x + sw - 4f, roofTL.y + sh * 0.85f), strokeWidth = 2f)
 
-    // Doorway & Rooftop Reactor Node
+    // Doorway & Rooftop Reactor Node / Bank & Vault Landmarks
     drawRect(color = strokeCol, topLeft = Offset(tl.x + sw * 0.38f, tl.y + sh - 4f), size = Size(sw * 0.24f, 6f))
     val center = Offset(roofTL.x + (sw - 4f) * 0.5f, roofTL.y + sh * 0.42f)
-    if (glowOn) drawCircle(strokeCol.copy(alpha = 0.20f + pulse * 0.12f), radius = 16f * midScale, center = center)
-    drawCircle(strokeCol, radius = 6f * midScale, center = center)
+    if (glowOn) drawCircle(strokeCol.copy(alpha = 0.22f + pulse * 0.14f), radius = 18f * midScale, center = center)
+    val isVaultBld = b.name.contains("Vault", ignoreCase = true) || b.name.contains("Diamond", ignoreCase = true) || b.name.contains("Depository", ignoreCase = true)
+    val isBankBld = b.name.contains("Bank", ignoreCase = true) || b.name.contains("Teller", ignoreCase = true) || b.name.contains("Bullion", ignoreCase = true) || b.name.contains("Mint", ignoreCase = true) || b.name.contains("Reserve", ignoreCase = true)
+    when {
+      isVaultBld -> {
+        val dSz = 11f * midScale
+        val dPath = Path().apply {
+          moveTo(center.x, center.y - dSz)
+          lineTo(center.x + dSz * 0.8f, center.y)
+          lineTo(center.x, center.y + dSz)
+          lineTo(center.x - dSz * 0.8f, center.y)
+          close()
+        }
+        drawPath(dPath, color = Color(0xFF40C4FF))
+        drawPath(dPath, color = Color(0xFFFFD54F), style = Stroke(width = 2.2f * midScale))
+      }
+      isBankBld -> {
+        // Golden Bullion Vault Bars + Emerald Bank Crest
+        for (colIdx in -1..1) {
+          drawRect(
+            color = Color(0xFFFFD54F),
+            topLeft = Offset(center.x + colIdx * 6.5f * midScale - 2f * midScale, center.y - 7f * midScale),
+            size = Size(4f * midScale, 14f * midScale),
+          )
+        }
+        drawCircle(Color(0xFF00E676), radius = 12f * midScale, center = center, style = Stroke(width = 2.2f * midScale))
+      }
+      else -> drawCircle(strokeCol, radius = 6f * midScale, center = center)
+    }
   }
 
   // 4. Electric & Fire Traps projected in 2.5D
   for (i in 0 until sim.traps.size) {
     val trap = sim.traps.getOrNull(i) ?: continue
     val p = worldToPerspectiveScreen(trap.x, trap.y, camX, camY, w, h)
-    val scale = perspectiveScaleForRelY(trap.y - camY)
-    val radPx = trap.radius * minOf(w, h) * scale * 0.72f
+    val depthOnly = perspectiveScaleForRelY(trap.y - camY)
+    val scale = depthOnly * resScale
+    val radPx = trap.radius * worldAxis * depthOnly
     if (p.x + radPx < -30f || p.x - radPx > w + 30f || p.y + radPx < -30f || p.y - radPx > h + 30f) continue
 
     val baseCol = trap.kind.color
     val activeAlpha = if (trap.activeTicks > 0f) 0.36f else if (trap.cooldownTicks > 0f) 0.10f else 0.22f
-    drawOval(baseCol.copy(alpha = activeAlpha), topLeft = Offset(p.x - radPx, p.y - radPx * 0.68f), size = Size(radPx * 2f, radPx * 1.36f))
-    drawOval(baseCol.copy(alpha = 0.85f), topLeft = Offset(p.x - radPx, p.y - radPx * 0.68f), size = Size(radPx * 2f, radPx * 1.36f), style = Stroke(width = 2.2f * scale))
+    drawOval(baseCol.copy(alpha = activeAlpha), topLeft = Offset(p.x - radPx, p.y - radPx * PERSP_Y_FORESHORTEN), size = Size(radPx * 2f, radPx * 2f * PERSP_Y_FORESHORTEN))
+    drawOval(baseCol.copy(alpha = 0.85f), topLeft = Offset(p.x - radPx, p.y - radPx * PERSP_Y_FORESHORTEN), size = Size(radPx * 2f, radPx * 2f * PERSP_Y_FORESHORTEN), style = Stroke(width = 2.2f * scale))
     if (trap.kind == ArenaTrapKind.ELECTRIC) {
       drawLine(Color.White, Offset(p.x - 9f * scale, p.y - 7f * scale), Offset(p.x + 4f * scale, p.y), strokeWidth = 2.5f * scale)
       drawLine(baseCol, Offset(p.x + 4f * scale, p.y), Offset(p.x - 5f * scale, p.y + 9f * scale), strokeWidth = 2.5f * scale)
@@ -762,7 +1016,7 @@ fun DrawScope.drawBuildingsAndTraps(
   for (i in 0 until sim.worldStations.size) {
     val st = sim.worldStations.getOrNull(i) ?: continue
     val p = worldToPerspectiveScreen(st.x, st.y, camX, camY, w, h)
-    val scale = perspectiveScaleForRelY(st.y - camY)
+    val scale = perspectiveScaleForRelY(st.y - camY, w, h)
     if (p.x < -50f || p.x > w + 50f || p.y < -50f || p.y > h + 50f) continue
     val stCol = st.kind.color
     val ready = st.cooldownTicks <= 0f
@@ -794,7 +1048,7 @@ fun DrawScope.drawBuildingsAndTraps(
     val crate = sim.lootCrates.getOrNull(i) ?: continue
     if (crate.opened) continue
     val p = worldToPerspectiveScreen(crate.x, crate.y, camX, camY, w, h)
-    val scale = perspectiveScaleForRelY(crate.y - camY)
+    val scale = perspectiveScaleForRelY(crate.y - camY, w, h)
     if (p.x < -40f || p.x > w + 40f || p.y < -40f || p.y > h + 40f) continue
     val cCol = Color(crate.rarity.colorHex)
     if (crate.fromHazard || crate.rarity.rank >= 3) {
@@ -821,7 +1075,7 @@ fun DrawScope.drawBuildingsAndTraps(
     val cat = sim.catEasterEggs.getOrNull(i) ?: continue
     if (cat.found) continue
     val p = worldToPerspectiveScreen(cat.x, cat.y, camX, camY, w, h)
-    val scale = perspectiveScaleForRelY(cat.y - camY)
+    val scale = perspectiveScaleForRelY(cat.y - camY, w, h)
     if (p.x < -30f || p.x > w + 30f || p.y < -30f || p.y > h + 30f) continue
     val gold = Color(0xFFFFD54F)
     if (glowOn) drawCircle(gold.copy(alpha = 0.22f + pulse * 0.16f), radius = 15f * scale, center = p)
@@ -844,6 +1098,91 @@ fun DrawScope.drawBuildingsAndTraps(
     drawCircle(Color(0xFF0A1220), radius = 1.6f * scale, center = Offset(p.x - 2.6f * scale, p.y - 1f * scale))
     drawCircle(Color(0xFF0A1220), radius = 1.6f * scale, center = Offset(p.x + 2.6f * scale, p.y - 1f * scale))
   }
+
+  // 8. Customizable Player Base Citadel Keep, Energy Shield Dome & Automated Turrets
+  val basePt = worldToPerspectiveScreen(sim.baseX, sim.baseY, camX, camY, w, h)
+  if (basePt.x in -180f * resScale..w + 180f * resScale && basePt.y in -180f * resScale..h + 180f * resScale) {
+    val bScale = perspectiveScaleForRelY(sim.baseY - camY, w, h)
+    val baseSt = sim.progression.playerBaseState
+    val bCol = if (sim.hudBaseRaidActive) Color(0xFFFF3D71) else Color(baseSt.primaryHex)
+    val domeR = 62f * bScale
+    if (glowOn) {
+      drawCircle(bCol.copy(alpha = 0.16f + pulse * 0.12f), radius = domeR, center = basePt)
+    }
+    drawOval(
+      color = bCol.copy(alpha = 0.90f),
+      topLeft = Offset(basePt.x - domeR, basePt.y - domeR * 0.65f),
+      size = Size(domeR * 2f, domeR * 1.3f),
+      style = Stroke(width = if (sim.hudBaseRaidActive) 3.8f * bScale else 2.8f * bScale),
+    )
+    // Citadel Fortress Core + Battlements
+    val kw = 50f * bScale
+    val kh = 38f * bScale
+    drawRoundRect(
+      color = Color(0xFF0D1528),
+      topLeft = Offset(basePt.x - kw * 0.5f, basePt.y - kh * 0.65f),
+      size = Size(kw, kh),
+      cornerRadius = CornerRadius(8f, 8f),
+    )
+    drawRoundRect(
+      color = bCol,
+      topLeft = Offset(basePt.x - kw * 0.5f, basePt.y - kh * 0.65f),
+      size = Size(kw, kh),
+      cornerRadius = CornerRadius(8f, 8f),
+      style = Stroke(width = 3f * bScale),
+    )
+    // Castle Crenellations along top edge + Central Fortress Core Emblem
+    for (merlon in -2..2) {
+      drawRect(
+        color = bCol,
+        topLeft = Offset(basePt.x + merlon * (kw * 0.19f) - 3.5f * bScale, basePt.y - kh * 0.78f),
+        size = Size(7f * bScale, 6f * bScale),
+      )
+    }
+    drawCircle(Color(0xFFFFD54F), radius = 6.5f * bScale, center = Offset(basePt.x, basePt.y - kh * 0.15f))
+    drawCircle(bCol, radius = 10f * bScale, center = Offset(basePt.x, basePt.y - kh * 0.15f), style = Stroke(width = 2f * bScale))
+    // Twin Automated Defense Turret Pylons
+    for (txOff in listOf(-kw * 0.44f, kw * 0.44f)) {
+      val tp = Offset(basePt.x + txOff, basePt.y - kh * 0.52f)
+      drawCircle(Color(0xFF1A2540), radius = 7f * bScale, center = tp)
+      drawCircle(Color(0xFFFFD54F), radius = 4f * bScale, center = tp)
+    }
+    // Base Integrity Bar
+    val hpPct = (sim.hudBaseHp.toFloat() / sim.hudBaseMaxHp.coerceAtLeast(1)).coerceIn(0f, 1f)
+    drawRect(Color(0xFF1B2336), topLeft = Offset(basePt.x - 26f * bScale, basePt.y - kh * 0.98f), size = Size(52f * bScale, 5f * bScale))
+    drawRect(Color(0xFF00E676), topLeft = Offset(basePt.x - 26f * bScale, basePt.y - kh * 0.98f), size = Size(52f * bScale * hpPct, 5f * bScale))
+  }
+
+  // 9. Automated Area Defense Turrets (perimeter bastions, gateways, and section sentinels)
+  for (i in 0 until sim.defenseTurrets.size) {
+    val turret = sim.defenseTurrets.getOrNull(i) ?: continue
+    val p = worldToPerspectiveScreen(turret.x, turret.y, camX, camY, w, h)
+    val tScale = perspectiveScaleForRelY(turret.y - camY, w, h)
+    if (p.x < -80f || p.x > w + 80f || p.y < -80f || p.y > h + 80f) continue
+    val tCol = turret.accentColor
+    // Subtle detection range ring
+    val rngPx = 28f * tScale
+    drawOval(
+      color = tCol.copy(alpha = 0.22f + pulse * 0.12f),
+      topLeft = Offset(p.x - rngPx, p.y - rngPx * 0.65f),
+      size = Size(rngPx * 2f, rngPx * 1.3f),
+      style = Stroke(width = 1.6f * tScale, pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f))),
+    )
+    // Armored Pedestal
+    drawCircle(Color(0xFF0F172A), radius = 12f * tScale, center = p)
+    drawCircle(tCol, radius = 12f * tScale, center = p, style = Stroke(width = 2.6f * tScale))
+    // Rotating Gun Barrel toward current target angle
+    val bLen = 18f * tScale
+    val tip = Offset(p.x + cos(turret.aimAngle) * bLen, p.y + sin(turret.aimAngle) * bLen * 0.72f)
+    drawLine(Color(0xFFCFD8DC), p, tip, strokeWidth = 4.2f * tScale, cap = StrokeCap.Round)
+    drawLine(tCol, p, tip, strokeWidth = 2f * tScale, cap = StrokeCap.Round)
+    drawCircle(
+      color = if (turret.muzzleFlashTicks > 0f) Color.White else tCol,
+      radius = (if (turret.muzzleFlashTicks > 0f) 5.5f else 3.2f) * tScale,
+      center = tip,
+    )
+    drawCircle(Color(0xFFFFD54F), radius = 4f * tScale, center = p)
+  }
 }
 
 fun DrawScope.drawVacuumAndCollectibles(
@@ -857,11 +1196,37 @@ fun DrawScope.drawVacuumAndCollectibles(
   val h = size.height
   if (!w.isFinite() || !h.isFinite() || w <= 1f || h <= 1f) return
 
-  // Collectibles (Orbs, Blast Shards, Perk Drinks, Blast Cores, Character Shards, Cat Easter Eggs)
+  // Expanding Magic Spell Nova & Thought/Spirit Healing Wave
+  if (sim.magicWaveRadius > 0f) {
+    val mp = worldToPerspectiveScreen(sim.playerX, sim.playerY, camX, camY, w, h)
+    val mr = sim.magicWaveRadius * minOf(w, h) * 0.95f
+    if (mr.isFinite() && mr > 0f) {
+      drawOval(
+        color = sim.magicWaveColor.copy(alpha = 0.72f),
+        topLeft = Offset(mp.x - mr, mp.y - mr * 0.66f),
+        size = Size(mr * 2f, mr * 1.32f),
+        style = Stroke(width = 6f),
+      )
+    }
+  }
+  if (sim.spiritWaveRadius > 0f) {
+    val sp = worldToPerspectiveScreen(sim.playerX, sim.playerY, camX, camY, w, h)
+    val sr = sim.spiritWaveRadius * minOf(w, h) * 0.90f
+    if (sr.isFinite() && sr > 0f) {
+      drawOval(
+        color = Color(0xFF00E676).copy(alpha = 0.78f),
+        topLeft = Offset(sp.x - sr, sp.y - sr * 0.66f),
+        size = Size(sr * 2f, sr * 1.32f),
+        style = Stroke(width = 5f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 6f))),
+      )
+    }
+  }
+
+  // Collectibles (Orbs, Gold, Diamonds, TUUCash, Resources, System Shards, Crystals, Blast Shards, Perks)
   for (i in 0 until sim.collectibles.size) {
     val c = sim.collectibles.getOrNull(i) ?: continue
     val pos = worldToPerspectiveScreen(c.x, c.y, camX, camY, w, h)
-    val scale = perspectiveScaleForRelY(c.y - camY)
+    val scale = perspectiveScaleForRelY(c.y - camY, w, h)
     if (pos.x < -30f || pos.x > w + 30f || pos.y < -30f || pos.y > h + 30f) continue
     if (glowOn) drawCircle(c.color.copy(alpha = 0.25f + pulse * 0.2f), radius = 14f * scale, center = pos)
     when (c.kind) {
@@ -869,7 +1234,7 @@ fun DrawScope.drawVacuumAndCollectibles(
         drawRect(c.color, topLeft = Offset(pos.x - 5f * scale, pos.y - 8f * scale), size = Size(10f * scale, 16f * scale))
         drawRect(Color.White, topLeft = Offset(pos.x - 5f * scale, pos.y - 8f * scale), size = Size(10f * scale, 16f * scale), style = Stroke(width = 1.6f * scale))
       }
-      ArenaCollectibleKind.CHARACTER_SHARD -> {
+      ArenaCollectibleKind.CHARACTER_SHARD, ArenaCollectibleKind.DIAMOND_GEM, ArenaCollectibleKind.CRYSTAL_NODE, ArenaCollectibleKind.XP_GEM -> {
         val diamond = Path().apply {
           moveTo(pos.x, pos.y - 11f * scale)
           lineTo(pos.x + 8f * scale, pos.y)
@@ -880,11 +1245,19 @@ fun DrawScope.drawVacuumAndCollectibles(
         drawPath(diamond, color = c.color)
         drawPath(diamond, color = Color.White, style = Stroke(width = 1.8f * scale))
       }
+      ArenaCollectibleKind.GOLD_COIN -> {
+        drawCircle(Color(0xFFFFD54F), radius = 8.5f * scale, center = pos)
+        drawCircle(Color(0xFFFF8F00), radius = 5f * scale, center = pos, style = Stroke(width = 1.6f * scale))
+      }
+      ArenaCollectibleKind.TUU_CASH, ArenaCollectibleKind.ENV_RESOURCE -> {
+        drawRoundRect(c.color, topLeft = Offset(pos.x - 8f * scale, pos.y - 5f * scale), size = Size(16f * scale, 10f * scale), cornerRadius = CornerRadius(3f, 3f))
+        drawRoundRect(Color.White, topLeft = Offset(pos.x - 8f * scale, pos.y - 5f * scale), size = Size(16f * scale, 10f * scale), cornerRadius = CornerRadius(3f, 3f), style = Stroke(width = 1.4f * scale))
+      }
       ArenaCollectibleKind.PERK_DRINK -> {
         drawRoundRect(c.color, topLeft = Offset(pos.x - 6f * scale, pos.y - 9f * scale), size = Size(12f * scale, 18f * scale), cornerRadius = CornerRadius(4f, 4f))
         drawCircle(Color.White, radius = 3f * scale, center = pos)
       }
-      ArenaCollectibleKind.BLAST_CORE, ArenaCollectibleKind.CAT_EASTER_EGG -> {
+      ArenaCollectibleKind.BLAST_CORE, ArenaCollectibleKind.CAT_EASTER_EGG, ArenaCollectibleKind.SYSTEM_SHARD -> {
         drawCircle(c.color, radius = 9f * scale, center = pos, style = Stroke(width = 3f * scale))
         drawCircle(Color.White, radius = 4f * scale, center = pos)
       }
@@ -897,12 +1270,198 @@ fun DrawScope.drawVacuumAndCollectibles(
 
   // Vacuum Bot Drone Orbiting Player
   val botPos = worldToPerspectiveScreen(sim.vacuumBotX, sim.vacuumBotY, camX, camY, w, h)
-  val botScale = perspectiveScaleForRelY(sim.vacuumBotY - camY)
+  val botScale = perspectiveScaleForRelY(sim.vacuumBotY - camY, w, h)
   val vacCol = Color(0xFF00E676)
   if (glowOn) drawCircle(vacCol.copy(alpha = 0.22f + pulse * 0.14f), radius = 16f * botScale, center = botPos)
   drawCircle(Color(0xFF0C1A24), radius = 9.5f * botScale, center = botPos)
   drawCircle(vacCol, radius = 9.5f * botScale, center = botPos, style = Stroke(width = 2.5f * botScale))
   drawCircle(Color(0xFF00E5FF), radius = 3.5f * botScale, center = botPos)
+}
+
+fun DrawScope.drawPlayerProtectionAndCompanions(
+  sim: ArenaSimState,
+  camX: Float,
+  camY: Float,
+  glowOn: Boolean,
+  pulse: Float,
+) {
+  val w = size.width
+  val h = size.height
+  if (!w.isFinite() || !h.isFinite() || w <= 1f || h <= 1f) return
+  val pCenter = worldToPerspectiveScreen(sim.playerX, sim.playerY, camX, camY, w, h)
+  val pScale = perspectiveScaleForRelY(sim.playerY - camY, w, h)
+
+  // Fortress Aegis Bubble Dome
+  if (sim.hudAegisDomeActive) {
+    val domeRx = 46f * pScale
+    val domeRy = 34f * pScale
+    if (glowOn) {
+      drawOval(
+        color = Color(0xFF38BDF8).copy(alpha = 0.18f + pulse * 0.12f),
+        topLeft = Offset(pCenter.x - domeRx, pCenter.y - domeRy),
+        size = Size(domeRx * 2f, domeRy * 2f),
+      )
+    }
+    drawOval(
+      color = Color(0xFF00E5FF),
+      topLeft = Offset(pCenter.x - domeRx, pCenter.y - domeRy),
+      size = Size(domeRx * 2f, domeRy * 2f),
+      style = Stroke(width = 3.2f * pScale, pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 6f))),
+    )
+  }
+
+  // Orbiting Aegis Blades / Guardian Orbs
+  val bladeCount = sim.hudOrbitalBladesCount
+  if (bladeCount > 0) {
+    val orbRad = 0.145f
+    val baseAng = sim.elapsedTicks * 0.11f
+    val stepAng = (2f * PI.toFloat()) / bladeCount.coerceAtLeast(1)
+    for (k in 0 until bladeCount) {
+      val ang = baseAng + k * stepAng
+      val ox = sim.playerX + cos(ang) * orbRad
+      val oy = sim.playerY + sin(ang) * orbRad
+      val oPt = worldToPerspectiveScreen(ox, oy, camX, camY, w, h)
+      val oScale = perspectiveScaleForRelY(oy - camY, w, h)
+      val orbCol = if (k % 2 == 0) Color(0xFF38BDF8) else Color(0xFFFFD54F)
+      if (glowOn) drawCircle(orbCol.copy(alpha = 0.28f + pulse * 0.16f), radius = 13f * oScale, center = oPt)
+      drawCircle(Color(0xFF0B1626), radius = 6.5f * oScale, center = oPt)
+      drawCircle(orbCol, radius = 6.5f * oScale, center = oPt, style = Stroke(width = 2.4f * oScale))
+      drawCircle(Color.White, radius = 2.4f * oScale, center = oPt)
+    }
+  }
+
+  // Dead Ops Arcade Wingman Companion Drone
+  if (sim.wingmanLevel > 0) {
+    val wPt = worldToPerspectiveScreen(sim.wingmanX, sim.wingmanY, camX, camY, w, h)
+    val wScale = perspectiveScaleForRelY(sim.wingmanY - camY, w, h)
+    val wCol = Color(0xFFE040FB)
+    if (glowOn) drawCircle(wCol.copy(alpha = 0.25f + pulse * 0.18f), radius = 15f * wScale, center = wPt)
+    drawRoundRect(
+      color = Color(0xFF190E2B),
+      topLeft = Offset(wPt.x - 8f * wScale, wPt.y - 6f * wScale),
+      size = Size(16f * wScale, 12f * wScale),
+      cornerRadius = CornerRadius(4f, 4f),
+    )
+    drawRoundRect(
+      color = wCol,
+      topLeft = Offset(wPt.x - 8f * wScale, wPt.y - 6f * wScale),
+      size = Size(16f * wScale, 12f * wScale),
+      cornerRadius = CornerRadius(4f, 4f),
+      style = Stroke(width = 2.4f * wScale),
+    )
+    drawCircle(Color(0xFFFFD54F), radius = 3f * wScale, center = wPt)
+  }
+
+  // Equipped Collection Vehicle: Underglow Harness + 2.5D Deployed Escort/Mount Craft
+  sim.activeVehicleSpec?.let { veh ->
+    val vCol = Color(veh.accentHex)
+    val vRx = 30f * pScale
+    val vRy = 18f * pScale
+    drawOval(
+      color = vCol.copy(alpha = 0.52f + pulse * 0.18f),
+      topLeft = Offset(pCenter.x - vRx, pCenter.y + 4f * pScale - vRy * 0.5f),
+      size = Size(vRx * 2f, vRy),
+      style = Stroke(width = 2.6f * pScale),
+    )
+    // Draw detailed 2.5D vehicle hull positioned cleanly beside the operator
+    val vc = Offset(pCenter.x - 42f * pScale, pCenter.y + 6f * pScale)
+    val aimLen = kotlin.math.hypot(sim.aimX, sim.aimY).coerceAtLeast(0.001f)
+    val dirX = sim.aimX / aimLen
+    val dirY = sim.aimY / aimLen
+    if (glowOn) {
+      drawCircle(vCol.copy(alpha = 0.22f + pulse * 0.14f), radius = 24f * pScale, center = vc)
+    }
+    when {
+      veh.vehicleType.contains("Tank", ignoreCase = true) || veh.vehicleType.contains("Carrier", ignoreCase = true) -> {
+        val hullW = 34f * pScale
+        val hullH = 20f * pScale
+        // Armored tracks / heavy wheels
+        drawRoundRect(
+          color = Color(0xFF1E293B),
+          topLeft = Offset(vc.x - hullW * 0.55f, vc.y - hullH * 0.65f),
+          size = Size(hullW * 1.1f, 6f * pScale),
+          cornerRadius = CornerRadius(3f, 3f),
+        )
+        drawRoundRect(
+          color = Color(0xFF1E293B),
+          topLeft = Offset(vc.x - hullW * 0.55f, vc.y + hullH * 0.35f),
+          size = Size(hullW * 1.1f, 6f * pScale),
+          cornerRadius = CornerRadius(3f, 3f),
+        )
+        // Main Armored Hull
+        drawRoundRect(
+          color = Color(0xFF0F172A),
+          topLeft = Offset(vc.x - hullW * 0.5f, vc.y - hullH * 0.5f),
+          size = Size(hullW, hullH),
+          cornerRadius = CornerRadius(5f, 5f),
+        )
+        drawRoundRect(
+          color = vCol,
+          topLeft = Offset(vc.x - hullW * 0.5f, vc.y - hullH * 0.5f),
+          size = Size(hullW, hullH),
+          cornerRadius = CornerRadius(5f, 5f),
+          style = Stroke(width = 2.4f * pScale),
+        )
+        // Rotating Turret + Cannon Barrel
+        drawCircle(vCol.copy(alpha = 0.85f), radius = 7.5f * pScale, center = vc)
+        drawLine(
+          color = Color.White,
+          start = vc,
+          end = Offset(vc.x + dirX * 22f * pScale, vc.y + dirY * 18f * pScale),
+          strokeWidth = 4.2f * pScale,
+          cap = StrokeCap.Round,
+        )
+      }
+      veh.vehicleType.contains("Jet", ignoreCase = true) || veh.vehicleType.contains("Dropship", ignoreCase = true) -> {
+        // Delta-wing aerial craft floating above shadow
+        val hoverVc = Offset(vc.x, vc.y - 12f * pScale)
+        drawOval(
+          color = Color.Black.copy(alpha = 0.35f),
+          topLeft = Offset(vc.x - 16f * pScale, vc.y + 4f * pScale),
+          size = Size(32f * pScale, 10f * pScale),
+        )
+        val perpX = -dirY
+        val perpY = dirX
+        val nose = Offset(hoverVc.x + dirX * 20f * pScale, hoverVc.y + dirY * 14f * pScale)
+        val wingL = Offset(hoverVc.x - dirX * 12f * pScale + perpX * 18f * pScale, hoverVc.y - dirY * 9f * pScale + perpY * 14f * pScale)
+        val wingR = Offset(hoverVc.x - dirX * 12f * pScale - perpX * 18f * pScale, hoverVc.y - dirY * 9f * pScale - perpY * 14f * pScale)
+        val jetPath = Path().apply {
+          moveTo(nose.x, nose.y)
+          lineTo(wingL.x, wingL.y)
+          lineTo(hoverVc.x - dirX * 7f * pScale, hoverVc.y - dirY * 5f * pScale)
+          lineTo(wingR.x, wingR.y)
+          close()
+        }
+        drawPath(jetPath, color = Color(0xFF0F172A))
+        drawPath(jetPath, color = vCol, style = Stroke(width = 2.5f * pScale))
+        drawCircle(Color(0xFF00E5FF), radius = 4f * pScale, center = hoverVc)
+        // Twin afterburners
+        drawCircle(Color(0xFFFF9100), radius = (3.5f + pulse * 1.5f) * pScale, center = Offset(hoverVc.x - dirX * 11f * pScale, hoverVc.y - dirY * 8f * pScale))
+      }
+      else -> {
+        // Hovercraft / Speed Bike sleek turbo body
+        val bw = 32f * pScale
+        val bh = 14f * pScale
+        drawRoundRect(
+          color = Color(0xFF0B1324),
+          topLeft = Offset(vc.x - bw * 0.5f, vc.y - bh * 0.5f),
+          size = Size(bw, bh),
+          cornerRadius = CornerRadius(9f, 9f),
+        )
+        drawRoundRect(
+          color = vCol,
+          topLeft = Offset(vc.x - bw * 0.5f, vc.y - bh * 0.5f),
+          size = Size(bw, bh),
+          cornerRadius = CornerRadius(9f, 9f),
+          style = Stroke(width = 2.6f * pScale),
+        )
+        // Glowing twin side wheels/thrusters + cockpit visor
+        drawCircle(Color(0xFF00E5FF), radius = 4.5f * pScale, center = Offset(vc.x - bw * 0.32f, vc.y + bh * 0.45f))
+        drawCircle(Color(0xFF00E5FF), radius = 4.5f * pScale, center = Offset(vc.x + bw * 0.32f, vc.y + bh * 0.45f))
+        drawCircle(Color.White, radius = 3.2f * pScale, center = Offset(vc.x + dirX * 8f * pScale, vc.y))
+      }
+    }
+  }
 }
 
 fun formatRoundRoman(round: Long): String {

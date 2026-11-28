@@ -512,13 +512,107 @@ fun SettingsDialog(
                 )
                 SettingSliderRow(
                   title = "Controller Scale (${(settings.controllerScale * 100).roundToInt()}%)",
-                  description = "Overall scaling factor for the virtual controller layout.",
-                  value = settings.controllerScale,
-                  range = 0.75f..1.5f,
+                  description = "Overall scaling factor for the compact virtual controller layout.",
+                  value = settings.controllerScale.coerceIn(0.65f, 1.4f),
+                  range = 0.65f..1.4f,
                   steps = 5,
                   tag = "slider_controller_scale",
                   onValueChange = { v -> onUpdateSettings { it.copy(controllerScale = v) } },
                 )
+                SettingSwitchRow(
+                  title = "Show 4-Way Tactical D-Pad",
+                  description = "Adds an interactive directional D-Pad (Weapon Swap, Interact, Spirit Heal, Traps) in Console Gamepad mode.",
+                  checked = settings.controllerShowDpad,
+                  tag = "switch_controller_dpad",
+                  onCheckedChange = { v -> onUpdateSettings { it.copy(controllerShowDpad = v) } },
+                )
+                Text("Controller Button Shape", style = MaterialTheme.typography.titleMedium)
+                Row(
+                  modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                  horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                  listOf(
+                    "gamepad_circle" to "Gamepad Circle",
+                    "tactical_hex" to "Tactical Square",
+                    "pill" to "Classic Pill",
+                  ).forEach { (id, lbl) ->
+                    FilterChip(
+                      selected = settings.controllerButtonShape == id,
+                      onClick = { onUpdateSettings { it.copy(controllerButtonShape = id) } },
+                      label = { Text(lbl) },
+                      modifier = Modifier.height(48.dp).testTag("chip_shape_$id"),
+                    )
+                  }
+                }
+                SettingSliderRow(
+                  title = "Button Spacing (${settings.controllerSpacingDp} dp)",
+                  description = "Adjust gap between gamepad face buttons, shoulder triggers, and thumbsticks.",
+                  value = settings.controllerSpacingDp.toFloat(),
+                  range = 2f..14f,
+                  steps = 5,
+                  tag = "slider_controller_spacing",
+                  onValueChange = { v -> onUpdateSettings { it.copy(controllerSpacingDp = v.roundToInt()) } },
+                )
+                Spacer(Modifier.height(6.dp))
+                Text("Remappable Face & Shoulder Bindings (Tap to Cycle)", style = MaterialTheme.typography.titleMedium)
+                val actionCycle = listOf(
+                  "fire", "melee", "power", "magic", "spirit_heal",
+                  "dash", "interact", "surge", "lethal", "tactical",
+                  "wonder", "traps", "swap_wpn", "pack"
+                )
+                fun nextBinding(cur: String): String {
+                  val idx = actionCycle.indexOf(cur)
+                  return actionCycle[(idx + 1) % actionCycle.size]
+                }
+                val slots = listOf(
+                  Triple("A Button", settings.controllerActionA) { next: String -> onUpdateSettings { it.copy(controllerActionA = next) } },
+                  Triple("B Button", settings.controllerActionB) { next: String -> onUpdateSettings { it.copy(controllerActionB = next) } },
+                  Triple("X Button", settings.controllerActionX) { next: String -> onUpdateSettings { it.copy(controllerActionX = next) } },
+                  Triple("Y Button", settings.controllerActionY) { next: String -> onUpdateSettings { it.copy(controllerActionY = next) } },
+                  Triple("L1 Bumper", settings.controllerActionL1) { next: String -> onUpdateSettings { it.copy(controllerActionL1 = next) } },
+                  Triple("R1 Bumper", settings.controllerActionR1) { next: String -> onUpdateSettings { it.copy(controllerActionR1 = next) } },
+                  Triple("L2 Trigger", settings.controllerActionL2) { next: String -> onUpdateSettings { it.copy(controllerActionL2 = next) } },
+                  Triple("R2 Trigger", settings.controllerActionR2) { next: String -> onUpdateSettings { it.copy(controllerActionR2 = next) } },
+                )
+                Row(
+                  modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                  horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                  slots.forEach { (slotLabel, currentAct, onSet) ->
+                    FilterChip(
+                      selected = true,
+                      onClick = { onSet(nextBinding(currentAct)) },
+                      label = { Text("$slotLabel: ${currentAct.uppercase()}") },
+                      modifier = Modifier.height(48.dp).testTag("remap_${slotLabel.lowercase().replace(" ", "_")}"),
+                    )
+                  }
+                }
+                Spacer(Modifier.height(4.dp))
+                OutlinedButton(
+                  onClick = {
+                    onUpdateSettings {
+                      it.copy(
+                        controllerStyle = "console_gamepad",
+                        controllerOpacity = 0.85f,
+                        controllerScale = 1.0f,
+                        controllerShowDpad = true,
+                        controllerSpacingDp = 6,
+                        controllerButtonShape = "gamepad_circle",
+                        controllerActionA = "fire",
+                        controllerActionB = "melee",
+                        controllerActionX = "interact",
+                        controllerActionY = "power",
+                        controllerActionL1 = "dash",
+                        controllerActionR1 = "magic",
+                        controllerActionL2 = "tactical",
+                        controllerActionR2 = "lethal",
+                      )
+                    }
+                  },
+                  modifier = Modifier.height(48.dp).testTag("reset_controller_bindings_btn"),
+                ) {
+                  Text("Reset Controller Defaults")
+                }
                 SettingSliderRow(
                   title = "Movement Sensitivity (${String.format(Locale.US, "%.2fx", settings.moveSensitivity)})",
                   description = "Adjust how quickly operator movement responds to thumbstick deflection.",

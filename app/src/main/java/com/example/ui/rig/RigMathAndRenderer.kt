@@ -270,7 +270,12 @@ fun DrawScope.drawRigCharacter(
       outfitId.startsWith("spacetime") ||
       outfitId.startsWith("crucible") ||
       outfitId.startsWith("shipheroes")
-    val bodyStroke = if (highContrast) 13f else 11f
+    val torsoDist = kotlin.math.hypot(
+      (skeleton.chest.x - skeleton.pelvis.x).toDouble(),
+      (skeleton.chest.y - skeleton.pelvis.y).toDouble(),
+    ).toFloat()
+    val u = (torsoDist / 34f).let { if (it.isFinite()) it.coerceIn(0.45f, 3.5f) else 1f }
+    val bodyStroke = (if (highContrast) 10.5f else 8.8f) * u
     val armorColor =
       if (visorColorOverride != null || cloakOverride != null) primaryColor
       else when (archetype) {
@@ -283,272 +288,292 @@ fun DrawScope.drawRigCharacter(
     val underSuit = if (highContrast) Color(0xFF050810) else Color(0xFF131B2E)
 
     // Ground shadow + aura ring + Character Aura Trail
-    val footY = (if (skeleton.lFoot.y.isFinite() && skeleton.rFoot.y.isFinite()) maxOf(skeleton.lFoot.y, skeleton.rFoot.y) else skeleton.pelvis.y + 60f)
-  drawOval(
-    color = Color.Black.copy(alpha = 0.52f),
-    topLeft = Offset(skeleton.pelvis.x - 46f, footY - 7f),
-    size = androidx.compose.ui.geometry.Size(92f, 18f),
-  )
-  if (auraTrailId != "none") {
-    val auraCol = when (auraTrailId) {
-      "chrono_spark" -> Color(0xFF448AFF)
-      "infernal_flare" -> Color(0xFFFF3D71)
-      else -> secondaryColor
-    }
+    val footY = (if (skeleton.lFoot.y.isFinite() && skeleton.rFoot.y.isFinite()) maxOf(skeleton.lFoot.y, skeleton.rFoot.y) else skeleton.pelvis.y + 54f * u)
     drawOval(
-      color = auraCol.copy(alpha = 0.35f),
-      topLeft = Offset(skeleton.pelvis.x - 44f, footY - 9f),
-      size = androidx.compose.ui.geometry.Size(88f, 20f),
-      style = Stroke(width = 3.5f),
+      color = Color.Black.copy(alpha = 0.52f),
+      topLeft = Offset(skeleton.pelvis.x - 36f * u, footY - 5.5f * u),
+      size = androidx.compose.ui.geometry.Size(72f * u, 14f * u),
     )
-  }
-  if (dynamicGlow || highContrast || isDashing) {
-    drawOval(
-      color = (if (highContrast) Color.White else armorColor).copy(alpha = if (highContrast) 0.85f else if (isDashing) 0.55f else 0.22f),
-      topLeft = Offset(skeleton.pelvis.x - 36f, footY - 4f),
-      size = androidx.compose.ui.geometry.Size(72f, 12f),
-      style = Stroke(width = if (isDashing || highContrast) 3.5f else 2f),
-    )
-  }
-
-  // Flowing trenchcoat / hero cape behind torso + Iron Spider golden waldoes
-  val showCloak = cloakOverride ?: (isBatman || isSuperman || isAbyss || archetype == "chrono" || archetype == "starblade" || archetype == "biomorph")
-  if (isIronSpider) {
-    val waldoGold = Color(0xFFFFD54F)
-    val armOffsets = listOf(
-      Pair(Offset(-36f, -26f), Offset(-48f, 10f)),
-      Pair(Offset(36f, -26f), Offset(48f, 10f)),
-      Pair(Offset(-30f, -44f), Offset(-44f, -12f)),
-      Pair(Offset(30f, -44f), Offset(44f, -12f)),
-    )
-    armOffsets.forEach { (elbowOff, tipOff) ->
-      val elbow = Offset(skeleton.chest.x + elbowOff.x, skeleton.chest.y + elbowOff.y)
-      val tip = Offset(skeleton.chest.x + tipOff.x, skeleton.chest.y + tipOff.y)
-      drawLine(waldoGold, skeleton.chest, elbow, strokeWidth = 5f, cap = StrokeCap.Round)
-      drawLine(Color(0xFF00E5FF), elbow, tip, strokeWidth = 3.5f, cap = StrokeCap.Round)
-      drawCircle(waldoGold, radius = 3.5f, center = elbow)
-    }
-  }
-  if (isFlash && !highContrast) {
-    // Speed-force lightning trail arcs behind Flash
-    val boltCol = if (outfitId == "flash_v3") Color(0xFF00E5FF) else Color(0xFFFFD54F)
-    drawLine(boltCol.copy(alpha = 0.72f), skeleton.chest, Offset(skeleton.pelvis.x - 24f, skeleton.pelvis.y + 8f), strokeWidth = 2.6f, cap = StrokeCap.Round)
-    drawLine(boltCol.copy(alpha = 0.72f), skeleton.rElbow, Offset(skeleton.lFoot.x - 26f, skeleton.lFoot.y - 8f), strokeWidth = 2.4f, cap = StrokeCap.Round)
-  }
-  if (showCloak) {
-    val capeColor = when {
-      isBatman -> Color(0xFF0B0E17)
-      isSuperman -> Color(0xFFD50000)
-      isAbyss -> Color(0xFF2B0E3B)
-      archetype == "biomorph" -> Color(0xFF3A0E24)
-      archetype == "chrono" -> Color(0xFF1D2C4D)
-      else -> armorColor.copy(alpha = 0.28f)
-    }
-    val capePath = (capePathScratch ?: Path()).apply {
-      reset()
-      moveTo(skeleton.lShoulder.x - 5f, skeleton.lShoulder.y)
-      lineTo(skeleton.rShoulder.x + 5f, skeleton.rShoulder.y)
-      lineTo(skeleton.rFoot.x + if (isBatman) 20f else 14f, footY - 6f)
-      if (isBatman) {
-        lineTo(skeleton.pelvis.x + 10f, footY - 14f)
-        lineTo(skeleton.pelvis.x, footY - 5f)
-        lineTo(skeleton.pelvis.x - 10f, footY - 14f)
+    if (auraTrailId != "none") {
+      val auraCol = when (auraTrailId) {
+        "chrono_spark" -> Color(0xFF448AFF)
+        "infernal_flare" -> Color(0xFFFF3D71)
+        else -> secondaryColor
       }
-      lineTo(skeleton.lFoot.x - if (isBatman) 20f else 14f, footY - 6f)
+      drawOval(
+        color = auraCol.copy(alpha = 0.35f),
+        topLeft = Offset(skeleton.pelvis.x - 34f * u, footY - 7f * u),
+        size = androidx.compose.ui.geometry.Size(68f * u, 16f * u),
+        style = Stroke(width = 3f * u),
+      )
+    }
+    if (dynamicGlow || highContrast || isDashing) {
+      drawOval(
+        color = (if (highContrast) Color.White else armorColor).copy(alpha = if (highContrast) 0.85f else if (isDashing) 0.55f else 0.22f),
+        topLeft = Offset(skeleton.pelvis.x - 28f * u, footY - 3.5f * u),
+        size = androidx.compose.ui.geometry.Size(56f * u, 10f * u),
+        style = Stroke(width = (if (isDashing || highContrast) 3f else 1.8f) * u),
+      )
+    }
+
+    // Flowing trenchcoat / hero cape behind torso + Iron Spider golden waldoes
+    val showCloak = cloakOverride ?: (isBatman || isSuperman || isAbyss || archetype == "chrono" || archetype == "starblade" || archetype == "biomorph")
+    if (isIronSpider) {
+      val waldoGold = Color(0xFFFFD54F)
+      val armOffsets = listOf(
+        Pair(Offset(-30f * u, -22f * u), Offset(-40f * u, 8f * u)),
+        Pair(Offset(30f * u, -22f * u), Offset(40f * u, 8f * u)),
+        Pair(Offset(-25f * u, -36f * u), Offset(-36f * u, -10f * u)),
+        Pair(Offset(25f * u, -36f * u), Offset(36f * u, -10f * u)),
+      )
+      armOffsets.forEach { (elbowOff, tipOff) ->
+        val elbow = Offset(skeleton.chest.x + elbowOff.x, skeleton.chest.y + elbowOff.y)
+        val tip = Offset(skeleton.chest.x + tipOff.x, skeleton.chest.y + tipOff.y)
+        drawLine(waldoGold, skeleton.chest, elbow, strokeWidth = 4.2f * u, cap = StrokeCap.Round)
+        drawLine(Color(0xFF00E5FF), elbow, tip, strokeWidth = 3f * u, cap = StrokeCap.Round)
+        drawCircle(waldoGold, radius = 3f * u, center = elbow)
+      }
+    }
+    if (isFlash && !highContrast) {
+      // Speed-force lightning trail arcs behind Flash
+      val boltCol = if (outfitId == "flash_v3") Color(0xFF00E5FF) else Color(0xFFFFD54F)
+      drawLine(boltCol.copy(alpha = 0.72f), skeleton.chest, Offset(skeleton.pelvis.x - 20f * u, skeleton.pelvis.y + 7f * u), strokeWidth = 2.4f * u, cap = StrokeCap.Round)
+      drawLine(boltCol.copy(alpha = 0.72f), skeleton.rElbow, Offset(skeleton.lFoot.x - 22f * u, skeleton.lFoot.y - 7f * u), strokeWidth = 2.2f * u, cap = StrokeCap.Round)
+    }
+    if (showCloak) {
+      val capeColor = when {
+        isBatman -> Color(0xFF0B0E17)
+        isSuperman -> Color(0xFFD50000)
+        isAbyss -> Color(0xFF2B0E3B)
+        archetype == "biomorph" -> Color(0xFF3A0E24)
+        archetype == "chrono" -> Color(0xFF1D2C4D)
+        else -> armorColor.copy(alpha = 0.28f)
+      }
+      val capePath = (capePathScratch ?: Path()).apply {
+        reset()
+        moveTo(skeleton.lShoulder.x - 4f * u, skeleton.lShoulder.y)
+        lineTo(skeleton.rShoulder.x + 4f * u, skeleton.rShoulder.y)
+        lineTo(skeleton.rFoot.x + (if (isBatman) 16f else 11f) * u, footY - 4f * u)
+        if (isBatman) {
+          lineTo(skeleton.pelvis.x + 8f * u, footY - 11f * u)
+          lineTo(skeleton.pelvis.x, footY - 4f * u)
+          lineTo(skeleton.pelvis.x - 8f * u, footY - 11f * u)
+        }
+        lineTo(skeleton.lFoot.x - (if (isBatman) 16f else 11f) * u, footY - 4f * u)
+        close()
+      }
+      drawPath(capePath, color = capeColor.copy(alpha = if (isBatman) 0.90f else 0.78f))
+      drawPath(capePath, color = armorColor.copy(alpha = 0.55f), style = Stroke(width = 1.8f * u))
+    }
+
+    // Legs + Armored Greaves/Boots
+    drawLine(underSuit, skeleton.lHip, skeleton.lKnee, strokeWidth = bodyStroke + 1.6f * u, cap = StrokeCap.Round)
+    drawLine(armorColor.copy(alpha = 0.85f), skeleton.lHip, skeleton.lKnee, strokeWidth = bodyStroke * 0.78f, cap = StrokeCap.Round)
+    drawLine(underSuit, skeleton.lKnee, skeleton.lFoot, strokeWidth = bodyStroke, cap = StrokeCap.Round)
+    drawLine(armorColor, skeleton.lKnee, skeleton.lFoot, strokeWidth = bodyStroke * 0.68f, cap = StrokeCap.Round)
+    drawCircle(secondaryColor, radius = 4.2f * u, center = skeleton.lKnee)
+    drawOval(
+      color = underSuit,
+      topLeft = Offset(skeleton.lFoot.x - 6f * u, skeleton.lFoot.y - 3f * u),
+      size = androidx.compose.ui.geometry.Size(12f * u, 7f * u),
+    )
+    drawOval(
+      color = armorColor,
+      topLeft = Offset(skeleton.lFoot.x - 6f * u, skeleton.lFoot.y - 3f * u),
+      size = androidx.compose.ui.geometry.Size(12f * u, 7f * u),
+      style = Stroke(width = 1.6f * u),
+    )
+
+    drawLine(underSuit, skeleton.rHip, skeleton.rKnee, strokeWidth = bodyStroke + 1.6f * u, cap = StrokeCap.Round)
+    drawLine(armorColor.copy(alpha = 0.85f), skeleton.rHip, skeleton.rKnee, strokeWidth = bodyStroke * 0.78f, cap = StrokeCap.Round)
+    drawLine(underSuit, skeleton.rKnee, skeleton.rFoot, strokeWidth = bodyStroke, cap = StrokeCap.Round)
+    drawLine(armorColor, skeleton.rKnee, skeleton.rFoot, strokeWidth = bodyStroke * 0.68f, cap = StrokeCap.Round)
+    drawCircle(secondaryColor, radius = 4.2f * u, center = skeleton.rKnee)
+    drawOval(
+      color = underSuit,
+      topLeft = Offset(skeleton.rFoot.x - 5f * u, skeleton.rFoot.y - 3f * u),
+      size = androidx.compose.ui.geometry.Size(12f * u, 7f * u),
+    )
+    drawOval(
+      color = armorColor,
+      topLeft = Offset(skeleton.rFoot.x - 5f * u, skeleton.rFoot.y - 3f * u),
+      size = androidx.compose.ui.geometry.Size(12f * u, 7f * u),
+      style = Stroke(width = 1.6f * u),
+    )
+
+    // Torso Armor Chassis
+    val torsoPath = (torsoPathScratch ?: Path()).apply {
+      reset()
+      moveTo(skeleton.lShoulder.x - 3.5f * u, skeleton.lShoulder.y)
+      lineTo(skeleton.rShoulder.x + 3.5f * u, skeleton.rShoulder.y)
+      lineTo(skeleton.rHip.x + 2f * u, skeleton.rHip.y)
+      lineTo(skeleton.lHip.x - 2f * u, skeleton.lHip.y)
       close()
     }
-    drawPath(capePath, color = capeColor.copy(alpha = if (isBatman) 0.90f else 0.78f))
-    drawPath(capePath, color = armorColor.copy(alpha = 0.55f), style = Stroke(width = 2f))
-  }
-
-  // Legs + Armored Greaves/Boots
-  drawLine(underSuit, skeleton.lHip, skeleton.lKnee, strokeWidth = bodyStroke + 2f, cap = StrokeCap.Round)
-  drawLine(armorColor.copy(alpha = 0.85f), skeleton.lHip, skeleton.lKnee, strokeWidth = bodyStroke * 0.78f, cap = StrokeCap.Round)
-  drawLine(underSuit, skeleton.lKnee, skeleton.lFoot, strokeWidth = bodyStroke, cap = StrokeCap.Round)
-  drawLine(armorColor, skeleton.lKnee, skeleton.lFoot, strokeWidth = bodyStroke * 0.68f, cap = StrokeCap.Round)
-  drawCircle(secondaryColor, radius = 5f, center = skeleton.lKnee)
-
-  drawLine(underSuit, skeleton.rHip, skeleton.rKnee, strokeWidth = bodyStroke + 2f, cap = StrokeCap.Round)
-  drawLine(armorColor.copy(alpha = 0.85f), skeleton.rHip, skeleton.rKnee, strokeWidth = bodyStroke * 0.78f, cap = StrokeCap.Round)
-  drawLine(underSuit, skeleton.rKnee, skeleton.rFoot, strokeWidth = bodyStroke, cap = StrokeCap.Round)
-  drawLine(armorColor, skeleton.rKnee, skeleton.rFoot, strokeWidth = bodyStroke * 0.68f, cap = StrokeCap.Round)
-  drawCircle(secondaryColor, radius = 5f, center = skeleton.rKnee)
-
-  // Torso Armor Chassis
-  val torsoPath = (torsoPathScratch ?: Path()).apply {
-    reset()
-    moveTo(skeleton.lShoulder.x - 4f, skeleton.lShoulder.y)
-    lineTo(skeleton.rShoulder.x + 4f, skeleton.rShoulder.y)
-    lineTo(skeleton.rHip.x + 2f, skeleton.rHip.y)
-    lineTo(skeleton.lHip.x - 2f, skeleton.lHip.y)
-    close()
-  }
   drawPath(torsoPath, color = underSuit)
   drawPath(torsoPath, color = armorColor.copy(alpha = 0.42f))
-  drawPath(torsoPath, color = if (highContrast) Color.White else armorColor, style = Stroke(width = if (highContrast) 4.2f else 3.5f))
+  drawPath(torsoPath, color = if (highContrast) Color.White else armorColor, style = Stroke(width = (if (highContrast) 3.8f else 3.0f) * u))
 
   // Chest Core / Bat Emblem / Spider Emblem / Iron Man Arc Reactor
   val chestMid = Offset((skeleton.chest.x + skeleton.pelvis.x) * 0.5f, (skeleton.chest.y + skeleton.pelvis.y) * 0.5f)
   if (dynamicGlow) {
-    drawCircle(color = secondaryColor.copy(alpha = 0.32f), radius = 10f, center = chestMid)
+    drawCircle(color = secondaryColor.copy(alpha = 0.32f), radius = 9f * u, center = chestMid)
   }
   when {
     isBatman -> {
-      // Bat-emblem wings silhouette
-      drawOval(color = secondaryColor, topLeft = Offset(chestMid.x - 10f, chestMid.y - 5f), size = androidx.compose.ui.geometry.Size(20f, 10f))
-      drawLine(Color(0xFF0A0D14), Offset(chestMid.x - 8f, chestMid.y), Offset(chestMid.x + 8f, chestMid.y), strokeWidth = 3.5f, cap = StrokeCap.Round)
+      drawOval(color = secondaryColor, topLeft = Offset(chestMid.x - 8.5f * u, chestMid.y - 4.5f * u), size = androidx.compose.ui.geometry.Size(17f * u, 9f * u))
+      drawLine(Color(0xFF0A0D14), Offset(chestMid.x - 7f * u, chestMid.y), Offset(chestMid.x + 7f * u, chestMid.y), strokeWidth = 3f * u, cap = StrokeCap.Round)
     }
     isSpiderMan -> {
       val spCol = if (outfitId == "spiderman_v2") Color.White else if (isIronSpider) Color(0xFFFFD54F) else Color(0xFF0A0D14)
-      drawCircle(color = spCol, radius = 4.5f, center = chestMid)
+      drawCircle(color = spCol, radius = 4f * u, center = chestMid)
       for (leg in -1..1 step 2) {
-        drawLine(spCol, chestMid, Offset(chestMid.x + leg * 9f, chestMid.y - 6f), strokeWidth = 1.8f)
-        drawLine(spCol, chestMid, Offset(chestMid.x + leg * 10f, chestMid.y + 5f), strokeWidth = 1.8f)
+        drawLine(spCol, chestMid, Offset(chestMid.x + leg * 8f * u, chestMid.y - 5f * u), strokeWidth = 1.6f * u)
+        drawLine(spCol, chestMid, Offset(chestMid.x + leg * 8.5f * u, chestMid.y + 4.5f * u), strokeWidth = 1.6f * u)
       }
     }
     isIronMan -> {
-      drawCircle(color = Color(0xFF00E5FF), radius = 6.5f, center = chestMid)
-      drawCircle(color = Color.White, radius = 3.2f, center = chestMid)
+      drawCircle(color = Color(0xFF00E5FF), radius = 5.5f * u, center = chestMid)
+      drawCircle(color = Color.White, radius = 2.8f * u, center = chestMid)
     }
     isSuperman -> {
       val shield = Path().apply {
-        moveTo(chestMid.x - 8f, chestMid.y - 5f)
-        lineTo(chestMid.x + 8f, chestMid.y - 5f)
-        lineTo(chestMid.x + 10f, chestMid.y - 1f)
-        lineTo(chestMid.x, chestMid.y + 8f)
-        lineTo(chestMid.x - 10f, chestMid.y - 1f)
+        moveTo(chestMid.x - 7f * u, chestMid.y - 4.5f * u)
+        lineTo(chestMid.x + 7f * u, chestMid.y - 4.5f * u)
+        lineTo(chestMid.x + 8.5f * u, chestMid.y - 1f * u)
+        lineTo(chestMid.x, chestMid.y + 7f * u)
+        lineTo(chestMid.x - 8.5f * u, chestMid.y - 1f * u)
         close()
       }
       drawPath(shield, color = Color(0xFFFFD54F))
-      drawPath(shield, color = Color(0xFFD50000), style = Stroke(width = 2.4f))
-      drawLine(Color(0xFFD50000), Offset(chestMid.x - 5f, chestMid.y - 2f), Offset(chestMid.x + 5f, chestMid.y + 2f), strokeWidth = 2.6f, cap = StrokeCap.Round)
+      drawPath(shield, color = Color(0xFFD50000), style = Stroke(width = 2.0f * u))
+      drawLine(Color(0xFFD50000), Offset(chestMid.x - 4.5f * u, chestMid.y - 1.8f * u), Offset(chestMid.x + 4.5f * u, chestMid.y + 1.8f * u), strokeWidth = 2.2f * u, cap = StrokeCap.Round)
     }
     isFlash -> {
       val crestCol = if (outfitId == "flash_v3") Color(0xFF00E5FF) else Color(0xFFFFD54F)
-      drawCircle(color = Color.White, radius = 7f, center = chestMid)
-      drawCircle(color = crestCol, radius = 7f, center = chestMid, style = Stroke(width = 2f))
-      drawLine(crestCol, Offset(chestMid.x + 2f, chestMid.y - 6f), Offset(chestMid.x - 3f, chestMid.y), strokeWidth = 2.6f, cap = StrokeCap.Round)
-      drawLine(crestCol, Offset(chestMid.x - 3f, chestMid.y), Offset(chestMid.x + 3f, chestMid.y + 1f), strokeWidth = 2.6f, cap = StrokeCap.Round)
-      drawLine(crestCol, Offset(chestMid.x + 3f, chestMid.y + 1f), Offset(chestMid.x - 2f, chestMid.y + 7f), strokeWidth = 2.6f, cap = StrokeCap.Round)
+      drawCircle(color = Color.White, radius = 6f * u, center = chestMid)
+      drawCircle(color = crestCol, radius = 6f * u, center = chestMid, style = Stroke(width = 1.8f * u))
+      drawLine(crestCol, Offset(chestMid.x + 1.8f * u, chestMid.y - 5f * u), Offset(chestMid.x - 2.6f * u, chestMid.y), strokeWidth = 2.2f * u, cap = StrokeCap.Round)
+      drawLine(crestCol, Offset(chestMid.x - 2.6f * u, chestMid.y), Offset(chestMid.x + 2.6f * u, chestMid.y + 1f * u), strokeWidth = 2.2f * u, cap = StrokeCap.Round)
+      drawLine(crestCol, Offset(chestMid.x + 2.6f * u, chestMid.y + 1f * u), Offset(chestMid.x - 1.8f * u, chestMid.y + 6f * u), strokeWidth = 2.2f * u, cap = StrokeCap.Round)
     }
     isGreenLantern -> {
       val lanCol = Color(0xFF00E676)
-      drawCircle(color = Color.White, radius = 7f, center = chestMid)
-      drawCircle(color = lanCol, radius = 4.2f, center = chestMid, style = Stroke(width = 2.6f))
-      drawLine(lanCol, Offset(chestMid.x - 6f, chestMid.y - 5f), Offset(chestMid.x + 6f, chestMid.y - 5f), strokeWidth = 2.2f)
-      drawLine(lanCol, Offset(chestMid.x - 6f, chestMid.y + 5f), Offset(chestMid.x + 6f, chestMid.y + 5f), strokeWidth = 2.2f)
-      // Emerald Power Ring glow on right hand
-      drawCircle(color = lanCol.copy(alpha = 0.5f), radius = 9f, center = skeleton.rHand)
-      drawCircle(color = Color.White, radius = 3.5f, center = skeleton.rHand)
+      drawCircle(color = Color.White, radius = 6f * u, center = chestMid)
+      drawCircle(color = lanCol, radius = 3.6f * u, center = chestMid, style = Stroke(width = 2.2f * u))
+      drawLine(lanCol, Offset(chestMid.x - 5f * u, chestMid.y - 4.5f * u), Offset(chestMid.x + 5f * u, chestMid.y - 4.5f * u), strokeWidth = 2.0f * u)
+      drawLine(lanCol, Offset(chestMid.x - 5f * u, chestMid.y + 4.5f * u), Offset(chestMid.x + 5f * u, chestMid.y + 4.5f * u), strokeWidth = 2.0f * u)
+      drawCircle(color = lanCol.copy(alpha = 0.5f), radius = 7.5f * u, center = skeleton.rHand)
+      drawCircle(color = Color.White, radius = 3f * u, center = skeleton.rHand)
     }
     isAbyss -> {
-      drawCircle(color = Color(0xFFFFAB40).copy(alpha = 0.35f), radius = 8f, center = chestMid)
-      drawLine(secondaryColor, Offset(chestMid.x, chestMid.y - 7f), Offset(chestMid.x, chestMid.y + 7f), strokeWidth = 3f, cap = StrokeCap.Round)
-      drawLine(secondaryColor, Offset(chestMid.x - 6f, chestMid.y), Offset(chestMid.x + 6f, chestMid.y), strokeWidth = 2.6f, cap = StrokeCap.Round)
+      drawCircle(color = Color(0xFFFFAB40).copy(alpha = 0.35f), radius = 7f * u, center = chestMid)
+      drawLine(secondaryColor, Offset(chestMid.x, chestMid.y - 6f * u), Offset(chestMid.x, chestMid.y + 6f * u), strokeWidth = 2.6f * u, cap = StrokeCap.Round)
+      drawLine(secondaryColor, Offset(chestMid.x - 5f * u, chestMid.y), Offset(chestMid.x + 5f * u, chestMid.y), strokeWidth = 2.2f * u, cap = StrokeCap.Round)
     }
     isNightwing -> {
-      drawLine(secondaryColor, Offset(chestMid.x - 10f, chestMid.y - 4f), Offset(chestMid.x, chestMid.y + 4f), strokeWidth = 3.2f, cap = StrokeCap.Round)
-      drawLine(secondaryColor, Offset(chestMid.x + 10f, chestMid.y - 4f), Offset(chestMid.x, chestMid.y + 4f), strokeWidth = 3.2f, cap = StrokeCap.Round)
+      drawLine(secondaryColor, Offset(chestMid.x - 8.5f * u, chestMid.y - 3.5f * u), Offset(chestMid.x, chestMid.y + 3.5f * u), strokeWidth = 2.8f * u, cap = StrokeCap.Round)
+      drawLine(secondaryColor, Offset(chestMid.x + 8.5f * u, chestMid.y - 3.5f * u), Offset(chestMid.x, chestMid.y + 3.5f * u), strokeWidth = 2.8f * u, cap = StrokeCap.Round)
     }
     isCodGhost -> {
-      drawCircle(color = Color.White, radius = 6f, center = chestMid)
-      drawCircle(color = Color(0xFF0A0D14), radius = 1.6f, center = Offset(chestMid.x - 2.2f, chestMid.y - 1f))
-      drawCircle(color = Color(0xFF0A0D14), radius = 1.6f, center = Offset(chestMid.x + 2.2f, chestMid.y - 1f))
+      drawCircle(color = Color.White, radius = 5.2f * u, center = chestMid)
+      drawCircle(color = Color(0xFF0A0D14), radius = 1.4f * u, center = Offset(chestMid.x - 2f * u, chestMid.y - 1f * u))
+      drawCircle(color = Color(0xFF0A0D14), radius = 1.4f * u, center = Offset(chestMid.x + 2f * u, chestMid.y - 1f * u))
     }
     isHeller -> {
-      drawCircle(color = Color(0xFFFF3D00), radius = 6.5f, center = chestMid, style = Stroke(width = 2.5f))
-      drawLine(Color(0xFFFFAB40), Offset(chestMid.x - 6f, chestMid.y - 5f), Offset(chestMid.x + 6f, chestMid.y + 5f), strokeWidth = 2.6f)
+      drawCircle(color = Color(0xFFFF3D00), radius = 5.5f * u, center = chestMid, style = Stroke(width = 2.2f * u))
+      drawLine(Color(0xFFFFAB40), Offset(chestMid.x - 5f * u, chestMid.y - 4.5f * u), Offset(chestMid.x + 5f * u, chestMid.y + 4.5f * u), strokeWidth = 2.2f * u)
     }
     isDelsin -> {
-      drawLine(secondaryColor, Offset(chestMid.x - 7f, chestMid.y - 5f), Offset(chestMid.x + 7f, chestMid.y - 5f), strokeWidth = 2.5f)
-      drawLine(secondaryColor, Offset(chestMid.x - 5f, chestMid.y + 4f), Offset(chestMid.x + 5f, chestMid.y + 4f), strokeWidth = 2.5f)
+      drawLine(secondaryColor, Offset(chestMid.x - 6f * u, chestMid.y - 4.5f * u), Offset(chestMid.x + 6f * u, chestMid.y - 4.5f * u), strokeWidth = 2.2f * u)
+      drawLine(secondaryColor, Offset(chestMid.x - 4.5f * u, chestMid.y + 3.5f * u), Offset(chestMid.x + 4.5f * u, chestMid.y + 3.5f * u), strokeWidth = 2.2f * u)
     }
     isNiko -> {
-      drawRect(color = secondaryColor, topLeft = Offset(chestMid.x - 6f, chestMid.y - 4f), size = androidx.compose.ui.geometry.Size(12f, 8f), style = Stroke(width = 2.2f))
+      drawRect(color = secondaryColor, topLeft = Offset(chestMid.x - 5f * u, chestMid.y - 3.5f * u), size = androidx.compose.ui.geometry.Size(10f * u, 7f * u), style = Stroke(width = 2f * u))
     }
     isRealLifeMe && !highContrast -> {
-      // Real-life hoodie / jacket collar & center zipper seam
-      val collarMid = Offset(skeleton.chest.x, skeleton.chest.y - 2f)
-      drawLine(Color(0xFFE2E8F0).copy(alpha = 0.72f), collarMid, Offset(skeleton.pelvis.x, skeleton.pelvis.y - 2f), strokeWidth = 2.4f, cap = StrokeCap.Round)
-      drawLine(secondaryColor.copy(alpha = 0.9f), skeleton.lShoulder, collarMid, strokeWidth = 3.2f, cap = StrokeCap.Round)
-      drawLine(secondaryColor.copy(alpha = 0.9f), skeleton.rShoulder, collarMid, strokeWidth = 3.2f, cap = StrokeCap.Round)
-      drawCircle(color = secondaryColor, radius = 3.8f, center = chestMid)
+      val collarMid = Offset(skeleton.chest.x, skeleton.chest.y - 1.5f * u)
+      drawLine(Color(0xFFE2E8F0).copy(alpha = 0.72f), collarMid, Offset(skeleton.pelvis.x, skeleton.pelvis.y - 1.5f * u), strokeWidth = 2.1f * u, cap = StrokeCap.Round)
+      drawLine(secondaryColor.copy(alpha = 0.9f), skeleton.lShoulder, collarMid, strokeWidth = 2.8f * u, cap = StrokeCap.Round)
+      drawLine(secondaryColor.copy(alpha = 0.9f), skeleton.rShoulder, collarMid, strokeWidth = 2.8f * u, cap = StrokeCap.Round)
+      drawCircle(color = secondaryColor, radius = 3.2f * u, center = chestMid)
     }
-    else -> drawCircle(color = secondaryColor, radius = 5f, center = chestMid)
+    else -> drawCircle(color = secondaryColor, radius = 4.4f * u, center = chestMid)
   }
-  // Tactical / Utility belt (or real-life casual belt)
+  // Tactical / Utility belt
   drawLine(
     color = if (isBatman) Color(0xFFFFD54F) else if (isRealLifeMe) Color(0xFF334155) else secondaryColor.copy(alpha = 0.8f),
-    start = Offset(skeleton.lHip.x - 4f, skeleton.pelvis.y),
-    end = Offset(skeleton.rHip.x + 4f, skeleton.pelvis.y),
-    strokeWidth = if (isBatman) 5f else 4f,
+    start = Offset(skeleton.lHip.x - 3f * u, skeleton.pelvis.y),
+    end = Offset(skeleton.rHip.x + 3f * u, skeleton.pelvis.y),
+    strokeWidth = (if (isBatman) 4.2f else 3.4f) * u,
     cap = StrokeCap.Round,
   )
 
   // Shoulder Pauldrons & Division Orange ISAC Beacon
-  drawCircle(color = armorColor, radius = if (isRealLifeMe) 7f else 8.5f, center = skeleton.lShoulder)
-  drawCircle(color = armorColor, radius = if (isRealLifeMe) 7f else 8.5f, center = skeleton.rShoulder)
+  drawCircle(color = armorColor, radius = (if (isRealLifeMe) 5.8f else 7.0f) * u, center = skeleton.lShoulder)
+  drawCircle(color = armorColor, radius = (if (isRealLifeMe) 5.8f else 7.0f) * u, center = skeleton.rShoulder)
   if (archetype == "operator") {
-    drawCircle(color = Color(0xFFFF8F00), radius = 4f, center = Offset(skeleton.lShoulder.x, skeleton.lShoulder.y - 4f))
+    drawCircle(color = Color(0xFFFF8F00), radius = 3.4f * u, center = Offset(skeleton.lShoulder.x, skeleton.lShoulder.y - 3.5f * u))
   }
 
-  // Arms & Gauntlet Bracers (+ everyday wristwatch on left forearm for real-life Blake)
+  // Arms & Gauntlet Bracers
   drawLine(armorColor.copy(alpha = 0.9f), skeleton.lShoulder, skeleton.lElbow, strokeWidth = bodyStroke * 0.85f, cap = StrokeCap.Round)
   drawLine(secondaryColor, skeleton.lElbow, skeleton.lHand, strokeWidth = bodyStroke * 0.78f, cap = StrokeCap.Round)
   if (isRealLifeMe && !highContrast) {
     val watchPos = Offset((skeleton.lElbow.x + skeleton.lHand.x) * 0.52f, (skeleton.lElbow.y + skeleton.lHand.y) * 0.52f)
-    drawCircle(color = Color(0xFF0F172A), radius = 5.5f, center = watchPos)
-    drawCircle(color = Color(0xFF38BDF8), radius = 3.2f, center = watchPos)
+    drawCircle(color = Color(0xFF0F172A), radius = 4.6f * u, center = watchPos)
+    drawCircle(color = Color(0xFF38BDF8), radius = 2.6f * u, center = watchPos)
   }
   drawLine(armorColor.copy(alpha = 0.9f), skeleton.rShoulder, skeleton.rElbow, strokeWidth = bodyStroke * 0.85f, cap = StrokeCap.Round)
   drawLine(secondaryColor, skeleton.rElbow, skeleton.rHand, strokeWidth = bodyStroke * 0.78f, cap = StrokeCap.Round)
 
-  // Pack-a-Tier aura around active weapon when upgraded in Sector Zero / Armory
+  // Pack-a-Tier aura around active weapon
   if (packTier >= 2 && dynamicGlow) {
     val tierCol = if (packTier >= 3) Color(0xFFFFD54F) else Color(0xFFE040FB)
-    drawLine(tierCol.copy(alpha = 0.38f), skeleton.rHand, skeleton.weaponTip, strokeWidth = 18f, cap = StrokeCap.Round)
+    drawLine(tierCol.copy(alpha = 0.38f), skeleton.rHand, skeleton.weaponTip, strokeWidth = 14f * u, cap = StrokeCap.Round)
   }
 
   // Archetype Signature Weapons
   when (archetype) {
     "biomorph" -> {
       if (dynamicGlow) {
-        drawLine(Color(0xFFFF1744).copy(alpha = 0.35f), skeleton.rHand, skeleton.weaponTip, strokeWidth = 16f, cap = StrokeCap.Round)
+        drawLine(Color(0xFFFF1744).copy(alpha = 0.35f), skeleton.rHand, skeleton.weaponTip, strokeWidth = 13f * u, cap = StrokeCap.Round)
       }
-      drawLine(Color(0xFFFF3D71), skeleton.rHand, skeleton.weaponTip, strokeWidth = 8.5f, cap = StrokeCap.Round)
-      drawCircle(Color(0xFF00E5FF).copy(alpha = 0.45f), radius = 12f, center = skeleton.lHand, style = Stroke(width = 3f))
-      drawLine(Color(0xFF00E5FF), skeleton.lHand, Offset(skeleton.lHand.x - 16f, skeleton.lHand.y + 14f), strokeWidth = 4.5f, cap = StrokeCap.Round)
+      drawLine(Color(0xFFFF3D71), skeleton.rHand, skeleton.weaponTip, strokeWidth = 7f * u, cap = StrokeCap.Round)
+      drawCircle(Color(0xFF00E5FF).copy(alpha = 0.45f), radius = 10f * u, center = skeleton.lHand, style = Stroke(width = 2.5f * u))
+      drawLine(Color(0xFF00E5FF), skeleton.lHand, Offset(skeleton.lHand.x - 13f * u, skeleton.lHand.y + 11f * u), strokeWidth = 3.8f * u, cap = StrokeCap.Round)
     }
     "infernal" -> {
       for (c in -1..1) {
-        val ox = c * 5f
-        val oy = c * 3.5f
-        drawLine(Color(0xFFFFAB40), Offset(skeleton.rHand.x + ox, skeleton.rHand.y + oy), Offset(skeleton.weaponTip.x + ox, skeleton.weaponTip.y + oy), strokeWidth = 3.2f, cap = StrokeCap.Round)
-        drawLine(Color(0xFFFFD54F), Offset(skeleton.lHand.x + ox * 0.7f, skeleton.lHand.y + oy * 0.7f), Offset(skeleton.lHand.x - 18f + ox, skeleton.lHand.y + 15f + oy), strokeWidth = 2.8f, cap = StrokeCap.Round)
+        val ox = c * 4.2f * u
+        val oy = c * 3.0f * u
+        drawLine(Color(0xFFFFAB40), Offset(skeleton.rHand.x + ox, skeleton.rHand.y + oy), Offset(skeleton.weaponTip.x + ox, skeleton.weaponTip.y + oy), strokeWidth = 2.8f * u, cap = StrokeCap.Round)
+        drawLine(Color(0xFFFFD54F), Offset(skeleton.lHand.x + ox * 0.7f, skeleton.lHand.y + oy * 0.7f), Offset(skeleton.lHand.x - 15f * u + ox, skeleton.lHand.y + 12f * u + oy), strokeWidth = 2.4f * u, cap = StrokeCap.Round)
       }
     }
     "starblade" -> {
       if (dynamicGlow) {
-        drawLine(Color(0xFF00E5FF).copy(alpha = 0.32f), skeleton.rHand, skeleton.weaponTip, strokeWidth = 18f, cap = StrokeCap.Round)
+        drawLine(Color(0xFF00E5FF).copy(alpha = 0.32f), skeleton.rHand, skeleton.weaponTip, strokeWidth = 14f * u, cap = StrokeCap.Round)
       }
-      drawLine(Color(0xFFE040FB).copy(alpha = 0.55f), skeleton.rHand, skeleton.weaponTip, strokeWidth = 9f, cap = StrokeCap.Round)
-      drawLine(Color.White, skeleton.rHand, skeleton.weaponTip, strokeWidth = 4f, cap = StrokeCap.Round)
+      drawLine(Color(0xFFE040FB).copy(alpha = 0.55f), skeleton.rHand, skeleton.weaponTip, strokeWidth = 7.5f * u, cap = StrokeCap.Round)
+      drawLine(Color.White, skeleton.rHand, skeleton.weaponTip, strokeWidth = 3.4f * u, cap = StrokeCap.Round)
     }
     "chrono" -> {
-      drawLine(Color(0xFFB0BEC5), skeleton.rHand, skeleton.weaponTip, strokeWidth = 5f, cap = StrokeCap.Round)
+      drawLine(Color(0xFFB0BEC5), skeleton.rHand, skeleton.weaponTip, strokeWidth = 4.2f * u, cap = StrokeCap.Round)
       if (dynamicGlow) {
-        drawCircle(Color(0xFF448AFF).copy(alpha = 0.4f), radius = 11f, center = skeleton.weaponTip)
+        drawCircle(Color(0xFF448AFF).copy(alpha = 0.4f), radius = 9.5f * u, center = skeleton.weaponTip)
       }
-      drawCircle(Color(0xFFFFD54F), radius = 6f, center = skeleton.weaponTip)
+      drawCircle(Color(0xFFFFD54F), radius = 5f * u, center = skeleton.weaponTip)
     }
     else -> {
-      drawLine(Color(0xFF607D8B), skeleton.rElbow, skeleton.weaponTip, strokeWidth = 6.5f, cap = StrokeCap.Round)
-      drawLine(Color(0xFFCFD8DC), skeleton.rHand, skeleton.weaponTip, strokeWidth = 4.5f, cap = StrokeCap.Round)
-      drawCircle(secondaryColor, radius = 4f, center = skeleton.weaponTip)
+      drawLine(Color(0xFF607D8B), skeleton.rElbow, skeleton.weaponTip, strokeWidth = 5.4f * u, cap = StrokeCap.Round)
+      drawLine(Color(0xFFCFD8DC), skeleton.rHand, skeleton.weaponTip, strokeWidth = 3.8f * u, cap = StrokeCap.Round)
+      drawCircle(secondaryColor, radius = 3.4f * u, center = skeleton.weaponTip)
     }
   }
 
   // Helmet / Head + Archetype / Batman Cowl / Spider-Man Lenses
+  val headR = 13.5f * u
   val headFill = when {
     isSpiderMan && outfitId != "spiderman_v2" -> Color(0xFFB71C1C)
     isIronMan -> Color(0xFFC62828)
@@ -559,107 +584,102 @@ fun DrawScope.drawRigCharacter(
     else -> Color(0xFF0E1629)
   }
   if (isFlash) {
-    // Golden ear-wing fins
     val wingCol = if (outfitId == "flash_v3") Color(0xFF00E5FF) else Color(0xFFFFD54F)
-    drawLine(wingCol, Offset(skeleton.head.x - 16f, skeleton.head.y), Offset(skeleton.head.x - 25f, skeleton.head.y - 12f), strokeWidth = 3.5f, cap = StrokeCap.Round)
-    drawLine(wingCol, Offset(skeleton.head.x + 16f, skeleton.head.y), Offset(skeleton.head.x + 25f, skeleton.head.y - 12f), strokeWidth = 3.5f, cap = StrokeCap.Round)
+    drawLine(wingCol, Offset(skeleton.head.x - 13f * u, skeleton.head.y), Offset(skeleton.head.x - 20f * u, skeleton.head.y - 10f * u), strokeWidth = 3.0f * u, cap = StrokeCap.Round)
+    drawLine(wingCol, Offset(skeleton.head.x + 13f * u, skeleton.head.y), Offset(skeleton.head.x + 20f * u, skeleton.head.y - 10f * u), strokeWidth = 3.0f * u, cap = StrokeCap.Round)
   }
   if (isBatman) {
-    // Pointed Bat-Cowl Ears!
     val cowlCol = Color(0xFF0E1629)
     val rimCol = if (highContrast) Color.White else armorColor
     val lEar = Path().apply {
-      moveTo(skeleton.head.x - 13f, skeleton.head.y - 8f)
-      lineTo(skeleton.head.x - 10f, skeleton.head.y - 28f)
-      lineTo(skeleton.head.x - 4f, skeleton.head.y - 14f)
+      moveTo(skeleton.head.x - 10.5f * u, skeleton.head.y - 6.5f * u)
+      lineTo(skeleton.head.x - 8f * u, skeleton.head.y - 22f * u)
+      lineTo(skeleton.head.x - 3f * u, skeleton.head.y - 11f * u)
       close()
     }
     val rEar = Path().apply {
-      moveTo(skeleton.head.x + 13f, skeleton.head.y - 8f)
-      lineTo(skeleton.head.x + 10f, skeleton.head.y - 28f)
-      lineTo(skeleton.head.x + 4f, skeleton.head.y - 14f)
+      moveTo(skeleton.head.x + 10.5f * u, skeleton.head.y - 6.5f * u)
+      lineTo(skeleton.head.x + 8f * u, skeleton.head.y - 22f * u)
+      lineTo(skeleton.head.x + 3f * u, skeleton.head.y - 11f * u)
       close()
     }
     drawPath(lEar, color = cowlCol)
     drawPath(rEar, color = cowlCol)
-    drawPath(lEar, color = rimCol, style = Stroke(width = 2.2f))
-    drawPath(rEar, color = rimCol, style = Stroke(width = 2.2f))
+    drawPath(lEar, color = rimCol, style = Stroke(width = 1.8f * u))
+    drawPath(rEar, color = rimCol, style = Stroke(width = 1.8f * u))
   }
-  drawCircle(color = headFill, radius = 17f, center = skeleton.head)
-  drawCircle(color = if (highContrast) Color.White else armorColor, radius = 17f, center = skeleton.head, style = Stroke(width = if (highContrast) 4f else 3.2f))
+  drawCircle(color = headFill, radius = headR, center = skeleton.head)
+  drawCircle(color = if (highContrast) Color.White else armorColor, radius = headR, center = skeleton.head, style = Stroke(width = (if (highContrast) 3.4f else 2.6f) * u))
   if (archetype == "infernal" && !isBatman && !isIronMan && !isAbyss) {
-    drawLine(Color(0xFFFFAB40), Offset(skeleton.head.x - 9f, skeleton.head.y - 14f), Offset(skeleton.head.x + 9f, skeleton.head.y - 14f), strokeWidth = 3.5f, cap = StrokeCap.Round)
+    drawLine(Color(0xFFFFAB40), Offset(skeleton.head.x - 7.5f * u, skeleton.head.y - 11f * u), Offset(skeleton.head.x + 7.5f * u, skeleton.head.y - 11f * u), strokeWidth = 3f * u, cap = StrokeCap.Round)
   }
   if (isSpiderMan) {
-    // Expressive angular white Spider-Man mask eye lenses!
     val lensCol = visorColorOverride ?: Color.White
     val lEye = Path().apply {
-      moveTo(skeleton.head.x - 11f, skeleton.head.y - 6f)
-      lineTo(skeleton.head.x - 2f, skeleton.head.y - 1f)
-      lineTo(skeleton.head.x - 9f, skeleton.head.y + 4f)
+      moveTo(skeleton.head.x - 9f * u, skeleton.head.y - 5f * u)
+      lineTo(skeleton.head.x - 1.8f * u, skeleton.head.y - 1f * u)
+      lineTo(skeleton.head.x - 7.5f * u, skeleton.head.y + 3.2f * u)
       close()
     }
     val rEye = Path().apply {
-      moveTo(skeleton.head.x + 12f, skeleton.head.y - 6f)
-      lineTo(skeleton.head.x + 3f, skeleton.head.y - 1f)
-      lineTo(skeleton.head.x + 10f, skeleton.head.y + 4f)
+      moveTo(skeleton.head.x + 9.5f * u, skeleton.head.y - 5f * u)
+      lineTo(skeleton.head.x + 2.5f * u, skeleton.head.y - 1f * u)
+      lineTo(skeleton.head.x + 8f * u, skeleton.head.y + 3.2f * u)
       close()
     }
     drawPath(lEye, color = lensCol)
     drawPath(rEye, color = lensCol)
-    drawPath(lEye, color = Color.Black, style = Stroke(width = 1.6f))
-    drawPath(rEye, color = Color.Black, style = Stroke(width = 1.6f))
+    drawPath(lEye, color = Color.Black, style = Stroke(width = 1.4f * u))
+    drawPath(rEye, color = Color.Black, style = Stroke(width = 1.4f * u))
   } else if (isBatman) {
-    // White cowl eye slits
     val cowlEye = visorColorOverride ?: Color.White
-    drawLine(cowlEye, Offset(skeleton.head.x - 9f, skeleton.head.y - 3f), Offset(skeleton.head.x - 2f, skeleton.head.y - 1f), strokeWidth = 3.5f, cap = StrokeCap.Round)
-    drawLine(cowlEye, Offset(skeleton.head.x + 3f, skeleton.head.y - 1f), Offset(skeleton.head.x + 10f, skeleton.head.y - 3f), strokeWidth = 3.5f, cap = StrokeCap.Round)
+    drawLine(cowlEye, Offset(skeleton.head.x - 7.5f * u, skeleton.head.y - 2.4f * u), Offset(skeleton.head.x - 1.8f * u, skeleton.head.y - 0.8f * u), strokeWidth = 2.8f * u, cap = StrokeCap.Round)
+    drawLine(cowlEye, Offset(skeleton.head.x + 2.4f * u, skeleton.head.y - 0.8f * u), Offset(skeleton.head.x + 8.2f * u, skeleton.head.y - 2.4f * u), strokeWidth = 2.8f * u, cap = StrokeCap.Round)
   } else if (isGreenLantern) {
-    // Emerald Domino Mask
     val maskCol = Color(0xFF00E676)
-    drawLine(maskCol, Offset(skeleton.head.x - 10f, skeleton.head.y - 2f), Offset(skeleton.head.x + 10f, skeleton.head.y - 2f), strokeWidth = 6f, cap = StrokeCap.Round)
-    drawCircle(Color.White, radius = 2.4f, center = Offset(skeleton.head.x - 5f, skeleton.head.y - 2f))
-    drawCircle(Color.White, radius = 2.4f, center = Offset(skeleton.head.x + 5f, skeleton.head.y - 2f))
+    drawLine(maskCol, Offset(skeleton.head.x - 8.2f * u, skeleton.head.y - 1.8f * u), Offset(skeleton.head.x + 8.2f * u, skeleton.head.y - 1.8f * u), strokeWidth = 4.8f * u, cap = StrokeCap.Round)
+    drawCircle(Color.White, radius = 2.0f * u, center = Offset(skeleton.head.x - 4.2f * u, skeleton.head.y - 1.8f * u))
+    drawCircle(Color.White, radius = 2.0f * u, center = Offset(skeleton.head.x + 4.2f * u, skeleton.head.y - 1.8f * u))
   } else if (isRealLifeMe) {
-    // Everyday eyeglasses frame + subtle hair crest for Real-Life Blake versions
     val frameCol = visorColorOverride ?: Color(0xFFE2E8F0)
-    drawLine(Color(0xFF1E293B), Offset(skeleton.head.x - 10f, skeleton.head.y - 14f), Offset(skeleton.head.x + 10f, skeleton.head.y - 14f), strokeWidth = 4.5f, cap = StrokeCap.Round)
-    drawRect(color = frameCol, topLeft = Offset(skeleton.head.x - 10f, skeleton.head.y - 6f), size = androidx.compose.ui.geometry.Size(8f, 6f), style = Stroke(width = 2.0f))
-    drawRect(color = frameCol, topLeft = Offset(skeleton.head.x + 2f, skeleton.head.y - 6f), size = androidx.compose.ui.geometry.Size(8f, 6f), style = Stroke(width = 2.0f))
-    drawLine(frameCol, Offset(skeleton.head.x - 2f, skeleton.head.y - 3f), Offset(skeleton.head.x + 2f, skeleton.head.y - 3f), strokeWidth = 2.0f)
+    drawLine(Color(0xFF1E293B), Offset(skeleton.head.x - 8.2f * u, skeleton.head.y - 11f * u), Offset(skeleton.head.x + 8.2f * u, skeleton.head.y - 11f * u), strokeWidth = 3.6f * u, cap = StrokeCap.Round)
+    drawRect(color = frameCol, topLeft = Offset(skeleton.head.x - 8.2f * u, skeleton.head.y - 5f * u), size = androidx.compose.ui.geometry.Size(6.6f * u, 5f * u), style = Stroke(width = 1.6f * u))
+    drawRect(color = frameCol, topLeft = Offset(skeleton.head.x + 1.6f * u, skeleton.head.y - 5f * u), size = androidx.compose.ui.geometry.Size(6.6f * u, 5f * u), style = Stroke(width = 1.6f * u))
+    drawLine(frameCol, Offset(skeleton.head.x - 1.6f * u, skeleton.head.y - 2.4f * u), Offset(skeleton.head.x + 1.6f * u, skeleton.head.y - 2.4f * u), strokeWidth = 1.6f * u)
   } else {
     drawLine(
       color = visorColorOverride ?: secondaryColor,
-      start = Offset(skeleton.head.x - 6f, skeleton.head.y - 2f),
-      end = Offset(skeleton.head.x + 11f, skeleton.head.y - 2f),
-      strokeWidth = 5f,
+      start = Offset(skeleton.head.x - 5f * u, skeleton.head.y - 1.6f * u),
+      end = Offset(skeleton.head.x + 9f * u, skeleton.head.y - 1.6f * u),
+      strokeWidth = 4.2f * u,
       cap = StrokeCap.Round,
     )
   }
 
   if (showBonesOverlay) {
-    drawLine(Color.White.copy(alpha = 0.75f), skeleton.pelvis, skeleton.chest, strokeWidth = 2f)
-    drawLine(Color.White.copy(alpha = 0.75f), skeleton.chest, skeleton.head, strokeWidth = 2f)
-    drawLine(Color.White.copy(alpha = 0.75f), skeleton.lShoulder, skeleton.lElbow, strokeWidth = 2f)
-    drawLine(Color.White.copy(alpha = 0.75f), skeleton.lElbow, skeleton.lHand, strokeWidth = 2f)
-    drawLine(Color.White.copy(alpha = 0.75f), skeleton.rShoulder, skeleton.rElbow, strokeWidth = 2f)
-    drawLine(Color.White.copy(alpha = 0.75f), skeleton.rElbow, skeleton.rHand, strokeWidth = 2f)
-    drawLine(Color.White.copy(alpha = 0.75f), skeleton.rHand, skeleton.weaponTip, strokeWidth = 2f)
-    drawLine(Color.White.copy(alpha = 0.75f), skeleton.lHip, skeleton.lKnee, strokeWidth = 2f)
-    drawLine(Color.White.copy(alpha = 0.75f), skeleton.lKnee, skeleton.lFoot, strokeWidth = 2f)
-    drawLine(Color.White.copy(alpha = 0.75f), skeleton.rHip, skeleton.rKnee, strokeWidth = 2f)
-    drawLine(Color.White.copy(alpha = 0.75f), skeleton.rKnee, skeleton.rFoot, strokeWidth = 2f)
+    val hs = u.coerceIn(0.8f, 1.8f)
+    drawLine(Color.White.copy(alpha = 0.75f), skeleton.pelvis, skeleton.chest, strokeWidth = 2f * hs)
+    drawLine(Color.White.copy(alpha = 0.75f), skeleton.chest, skeleton.head, strokeWidth = 2f * hs)
+    drawLine(Color.White.copy(alpha = 0.75f), skeleton.lShoulder, skeleton.lElbow, strokeWidth = 2f * hs)
+    drawLine(Color.White.copy(alpha = 0.75f), skeleton.lElbow, skeleton.lHand, strokeWidth = 2f * hs)
+    drawLine(Color.White.copy(alpha = 0.75f), skeleton.rShoulder, skeleton.rElbow, strokeWidth = 2f * hs)
+    drawLine(Color.White.copy(alpha = 0.75f), skeleton.rElbow, skeleton.rHand, strokeWidth = 2f * hs)
+    drawLine(Color.White.copy(alpha = 0.75f), skeleton.rHand, skeleton.weaponTip, strokeWidth = 2f * hs)
+    drawLine(Color.White.copy(alpha = 0.75f), skeleton.lHip, skeleton.lKnee, strokeWidth = 2f * hs)
+    drawLine(Color.White.copy(alpha = 0.75f), skeleton.lKnee, skeleton.lFoot, strokeWidth = 2f * hs)
+    drawLine(Color.White.copy(alpha = 0.75f), skeleton.rHip, skeleton.rKnee, strokeWidth = 2f * hs)
+    drawLine(Color.White.copy(alpha = 0.75f), skeleton.rKnee, skeleton.rFoot, strokeWidth = 2f * hs)
 
     fun drawHandle(id: String, pt: Offset) {
       val isSel = id == selectedBoneId
       drawCircle(
         color = if (isSel) Color(0xFFFFAB40) else Color(0xFF00E5FF),
-        radius = if (isSel) 10f else 6.5f,
+        radius = (if (isSel) 9.5f else 6.2f) * hs,
         center = pt,
       )
       drawCircle(
         color = Color(0xFF070A12),
-        radius = if (isSel) 4f else 2.5f,
+        radius = (if (isSel) 3.8f else 2.4f) * hs,
         center = pt,
       )
     }
@@ -704,7 +724,7 @@ fun DrawScope.drawArenaHostile(
     val effScale = if (scale.isFinite()) scale.coerceIn(0.55f, 1.85f) else 1.0f
     val baseRadius = when {
       isBoss -> 46f
-      archetype == "mech" || archetype == "clockwork_automaton" || archetype == "ultron_sentry" || archetype == "blackgate_enforcer" -> 34f
+      archetype == "mech" || archetype == "clockwork_automaton" || archetype == "ultron_sentry" || archetype == "blackgate_enforcer" || archetype == "b2_super_droid" || archetype == "dark_trooper" -> 34f
       isElite -> 31f
       archetype == "rusher" || archetype == "water_hive_swarm" -> 20f
       else -> 24f
@@ -717,6 +737,14 @@ fun DrawScope.drawArenaHostile(
     archetype == "boss_venom" -> Color(0xFFE040FB)
     archetype == "boss_goblin" -> Color(0xFFFF6D00)
     archetype == "boss_bane" -> Color(0xFF00E676)
+    archetype == "boss_vader" -> Color(0xFFFF1744)
+    archetype == "boss_starkiller" -> Color(0xFF40C4FF)
+    archetype == "boss_atst" -> Color(0xFFB0BEC5)
+    archetype == "stormtrooper" -> Color(0xFFECEFF1)
+    archetype == "sith_acolyte" -> Color(0xFFFF3D71)
+    archetype == "b2_super_droid" -> Color(0xFF90A4AE)
+    archetype == "dark_trooper" -> Color(0xFFFF5252)
+    archetype == "mandalorian" -> Color(0xFFFFD54F)
     archetype == "mech" || archetype == "boss_mech" || archetype == "ultron_sentry" -> Color(0xFFFF8F00)
     archetype == "blackwatch" -> Color(0xFFD50000)
     archetype == "gentek_mutant" -> Color(0xFFFF1744)
@@ -734,6 +762,7 @@ fun DrawScope.drawArenaHostile(
     archetype == "slasher" -> Color(0xFFFF3D71)
     archetype == "trooper" -> Color(0xFF7C4DFF)
     isElite -> Color(0xFFFF1744)
+    worldId == "sector_star_wars_nexus" -> Color(0xFFFFD54F)
     worldId == "gotham_arkham" -> Color(0xFFFFD54F)
     worldId == "spiderverse_queens" -> Color(0xFFE53935)
     worldId == "stark_orbital" -> Color(0xFFFF3D71)
@@ -771,8 +800,12 @@ fun DrawScope.drawArenaHostile(
   val wobble = if (reduceMotion) 0f else sin(animPhase) * 3.5f * effScale
 
   // Shoulders / Silhouette body
-  if (archetype == "mech" || archetype == "boss_mech" || archetype == "clockwork_automaton") {
-    val chassisFill = if (archetype == "clockwork_automaton") Color(0xFF281F10) else Color(0xFF1A2234)
+  if (archetype == "mech" || archetype == "boss_mech" || archetype == "clockwork_automaton" || archetype == "b2_super_droid" || archetype == "boss_atst") {
+    val chassisFill = when (archetype) {
+      "clockwork_automaton" -> Color(0xFF281F10)
+      "boss_atst", "b2_super_droid" -> Color(0xFF232C3B)
+      else -> Color(0xFF1A2234)
+    }
     drawRect(
       color = chassisFill,
       topLeft = Offset(center.x - baseRadius, center.y - baseRadius * 0.78f),
@@ -784,7 +817,7 @@ fun DrawScope.drawArenaHostile(
       size = androidx.compose.ui.geometry.Size(baseRadius * 2f, baseRadius * 1.55f),
       style = Stroke(width = if (highContrast) 4f else 3f),
     )
-    val pylonColor = if (archetype == "clockwork_automaton") Color(0xFFFFD54F) else Color(0xFFFFAB40)
+    val pylonColor = if (archetype == "clockwork_automaton") Color(0xFFFFD54F) else if (archetype == "boss_atst") Color(0xFFFF3D71) else Color(0xFFFFAB40)
     drawLine(pylonColor, Offset(center.x - baseRadius * 0.8f, center.y - baseRadius * 0.6f), Offset(center.x - baseRadius * 0.8f, center.y - baseRadius * 1.2f), strokeWidth = 5f * effScale, cap = StrokeCap.Round)
     drawLine(pylonColor, Offset(center.x + baseRadius * 0.8f, center.y - baseRadius * 0.6f), Offset(center.x + baseRadius * 0.8f, center.y - baseRadius * 1.2f), strokeWidth = 5f * effScale, cap = StrokeCap.Round)
   } else {
@@ -792,6 +825,8 @@ fun DrawScope.drawArenaHostile(
       "rift_phantom" -> Color(0x99062436)
       "water_hive_swarm" -> Color(0xFF0A241B)
       "cosmic_raider" -> Color(0xFF1E0B2E)
+      "stormtrooper" -> Color(0xFF222A38)
+      "boss_vader", "dark_trooper" -> Color(0xFF090B12)
       else -> Color(0xFF101728)
     }
     drawOval(
@@ -809,6 +844,27 @@ fun DrawScope.drawArenaHostile(
 
   // Distinct archetype limbs & weapons
   when (archetype) {
+    "sith_acolyte", "boss_vader" -> {
+      val saberLen = if (archetype == "boss_vader") baseRadius * 2.1f else baseRadius * 1.65f
+      drawLine(Color(0xFFFF1744), Offset(center.x + baseRadius * 0.7f, center.y), Offset(center.x + saberLen, center.y - 22f * effScale + wobble * 0.5f), strokeWidth = 5.5f * effScale, cap = StrokeCap.Round)
+      drawLine(Color.White, Offset(center.x + baseRadius * 0.7f, center.y), Offset(center.x + saberLen, center.y - 22f * effScale + wobble * 0.5f), strokeWidth = 2.0f * effScale, cap = StrokeCap.Round)
+      if (archetype == "boss_vader") {
+        drawLine(Color(0xFF2A0C16), Offset(center.x - baseRadius * 0.8f, center.y), Offset(center.x - baseRadius * 1.25f, center.y + baseRadius * 0.9f), strokeWidth = 9f * effScale, cap = StrokeCap.Round)
+      }
+    }
+    "boss_starkiller" -> {
+      drawLine(Color(0xFF00E5FF), Offset(center.x - baseRadius * 0.7f, center.y + 4f), Offset(center.x - baseRadius * 1.9f, center.y - 16f * effScale + wobble), strokeWidth = 5f * effScale, cap = StrokeCap.Round)
+      drawLine(Color.White, Offset(center.x - baseRadius * 0.7f, center.y + 4f), Offset(center.x - baseRadius * 1.9f, center.y - 16f * effScale + wobble), strokeWidth = 1.8f * effScale, cap = StrokeCap.Round)
+      drawLine(Color(0xFFFF1744), Offset(center.x + baseRadius * 0.7f, center.y + 4f), Offset(center.x + baseRadius * 1.9f, center.y - 16f * effScale - wobble), strokeWidth = 5f * effScale, cap = StrokeCap.Round)
+      drawLine(Color.White, Offset(center.x + baseRadius * 0.7f, center.y + 4f), Offset(center.x + baseRadius * 1.9f, center.y - 16f * effScale - wobble), strokeWidth = 1.8f * effScale, cap = StrokeCap.Round)
+    }
+    "stormtrooper", "dark_trooper", "mandalorian" -> {
+      drawLine(Color(0xFF90A4AE), Offset(center.x + baseRadius * 0.5f, center.y + 2f * effScale), Offset(center.x + baseRadius * 1.45f, center.y - 2f * effScale), strokeWidth = 4.2f * effScale, cap = StrokeCap.Round)
+      drawCircle(if (archetype == "mandalorian") Color(0xFFFFD54F) else Color(0xFFFF1744), radius = 3.5f * effScale, center = Offset(center.x + baseRadius * 1.45f, center.y - 2f * effScale))
+      if (archetype == "dark_trooper" || archetype == "mandalorian") {
+        drawCircle(Color(0xFFFF6D00), radius = 4f * effScale, center = Offset(center.x - baseRadius * 0.7f, center.y + baseRadius * 0.55f))
+      }
+    }
     "slasher", "necromorph" -> {
       val bladeCol = if (archetype == "necromorph") Color(0xFFFFD180) else Color(0xFFFFAB40)
       drawLine(bladeCol, Offset(center.x - baseRadius * 0.7f, center.y - 6f * effScale), Offset(center.x - baseRadius * 1.55f, center.y - 18f * effScale + wobble), strokeWidth = 4.2f * effScale, cap = StrokeCap.Round)

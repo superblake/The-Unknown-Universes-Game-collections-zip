@@ -57,13 +57,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.BuildConfig
 import com.example.R
 import com.example.data.local.AppLanguage
@@ -130,6 +133,7 @@ fun OsDesktopScreen(
   onOpenStore: () -> Unit = {},
   onOpenAchievements: () -> Unit = {},
   onOpenMissions: () -> Unit = {},
+  onOpenVehiclesArmory: () -> Unit = {},
   onOpenMatchBrowser: (Int) -> Unit = {},
   onOpenSocialHub: (Int) -> Unit = {},
   onEquipOutfit: (String) -> Unit = {},
@@ -142,6 +146,7 @@ fun OsDesktopScreen(
   onBoostAllTiers: (Int) -> Unit = {},
   onMaxAllTiers: () -> Unit = {},
   onMaxAllStars: () -> Unit = {},
+  onOpenMultiverseHub: (Int) -> Unit = {},
   onGrantEssenceBonus: () -> Unit = {},
   onImportBo3Preset: () -> Unit = {},
   onDeployArea: (String) -> Unit = { areaId -> onSelectArea(areaId); onLaunchArena() },
@@ -358,56 +363,72 @@ fun OsDesktopScreen(
             }
           }
 
-          // UnknownOS Window Dock Strip
+          // UnknownOS Window Dock Strip — compact game-relation icon links
           Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
           ) {
             OsDockChip(
               modifier = Modifier.widthIn(min = 72.dp),
+              icon = AppIcons.MyLocation,
               label = "ARENA",
+              subtitle = "Combat Sim",
               accent = Color(activeWorld.accentHex),
               onClick = onLaunchArena,
             )
             OsDockChip(
-              modifier = Modifier.widthIn(min = 78.dp).testTag("os_tier_codes_btn"),
-              label = "⚡ CODES",
-              accent = Color(0xFF6200EE),
+              modifier = Modifier.widthIn(min = 74.dp).testTag("os_tier_codes_btn"),
+              icon = AppIcons.Bolt,
+              label = "CODES",
+              subtitle = "T25 / 15★",
+              accent = Color(0xFF8C52FF),
               onClick = { showCodesDialog = true },
             )
             OsDockChip(
               modifier = Modifier.widthIn(min = 72.dp).testTag("os_dock_store"),
+              icon = AppIcons.StorefrontBag,
               label = "STORE",
+              subtitle = "Conduit Shop",
               accent = Color(0xFF00E5FF),
               onClick = onOpenStore,
             )
             OsDockChip(
               modifier = Modifier.widthIn(min = 72.dp).testTag("os_dock_achievements"),
+              icon = AppIcons.TrophyCup,
               label = if (claimableAchievements > 0) "ACH ($claimableAchievements)" else "ACHIEVE",
+              subtitle = "Arkham Cups",
               accent = Color(0xFFFFD54F),
               onClick = onOpenAchievements,
             )
             OsDockChip(
               modifier = Modifier.widthIn(min = 72.dp).testTag("os_dock_missions"),
+              icon = AppIcons.CompassOps,
               label = "MISSIONS",
+              subtitle = "Stargate Ops",
               accent = Color(0xFF00E676),
               onClick = onOpenMissions,
             )
             OsDockChip(
               modifier = Modifier.widthIn(min = 72.dp),
+              icon = AppIcons.Animation,
               label = "BLENDER",
+              subtitle = "3D Rig Lab",
               accent = Color(0xFFFF8F00),
               onClick = onOpenForgeRig,
             )
             OsDockChip(
               modifier = Modifier.widthIn(min = 72.dp),
+              icon = AppIcons.VideoLibrary,
               label = "VAULT",
+              subtitle = "Krita Media",
               accent = Color(0xFFE040FB),
               onClick = onOpenMediaVault,
             )
             OsDockChip(
               modifier = Modifier.widthIn(min = 72.dp),
+              icon = AppIcons.Gamepad,
               label = "EXPORT",
+              subtitle = "Mod Bridge",
               accent = Color(0xFF00E676),
               onClick = onOpenExport,
             )
@@ -417,46 +438,54 @@ fun OsDesktopScreen(
     }
 
     item {
-      @OptIn(ExperimentalFoundationApi::class)
-      Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface,
-        modifier = Modifier
-          .fillMaxWidth()
-          .heightIn(min = 48.dp)
-          .clip(RoundedCornerShape(16.dp))
-          .combinedClickable(
-            onClick = onOpenMissions,
-            onLongClick = {
-              haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-              onOpenMissions()
-            },
-          )
-          .border(1.5.dp, Color(0xFF00E676).copy(alpha = 0.65f), RoundedCornerShape(16.dp))
-          .testTag("os_missions_card"),
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
       ) {
-        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-          Text("${com.example.data.model.MissionsCatalog.allMissions.size} MULTIVERSE MISSIONS", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = Color(0xFF00E676))
-          Text(
-            text = "${UniverseCatalog.worlds.size} Worlds • ${MultiverseArsenalCatalog.customAreas.size} Arenas • Tap to view",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-          )
-        }
+        GameIconLinkTile(
+          modifier = Modifier.weight(1f).testTag("os_missions_card"),
+          icon = AppIcons.CompassOps,
+          title = "Missions",
+          subtitle = "Stargate ${com.example.data.model.MissionsCatalog.allMissions.size} Ops",
+          accent = Color(0xFF00E676),
+          onClick = onOpenMissions,
+        )
+        GameIconLinkTile(
+          modifier = Modifier.weight(1f),
+          icon = AppIcons.Public,
+          title = "Multiverse",
+          subtitle = "${UniverseCatalog.worlds.size} Worlds",
+          accent = Color(activeWorld.accentHex),
+          onClick = { onOpenMultiverseHub(0) },
+        )
+        GameIconLinkTile(
+          modifier = Modifier.weight(1f),
+          icon = AppIcons.BuildForge,
+          title = "3D Forge",
+          subtitle = "Blender Rigs",
+          accent = Color(0xFFFF8F00),
+          onClick = onOpenForgeRig,
+        )
       }
     }
 
     item {
+      val activeVeh = armory.firstOrNull { it.category == "vehicle" && it.equipped } ?: armory.firstOrNull { it.category == "vehicle" }
+      val activeVehLabel = activeVeh?.let { "${it.name} (T${it.tier})" } ?: "8 Collection Vehicles Ready"
       MultiverseSystemsControlCard(
         progression = progression,
+        activeVehicleLabel = activeVehLabel,
         onMaxAllTiers = onMaxAllTiers,
         onMaxAllStars = onMaxAllStars,
         onDeployStarWarsNexus = {
           onSelectUniverse("sector_star_wars_nexus")
           onDeployArea("area_star_wars_nexus")
         },
+        onDeployBankVault = {
+          onDeployArea("area_bank_vault")
+        },
+        onOpenVehiclesArmory = onOpenVehiclesArmory,
+        onOpenMultiverseHub = onOpenMultiverseHub,
       )
     }
 
@@ -907,120 +936,38 @@ fun OsDesktopScreen(
       }
     }
 
-    // Blue Essence Store & Achievements Menu Quick Row
+    // Store, Achievements & Batcomputer Settings — Compact Game-Relation Icon Links
     item {
-      @OptIn(ExperimentalFoundationApi::class)
+      val unlockedAch = achievements.count { it.unlocked }
       Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
       ) {
-        Surface(
-          shape = RoundedCornerShape(16.dp),
-          color = MaterialTheme.colorScheme.surface,
-          modifier = Modifier
-            .weight(1f)
-            .clip(RoundedCornerShape(16.dp))
-            .combinedClickable(
-              onClick = onOpenStore,
-              onLongClick = {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                onOpenStore()
-              },
-            )
-            .border(1.5.dp, Color(0xFF00E5FF).copy(alpha = 0.65f), RoundedCornerShape(16.dp))
-            .testTag("os_store_card"),
-        ) {
-          Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("BLUE ESSENCE STORE", style = MaterialTheme.typography.titleSmall, color = Color(0xFF00E5FF))
-            Text(
-              text = "${profile.totalEssence} Blue Essence • XP Boosters, Tier Catalysts & Bot Uplinks",
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-              maxLines = 2,
-              overflow = TextOverflow.Ellipsis,
-            )
-          }
-        }
-        Surface(
-          shape = RoundedCornerShape(16.dp),
-          color = MaterialTheme.colorScheme.surface,
-          modifier = Modifier
-            .weight(1f)
-            .clip(RoundedCornerShape(16.dp))
-            .combinedClickable(
-              onClick = onOpenAchievements,
-              onLongClick = {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                onOpenAchievements()
-              },
-            )
-            .border(1.5.dp, Color(0xFFFFD54F).copy(alpha = 0.65f), RoundedCornerShape(16.dp))
-            .testTag("os_achievements_card"),
-        ) {
-          Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            val unlockedAch = achievements.count { it.unlocked }
-            Text("ACHIEVEMENTS ($unlockedAch/${achievements.size.coerceAtLeast(18)})", style = MaterialTheme.typography.titleSmall, color = Color(0xFFFFD54F))
-            Text(
-              text = if (claimableAchievements > 0) "$claimableAchievements reward(s) ready to claim!" else "Earn Blue Essence & Operator XP milestones",
-              style = MaterialTheme.typography.bodySmall,
-              color = if (claimableAchievements > 0) Color(0xFF00E676) else MaterialTheme.colorScheme.onSurfaceVariant,
-              maxLines = 2,
-              overflow = TextOverflow.Ellipsis,
-            )
-          }
-        }
-      }
-    }
-
-    // Settings, Performance, Controls & Accessibility Support Card
-    item {
-      @OptIn(ExperimentalFoundationApi::class)
-      Surface(
-        shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.surface,
-        modifier = Modifier
-          .fillMaxWidth()
-          .clip(RoundedCornerShape(18.dp))
-          .combinedClickable(
-            onClick = onOpenSettings,
-            onLongClick = {
-              haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-              onOpenSettings()
-            },
-          )
-          .border(1.5.dp, Color(0xFF00E676).copy(alpha = 0.55f), RoundedCornerShape(18.dp))
-          .testTag("settings_accessibility_card"),
-      ) {
-        Row(
-          modifier = Modifier.fillMaxWidth().padding(14.dp),
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-          Icon(
-            imageVector = AppIcons.Accessibility,
-            contentDescription = stringResource(R.string.cd_open_settings),
-            tint = Color(0xFF00E676),
-            modifier = Modifier.size(28.dp),
-          )
-          Column(modifier = Modifier.weight(1f)) {
-            Text(
-              text = stringResource(R.string.settings_title),
-              style = MaterialTheme.typography.titleMedium,
-              color = Color(0xFF00E676),
-            )
-            Text(
-              text = "Tune controls, FPS, visuals, epilepsy flash safety, colorblind palettes, large text & motor assist.",
-              style = MaterialTheme.typography.bodyMedium,
-              color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-          }
-          Icon(
-            imageVector = AppIcons.Tune,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(22.dp),
-          )
-        }
+        GameIconLinkTile(
+          modifier = Modifier.weight(1f).testTag("os_store_card"),
+          icon = AppIcons.StorefrontBag,
+          title = "Store",
+          subtitle = "${profile.totalEssence} Conduit",
+          accent = Color(0xFF00E5FF),
+          onClick = onOpenStore,
+        )
+        GameIconLinkTile(
+          modifier = Modifier.weight(1f).testTag("os_achievements_card"),
+          icon = AppIcons.TrophyCup,
+          title = "Trophies",
+          subtitle = if (claimableAchievements > 0) "$claimableAchievements Ready!" else "$unlockedAch/${achievements.size.coerceAtLeast(18)} Arkham",
+          accent = Color(0xFFFFD54F),
+          onClick = onOpenAchievements,
+        )
+        GameIconLinkTile(
+          modifier = Modifier.weight(1f).testTag("settings_accessibility_card"),
+          icon = AppIcons.Accessibility,
+          title = "Batcomputer",
+          subtitle = "Controls & FPS",
+          accent = Color(0xFF00E676),
+          contentDescription = stringResource(R.string.cd_open_settings),
+          onClick = onOpenSettings,
+        )
       }
     }
 
@@ -1598,12 +1545,19 @@ fun OsDesktopScreen(
         if (showAllWorldArenas) {
           playableAreas
         } else {
-          playableAreas.filter { it.linkedWorldId == activeWorld.id || it.id == progression.activeAreaId }
-            .ifEmpty { playableAreas }
+          playableAreas.filter {
+            it.linkedWorldId == activeWorld.id ||
+              it.id == progression.activeAreaId ||
+              it.id == "area_bank_vault"
+          }.ifEmpty { playableAreas }
         }
       }
       val thisWorldCount = remember(playableAreas, activeWorld.id, progression.activeAreaId) {
-        playableAreas.count { it.linkedWorldId == activeWorld.id || it.id == progression.activeAreaId }
+        playableAreas.count {
+          it.linkedWorldId == activeWorld.id ||
+            it.id == progression.activeAreaId ||
+            it.id == "area_bank_vault"
+        }
       }
       Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
@@ -1980,17 +1934,19 @@ fun OsDesktopScreen(
 @Composable
 private fun OsDockChip(
   modifier: Modifier,
+  icon: ImageVector,
   label: String,
+  subtitle: String,
   accent: Color,
   onClick: () -> Unit,
 ) {
   val haptic = LocalHapticFeedback.current
   Surface(
-    shape = RoundedCornerShape(10.dp),
-    color = accent.copy(alpha = 0.14f),
+    shape = RoundedCornerShape(12.dp),
+    color = accent.copy(alpha = 0.12f),
     modifier = modifier
-      .heightIn(min = 48.dp)
-      .clip(RoundedCornerShape(10.dp))
+      .heightIn(min = 58.dp)
+      .clip(RoundedCornerShape(12.dp))
       .combinedClickable(
         onClick = onClick,
         onLongClick = {
@@ -1998,18 +1954,111 @@ private fun OsDockChip(
           onClick()
         },
       )
-      .border(1.dp, accent.copy(alpha = 0.45f), RoundedCornerShape(10.dp)),
+      .border(1.dp, accent.copy(alpha = 0.45f), RoundedCornerShape(12.dp)),
   ) {
-    Box(
-      modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
-      contentAlignment = Alignment.Center,
+    Column(
+      modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+      horizontalAlignment = Alignment.CenterHorizontally,
+      verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
+      Box(
+        modifier = Modifier
+          .size(26.dp)
+          .clip(CircleShape)
+          .background(accent.copy(alpha = 0.22f)),
+        contentAlignment = Alignment.Center,
+      ) {
+        Icon(
+          imageVector = icon,
+          contentDescription = label,
+          tint = accent,
+          modifier = Modifier.size(15.dp),
+        )
+      }
       Text(
         text = label,
-        style = MaterialTheme.typography.labelSmall,
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Bold,
         color = accent,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
+        textAlign = TextAlign.Center,
+      )
+      Text(
+        text = subtitle,
+        fontSize = 8.5.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = TextAlign.Center,
+      )
+    }
+  }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun GameIconLinkTile(
+  modifier: Modifier = Modifier,
+  icon: ImageVector,
+  title: String,
+  subtitle: String,
+  accent: Color,
+  contentDescription: String = "$title — $subtitle",
+  onClick: () -> Unit,
+) {
+  val haptic = LocalHapticFeedback.current
+  Surface(
+    shape = RoundedCornerShape(14.dp),
+    color = accent.copy(alpha = 0.10f),
+    modifier = modifier
+      .heightIn(min = 66.dp)
+      .clip(RoundedCornerShape(14.dp))
+      .combinedClickable(
+        onClick = onClick,
+        onLongClick = {
+          haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+          onClick()
+        },
+      )
+      .border(1.dp, accent.copy(alpha = 0.50f), RoundedCornerShape(14.dp)),
+  ) {
+    Column(
+      modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
+      horizontalAlignment = Alignment.CenterHorizontally,
+      verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+      Box(
+        modifier = Modifier
+          .size(28.dp)
+          .clip(CircleShape)
+          .background(accent.copy(alpha = 0.22f)),
+        contentAlignment = Alignment.Center,
+      ) {
+        Icon(
+          imageVector = icon,
+          contentDescription = contentDescription,
+          tint = accent,
+          modifier = Modifier.size(16.dp),
+        )
+      }
+      Text(
+        text = title,
+        fontSize = 11.sp,
+        fontWeight = FontWeight.Bold,
+        color = accent,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = TextAlign.Center,
+      )
+      Text(
+        text = subtitle,
+        fontSize = 9.sp,
+        lineHeight = 11.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = TextAlign.Center,
       )
     }
   }
@@ -2148,9 +2197,13 @@ private fun UniverseCollectionCard(
 @Composable
 fun MultiverseSystemsControlCard(
   progression: OperatorProgressionState,
+  activeVehicleLabel: String = "8 Collection Vehicles Ready",
   onMaxAllTiers: () -> Unit,
   onMaxAllStars: () -> Unit,
   onDeployStarWarsNexus: () -> Unit,
+  onDeployBankVault: () -> Unit = {},
+  onOpenVehiclesArmory: () -> Unit = {},
+  onOpenMultiverseHub: (Int) -> Unit = {},
 ) {
   Surface(
     shape = RoundedCornerShape(16.dp),
@@ -2201,39 +2254,82 @@ fun MultiverseSystemsControlCard(
         color = Color(0xFFE040FB),
       )
       Text(
-        text = "🏰 Player Base: ${progression.playerBaseState.baseName} (Wall T${progression.playerBaseState.wallTier} • Turret T${progression.playerBaseState.turretTier}) • Attacks Defended: ${progression.playerBaseState.defenseSuccessCount}",
+        text = "🏰 Player Base: ${progression.playerBaseState.baseName} (Wall T${progression.playerBaseState.wallTier} • Turret T${progression.playerBaseState.turretTier}) • Defended: ${progression.playerBaseState.defenseSuccessCount}",
         style = MaterialTheme.typography.labelSmall,
         color = Color(0xFF38BDF8),
+      )
+      Text(
+        text = "🚗 Active Vehicle: $activeVehicleLabel • 16 Perimeter Turrets Armed",
+        style = MaterialTheme.typography.labelSmall,
+        color = Color(0xFF00E5FF),
       )
 
       Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
       ) {
-        Button(
+        GameIconLinkTile(
+          modifier = Modifier.weight(1f).testTag("os_open_base_citadel_btn"),
+          icon = AppIcons.CitadelKeep,
+          title = "Citadel Base",
+          subtitle = "Krypton Turrets",
+          accent = Color(0xFF38BDF8),
+          onClick = { onOpenMultiverseHub(4) },
+        )
+        GameIconLinkTile(
+          modifier = Modifier.weight(1f).testTag("os_open_vehicles_btn"),
+          icon = AppIcons.VehicleFleet,
+          title = "Vehicles",
+          subtitle = "Wayne & Stark",
+          accent = Color(0xFF00E5FF),
+          onClick = onOpenVehiclesArmory,
+        )
+        GameIconLinkTile(
+          modifier = Modifier.weight(1f).testTag("os_open_bank_vault_btn"),
+          icon = AppIcons.BankVault,
+          title = "Bank & Vault",
+          subtitle = "TUUCash & Gem",
+          accent = Color(0xFFFFD54F),
+          onClick = { onOpenMultiverseHub(5) },
+        )
+        GameIconLinkTile(
+          modifier = Modifier.weight(1f).testTag("os_deploy_bank_vault_btn"),
+          icon = AppIcons.DiamondShard,
+          title = "Vault Arena",
+          subtitle = "Deploy Sector",
+          accent = Color(0xFF00E676),
+          onClick = onDeployBankVault,
+        )
+      }
+
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+      ) {
+        GameIconLinkTile(
+          modifier = Modifier.weight(1f).testTag("os_max_tiers_btn"),
+          icon = AppIcons.Bolt,
+          title = "Max T25",
+          subtitle = "BO3 Gear Tier",
+          accent = Color(0xFFFFD54F),
           onClick = onMaxAllTiers,
-          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFD54F), contentColor = Color.Black),
-          shape = RoundedCornerShape(10.dp),
-          modifier = Modifier.weight(1f).height(44.dp).testTag("os_max_tiers_btn"),
-        ) {
-          Text("Max Tiers (T25)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-        }
-        Button(
+        )
+        GameIconLinkTile(
+          modifier = Modifier.weight(1f).testTag("os_max_stars_btn"),
+          icon = AppIcons.AutoAwesome,
+          title = "Max 15★",
+          subtitle = "Starfield Mastery",
+          accent = Color(0xFF00E5FF),
           onClick = onMaxAllStars,
-          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF), contentColor = Color.Black),
-          shape = RoundedCornerShape(10.dp),
-          modifier = Modifier.weight(1f).height(44.dp).testTag("os_max_stars_btn"),
-        ) {
-          Text("Max Stars (15★)", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-        }
-        Button(
+        )
+        GameIconLinkTile(
+          modifier = Modifier.weight(1f).testTag("os_star_wars_nexus_btn"),
+          icon = AppIcons.Public,
+          title = "SW Nexus",
+          subtitle = "Galactic Deploy",
+          accent = Color(0xFFFF3D71),
           onClick = onDeployStarWarsNexus,
-          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF3D71), contentColor = Color.White),
-          shape = RoundedCornerShape(10.dp),
-          modifier = Modifier.weight(1f).height(44.dp).testTag("os_star_wars_nexus_btn"),
-        ) {
-          Text("Star Wars Nexus", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-        }
+        )
       }
     }
   }

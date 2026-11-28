@@ -47,7 +47,62 @@ enum class ArenaDropKind(val badge: String, val label: String, val color: Color)
   DOUBLE_ESSENCE("2X", "DOUBLE BLUE ESSENCE (2X)", Color(0xFFFFD54F)),
   INSTA_KILL("IK", "INSTA-KILL ACTIVE!", Color(0xFFFF3D71)),
   NUKE("NK", "TACTICAL NUKE DETONATED!", Color(0xFF00E5FF)),
-  MAX_ARMOR("MX", "MAX ARMOR REFILLED!", Color(0xFF00E676)),
+  MAX_ARMOR("MX", "MAX ARMOR & PLATES REFILLED!", Color(0xFF00E676)),
+  AEGIS_RING("SB", "SENTINEL ORBITAL BLADES!", Color(0xFF38BDF8)),
+  FATE_BLESSING("FT", "DEAD OPS FATE BLESSING!", Color(0xFFFFAB40)),
+  EPOCH_SURGE("EP", "SURVIVAL EPOCH SURGE!", Color(0xFF69F0AE)),
+}
+
+enum class SurvivalEpoch(
+  val tier: Int,
+  val label: String,
+  val shortTag: String,
+  val xpBonusMult: Float,
+  val defenseBonus: Float,
+  val turretBonus: Int,
+  val accentHex: Long,
+) {
+  DARK_AGE(1, "Dark Age", "AGE I", 1.0f, 0.0f, 0, 0xFF90A4AE),
+  FEUDAL_AGE(2, "Feudal Age", "AGE II", 1.15f, 0.06f, 2, 0xFF00E676),
+  CASTLE_AGE(3, "Castle Age", "AGE III", 1.35f, 0.12f, 5, 0xFF38BDF8),
+  IMPERIAL_AGE(4, "Imperial Age", "AGE IV", 1.65f, 0.18f, 9, 0xFFFFD54F),
+  MULTIVERSAL_AGE(5, "Multiversal Epoch", "EPOCH V", 2.0f, 0.25f, 14, 0xFFE040FB);
+
+  fun next(): SurvivalEpoch? = entries.getOrNull(ordinal + 1)
+}
+
+data class InGameUpgradeSpec(
+  val id: String,
+  val title: String,
+  val category: String,
+  val summary: String,
+  val accentHex: Long,
+  val maxStacks: Int = 6,
+)
+
+object InGameUpgradeCatalog {
+  val upgrades: List<InGameUpgradeSpec> = listOf(
+    InGameUpgradeSpec("upg_orbital_blades", "Sentinel Orbital Blades", "DEFENSE", "+2 orbiting guardian blades that intercept enemy bolts & slice foes.", 0xFF38BDF8, 5),
+    InGameUpgradeSpec("upg_bubble_dome", "Titan Forcefield Dome", "WARDING", "+2 Max Reactive Plates, refill Plates & -20% Forcefield cooldown.", 0xFF00E5FF, 5),
+    InGameUpgradeSpec("upg_doa_firepower", "Fate of Firepower", "DEAD OPS FATE", "+1 Multi-Shot projectile & +20% combat fire rate.", 0xFFFF5722, 6),
+    InGameUpgradeSpec("upg_doa_fortitude", "Fate of Fortitude", "DEAD OPS FATE", "+55 Max Shield, +25 Shield heal & +10% incoming DR.", 0xFF00E676, 6),
+    InGameUpgradeSpec("upg_doa_feet", "Fate of Furious Feet", "DEAD OPS FATE", "+16% Move Speed & -20% Dash cooldown.", 0xFFFFD54F, 5),
+    InGameUpgradeSpec("upg_doa_wingman", "DOA Wingman Drone", "COMPANION", "Deploys/upgrades an autonomous Wingman turret drone by your side.", 0xFFE040FB, 5),
+    InGameUpgradeSpec("upg_aoe_epoch", "Advance Survival Epoch", "AGE SURVIVAL", "Advances Age/Epoch tier (+Defense, +XP Mult, +Allied Turret DMG).", 0xFF69F0AE, 4),
+    InGameUpgradeSpec("upg_aoe_garrison", "Citadel Garrison Levy", "AGE SURVIVAL", "Summons an extra Allied Guardian Bot & repairs Citadel +40%.", 0xFF40C4FF, 5),
+    InGameUpgradeSpec("upg_tesla_coil", "Tesla Overwatch Pylon", "DEFENSE", "Auto-zaps up to 4 nearby hostiles with chain lightning every second.", 0xFF00E5FF, 5),
+    InGameUpgradeSpec("upg_vampiric_siphon", "Soul Bastion Siphon", "VAMPIRIC", "+5 Shield & +4 Mana restored on every elimination.", 0xFFFF3D71, 6),
+    InGameUpgradeSpec("upg_pack_overclock", "Pack-a-Punch Overclock", "ARSENAL", "Upgrades live Pack-a-Punch tier (+2 Tiers) & +20% Score XP.", 0xFFE040FB, 6),
+    InGameUpgradeSpec("upg_loot_magnet", "Multiverse Relic Magnet", "UTILITY", "+0.18 Vacuum pickup range & +25% XP/Gold/Shard harvest.", 0xFFFFAB40, 5),
+    InGameUpgradeSpec("upg_diamond_alchemist", "Diamond Alchemist & Gem Siphon", "DIAMONDS & GEMS", "+150% Diamond drops, diamonds heal +25 Shield & +500 Score on pickup.", 0xFF40C4FF, 6),
+    InGameUpgradeSpec("upg_diamond_resonance", "Resonance Diamond Laser Core", "DIAMOND COMBAT", "Fires an orbital piercing cyan-diamond laser cutting through foes every 1.5s.", 0xFF00E5FF, 5),
+    InGameUpgradeSpec("upg_tuu_cash_syndicate", "TUUCash Syndicate Monopoly", "TUU CASH ECONOMY", "+200% TUUCash drops, grants instant +5,000 TUUCash bonus & elite bounties.", 0xFF00E676, 6),
+    InGameUpgradeSpec("upg_tuu_airstrike", "TUUCash Gunship Overwatch", "TUU CASH COMBAT", "Mercenary gunship circles overhead bombarding enemies with mortar rounds every 3.5s.", 0xFFFFD54F, 5),
+    InGameUpgradeSpec("upg_arcane_sorcery", "Grand Archmage & Mana Surge", "ARCANE MAGIC", "+60 Max Mana, instant full Mana refill, +45% Spell damage & +50% Mana regen.", 0xFFE040FB, 6),
+    InGameUpgradeSpec("upg_celestial_cataclysm", "Celestial Astral Cataclysm", "ASTRAL MAGIC", "Swirling magical runes zap nearby foes & triggers Nova blast when shield is depleted.", 0xFFB388FF, 5),
+  )
+
+  fun byId(id: String): InGameUpgradeSpec? = upgrades.firstOrNull { it.id == id }
 }
 
 enum class ArenaTrapKind(val label: String, val color: Color) {
@@ -125,6 +180,13 @@ enum class ArenaCollectibleKind(val label: String, val color: Color) {
   BLAST_CORE("Blast Core", Color(0xFFE040FB)),
   CAT_EASTER_EGG("Golden Cat Easter Egg", Color(0xFFFFD54F)),
   CHARACTER_SHARD("Character Collection Shard", Color(0xFF00E5FF)),
+  GOLD_COIN("Gold Coins", Color(0xFFFFD54F)),
+  DIAMOND_GEM("Diamonds", Color(0xFF40C4FF)),
+  TUU_CASH("TUUCash Notes", Color(0xFF00E676)),
+  ENV_RESOURCE("Env Resource", Color(0xFF80CBC4)),
+  SYSTEM_SHARD("System Shard", Color(0xFFE040FB)),
+  CRYSTAL_NODE("Resonance Crystal", Color(0xFFFF4081)),
+  XP_GEM("Survival XP Gem", Color(0xFF69F0AE)),
 }
 
 enum class ArenaDamageType(
@@ -253,6 +315,21 @@ data class ArenaTrap(
   var cooldownTicks: Float = 0f,
 )
 
+data class ArenaDefenseTurret(
+  val id: String,
+  val label: String,
+  val x: Float,
+  val y: Float,
+  val turretKind: String = "kinetic",
+  val accentColor: Color = Color(0xFF00E5FF),
+  val range: Float = 1.45f,
+  val fireRateTicks: Float = 36f,
+  var fireCdTicks: Float = 12f,
+  val baseDamage: Int = 6,
+  var aimAngle: Float = 0f,
+  var muzzleFlashTicks: Float = 0f,
+)
+
 data class HitSpark(
   val x: Float,
   val y: Float,
@@ -341,6 +418,11 @@ data class ArenaLoadoutStats(
   val killSiphonBonus: Int = 0,
   val essenceBonusMult: Float = 1.0f,
   val skillDamageReductionRatio: Float = 0f,
+  val canSpiritHeal: Boolean = false,
+  val spiritHealAmount: Int = 60,
+  val magicDamageMult: Float = 1.0f,
+  val magicCooldownMult: Float = 1.0f,
+  val crystalLuckPct: Int = 0,
 ) {
   companion object {
     fun fromArmory(
@@ -633,11 +715,11 @@ data class ArenaLoadoutStats(
       val multiShot = (1 + upgrades.sumOf { (it.tier / 2).toInt().coerceAtLeast(1) } +
         (weapon.baseSpreadCount - 1) + magExtraSpread + (doubleTapRank / 3) + (muleKickRank / 4)).coerceAtMost(8)
 
-      // Armory Pack Mod Tier 1..25 directly unlocks Pack Tier 1..25!
+      // Armory Pack Mod Tier 1..60 directly unlocks Pack Tier 1..60!
       val packItem = upgrades.firstOrNull { it.id == "upgrade_packtier" || it.name.contains("Pack", ignoreCase = true) }
       val initialPackTier = when {
         packItem == null -> 1
-        else -> packItem.tier.toInt().coerceIn(1, 25)
+        else -> packItem.tier.toInt().coerceIn(1, PowerTier.MAX_TIER)
       }
 
       val cm = progression.collectionCustomMode
@@ -765,6 +847,12 @@ data class ArenaLoadoutStats(
         killSiphonBonus = killSiphonBonus,
         essenceBonusMult = essenceBonusMult,
         skillDamageReductionRatio = skillDamageReductionRatio,
+        canSpiritHeal = progression.canHealWithThoughtAndSpirit(),
+        spiritHealAmount = progression.thoughtSpiritHealAmount(powerLight.powerLevel),
+        magicDamageMult = 1f + ((progression.magicState.magicTier - 1).coerceAtLeast(0) * 0.08f) +
+          (if (progression.magicState.overchargeDifficultyEnabled) (progression.magicState.difficultyScalingFactor - 1f).coerceAtLeast(0f) * 0.5f else 0f),
+        magicCooldownMult = (1f - ((progression.magicState.magicTier - 1).coerceAtLeast(0) * 0.015f)).coerceIn(0.45f, 1.0f),
+        crystalLuckPct = progression.crystalTotalLuckPct(),
       )
     }
   }
@@ -866,6 +954,8 @@ class ArenaSimState(
   val sparks = ArrayList<HitSpark>(48)
   val arcs = ArrayList<ArenaArcLine>(24)
   val arenaBots = ArrayList<ArenaBot>(16)
+  val defenseTurrets = ArrayList<ArenaDefenseTurret>(32)
+  var hudTurretCount by mutableIntStateOf(0)
   var maxPackTierReached = loadout.initialPackTier
 
   // Multi-Equip cycling
@@ -888,6 +978,86 @@ class ArenaSimState(
   var catsFoundCount by mutableIntStateOf(0)
   var lootCratesOpenedCount by mutableIntStateOf(0)
   val recruitedOutfitIdsList = mutableListOf<String>()
+  var goldEarned by mutableLongStateOf(0L)
+  var diamondsEarned by mutableLongStateOf(0L)
+  var tuuCashEarned by mutableLongStateOf(0L)
+  var diamondsSpentInMatch by mutableLongStateOf(0L)
+  var tuuCashSpentInMatch by mutableLongStateOf(0L)
+  fun availableDiamondsInMatch(): Long = (progression.diamonds + diamondsEarned - diamondsSpentInMatch).coerceAtLeast(0L)
+  fun availableTuuCashInMatch(): Long = (progression.tuuCash + tuuCashEarned - tuuCashSpentInMatch).coerceAtLeast(0L)
+  val envResourcesEarned = mutableMapOf<String, Long>()
+  val systemShardsEarned = mutableMapOf<String, Long>()
+  var crystalsFoundCount by mutableIntStateOf(0)
+
+  // Magic, Spirit Healing & Player Base Citadel live simulation state
+  var manaCurrent = progression.magicState.manaCurrent.coerceIn(0f, progression.magicState.manaMax.coerceAtLeast(100f))
+  var manaMax = progression.magicState.manaMax.coerceAtLeast(100f) + ((progression.magicState.magicTier - 1).coerceAtLeast(0) * 12f)
+  var magicCd = 0f
+  var spiritHealCd = 0f
+  var magicWaveRadius = 0f
+  var magicWaveColor = Color(0xFFE040FB)
+  var spiritWaveRadius = 0f
+  var spiritHealsCount by mutableIntStateOf(0)
+  var magicCastsCount by mutableIntStateOf(0)
+
+  val baseX = ARENA_CENTER + 0.42f
+  val baseY = ARENA_CENTER - 0.36f
+  var baseRaidTicksLeft = 0f
+  var baseTurretCd = 0f
+  var baseDefenseWon by mutableStateOf(false)
+
+  // Protection Systems + Dead Ops Arcade / Age of Empires Survival Mode In-Game Upgrades & XP
+  private val initialAegisOrbs: Int = (1 +
+    (progression.protectionRank("prot_aegis_siphon") / 10) +
+    (progression.protectionRank("prot_emergency_dome") / 12)).coerceIn(1, 6)
+  var hudMatchLevel by mutableIntStateOf(1)
+  var hudMatchXp by mutableLongStateOf(0L)
+  var hudMatchXpNext by mutableLongStateOf(100L)
+  var hudDoaMultiplier by mutableFloatStateOf(1.0f)
+  private var doaStreakTicks = 0f
+  var hudEpoch by mutableStateOf(SurvivalEpoch.DARK_AGE)
+  var hudOrbitalBladesCount by mutableIntStateOf(initialAegisOrbs)
+  var hudMaxArmorPlates by mutableIntStateOf((3 + progression.protectionRank("prot_armor_weave") / 12).coerceIn(3, 10))
+  var hudArmorPlates by mutableIntStateOf((2 + progression.protectionRank("prot_armor_weave") / 15).coerceIn(2, 10))
+  private var aegisDomeTicks = 0f
+  private var aegisDomeCd = 0f
+  var hudAegisDomeActive by mutableStateOf(false)
+  var hudAegisDomeCdSec by mutableIntStateOf(0)
+  var wingmanLevel = 0
+  var wingmanX = ARENA_CENTER - 0.075f
+  var wingmanY = ARENA_CENTER - 0.055f
+  private var wingmanFireCd = 0f
+  var hudWingmanLevel by mutableIntStateOf(0)
+  private var teslaLevel = 0
+  private var teslaCd = 0f
+  val inGameUpgradeRanks = mutableMapOf<String, Int>()
+  var hudPendingDraftChoices by mutableStateOf<List<InGameUpgradeSpec>>(emptyList())
+  var hudPendingDraftCount by mutableIntStateOf(0)
+  var inGameBonusMaxShield by mutableIntStateOf(0)
+  var inGameFireRateMult = 1.0f
+  var inGameExtraShots = 0
+  var inGameMoveMult = 1.0f
+  var inGameDmgReduction = 0.0f
+  var inGameSiphonPerKill = 0
+  var inGameXpMult = 1.0f
+  var inGameVacuumBonus = 0.0f
+  var inGameDiamondMult = 1.0f
+  var inGameTuuCashMult = 1.0f
+  var inGameMagicDmgMult = 1.0f
+  var inGameDiamondLaserLevel = 0
+  private var diamondLaserCd = 0f
+  var inGameTuuAirstrikeLevel = 0
+  private var tuuAirstrikeCd = 0f
+  var inGameCataclysmLevel = 0
+  private var cataclysmCd = 0f
+  val activeVehicleItem: ArmoryItem? = armoryItems.firstOrNull { it.category == "vehicle" && it.equipped }
+    ?: armoryItems.firstOrNull { it.category == "vehicle" }
+  val activeVehicleSpec: com.example.data.model.VehicleCollectionSpec? = activeVehicleItem?.let {
+    com.example.data.model.MultiverseVehicleCatalog.byId(it.id)
+  } ?: com.example.data.model.MultiverseVehicleCatalog.vehicles.firstOrNull()
+  private var vehicleSupportCd = 0f
+
+  fun effectiveMaxShield(): Int = (loadout.maxShield + inGameBonusMaxShield).coerceAtLeast(50)
 
   // Low-frequency HUD Snapshot States
   var hudShield by mutableIntStateOf(loadout.maxShield)
@@ -914,6 +1084,17 @@ class ArenaSimState(
   var hudActiveHazardLabel by mutableStateOf<String?>(null)
   var hudNearbyPrompt by mutableStateOf<String?>(null)
   var hudInOuterFrontier by mutableStateOf(false)
+  var hudMana by mutableFloatStateOf(manaCurrent)
+  var hudManaMax by mutableFloatStateOf(manaMax)
+  var hudActiveSpellId by mutableStateOf(progression.magicState.activeSpellId)
+  var hudMagicCdSec by mutableIntStateOf(0)
+  var hudMagicOvercharge by mutableStateOf(progression.magicState.overchargeDifficultyEnabled)
+  var hudSpiritHealCdSec by mutableIntStateOf(0)
+  val hudCanSpiritHeal: Boolean get() = loadout.canSpiritHeal
+  var hudBaseHp by mutableIntStateOf(progression.playerBaseState.maxIntegrity())
+  val hudBaseMaxHp: Int = progression.playerBaseState.maxIntegrity()
+  var hudBaseRaidActive by mutableStateOf(progression.playerBaseState.underAttack)
+  var hudBaseRaidSecLeft by mutableIntStateOf(0)
 
   val equippedLethalItem: com.example.data.model.EquipmentItemSpec
     get() {
@@ -990,6 +1171,30 @@ class ArenaSimState(
     val initialWave = matchRules.startingWave.toLong().coerceAtLeast(1L)
     hudWave = initialWave
     spawnWave(initialWave)
+    if (activeVehicleSpec != null) {
+      val vTier = (activeVehicleItem?.tier?.toInt() ?: 1).coerceAtLeast(1)
+      val vStars = activeVehicleItem?.let { progression.armoryItemStar(it.id) } ?: 1
+      val tierScale = 1f + (vTier - 1) * 0.08f + (vStars - 1) * 0.06f
+      inGameBonusMaxShield += ((activeVehicleSpec.armorRating / 2).coerceAtLeast(30) * tierScale).roundToInt()
+      inGameMoveMult *= (1.0f + activeVehicleSpec.speedRating * 0.002f + (vTier - 1) * 0.008f)
+      when (activeVehicleSpec.id) {
+        "vehicle_bank_transport" -> {
+          inGameDiamondMult += 1.5f * tierScale
+          inGameTuuCashMult += 1.5f * tierScale
+        }
+        "vehicle_rail_skimmer" -> {
+          manaMax = (manaMax + 40f * tierScale).coerceAtMost(600f)
+          manaCurrent = manaMax
+          hudManaMax = manaMax
+          hudMana = manaCurrent
+        }
+        "vehicle_stark_quinjet" -> inGameFireRateMult += 0.25f * tierScale
+        "vehicle_blacklight_apc" -> inGameSiphonPerKill += (6 * tierScale).roundToInt()
+        "vehicle_arkham_tumbler" -> inGameBonusMaxShield += (45 * tierScale).roundToInt()
+      }
+      hudShield = effectiveMaxShield()
+      postCallout("VEHICLE DEPLOYED: ${activeVehicleSpec.name.uppercase()} T$vTier/${vStars}★ (${activeVehicleSpec.specialAbility})!")
+    }
   }
 
   fun activeWeaponDamageType(): ArenaDamageType {
@@ -1101,6 +1306,8 @@ class ArenaSimState(
     mapSections.clear()
     val isCrossoverWorld = world.id in setOf("mr_crossover_nexus", "campaign_origins") ||
       areaSpec.id in setOf("area_mended_convergence", "area_campaign_nexus", "area_hero_frontier")
+    val isStarWarsWorld = world.id == "sector_star_wars_nexus" || areaSpec.id == "area_star_wars_nexus"
+    val isBankVaultArea = areaSpec.id.contains("bank", ignoreCase = true) || areaSpec.id.contains("vault", ignoreCase = true)
     data class SectionTemplate(
       val name: String,
       val biome: String,
@@ -1109,8 +1316,30 @@ class ArenaSimState(
       val style: SectionFloorStyle,
       val arch: List<String>,
     )
-    val templates: List<SectionTemplate> = if (isCrossoverWorld) {
-      listOf(
+    val templates: List<SectionTemplate> = when {
+      isBankVaultArea -> listOf(
+        SectionTemplate("Titanium Diamond Vault", "VAULT NW", 0xFF0E1D2D, 0xFF40C4FF, SectionFloorStyle.CRYO, listOf("ultron_sentry", "mech")),
+        SectionTemplate("Gold Bullion Foundry Mint", "MINT N", 0xFF211B09, 0xFFFFD54F, SectionFloorStyle.FOUNDRY, listOf("blackgate_enforcer", "mech")),
+        SectionTemplate("Laser Security Annex", "LASER NE", 0xFF1F0C18, 0xFFFF3D71, SectionFloorStyle.SOLAR, listOf("ultron_sentry", "trooper")),
+        SectionTemplate("Armored Convoy Hangar", "BANK W", 0xFF151822, 0xFFFFAB40, SectionFloorStyle.URBAN, listOf("blackgate_enforcer", "trooper")),
+        SectionTemplate("Federal Central Bank Hub", "BANK CORE", 0xFF161A0E, 0xFFFFD54F, SectionFloorStyle.TECH, listOf("blackgate_enforcer", "ultron_sentry", "mech")),
+        SectionTemplate("Emerald Treasury Vault", "VAULT E", 0xFF0A2018, 0xFF00E676, SectionFloorStyle.NEON, listOf("dup_conduit", "trooper")),
+        SectionTemplate("Obsidian Safe Deposit Wing", "SAFE SW", 0xFF161124, 0xFFB388FF, SectionFloorStyle.CRYPT, listOf("clockwork_automaton", "mech")),
+        SectionTemplate("Subterranean Bullion Reserve", "VAULT S", 0xFF1C170E, 0xFFFFD54F, SectionFloorStyle.FOUNDRY, listOf("blackgate_enforcer", "cosmic_raider")),
+        SectionTemplate("Diamond Depository Vault", "VAULT SE", 0xFF0E1B28, 0xFF00E5FF, SectionFloorStyle.VOID, listOf("rift_phantom", "ultron_sentry")),
+      )
+      isStarWarsWorld -> listOf(
+        SectionTemplate("Hoth Cryo Echo Base", "HOTH", 0xFF0D2030, 0xFF80D8FF, SectionFloorStyle.CRYO, listOf("stormtrooper", "super_battle_droid")),
+        SectionTemplate("Mustafar Lava Foundry", "MUSTAFAR", 0xFF241008, 0xFFFF5722, SectionFloorStyle.FOUNDRY, listOf("sith_acolyte", "super_battle_droid")),
+        SectionTemplate("Tatooine Twin-Sun Dunes", "TATOOINE", 0xFF241A0B, 0xFFFFD54F, SectionFloorStyle.SOLAR, listOf("stormtrooper", "beskar_mandalorian")),
+        SectionTemplate("Jakku Starship Graveyard", "JAKKU", 0xFF1A1614, 0xFFFFAB40, SectionFloorStyle.URBAN, listOf("stormtrooper", "beskar_mandalorian")),
+        SectionTemplate("Coruscant Jedi Temple", "CORUSCANT", 0xFF101B2E, 0xFF40C4FF, SectionFloorStyle.TECH, listOf("sith_acolyte", "beskar_mandalorian", "stormtrooper")),
+        SectionTemplate("Death Star Trench", "DEATH STAR", 0xFF0E141C, 0xFF00E5FF, SectionFloorStyle.NEON, listOf("stormtrooper", "super_battle_droid")),
+        SectionTemplate("Endor Shield Bunker", "ENDOR", 0xFF0E1E12, 0xFF76FF03, SectionFloorStyle.BIO, listOf("stormtrooper", "beskar_mandalorian")),
+        SectionTemplate("Kamino Cloning Spire", "KAMINO", 0xFF101928, 0xFFB388FF, SectionFloorStyle.CRYPT, listOf("super_battle_droid", "sith_acolyte")),
+        SectionTemplate("Starkiller Kyber Core", "STARKILLER", 0xFF1F0C18, 0xFFFF3D71, SectionFloorStyle.VOID, listOf("sith_acolyte", "beskar_mandalorian", "super_battle_droid")),
+      )
+      isCrossoverWorld -> listOf(
         SectionTemplate("Arkham Blackgate Wing", "GOTHAM", 0xFF10121D, 0xFFFFD54F, SectionFloorStyle.CRYPT, listOf("blackgate_enforcer", "arkham_thug", "joker_wild")),
         SectionTemplate("Der Riese Aether Lab", "BO3 LAB", 0xFF101C16, 0xFF00E676, SectionFloorStyle.FOUNDRY, listOf("necromorph", "mech", "slasher")),
         SectionTemplate("Metropolis Solar Spire", "KRYPTON", 0xFF121C33, 0xFF2979FF, SectionFloorStyle.SOLAR, listOf("ultron_sentry", "cosmic_raider", "mech")),
@@ -1121,51 +1350,52 @@ class ArenaSimState(
         SectionTemplate("Abyss Torch Sanctuary", "ABYSS", 0xFF181126, 0xFFB388FF, SectionFloorStyle.CRYPT, listOf("necromorph", "slasher", "clockwork_automaton")),
         SectionTemplate("Queens Symbiote Rift", "SPIDER-VERSE", 0xFF190E29, 0xFFE040FB, SectionFloorStyle.VOID, listOf("symbiote_stalker", "oscorp_goblin_drone", "rift_phantom")),
       )
-    } else {
-      val baseBuildings = areaSpec.buildingNames + world.mapSectors
-      val styles = listOf(
-        SectionFloorStyle.CRYO,
-        SectionFloorStyle.FOUNDRY,
-        SectionFloorStyle.SOLAR,
-        SectionFloorStyle.URBAN,
-        SectionFloorStyle.TECH,
-        SectionFloorStyle.NEON,
-        SectionFloorStyle.BIO,
-        SectionFloorStyle.CRYPT,
-        SectionFloorStyle.VOID,
-      )
-      val grounds = listOf(
-        0xFF0C1C29, 0xFF1B1410, 0xFF151E2E,
-        0xFF131622, 0xFF10182C, 0xFF0B1C24,
-        0xFF180D16, 0xFF161124, 0xFF121822,
-      )
-      val accents = listOf(
-        0xFF80D8FF, 0xFFFF7043, 0xFFFFD54F,
-        areaSpec.secondaryHex, areaSpec.accentHex, 0xFF00E5FF,
-        0xFF76FF03, 0xFFB388FF, 0xFFE040FB,
-      )
-      val sectionArchPools = listOf(
-        listOf(chooseArchetype(world.id, 1L, 0), "rift_phantom"),
-        listOf(chooseArchetype(world.id, 2L, 1), "mech"),
-        listOf(chooseArchetype(world.id, 2L, 2), "ultron_sentry"),
-        listOf(chooseArchetype(world.id, 2L, 3), "trooper"),
-        listOf(chooseArchetype(world.id, 1L, 0), chooseArchetype(world.id, 1L, 1)),
-        listOf("dup_conduit", chooseArchetype(world.id, 2L, 2)),
-        listOf("gentek_mutant", chooseArchetype(world.id, 2L, 1)),
-        listOf("necromorph", chooseArchetype(world.id, 3L, 3)),
-        listOf("cosmic_raider", chooseArchetype(world.id, 3L, 4)),
-      )
-      (0 until 9).map { idx ->
-        val rawName = when (idx) {
-          4 -> "${areaSpec.name.substringBefore(" (").take(16)} Central Hub"
-          else -> baseBuildings.getOrNull(idx % baseBuildings.size.coerceAtLeast(1)) ?: "Section ${idx + 1}"
+      else -> {
+        val baseBuildings = areaSpec.buildingNames + world.mapSectors
+        val styles = listOf(
+          SectionFloorStyle.CRYO,
+          SectionFloorStyle.FOUNDRY,
+          SectionFloorStyle.SOLAR,
+          SectionFloorStyle.URBAN,
+          SectionFloorStyle.TECH,
+          SectionFloorStyle.NEON,
+          SectionFloorStyle.BIO,
+          SectionFloorStyle.CRYPT,
+          SectionFloorStyle.VOID,
+        )
+        val grounds = listOf(
+          0xFF0C1C29, 0xFF1B1410, 0xFF151E2E,
+          0xFF131622, 0xFF10182C, 0xFF0B1C24,
+          0xFF180D16, 0xFF161124, 0xFF121822,
+        )
+        val accents = listOf(
+          0xFF80D8FF, 0xFFFF7043, 0xFFFFD54F,
+          areaSpec.secondaryHex, areaSpec.accentHex, 0xFF00E5FF,
+          0xFF76FF03, 0xFFB388FF, 0xFFE040FB,
+        )
+        val sectionArchPools = listOf(
+          listOf(chooseArchetype(world.id, 1L, 0), "rift_phantom"),
+          listOf(chooseArchetype(world.id, 2L, 1), "mech"),
+          listOf(chooseArchetype(world.id, 2L, 2), "ultron_sentry"),
+          listOf(chooseArchetype(world.id, 2L, 3), "trooper"),
+          listOf(chooseArchetype(world.id, 1L, 0), chooseArchetype(world.id, 1L, 1)),
+          listOf("dup_conduit", chooseArchetype(world.id, 2L, 2)),
+          listOf("gentek_mutant", chooseArchetype(world.id, 2L, 1)),
+          listOf("necromorph", chooseArchetype(world.id, 3L, 3)),
+          listOf("cosmic_raider", chooseArchetype(world.id, 3L, 4)),
+        )
+        (0 until 9).map { idx ->
+          val rawName = when (idx) {
+            4 -> "${areaSpec.name.substringBefore(" (").take(16)} Central Hub"
+            else -> baseBuildings.getOrNull(idx % baseBuildings.size.coerceAtLeast(1)) ?: "Section ${idx + 1}"
+          }
+          val tag = when (idx) {
+            0 -> "NW CRYO"; 1 -> "N FORGE"; 2 -> "NE SOLAR"
+            3 -> "W TRANSIT"; 4 -> "CENTER"; 5 -> "E CONDUIT"
+            6 -> "SW BIO"; 7 -> "S CRYPT"; else -> "SE RIFT"
+          }
+          SectionTemplate(rawName, tag, grounds[idx], accents[idx], styles[idx], sectionArchPools[idx])
         }
-        val tag = when (idx) {
-          0 -> "NW CRYO"; 1 -> "N FORGE"; 2 -> "NE SOLAR"
-          3 -> "W TRANSIT"; 4 -> "CENTER"; 5 -> "E CONDUIT"
-          6 -> "SW BIO"; 7 -> "S CRYPT"; else -> "SE RIFT"
-        }
-        SectionTemplate(rawName, tag, grounds[idx], accents[idx], styles[idx], sectionArchPools[idx])
       }
     }
     var idx = 0
@@ -1292,6 +1522,16 @@ class ArenaSimState(
     }
     out.add(
       ArenaPlaceDestination(
+        id = "player_base_citadel",
+        label = progression.playerBaseState.baseName,
+        kind = "CITADEL",
+        x = baseX,
+        y = baseY,
+        accent = Color(progression.playerBaseState.primaryHex),
+      )
+    )
+    out.add(
+      ArenaPlaceDestination(
         id = "outer_frontier",
         label = "North Border Bastion",
         kind = "FRONTIER",
@@ -1348,44 +1588,108 @@ class ArenaSimState(
   private fun setupBuildingsAndTraps() {
     buildings.clear()
     traps.clear()
+    defenseTurrets.clear()
     val areaSpec = progression.activeAreaSpec()
     val areaState = progression.areaState()
+    val isBankVault = areaSpec.id.contains("bank") || areaSpec.id.contains("vault")
     val bNames = areaSpec.buildingNames
-    // Spread across distinct 8x8 sections of the 24x24 bordered world instead of crowding center
+    val wingSuffixes = if (isBankVault) {
+      listOf(
+        "Federal Teller Atrium",
+        "Titanium Vault Core",
+        "Diamond Depository Wing",
+        "Gold Bullion Foundry",
+        "Armored Convoy Hangar",
+        "Reserve Security Command",
+        "Mint Vault Checkpoint",
+        "Emerald Treasury Annex",
+        "Obsidian Safe Room",
+        "Central Vault Lobby",
+        "Bullion Loading Bay",
+        "Treasury Radar Tower",
+        "Diamond Assay Lab",
+        "Security Bastion North",
+        "Reserve Armory East",
+        "Federal Relay Vault",
+      )
+    } else {
+      listOf(
+        "North Bastion Keep",
+        "West Armory Hangar",
+        "East Reactor Hall",
+        "South Command Annex",
+        "NW Radar Watchpost",
+        "NE Orbital Relay Wing",
+        "SW Munitions Depot",
+        "SE Fortress Gatehouse",
+        "Central Guardhouse",
+        "Outer Foundry Wing",
+        "Logistics Supply Hub",
+        "Tactical Overlook",
+        "Conduit Sub-Station",
+        "Sentinel Barracks",
+        "Vault Cache Annex",
+        "Frontier Control Deck",
+      )
+    }
+    // Distribute 18 multi-part structures: Spawn Bank & Vault courtyard landmarks + all 9 sections of the 24x24 world!
     val positions = listOf(
-      Pair(ARENA_CENTER - 0.85f, ARENA_CENTER - 1.15f), // Center
-      Pair(11.65f, 3.60f),  // N Section
-      Pair(3.65f, 11.65f),  // W Section
-      Pair(19.65f, 11.65f), // E Section
-      Pair(11.65f, 19.60f), // S Section
-      Pair(3.65f, 3.60f),   // NW Section
-      Pair(19.65f, 3.60f),  // NE Section
-      Pair(3.65f, 19.60f),  // SW Section
+      Pair(ARENA_CENTER - 0.78f, ARENA_CENTER - 0.56f), // Spawn NW Bank Wing (visible immediately)
+      Pair(ARENA_CENTER - 0.76f, ARENA_CENTER + 0.08f), // Spawn SW Vault Wing (visible immediately)
+      Pair(ARENA_CENTER - 0.20f, ARENA_CENTER - 0.96f), // Center North Courtyard
+      Pair(ARENA_CENTER + 0.65f, ARENA_CENTER - 0.92f), // Center East Courtyard
+      Pair(11.65f, 3.60f),  // N Section Main
+      Pair(13.20f, 5.10f),  // N Section Wing
+      Pair(3.65f, 11.65f),  // W Section Main
+      Pair(5.10f, 13.10f),  // W Section Wing
+      Pair(19.65f, 11.65f), // E Section Main
+      Pair(18.10f, 10.10f), // E Section Wing
+      Pair(11.65f, 19.60f), // S Section Main
+      Pair(10.10f, 18.20f), // S Section Wing
+      Pair(3.65f, 3.60f),   // NW Section Main
+      Pair(5.30f, 4.90f),   // NW Section Wing
+      Pair(19.65f, 3.60f),  // NE Section Main
+      Pair(18.00f, 4.90f),  // NE Section Wing
+      Pair(3.65f, 19.60f),  // SW Section Main (Outer Bank Exchange)
+      Pair(19.65f, 19.60f), // SE Section Main (Outer Diamond Vault)
     )
-    val countToSpawn = bNames.size.coerceAtMost(positions.size)
-    for (idx in 0 until countToSpawn) {
+    for (idx in positions.indices) {
       val (bx, by) = positions[idx]
-      val name = bNames[idx]
+      val name = when {
+        isBankVault && idx == 0 -> "Federal Central Bank Atrium"
+        isBankVault && idx == 1 -> "Titanium Diamond Vault Core"
+        !isBankVault && idx == 0 -> "Federal Bank Exchange"
+        !isBankVault && idx == 1 -> "Titanium Diamond Vault"
+        idx in 2 until (2 + bNames.size) -> bNames[idx - 2]
+        !isBankVault && idx == 16 -> "SW Reserve Bank Branch"
+        !isBankVault && idx == 17 -> "SE Bullion Security Vault"
+        else -> "${areaSpec.name.substringBefore(" (").take(14)}: ${wingSuffixes[idx % wingSuffixes.size]}"
+      }
       val sec = sectionAt(bx, by)
-      val bColor = if (idx == 0) Color(areaSpec.accentHex) else Color(sec.accentHex)
+      val bColor = when {
+        idx == 0 || (!isBankVault && idx == 16) -> Color(0xFF00E676)
+        idx == 1 || (!isBankVault && idx == 17) -> Color(0xFFFFD54F)
+        idx < 4 -> Color(areaSpec.accentHex)
+        else -> Color(sec.accentHex)
+      }
       buildings.add(
         ArenaBuilding(
           id = "bld_$idx",
           name = name,
           x = bx,
           y = by,
-          width = 0.62f,
-          height = 0.46f,
+          width = if (idx % 3 == 0) 0.62f else 0.56f,
+          height = if (idx % 2 == 0) 0.46f else 0.42f,
           accentColor = bColor,
         )
       )
       traps.add(
         ArenaTrap(
           id = "trap_b_$idx",
-          x = bx + 0.31f,
-          y = by + 0.56f,
+          x = bx + 0.30f,
+          y = by + 0.52f,
           kind = if (idx % 2 == 0) ArenaTrapKind.ELECTRIC else ArenaTrapKind.FIRE,
-          radius = 0.18f + areaState.trapDensityTier * 0.009f,
+          radius = 0.17f + areaState.trapDensityTier * 0.009f,
         )
       )
     }
@@ -1399,6 +1703,56 @@ class ArenaSimState(
     ringOffsets.forEachIndexed { idx, (tx, ty, kind) ->
       traps.add(ArenaTrap("trap_mid_$idx", tx, ty, kind, radius = 0.17f + areaState.trapDensityTier * 0.008f))
     }
+
+    // Automated Area Defense Turrets placed around Base Citadel, Central Hub, Gateways & All Outer Sections!
+    val baseTurretTier = progression.playerBaseState.turretTier
+    val turretDmg = 5 + (baseTurretTier * 2) + (areaState.trapDensityTier / 2)
+    val turretRate = (38f - baseTurretTier * 1.4f).coerceAtLeast(16f)
+    val turretSpecs = listOf(
+      // Inner Citadel & Spawn Courtyard Defense Ring (immediately visible at spawn)
+      Triple(ARENA_CENTER - 0.46f, ARENA_CENTER - 0.42f, "kinetic"),
+      Triple(ARENA_CENTER + 0.58f, ARENA_CENTER - 0.20f, "laser"),
+      Triple(ARENA_CENTER - 0.44f, ARENA_CENTER + 0.06f, "tesla"),
+      Triple(ARENA_CENTER + 0.46f, ARENA_CENTER + 0.24f, "diamond_rail"),
+      // Section Gateway Guard Turrets
+      Triple(8.3f, 12.0f, "laser"),
+      Triple(15.7f, 12.0f, "laser"),
+      Triple(12.0f, 8.3f, "tesla"),
+      Triple(12.0f, 15.7f, "kinetic"),
+      // Outer 8 Sections Defense Perimeter Turrets
+      Triple(4.0f, 4.0f, "tesla"),
+      Triple(12.0f, 3.8f, "laser"),
+      Triple(20.0f, 4.0f, "diamond_rail"),
+      Triple(4.0f, 12.0f, "kinetic"),
+      Triple(20.0f, 12.0f, "laser"),
+      Triple(4.0f, 20.0f, "tesla"),
+      Triple(12.0f, 20.0f, "kinetic"),
+      Triple(20.0f, 20.0f, "diamond_rail"),
+    )
+    turretSpecs.forEachIndexed { idx, (tx, ty, tKind) ->
+      val secCol = Color(sectionAt(tx, ty).accentHex)
+      val tCol = when (tKind) {
+        "diamond_rail" -> Color(0xFF40C4FF)
+        "laser" -> Color(0xFFFF3D71)
+        "tesla" -> Color(0xFF00E5FF)
+        else -> secCol
+      }
+      defenseTurrets.add(
+        ArenaDefenseTurret(
+          id = "turret_$idx",
+          label = "${tKind.replace('_', ' ').uppercase()} TURRET #${idx + 1}",
+          x = tx,
+          y = ty,
+          turretKind = tKind,
+          accentColor = tCol,
+          range = 1.65f + (baseTurretTier * 0.04f),
+          fireRateTicks = turretRate,
+          fireCdTicks = (idx % 5) * 4f,
+          baseDamage = turretDmg,
+        )
+      )
+    }
+    hudTurretCount = defenseTurrets.size
   }
 
   private fun setupVerdanskInteractiveWorld() {
@@ -1430,6 +1784,8 @@ class ArenaSimState(
         Triple("Library Resonance Study", "$areaTitle TARDIS Alcove", "Dialer Safe Chamber")
       world.id == "aegis_starblade" ->
         Triple("Kyber Meditation Alcove", "$areaTitle Hangar Refuge", "Clone Command Pod")
+      world.id == "sector_star_wars_nexus" ->
+        Triple("Jedi Council Sanctuary", "Hoth Echo Command", "Mos Eisley Cantina Pad")
       world.id == "ship_of_heroes_apotheosis" ->
         Triple("Justice Medical Bay", "$areaTitle Cadet Sanctuary", "Promenade Safe Zone")
       world.id == "hellbreaker_citadel" ->
@@ -1447,6 +1803,8 @@ class ArenaSimState(
         listOf("Runic Forge Anvil", "Cleric Crimson Altar", "Mimic Quiver Chest", "Abyssal Enchant Pedestal", "Goblin Supply Sack", "Soul Tonic Fountain")
       isBo3Map ->
         listOf("BO3 Pack-a-Punch Machine", "Der Wunderfizz Perks", "Max Ammo Wall Crate", "Aether Pack Station", "Mystery Box Resupply", "Juggernog & Speed Cola")
+      world.id == "sector_star_wars_nexus" ->
+        listOf("Lightsaber Kyber Forge", "Blue Milk Cantina Tap", "Beskar Armory Crate", "Mustafar Hilt Foundry", "Republic Munitions Pod", "Jedi Temple Dispensary")
       world.id == "gotham_arkham" ->
         listOf("Wayne Tech Workbench", "Arkham Detective Rig", "Utility Belt Resupply", "Batcave Outer Forge", "Grapnel Ammo Cache", "Batsuit Upgrade Rack")
       world.id == "spiderverse_queens" ->
@@ -1474,7 +1832,7 @@ class ArenaSimState(
     // 2. Interactive Pack-a-Punch, Perk Machines & Ammo Crates across Center & Outer Sections
     worldStations.add(ArenaWorldStation("st_pap_main", ARENA_CENTER + 0.34f, ARENA_CENTER + 0.16f, ArenaStationKind.PACK_A_PUNCH, papMain))
     worldStations.add(ArenaWorldStation("st_perk_jugg", ARENA_CENTER - 0.34f, ARENA_CENTER - 0.30f, ArenaStationKind.PERK_MACHINE, perkMain))
-    worldStations.add(ArenaWorldStation("st_ammo_1", ARENA_CENTER + 0.30f, ARENA_CENTER - 0.32f, ArenaStationKind.AMMO_CRATE, ammoMain))
+    worldStations.add(ArenaWorldStation("st_ammo_1", ARENA_CENTER + 0.22f, ARENA_CENTER - 0.14f, ArenaStationKind.AMMO_CRATE, ammoMain))
     worldStations.add(ArenaWorldStation("st_pap_east", 20.1f, 12.0f, ArenaStationKind.PACK_A_PUNCH, papOuter))
     worldStations.add(ArenaWorldStation("st_ammo_south", 12.1f, 20.4f, ArenaStationKind.AMMO_CRATE, ammoOuter))
     worldStations.add(ArenaWorldStation("st_perk_north", 12.0f, 5.2f, ArenaStationKind.PERK_MACHINE, perkOuter))
@@ -1531,6 +1889,40 @@ class ArenaSimState(
       collectibles.add(ArenaCollectible(cx, cy + 0.04f, ArenaCollectibleKind.BLAST_CORE, subId = core.id, amount = 1L, color = Color(core.colorHex)))
       val outfit = allOutfits[(idx * 5) % allOutfits.size]
       collectibles.add(ArenaCollectible(cx, cy - 0.05f, ArenaCollectibleKind.CHARACTER_SHARD, subId = outfit.id, amount = if (isHeroFrontier) 2L else 1L, color = Color(outfit.primaryHex)))
+      val resPair = com.example.data.model.MultiverseSystemsCatalog.environmentalResourceSpecs[idx % com.example.data.model.MultiverseSystemsCatalog.environmentalResourceSpecs.size]
+      collectibles.add(ArenaCollectible(cx - 0.06f, cy + 0.05f, ArenaCollectibleKind.ENV_RESOURCE, subId = resPair.first, amount = 4L))
+      val shardPair = com.example.data.model.MultiverseSystemsCatalog.systemShardDomains[idx % com.example.data.model.MultiverseSystemsCatalog.systemShardDomains.size]
+      collectibles.add(ArenaCollectible(cx + 0.06f, cy - 0.05f, ArenaCollectibleKind.SYSTEM_SHARD, subId = shardPair.first, amount = 3L))
+    }
+    // Perimeter & Base Citadel starter Gold, Diamonds, TUUCash & Crystal Nodes
+    val isBankVaultArea = progression.activeAreaId.contains("bank") || progression.activeAreaId.contains("vault")
+    collectibles.add(ArenaCollectible(baseX - 0.14f, baseY - 0.10f, ArenaCollectibleKind.GOLD_COIN, amount = if (isBankVaultArea) 280L else 95L))
+    collectibles.add(ArenaCollectible(baseX + 0.14f, baseY - 0.10f, ArenaCollectibleKind.DIAMOND_GEM, amount = if (isBankVaultArea) 75L else 28L))
+    collectibles.add(ArenaCollectible(baseX, baseY - 0.16f, ArenaCollectibleKind.TUU_CASH, amount = if (isBankVaultArea) 900L else 320L))
+    collectibles.add(ArenaCollectible(baseX + 0.16f, baseY + 0.12f, ArenaCollectibleKind.CRYSTAL_NODE, subId = "kyber_cache", amount = 1L))
+    // Spawn Courtyard Bank & Vault Loot Caches + Outer Bank (SW) & Vault (SE) caches
+    collectibles.add(ArenaCollectible(ARENA_CENTER - 0.48f, ARENA_CENTER - 0.14f, ArenaCollectibleKind.TUU_CASH, amount = 450L))
+    collectibles.add(ArenaCollectible(ARENA_CENTER - 0.42f, ARENA_CENTER - 0.10f, ArenaCollectibleKind.GOLD_COIN, amount = 180L))
+    collectibles.add(ArenaCollectible(ARENA_CENTER - 0.48f, ARENA_CENTER + 0.44f, ArenaCollectibleKind.DIAMOND_GEM, amount = 45L))
+    collectibles.add(ArenaCollectible(ARENA_CENTER - 0.40f, ARENA_CENTER + 0.44f, ArenaCollectibleKind.TUU_CASH, amount = 400L))
+    collectibles.add(ArenaCollectible(3.9f, 19.8f, ArenaCollectibleKind.TUU_CASH, amount = 450L))
+    collectibles.add(ArenaCollectible(3.8f, 19.6f, ArenaCollectibleKind.GOLD_COIN, amount = 180L))
+    collectibles.add(ArenaCollectible(19.9f, 19.8f, ArenaCollectibleKind.DIAMOND_GEM, amount = 42L))
+    collectibles.add(ArenaCollectible(19.7f, 19.6f, ArenaCollectibleKind.TUU_CASH, amount = 400L))
+    if (isBankVaultArea) {
+      val vaultSpots = listOf(
+        Pair(ARENA_CENTER + 0.45f, ARENA_CENTER + 0.45f),
+        Pair(ARENA_CENTER - 0.45f, ARENA_CENTER + 0.45f),
+        Pair(12.0f, 4.2f),
+        Pair(20.0f, 12.0f),
+        Pair(4.0f, 12.0f),
+        Pair(12.0f, 20.0f),
+      )
+      vaultSpots.forEachIndexed { vIdx, (vx, vy) ->
+        collectibles.add(ArenaCollectible(vx, vy, ArenaCollectibleKind.DIAMOND_GEM, amount = 45L))
+        collectibles.add(ArenaCollectible(vx + 0.06f, vy, ArenaCollectibleKind.TUU_CASH, amount = 550L))
+        if (vIdx % 2 == 0) collectibles.add(ArenaCollectible(vx - 0.06f, vy, ArenaCollectibleKind.GOLD_COIN, amount = 220L))
+      }
     }
     // Courtyard, Hero Patrol & Hero Frontier bonus character hunt shards
     val shardCount = when {
@@ -1800,6 +2192,15 @@ class ArenaSimState(
     catsFound = catsFoundCount,
     lootCratesOpened = lootCratesOpenedCount,
     recruitedOutfitIds = recruitedOutfitIdsList.toList(),
+    goldEarned = goldEarned,
+    diamondsEarned = diamondsEarned,
+    tuuCashEarned = tuuCashEarned,
+    environmentalResourcesEarned = envResourcesEarned.toMap(),
+    systemShardsEarned = systemShardsEarned.toMap(),
+    magicCastsCount = magicCastsCount,
+    baseDefenseWon = baseDefenseWon,
+    diamondsSpent = diamondsSpentInMatch,
+    tuuCashSpent = tuuCashSpentInMatch,
   )
 
   private fun addSparkIfAllowed(x: Float, y: Float, color: Color, life: Float) {
@@ -1862,13 +2263,16 @@ class ArenaSimState(
     val customMaps = progression.customGameMaps
     val ngPlusSpawnBoost = 1f + ngPlusSpec.tier * 0.12f
     val customSpawnBoost = cm.effectiveSpawnCountMultFor(activeArea, customMaps)
-    val count = (rawCount * lc.enemyDensityMultiplier.coerceIn(0.75f, 2.5f) * ngPlusSpawnBoost * customSpawnBoost).roundToInt().coerceIn(8, 72)
+    val overchargeOn = progression.magicState.unlocked && progression.magicState.overchargeDifficultyEnabled
+    val magicDiffFactor = if (overchargeOn) progression.magicState.difficultyScalingFactor.coerceIn(1.0f, 3.0f) else 1.0f
+    val overchargeCountBonus = if (overchargeOn) 1f + (magicDiffFactor - 1f) * 0.35f else 1.0f
+    val count = (rawCount * lc.enemyDensityMultiplier.coerceIn(0.75f, 2.5f) * ngPlusSpawnBoost * customSpawnBoost * overchargeCountBonus).roundToInt().coerceIn(8, 80)
     val roundHpMult = 1.0f + (w - 1L).coerceAtLeast(0L) * 0.22f + (w * w * 0.02f)
     val roundArmorMult = 1.0f + (w - 1L).coerceAtLeast(0L) * 0.10f
     val customHpScale = cm.effectiveHostileHpMultFor(activeArea, customMaps)
     val customSpeedScale = cm.effectiveEnemySpeedMultFor(activeArea, customMaps)
-    val totalHpScale = diffTier.enemyHpScale * collectionDifficulty.enemyHpScale * ngPlusSpec.enemyHpScale * customHpScale
-    val totalSpeedScale = diffTier.enemySpeedScale * collectionDifficulty.enemySpeedScale * ngPlusSpec.enemySpeedScale * customSpeedScale
+    val totalHpScale = diffTier.enemyHpScale * collectionDifficulty.enemyHpScale * ngPlusSpec.enemyHpScale * customHpScale * magicDiffFactor
+    val totalSpeedScale = diffTier.enemySpeedScale * collectionDifficulty.enemySpeedScale * ngPlusSpec.enemySpeedScale * customSpeedScale * (1f + (magicDiffFactor - 1f) * 0.20f)
     val playerBonusScale = loadout.playerBonusHealthScale.coerceAtLeast(1.0f)
     val armorBonusScale = 1f + (playerBonusScale - 1f) * 0.35f
 
@@ -1885,8 +2289,8 @@ class ArenaSimState(
         chooseArchetype(world.id, w, i)
       }
       val archHpBonus = when (archetype) {
-        "mech", "dup_conduit", "ultron_sentry" -> 2
-        "blackwatch", "necromorph", "symbiote_stalker", "blackgate_enforcer" -> 1
+        "mech", "dup_conduit", "ultron_sentry", "super_battle_droid" -> 2
+        "blackwatch", "necromorph", "symbiote_stalker", "blackgate_enforcer", "beskar_mandalorian", "sith_acolyte" -> 1
         else -> 0
       }
       val rawHp = ((4 + w.toInt() * 2 + archHpBonus * 2 + if (isElite) 6 else 0) * roundHpMult * totalHpScale * playerBonusScale)
@@ -1894,7 +2298,7 @@ class ArenaSimState(
         .coerceAtLeast(4)
       val baseHp = if (lc.instagibMutator) 1 else rawHp
       val hasArmorUnit = isElite ||
-        archetype in setOf("mech", "dup_conduit", "ultron_sentry", "blackgate_enforcer") ||
+        archetype in setOf("mech", "dup_conduit", "ultron_sentry", "blackgate_enforcer", "super_battle_droid", "beskar_mandalorian") ||
         (w >= 3L && i % 4 == 0) ||
         cm.shouldReinforceArmor(activeArea, isElite = isElite, userCustomMaps = customMaps)
       val rawArmor = if (lc.instagibMutator || !hasArmorUnit) 0 else {
@@ -1904,8 +2308,8 @@ class ArenaSimState(
           .coerceAtLeast(1)
       }
       val baseSpd = when (archetype) {
-        "rusher", "water_hive_swarm", "rift_phantom", "symbiote_stalker", "oscorp_goblin_drone" -> (0.0017f + w * 0.00016f).coerceAtMost(0.0038f)
-        "mech", "dup_conduit", "clockwork_automaton", "blackgate_enforcer" -> (0.0008f + w * 0.00010f).coerceAtMost(0.0020f)
+        "rusher", "water_hive_swarm", "rift_phantom", "symbiote_stalker", "oscorp_goblin_drone", "sith_acolyte" -> (0.0017f + w * 0.00016f).coerceAtMost(0.0038f)
+        "mech", "dup_conduit", "clockwork_automaton", "blackgate_enforcer", "super_battle_droid" -> (0.0008f + w * 0.00010f).coerceAtMost(0.0020f)
         else -> (0.00105f + w * 0.00014f).coerceAtMost(0.0030f)
       }
       val spd = baseSpd * totalSpeedScale
@@ -1996,6 +2400,12 @@ class ArenaSimState(
         "blacklight_conduit" -> if (w % 2L != 0L) "boss_hydra" to "WATER HYDRA ALPHA" else "boss_mech" to "BLACKWATCH SUPER-HUNTER"
         "hellbreaker_citadel" -> if (w % 2L == 0L) "boss_mech" to "ASSAULT MECH TITAN" else "boss_croc" to "KILLER CROC JUGGERNAUT"
         "aegis_starblade" -> "boss_croc" to "COSMIC STARBLADE DREADNOUGHT"
+        "sector_star_wars_nexus" -> when ((w % 4L).toInt()) {
+          1 -> "boss_vader" to "DARTH VADER SITH LORD"
+          2 -> "boss_mech" to "GENERAL GRIEVOUS"
+          3 -> "boss_hydra" to "EMPEROR PALPATINE"
+          else -> "boss_bane" to "KYLO REN SUPREME KNIGHT"
+        }
         "chrono_vault" -> "boss_hydra" to "CHRONO RIFT WARDEN"
         "gotham_arkham" -> if (w % 2L != 0L) "boss_bane" to "BANE ARKHAM TITAN" else "boss_croc" to "KILLER CROC JUGGERNAUT"
         "spiderverse_queens" -> if (w % 2L != 0L) "boss_venom" to "VENOM SYMBIOTE PRIME" else "boss_goblin" to "GREEN GOBLIN SKY-OVERLORD"
@@ -2010,8 +2420,11 @@ class ArenaSimState(
     val lc = progression.levelCustom
     val cm = progression.collectionCustomMode
     val activeArea = progression.activeAreaId
-    val totalHpScale = lc.worldDifficultyTier.enemyHpScale * collectionDifficulty.enemyHpScale * ngPlusSpec.enemyHpScale * cm.effectiveHostileHpMultFor(activeArea, progression.customGameMaps)
-    val totalSpeedScale = lc.worldDifficultyTier.enemySpeedScale * collectionDifficulty.enemySpeedScale * ngPlusSpec.enemySpeedScale * cm.effectiveEnemySpeedMultFor(activeArea, progression.customGameMaps)
+    val bossOvercharge = if (progression.magicState.unlocked && progression.magicState.overchargeDifficultyEnabled) {
+      progression.magicState.difficultyScalingFactor.coerceIn(1.0f, 3.0f)
+    } else 1.0f
+    val totalHpScale = lc.worldDifficultyTier.enemyHpScale * collectionDifficulty.enemyHpScale * ngPlusSpec.enemyHpScale * cm.effectiveHostileHpMultFor(activeArea, progression.customGameMaps) * bossOvercharge
+    val totalSpeedScale = lc.worldDifficultyTier.enemySpeedScale * collectionDifficulty.enemySpeedScale * ngPlusSpec.enemySpeedScale * cm.effectiveEnemySpeedMultFor(activeArea, progression.customGameMaps) * (1f + (bossOvercharge - 1f) * 0.15f)
     val roundHpMult = 1.0f + (w - 1L).coerceAtLeast(0L) * 0.28f + (w * w * 0.03f)
     val roundArmorMult = 1.0f + (w - 1L).coerceAtLeast(0L) * 0.16f
     val playerBonusScale = loadout.playerBonusHealthScale.coerceAtLeast(1.0f)
@@ -2109,6 +2522,12 @@ class ArenaSimState(
         1 -> "trooper"
         2 -> "mech"
         else -> "rusher"
+      }
+      "sector_star_wars_nexus" -> when (index % 4) {
+        0 -> "stormtrooper"
+        1 -> "sith_acolyte"
+        2 -> "super_battle_droid"
+        else -> "beskar_mandalorian"
       }
       "gotham_arkham" -> when (index % 4) {
         0 -> "blackgate_enforcer"
@@ -2250,32 +2669,39 @@ class ArenaSimState(
     }
   }
 
-  private fun packDamageMultiplier(tier: Int): Int = when (tier.coerceIn(1, 25)) {
-    1 -> 1
-    2 -> 2
-    3 -> 4
-    4 -> 6
-    5 -> 9
-    6 -> 12
-    7 -> 16
-    8 -> 20
-    9 -> 25
-    10 -> 32
-    11 -> 40
-    12 -> 50
-    13 -> 62
-    14 -> 76
-    15 -> 92
-    16 -> 112
-    17 -> 135
-    18 -> 162
-    19 -> 195
-    20 -> 232
-    21 -> 275
-    22 -> 325
-    23 -> 380
-    24 -> 445
-    else -> 520
+  private fun packDamageMultiplier(tier: Int): Int {
+    val t = tier.coerceIn(1, PowerTier.MAX_TIER)
+    return when (t) {
+      1 -> 1
+      2 -> 2
+      3 -> 4
+      4 -> 6
+      5 -> 9
+      6 -> 12
+      7 -> 16
+      8 -> 20
+      9 -> 25
+      10 -> 32
+      11 -> 40
+      12 -> 50
+      13 -> 62
+      14 -> 76
+      15 -> 92
+      16 -> 112
+      17 -> 135
+      18 -> 162
+      19 -> 195
+      20 -> 232
+      21 -> 275
+      22 -> 325
+      23 -> 380
+      24 -> 445
+      25 -> 520
+      else -> {
+        val over = t - 25
+        520 + (over * 90) + (over * over * 7)
+      }
+    }
   }
 
   fun fireVolley(forceManual: Boolean = false) {
@@ -2285,7 +2711,7 @@ class ArenaSimState(
     }
     playerShotCounter++
     val baseAngle = atan2(aimY, aimX)
-    val packLevel = hudPackTier.coerceIn(1, 25)
+    val packLevel = hudPackTier.coerceIn(1, PowerTier.MAX_TIER)
     val wonder = activeWonderWeapon
     val shotDmgType = activeWeaponDamageType()
     val critBoost = if (progression.levelCustom.critSurgeMutator && playerShotCounter % 3 == 0) 2f else 1f
@@ -2485,7 +2911,7 @@ class ArenaSimState(
       return
     }
 
-    val shots = (loadout.multiShot + loadout.weaponExtraSpread + ((packLevel - 1) / 2).coerceAtMost(4) + if (overdriveTicks > 0f) 1 else 0).coerceAtMost(8)
+    val shots = (loadout.multiShot + loadout.weaponExtraSpread + inGameExtraShots + ((packLevel - 1) / 2).coerceAtMost(4) + if (overdriveTicks > 0f) 1 else 0).coerceAtMost(10)
     val spread = (if (shots > 4) 0.12f else 0.16f) * (if (hudCrouching) 0.55f else 1.0f)
     val packDamageMult = packDamageMultiplier(packLevel) + (progression.blastCoreLevel(BlastCoreColor.RED) - 1)
     val baseDmg = ((packLevel + loadout.weaponBonusDamage) * packDamageMult + if (overdriveTicks > 0f) 2 else 0)
@@ -2893,17 +3319,631 @@ class ArenaSimState(
 
   fun upgradePackAPunch() {
     if (hudRunEnded) return
-    if (hudPackTier < 25) {
+    if (hudPackTier < PowerTier.MAX_TIER) {
       hudPackTier++
       maxPackTierReached = maxOf(maxPackTierReached, hudPackTier)
       val roman = formatRoundRoman(hudPackTier.toLong())
       overdriveTicks = 240f
       pulseRingRadius = 0.05f
-      postCallout("PACK-A-PUNCH TIER $roman! (x${packDamageMultiplier(hudPackTier)} DAMAGE)")
+      postCallout("PACK-A-PUNCH TIER $roman ($hudPackTier/${PowerTier.MAX_TIER})! (x${packDamageMultiplier(hudPackTier)} DMG)")
     } else {
-      hudShield = (hudShield + 75).coerceAtMost(loadout.maxShield)
-      postCallout("MULTIVERSAL PACK TIER XXV OVERDRIVE! (+75 ARMOR)")
+      hudShield = (hudShield + 100).coerceAtMost(loadout.maxShield)
+      postCallout("MULTIVERSAL PACK TIER LX (${PowerTier.MAX_TIER}) OVERDRIVE! (+100 ARMOR)")
     }
+  }
+
+  fun triggerSpiritThoughtHeal() {
+    if (hudRunEnded || !loadout.canSpiritHeal || spiritHealCd > 0f) return
+    val outfitSpec = progression.activeOutfitSpec()
+    val cooldownSec = if (outfitSpec.id == "me_creator_prime" || outfitSpec.id == "creator_self") 5.5f else 8.5f
+    spiritHealCd = cooldownSec * 60f * loadout.skillDashCdMult
+    hudSpiritHealCdSec = cooldownSec.toInt().coerceAtLeast(1)
+    val healAmt = loadout.spiritHealAmount
+    hudShield = (hudShield + healAmt).coerceAtMost(loadout.maxShield)
+    playerBurnTicks = 0f
+    playerCryoSlowTicks = 0f
+    spiritHealsCount++
+    spiritWaveRadius = 0.04f
+    pulseRingRadius = 0.05f
+    val waveColor = Color(0xFF00E676)
+    val scoreMult = if (doubleEssenceTicks > 0f) 2L else 1L
+    val staggerRadSq = 0.42f * 0.42f
+    val iter = hostiles.iterator()
+    while (iter.hasNext()) {
+      val h = iter.next()
+      val dx = h.x - playerX
+      val dy = h.y - playerY
+      val dSq = dx * dx + dy * dy
+      if (dSq <= staggerRadSq) {
+        val d = sqrt(dSq).coerceAtLeast(0.01f)
+        h.knockVelX += (dx / d) * 0.016f
+        h.knockVelY += (dy / d) * 0.016f
+        h.hitStaggerTicks = maxOf(h.hitStaggerTicks, 32f)
+        applyDamageToHostile(h, (4 + hudPackTier / 4).coerceAtLeast(4), ArenaDamageType.VOID)
+        addSparkIfAllowed(h.x, h.y, waveColor, 16f)
+        if (h.hp <= 0) {
+          iter.remove()
+          onHostileDefeated(h, scoreMult)
+        }
+      }
+    }
+    postCallout("THOUGHT & SPIRIT HEAL +$healAmt ARMOR! (STATUS PURGED)")
+  }
+
+  fun cycleMagicSpell() {
+    val unlocked = progression.magicState.unlockedSpells.toList()
+      .ifEmpty { com.example.data.model.MultiverseSystemsCatalog.magicSpells.map { it.id } }
+    val curIdx = unlocked.indexOf(hudActiveSpellId).coerceAtLeast(0)
+    val nextId = unlocked[(curIdx + 1) % unlocked.size]
+    hudActiveSpellId = nextId
+    val spec = com.example.data.model.MultiverseSystemsCatalog.spellById(nextId)
+    postCallout("SPELL ATTUNED: ${spec.name.uppercase()} (${spec.manaCost.toInt()} MP)")
+  }
+
+  fun triggerMagicSpell(spellOverrideId: String? = null) {
+    if (hudRunEnded || !progression.magicState.unlocked) return
+    if (magicCd > 0f) {
+      postCallout("MAGIC RECHARGING (${hudMagicCdSec}s)")
+      return
+    }
+    val spellId = spellOverrideId ?: hudActiveSpellId
+    val spec = com.example.data.model.MultiverseSystemsCatalog.spellById(spellId)
+    if (manaCurrent < spec.manaCost) {
+      postCallout("LOW MANA (${manaCurrent.toInt()}/${spec.manaCost.toInt()} MP NEEDED)")
+      return
+    }
+    manaCurrent = (manaCurrent - spec.manaCost).coerceAtLeast(0f)
+    hudMana = manaCurrent
+    val spellTier = progression.magicState.spellTier(spellId)
+    magicCd = spec.cooldownTicks * loadout.magicCooldownMult * loadout.skillDashCdMult
+    hudMagicCdSec = (magicCd / 60f).toInt().coerceAtLeast(1)
+    magicCastsCount++
+    magicWaveRadius = 0.05f
+    magicWaveColor = Color(spec.colorHex)
+    pulseRingRadius = 0.06f
+
+    val spellPower = ((10 + spellTier * 3 + hudPackTier) * loadout.magicDamageMult * inGameMagicDmgMult * loadout.resonance.damageMult).roundToInt().coerceAtLeast(8)
+    val scoreMult = if (doubleEssenceTicks > 0f) 2L else 1L
+    when (spec.id) {
+      "spell_chrono_stasis" -> {
+        stasisTicks = maxOf(stasisTicks, 200f)
+        overdriveTicks = maxOf(overdriveTicks, 180f)
+        for (i in 0 until hostiles.size) {
+          val h = hostiles.getOrNull(i) ?: continue
+          if ((h.x - playerX) * (h.x - playerX) + (h.y - playerY) * (h.y - playerY) <= 0.85f * 0.85f) {
+            h.cryoSlowTicks = maxOf(h.cryoSlowTicks, 220f)
+            applyDamageToHostile(h, spellPower / 2, ArenaDamageType.CRYO)
+            addSparkIfAllowed(h.x, h.y, magicWaveColor, 18f)
+          }
+        }
+        postCallout("CHRONO STASIS CAST! TIME FROZEN + OVERDRIVE")
+      }
+      "spell_soul_heal" -> {
+        val mHeal = (65 + spellTier * 14 + loadout.spiritHealAmount / 2).coerceAtMost(loadout.maxShield)
+        hudShield = (hudShield + mHeal).coerceAtMost(loadout.maxShield)
+        playerBurnTicks = 0f
+        playerCryoSlowTicks = 0f
+        spiritWaveRadius = 0.05f
+        postCallout("SOUL & SPIRIT MENDING! +$mHeal ARMOR")
+      }
+      "spell_arcane_barrage" -> {
+        for (i in 0 until 12) {
+          val ang = (i / 12f) * 2f * PI.toFloat()
+          addBoltIfAllowed(
+            ArenaBolt(
+              x = playerX,
+              y = playerY,
+              vx = cos(ang) * 0.028f,
+              vy = sin(ang) * 0.028f,
+              life = 68f,
+              isSupercharged = true,
+              pierceLeft = 3,
+              damage = spellPower,
+              color = magicWaveColor,
+              damageType = ArenaDamageType.VOID,
+            )
+          )
+        }
+        postCallout("ARCANE PRISM BARRAGE! (12 HOMING BOLTS)")
+      }
+      "spell_kyber_storm" -> {
+        var struck = 0
+        val iter = hostiles.iterator()
+        while (iter.hasNext() && struck < 14) {
+          val h = iter.next()
+          val dx = h.x - playerX
+          val dy = h.y - playerY
+          if (dx * dx + dy * dy <= 0.90f * 0.90f) {
+            applyDamageToHostile(h, spellPower, ArenaDamageType.ENERGY)
+            addArcIfAllowed(playerX, playerY, h.x, h.y, magicWaveColor, 24f)
+            struck++
+            if (h.hp <= 0) {
+              iter.remove()
+              onHostileDefeated(h, scoreMult)
+            }
+          }
+        }
+        postCallout("KYBER FORCE TEMPEST! ($struck FOES STRUCK)")
+      }
+      else -> {
+        val novaRadSq = 0.65f * 0.65f
+        val iter = hostiles.iterator()
+        var hit = 0
+        while (iter.hasNext()) {
+          val h = iter.next()
+          val dx = h.x - playerX
+          val dy = h.y - playerY
+          if (dx * dx + dy * dy <= novaRadSq) {
+            if (h.armor > 0) h.armor = (h.armor - 6).coerceAtLeast(0)
+            applyDamageToHostile(h, spellPower, ArenaDamageType.VOID)
+            addSparkIfAllowed(h.x, h.y, magicWaveColor, 20f)
+            hit++
+            if (h.hp <= 0) {
+              iter.remove()
+              onHostileDefeated(h, scoreMult)
+            }
+          }
+        }
+        postCallout("ABYSSAL NOVA CAST! ($hit FOES SHATTERED)")
+      }
+    }
+  }
+
+  fun triggerAegisBarrier(autoProc: Boolean = false) {
+    if (hudRunEnded || aegisDomeCd > 0f) return
+    val domeRank = inGameUpgradeRanks["upg_bubble_dome"] ?: 0
+    val duration = 240f + domeRank * 35f
+    val cooldown = (540f * (1f - domeRank * 0.12f).coerceAtLeast(0.45f)) * loadout.skillDashCdMult
+    aegisDomeTicks = maxOf(aegisDomeTicks, duration)
+    aegisDomeCd = cooldown
+    hudAegisDomeActive = true
+    hudAegisDomeCdSec = (cooldown / 60f).toInt().coerceAtLeast(1)
+    hudArmorPlates = (hudArmorPlates + 1).coerceAtMost(hudMaxArmorPlates)
+    pulseRingRadius = 0.06f
+    val clearSq = 0.32f * 0.32f
+    bolts.removeAll { b ->
+      b.isEnemyShot && ((b.x - playerX) * (b.x - playerX) + (b.y - playerY) * (b.y - playerY)) <= clearSq
+    }
+    for (i in 0 until hostiles.size) {
+      val h = hostiles.getOrNull(i) ?: continue
+      val dx = h.x - playerX
+      val dy = h.y - playerY
+      val d = sqrt(dx * dx + dy * dy).coerceAtLeast(0.01f)
+      if (d <= 0.34f) {
+        h.knockVelX += (dx / d) * 0.020f
+        h.knockVelY += (dy / d) * 0.020f
+        h.hitStaggerTicks = maxOf(h.hitStaggerTicks, 24f)
+      }
+    }
+    postCallout(
+      if (autoProc) "EMERGENCY FORCEFIELD AUTO-DEPLOYED! (+1 PLATE)"
+      else "TITAN BUBBLE FORCEFIELD ACTIVE! (-85% DMG & +1 PLATE)"
+    )
+  }
+
+  fun grantSurvivalXp(baseXp: Long) {
+    if (baseXp <= 0L) return
+    val gained = (baseXp * inGameXpMult * hudEpoch.xpBonusMult).roundToInt().toLong().coerceAtLeast(1L)
+    hudMatchXp += gained
+    while (hudMatchXp >= hudMatchXpNext) {
+      hudMatchXp -= hudMatchXpNext
+      hudMatchLevel++
+      hudMatchXpNext = (100L + hudMatchLevel * 65L)
+      hudArmorPlates = (hudArmorPlates + 1).coerceAtMost(hudMaxArmorPlates)
+      hudShield = (hudShield + 28).coerceAtMost(effectiveMaxShield())
+      hudPendingDraftCount++
+      if (hudPendingDraftChoices.isEmpty()) {
+        rollInGameUpgradeDraft()
+      }
+      postCallout("SURVIVAL LV.$hudMatchLevel! DRAFT READY & +1 ARMOR PLATE")
+    }
+  }
+
+  fun rollInGameUpgradeDraft() {
+    val available = InGameUpgradeCatalog.upgrades.filter { spec ->
+      val cur = inGameUpgradeRanks[spec.id] ?: 0
+      if (spec.id == "upg_aoe_epoch" && hudEpoch.next() == null) false
+      else cur < spec.maxStacks
+    }
+    val pool = available.ifEmpty { InGameUpgradeCatalog.upgrades }
+    hudPendingDraftChoices = pool.shuffled().take(3)
+  }
+
+  fun selectInGameUpgrade(upgradeId: String) {
+    val spec = InGameUpgradeCatalog.byId(upgradeId) ?: return
+    val nextRank = ((inGameUpgradeRanks[upgradeId] ?: 0) + 1).coerceAtMost(spec.maxStacks)
+    inGameUpgradeRanks[upgradeId] = nextRank
+    when (upgradeId) {
+      "upg_orbital_blades" -> {
+        hudOrbitalBladesCount = (hudOrbitalBladesCount + 2).coerceAtMost(12)
+      }
+      "upg_bubble_dome" -> {
+        hudMaxArmorPlates = (hudMaxArmorPlates + 2).coerceAtMost(14)
+        hudArmorPlates = hudMaxArmorPlates
+        aegisDomeCd = 0f
+        triggerAegisBarrier()
+      }
+      "upg_doa_firepower" -> {
+        inGameExtraShots = (inGameExtraShots + 1).coerceAtMost(5)
+        inGameFireRateMult = (inGameFireRateMult + 0.20f).coerceAtMost(2.8f)
+      }
+      "upg_doa_fortitude" -> {
+        inGameBonusMaxShield += 55
+        inGameDmgReduction = (inGameDmgReduction + 0.08f).coerceAtMost(0.65f)
+        hudShield = (hudShield + 60).coerceAtMost(effectiveMaxShield())
+      }
+      "upg_doa_feet" -> {
+        inGameMoveMult = (inGameMoveMult + 0.16f).coerceAtMost(2.0f)
+        dashCd = 0f
+      }
+      "upg_doa_wingman" -> {
+        wingmanLevel = (wingmanLevel + 1).coerceAtMost(5)
+        hudWingmanLevel = wingmanLevel
+      }
+      "upg_aoe_epoch" -> {
+        val nxt = hudEpoch.next()
+        if (nxt != null) {
+          hudEpoch = nxt
+          hudShield = (hudShield + 50).coerceAtMost(effectiveMaxShield())
+        }
+      }
+      "upg_aoe_garrison" -> {
+        hudBaseHp = (hudBaseHp + (hudBaseMaxHp * 0.40f).roundToInt()).coerceAtMost(hudBaseMaxHp)
+        val ang = elapsedTicks * 0.2f
+        arenaBots.add(
+          ArenaBot(
+            id = "garrison_${elapsedTicks}_${arenaBots.size}",
+            callsign = "Garrison Guard ${arenaBots.size + 1}",
+            isAllied = true,
+            archetype = "mech",
+            color = Color(hudEpoch.accentHex),
+            x = playerX + cos(ang) * 0.18f,
+            y = playerY + sin(ang) * 0.18f,
+            hp = 180,
+            maxHp = 180,
+            fireCdTicks = 24f,
+            roamAngle = ang,
+          )
+        )
+        hudBotCount = arenaBots.size
+      }
+      "upg_tesla_coil" -> {
+        teslaLevel = (teslaLevel + 1).coerceAtMost(5)
+      }
+      "upg_vampiric_siphon" -> {
+        inGameSiphonPerKill += 5
+      }
+      "upg_pack_overclock" -> {
+        repeat(2) { if (hudPackTier < PowerTier.MAX_TIER) hudPackTier++ }
+        maxPackTierReached = maxOf(maxPackTierReached, hudPackTier)
+        inGameXpMult = (inGameXpMult + 0.20f).coerceAtMost(3.0f)
+      }
+      "upg_loot_magnet" -> {
+        inGameVacuumBonus = (inGameVacuumBonus + 0.16f).coerceAtMost(0.85f)
+        inGameXpMult = (inGameXpMult + 0.25f).coerceAtMost(3.0f)
+      }
+      "upg_diamond_alchemist" -> {
+        inGameDiamondMult = (inGameDiamondMult + 1.5f).coerceAtMost(9.0f)
+        diamondsEarned += 250L
+        hudShield = (hudShield + 35).coerceAtMost(effectiveMaxShield())
+      }
+      "upg_diamond_resonance" -> {
+        inGameDiamondLaserLevel = (inGameDiamondLaserLevel + 1).coerceAtMost(5)
+      }
+      "upg_tuu_cash_syndicate" -> {
+        inGameTuuCashMult = (inGameTuuCashMult + 2.0f).coerceAtMost(10.0f)
+        tuuCashEarned += 5000L
+      }
+      "upg_tuu_airstrike" -> {
+        inGameTuuAirstrikeLevel = (inGameTuuAirstrikeLevel + 1).coerceAtMost(5)
+      }
+      "upg_arcane_sorcery" -> {
+        manaMax = (manaMax + 60f).coerceAtMost(400f)
+        manaCurrent = manaMax
+        inGameMagicDmgMult = (inGameMagicDmgMult + 0.45f).coerceAtMost(4.0f)
+        hudMana = manaCurrent
+        hudManaMax = manaMax
+      }
+      "upg_celestial_cataclysm" -> {
+        inGameCataclysmLevel = (inGameCataclysmLevel + 1).coerceAtMost(5)
+      }
+    }
+    hudPendingDraftCount = (hudPendingDraftCount - 1).coerceAtLeast(0)
+    if (hudPendingDraftCount > 0) {
+      rollInGameUpgradeDraft()
+    } else {
+      hudPendingDraftChoices = emptyList()
+    }
+    postCallout("UPGRADE EQUIPPED: ${spec.title.uppercase()} (LV.$nextRank)")
+  }
+
+  fun buyFieldUpgrade(kind: String): Boolean {
+    if (hudRunEnded) return false
+    when (kind) {
+      "plate_refill" -> {
+        if (hudScore < 150L) {
+          postCallout("NEED 150 SCORE FOR ARMOR PLATE REFILL")
+          return false
+        }
+        hudScore -= 150L
+        hudArmorPlates = hudMaxArmorPlates
+        hudShield = (hudShield + 40).coerceAtMost(effectiveMaxShield())
+        postCallout("ARMOR PLATES REPLENISHED (${hudArmorPlates}/$hudMaxArmorPlates)!")
+        return true
+      }
+      "advance_epoch" -> {
+        val nxt = hudEpoch.next()
+        if (nxt == null) {
+          postCallout("ALREADY AT MULTIVERSAL EPOCH V!")
+          return false
+        }
+        val cost = 350L + (hudEpoch.tier * 150L)
+        if (hudScore < cost) {
+          postCallout("NEED $cost SCORE TO ADVANCE EPOCH")
+          return false
+        }
+        hudScore -= cost
+        hudEpoch = nxt
+        hudShield = (hudShield + 60).coerceAtMost(effectiveMaxShield())
+        pulseRingRadius = 0.06f
+        postCallout("ADVANCED TO ${nxt.label.uppercase()}! (+XP & +DEFENSE)")
+        return true
+      }
+      "draft_roll" -> {
+        val cost = 250L
+        if (hudScore < cost) {
+          postCallout("NEED $cost SCORE FOR FIELD UPGRADE DRAFT")
+          return false
+        }
+        hudScore -= cost
+        hudPendingDraftCount++
+        rollInGameUpgradeDraft()
+        postCallout("FIELD UPGRADE DRAFT READY!")
+        return true
+      }
+      "orbital_blade" -> {
+        val cost = 300L
+        if (hudScore < cost) {
+          postCallout("NEED $cost SCORE FOR SENTINEL ORBITAL BLADES")
+          return false
+        }
+        hudScore -= cost
+        hudOrbitalBladesCount = (hudOrbitalBladesCount + 1).coerceAtMost(12)
+        postCallout("SENTINEL ORBITAL BLADE FORGED ($hudOrbitalBladesCount ACTIVE)!")
+        return true
+      }
+      "magic_surge" -> {
+        val cost = 200L
+        if (hudScore < cost) {
+          postCallout("NEED $cost SCORE FOR ARCANE MAGIC SURGE")
+          return false
+        }
+        hudScore -= cost
+        manaCurrent = manaMax
+        hudMana = manaCurrent
+        triggerAegisBarrier()
+        pulseRingRadius = 0.08f
+        val hIter = hostiles.iterator()
+        while (hIter.hasNext()) {
+          val h = hIter.next()
+          val dx = h.x - playerX
+          val dy = h.y - playerY
+          if (dx * dx + dy * dy <= 0.35f * 0.35f) {
+            applyDamageToHostile(h, (180 * inGameMagicDmgMult).roundToInt(), ArenaDamageType.VOID)
+            addSparkIfAllowed(h.x, h.y, Color(0xFFE040FB), 16f)
+            if (h.hp <= 0) {
+              hIter.remove()
+              onHostileDefeated(h, if (doubleEssenceTicks > 0f) 2L else 1L)
+            }
+          }
+        }
+        postCallout("ARCANE MAGIC SURGE! 100% MANA REFILLED & NOVA UNLEASHED!")
+        return true
+      }
+      "diamond_harvest" -> {
+        val cost = 300L
+        if (hudScore < cost) {
+          postCallout("NEED $cost SCORE FOR DIAMOND CLUSTER DROP")
+          return false
+        }
+        hudScore -= cost
+        hudShield = (hudShield + 50).coerceAtMost(effectiveMaxShield())
+        for (i in 0 until 6) {
+          val ang = (i.toFloat() / 6f) * (2f * Math.PI.toFloat())
+          collectibles.add(
+            ArenaCollectible(
+              x = playerX + cos(ang) * 0.08f,
+              y = playerY + sin(ang) * 0.08f,
+              kind = ArenaCollectibleKind.DIAMOND_GEM,
+              amount = (25L * inGameDiamondMult).toLong().coerceAtLeast(25L),
+            )
+          )
+        }
+        postCallout("DIAMOND HARVEST DROP DEPLOYED (+150+ DIAMONDS & +50 SHIELD)!")
+        return true
+      }
+      "tuu_bounty" -> {
+        val cost = 220L
+        if (hudScore < cost) {
+          postCallout("NEED $cost SCORE FOR TUUCASH BOUNTY DROP")
+          return false
+        }
+        hudScore -= cost
+        for (i in 0 until 4) {
+          val ang = (i.toFloat() / 4f) * (2f * Math.PI.toFloat())
+          collectibles.add(
+            ArenaCollectible(
+              x = playerX + cos(ang) * 0.07f,
+              y = playerY + sin(ang) * 0.07f,
+              kind = ArenaCollectibleKind.TUU_CASH,
+              amount = (650L * inGameTuuCashMult).toLong().coerceAtLeast(650L),
+            )
+          )
+        }
+        postCallout("TUUCASH BOUNTY DROP SECURED (+2,600+ CASH)!")
+        return true
+      }
+      "deploy_turret_cash" -> {
+        val cashCost = 1200L
+        if (availableTuuCashInMatch() < cashCost) {
+          postCallout("NEED $cashCost TUUCASH FOR AUTO-TURRET")
+          return false
+        }
+        tuuCashSpentInMatch += cashCost
+        val kinds = listOf("kinetic", "laser", "tesla", "diamond_rail")
+        val k = kinds[defenseTurrets.size % kinds.size]
+        val tCol = when (k) {
+          "diamond_rail" -> Color(0xFF40C4FF)
+          "laser" -> Color(0xFFFF3D71)
+          "tesla" -> Color(0xFF00E5FF)
+          else -> Color(0xFF00E676)
+        }
+        defenseTurrets.add(
+          ArenaDefenseTurret(
+            id = "turret_field_${elapsedTicks}_${defenseTurrets.size}",
+            label = "DEPLOYED ${k.uppercase()} TURRET",
+            x = playerX + 0.08f,
+            y = playerY + 0.06f,
+            turretKind = k,
+            accentColor = tCol,
+            range = 1.9f,
+            fireRateTicks = 18f,
+            baseDamage = 10 + hudEpoch.tier * 3 + (hudPackTier / 4),
+          )
+        )
+        hudTurretCount = defenseTurrets.size
+        postCallout("TUUCASH DEPLOYED ${k.uppercase()} DEFENSE TURRET ($hudTurretCount ACTIVE)!")
+        return true
+      }
+      "tuu_airstrike_call" -> {
+        val cashCost = 1800L
+        if (availableTuuCashInMatch() < cashCost) {
+          postCallout("NEED $cashCost TUUCASH FOR GUNSHIP BARRAGE")
+          return false
+        }
+        tuuCashSpentInMatch += cashCost
+        pulseRingRadius = 0.12f
+        val hIter = hostiles.iterator()
+        while (hIter.hasNext()) {
+          val h = hIter.next()
+          if ((h.x - playerX) * (h.x - playerX) + (h.y - playerY) * (h.y - playerY) <= 1.6f * 1.6f) {
+            applyDamageToHostile(h, (240 * inGameMagicDmgMult).roundToInt(), ArenaDamageType.THERMAL)
+            addSparkIfAllowed(h.x, h.y, Color(0xFFFFAB40), 20f)
+            if (h.hp <= 0) {
+              hIter.remove()
+              onHostileDefeated(h, if (doubleEssenceTicks > 0f) 2L else 1L)
+            }
+          }
+        }
+        postCallout("TUUCASH GUNSHIP CARPET BOMBING EXECUTED!")
+        return true
+      }
+      "diamond_overclock" -> {
+        val dCost = 40L
+        if (availableDiamondsInMatch() < dCost) {
+          postCallout("NEED $dCost DIAMONDS FOR CITADEL OVERCLOCK")
+          return false
+        }
+        diamondsSpentInMatch += dCost
+        repeat(2) { if (hudPackTier < PowerTier.MAX_TIER) hudPackTier++ }
+        maxPackTierReached = maxOf(maxPackTierReached, hudPackTier)
+        inGameBonusMaxShield += 40
+        hudShield = effectiveMaxShield()
+        manaCurrent = manaMax
+        hudMana = manaCurrent
+        triggerAegisBarrier()
+        postCallout("DIAMOND OVERCLOCK! +2 PACK TIERS, FULL MANA & +40 MAX SHIELD!")
+        return true
+      }
+      "diamond_laser_overload" -> {
+        val dCost = 50L
+        if (availableDiamondsInMatch() < dCost) {
+          postCallout("NEED $dCost DIAMONDS FOR PRISM BEAM SWEEP")
+          return false
+        }
+        diamondsSpentInMatch += dCost
+        inGameDiamondLaserLevel = (inGameDiamondLaserLevel + 1).coerceAtMost(5)
+        val hIter = hostiles.iterator()
+        while (hIter.hasNext()) {
+          val h = hIter.next()
+          if ((h.x - playerX) * (h.x - playerX) + (h.y - playerY) * (h.y - playerY) <= 1.8f * 1.8f) {
+            applyDamageToHostile(h, 320, ArenaDamageType.ENERGY)
+            addArcIfAllowed(playerX, playerY, h.x, h.y, Color(0xFF40C4FF), 20f)
+            if (h.hp <= 0) {
+              hIter.remove()
+              onHostileDefeated(h, if (doubleEssenceTicks > 0f) 2L else 1L)
+            }
+          }
+        }
+        postCallout("DIAMOND PRISM BEAM OVERLOAD UNLEASHED (LV.$inGameDiamondLaserLevel)!")
+        return true
+      }
+    }
+    return false
+  }
+
+  fun damagePlayer(rawDmg: Int): Boolean {
+    if (hudRunEnded || modeId == "sandbox" || dashInvulnTicks > 0f) return false
+    val totalDr = (loadout.skillDamageReductionRatio + inGameDmgReduction + hudEpoch.defenseBonus).coerceIn(0f, 0.85f)
+    val domeFactor = if (aegisDomeTicks > 0f) 0.15f else 1.0f
+    var mitigated = (rawDmg * (1f - totalDr) * domeFactor).roundToInt().coerceAtLeast(1)
+    if (hudArmorPlates > 0 && aegisDomeTicks <= 0f) {
+      hudArmorPlates--
+      mitigated = (mitigated * 0.25f).roundToInt().coerceAtLeast(1)
+      addSparkIfAllowed(playerX, playerY, Color(0xFF38BDF8), 14f)
+    }
+    hudShield = (hudShield - mitigated).coerceAtLeast(0)
+    damageFlashTicks = if (liveSettings.reduceFlashes) 0f else 12f
+    if (hudDoaMultiplier > 1.0f) {
+      hudDoaMultiplier = (hudDoaMultiplier - 0.25f).coerceAtLeast(1.0f)
+    }
+    if (hudShield > 0 && hudShield <= effectiveMaxShield() / 4 && aegisDomeCd <= 0f) {
+      triggerAegisBarrier(autoProc = true)
+      if (inGameCataclysmLevel > 0) {
+        triggerMagicSpell()
+      }
+    }
+    if (hudShield <= 0) {
+      hudRunEnded = true
+    }
+    return true
+  }
+
+  fun triggerBaseDefenseRaid() {
+    if (hudRunEnded) return
+    if (hudBaseRaidActive) {
+      postCallout("BASE CITADEL SIEGE ALREADY ACTIVE! (${hudBaseRaidSecLeft}s)")
+      return
+    }
+    hudBaseRaidActive = true
+    baseRaidTicksLeft = 900f
+    hudBaseRaidSecLeft = 15
+    hudBaseHp = hudBaseMaxHp
+    playerX = (baseX - 0.14f).coerceIn(0.3f, ARENA_WORLD_SIZE - 0.3f)
+    playerY = (baseY + 0.05f).coerceIn(0.3f, ARENA_WORLD_SIZE - 0.3f)
+    camX = playerX - 0.5f
+    camY = playerY - 0.5f
+    val raiderCount = 6 + progression.playerBaseState.wallTier.coerceAtMost(8)
+    for (i in 0 until raiderCount) {
+      val ang = (i / raiderCount.toFloat()) * 2f * PI.toFloat()
+      val rx = (baseX + cos(ang) * 0.72f).coerceIn(0.3f, ARENA_WORLD_SIZE - 0.3f)
+      val ry = (baseY + sin(ang) * 0.72f).coerceIn(0.3f, ARENA_WORLD_SIZE - 0.3f)
+      val hp = (18 + hudWave.toInt() * 4).coerceAtLeast(18)
+      hostiles.add(
+        ArenaHostile(
+          x = rx,
+          y = ry,
+          hp = hp,
+          maxHp = hp,
+          speed = 0.0014f,
+          isElite = i % 3 == 0,
+          archetype = chooseArchetype(world.id, hudWave, i),
+          armor = 4,
+          maxArmor = 4,
+        )
+      )
+    }
+    postCallout("CITADEL SIEGE STARTED! DEFEND ${progression.playerBaseState.baseName.uppercase()}!")
   }
 
   fun triggerLethal() {
@@ -3071,13 +4111,23 @@ class ArenaSimState(
     if (matchRules.vampiricSiphon) {
       hudShield = (hudShield + 20).coerceAtMost(loadout.maxShield)
     }
-    if (loadout.killSiphonBonus > 0) {
-      hudShield = (hudShield + loadout.killSiphonBonus).coerceAtMost(loadout.maxShield)
+    val siphonTotal = loadout.killSiphonBonus + inGameSiphonPerKill
+    if (siphonTotal > 0) {
+      hudShield = (hudShield + siphonTotal).coerceAtMost(effectiveMaxShield())
+    }
+    if (inGameSiphonPerKill > 0) {
+      manaCurrent = (manaCurrent + (inGameSiphonPerKill / 2f).coerceAtLeast(2f)).coerceAtMost(manaMax)
+      hudMana = manaCurrent
     }
     if (h.isBoss || h.isElite) {
       val clanSiphon = (progression.clan.armorSiphonPerk / 4).coerceAtLeast(1)
-      hudShield = (hudShield + clanSiphon).coerceAtMost(loadout.maxShield)
+      hudShield = (hudShield + clanSiphon).coerceAtMost(effectiveMaxShield())
     }
+    // Dead Ops Arcade Combo Multiplier & Survival Mode XP
+    doaStreakTicks = 240f
+    hudDoaMultiplier = (hudDoaMultiplier + if (h.isBoss) 0.75f else if (h.isElite) 0.30f else 0.15f).coerceIn(1.0f, 9.0f)
+    grantSurvivalXp(if (h.isBoss) 110L else if (h.isElite) 42L else 18L)
+
     val base = when {
       h.isBoss -> 500L
       h.isElite -> 160L
@@ -3085,7 +4135,8 @@ class ArenaSimState(
     }
     val effectiveMult = scoreMult * (if (matchRules.doubleBlueEssence) 2L else 1L)
     val hardcoreBonus = if (matchRules.friendlyFire) base / 4L else 0L
-    val scaledReward = (((base + hardcoreBonus) * effectiveMult) * gameplayRewardMultiplier).roundToInt().toLong().coerceAtLeast(1L)
+    val doaScaledBase = ((base + hardcoreBonus) * hudDoaMultiplier).roundToInt().toLong()
+    val scaledReward = ((doaScaledBase * effectiveMult) * gameplayRewardMultiplier).roundToInt().toLong().coerceAtLeast(1L)
     hudScore += scaledReward
 
     if (modeId == "multiplayer") {
@@ -3105,21 +4156,46 @@ class ArenaSimState(
       val kind = ArenaDropKind.entries[Random.nextInt(ArenaDropKind.entries.size)]
       drops.add(ArenaDrop(h.x, h.y, kind))
     }
+    // Dead Ops / AoE Survival XP Gems
+    if (h.isBoss || h.isElite || Random.nextFloat() < 0.68f) {
+      collectibles.add(ArenaCollectible(h.x - 0.025f, h.y + 0.025f, ArenaCollectibleKind.XP_GEM, amount = if (h.isBoss) 65L else if (h.isElite) 28L else 12L))
+    }
 
-    // Spawn Multi-Color Essence Orbs, Blast Shards, Perk Drinks & Blast Cores scaled by NG+ & Collection Difficulty!
+    // Spawn Multi-Color Essence Orbs, Gold, Diamonds, TUUCash, Env Resources & System Shards!
     fun scaledDrop(raw: Long): Long = (raw * gameplayRewardMultiplier).roundToInt().toLong().coerceAtLeast(1L)
     val orbRoll = Random.nextFloat()
+    val currencyRoll = Random.nextFloat()
+    val isBankVaultArea = areaSpec.id.contains("bank") || areaSpec.id.contains("vault")
     when {
       h.isBoss -> {
         collectibles.add(ArenaCollectible(h.x, h.y, ArenaCollectibleKind.COMBINED_ORB, amount = scaledDrop(25L)))
         val core = BlastCoreColor.entries[Random.nextInt(BlastCoreColor.entries.size)]
         collectibles.add(ArenaCollectible(h.x + 0.04f, h.y, ArenaCollectibleKind.BLAST_CORE, subId = core.id, amount = 1L, color = Color(core.colorHex)))
         collectibles.add(ArenaCollectible(h.x - 0.04f, h.y, ArenaCollectibleKind.BLAST_SHARD, amount = scaledDrop(5L)))
+        collectibles.add(ArenaCollectible(h.x, h.y + 0.05f, ArenaCollectibleKind.DIAMOND_GEM, amount = scaledDrop((24L * inGameDiamondMult).toLong())))
+        collectibles.add(ArenaCollectible(h.x + 0.05f, h.y - 0.05f, ArenaCollectibleKind.TUU_CASH, amount = scaledDrop((450L * inGameTuuCashMult).toLong())))
+        collectibles.add(ArenaCollectible(h.x, h.y - 0.05f, ArenaCollectibleKind.CRYSTAL_NODE, subId = "boss_crystal", amount = 1L))
       }
-      orbRoll < 0.28f -> collectibles.add(ArenaCollectible(h.x, h.y, ArenaCollectibleKind.RED_ORB, amount = scaledDrop(18L)))
-      orbRoll < 0.56f -> collectibles.add(ArenaCollectible(h.x, h.y, ArenaCollectibleKind.YELLOW_ORB, amount = scaledDrop(18L)))
-      orbRoll < 0.84f -> collectibles.add(ArenaCollectible(h.x, h.y, ArenaCollectibleKind.GREEN_ORB, amount = scaledDrop(18L)))
+      orbRoll < 0.25f -> collectibles.add(ArenaCollectible(h.x, h.y, ArenaCollectibleKind.RED_ORB, amount = scaledDrop(18L)))
+      orbRoll < 0.50f -> collectibles.add(ArenaCollectible(h.x, h.y, ArenaCollectibleKind.YELLOW_ORB, amount = scaledDrop(18L)))
+      orbRoll < 0.75f -> collectibles.add(ArenaCollectible(h.x, h.y, ArenaCollectibleKind.GREEN_ORB, amount = scaledDrop(18L)))
       else -> collectibles.add(ArenaCollectible(h.x, h.y, ArenaCollectibleKind.BLAST_SHARD, amount = scaledDrop(3L)))
+    }
+    if (isBankVaultArea || inGameDiamondMult > 1.2f) {
+      collectibles.add(ArenaCollectible(h.x - 0.03f, h.y - 0.03f, ArenaCollectibleKind.DIAMOND_GEM, amount = scaledDrop((if (isBankVaultArea) 12L else 6L * inGameDiamondMult).toLong())))
+    }
+    when {
+      currencyRoll < 0.25f -> collectibles.add(ArenaCollectible(h.x + 0.03f, h.y + 0.02f, ArenaCollectibleKind.GOLD_COIN, amount = scaledDrop(if (isBankVaultArea) 85L else 30L)))
+      currencyRoll < 0.52f -> collectibles.add(ArenaCollectible(h.x + 0.03f, h.y + 0.02f, ArenaCollectibleKind.TUU_CASH, amount = scaledDrop(((if (isBankVaultArea) 260L else 120L) * inGameTuuCashMult).toLong())))
+      currencyRoll < 0.78f -> collectibles.add(ArenaCollectible(h.x + 0.03f, h.y + 0.02f, ArenaCollectibleKind.DIAMOND_GEM, amount = scaledDrop(((if (isBankVaultArea) 18L else 8L) * inGameDiamondMult).toLong())))
+      currencyRoll < 0.89f -> {
+        val resId = com.example.data.model.MultiverseSystemsCatalog.environmentalResourceSpecs[Random.nextInt(5)].first
+        collectibles.add(ArenaCollectible(h.x + 0.03f, h.y + 0.02f, ArenaCollectibleKind.ENV_RESOURCE, subId = resId, amount = 2L))
+      }
+      else -> {
+        val shId = com.example.data.model.MultiverseSystemsCatalog.systemShardDomains[Random.nextInt(15)].first
+        collectibles.add(ArenaCollectible(h.x + 0.03f, h.y + 0.02f, ArenaCollectibleKind.SYSTEM_SHARD, subId = shId, amount = 2L))
+      }
     }
 
     // Random Wonder Weapon Pickups
@@ -3171,6 +4247,46 @@ class ArenaSimState(
           postCallout("CHARACTER COLLECTION SHARD +$addShards ACQUIRED!")
         }
       }
+      ArenaCollectibleKind.GOLD_COIN -> {
+        val amt = (c.amount * (1f + loadout.crystalLuckPct / 100f)).roundToInt().toLong().coerceAtLeast(c.amount)
+        goldEarned += amt
+        hudScore += amt * 2L
+      }
+      ArenaCollectibleKind.DIAMOND_GEM -> {
+        val amt = (c.amount * (1f + loadout.crystalLuckPct / 150f) * inGameDiamondMult).roundToInt().toLong().coerceAtLeast(c.amount)
+        diamondsEarned += amt
+        hudScore += amt * 10L
+        if ((inGameUpgradeRanks["upg_diamond_alchemist"] ?: 0) > 0) {
+          hudShield = (hudShield + 25).coerceAtMost(effectiveMaxShield())
+          hudScore += 500L
+        }
+      }
+      ArenaCollectibleKind.TUU_CASH -> {
+        val amt = (c.amount * inGameTuuCashMult).roundToInt().toLong().coerceAtLeast(c.amount)
+        tuuCashEarned += amt
+        hudScore += amt
+      }
+      ArenaCollectibleKind.ENV_RESOURCE -> {
+        val k = c.subId.ifBlank { "crystal_shard" }
+        envResourcesEarned[k] = (envResourcesEarned[k] ?: 0L) + c.amount
+        postCallout("RESOURCE +${c.amount}: ${k.replace('_', ' ').uppercase()}")
+      }
+      ArenaCollectibleKind.SYSTEM_SHARD -> {
+        val k = c.subId.ifBlank { "weapon" }
+        systemShardsEarned[k] = (systemShardsEarned[k] ?: 0L) + c.amount
+      }
+      ArenaCollectibleKind.CRYSTAL_NODE -> {
+        crystalsFoundCount++
+        diamondsEarned += 12L
+        manaCurrent = (manaCurrent + 35f).coerceAtMost(manaMax)
+        hudMana = manaCurrent
+        postCallout("RESONANCE CRYSTAL HARVESTED! (+35 MP & +12 DIAMONDS)")
+      }
+      ArenaCollectibleKind.XP_GEM -> {
+        grantSurvivalXp(c.amount.coerceAtLeast(10L))
+        hudDoaMultiplier = (hudDoaMultiplier + 0.08f).coerceIn(1.0f, 9.0f)
+        doaStreakTicks = 240f
+      }
     }
     // Feed Vacuum Bot auto-upgrade capacitor!
     if (progression.vacuumBot.autoCollectEnabled) {
@@ -3178,10 +4294,10 @@ class ArenaSimState(
       if (vacuumChargeFloat >= 100f) {
         vacuumChargeFloat -= 100f
         if (progression.vacuumBot.autoUpgradeEnabled) {
-          if (hudPackTier < 25) {
+          if (hudPackTier < PowerTier.MAX_TIER) {
             upgradePackAPunch()
           } else {
-            hudShield = (hudShield + 40).coerceAtMost(loadout.maxShield)
+            hudShield = (hudShield + 40).coerceAtMost(effectiveMaxShield())
             postCallout("VACUUM BOT AUTO-UPGRADED ARMOR (+40)")
           }
         }
@@ -3195,7 +4311,7 @@ class ArenaSimState(
     activeWonderWeapon = kind
     wonderWeaponTicks = kind.durationTicks * durMult
     if (progression.wonderCustom.amplifierId == "amp_prototype_tendril_harness") {
-      hudShield = loadout.maxShield
+      hudShield = effectiveMaxShield()
     }
     hudActiveWonder = kind
     hudWonderSecLeft = (wonderWeaponTicks / 60f).roundToInt()
@@ -3215,9 +4331,10 @@ class ArenaSimState(
         postCallout("INSTA-KILL ACTIVE (8s)")
       }
       ArenaDropKind.MAX_ARMOR -> {
-        hudShield = loadout.maxShield
+        hudShield = effectiveMaxShield()
+        hudArmorPlates = hudMaxArmorPlates
         dashCd = 0f
-        postCallout("MAX ARMOR RESTORED!")
+        postCallout("MAX ARMOR & ALL PLATES RESTORED!")
       }
       ArenaDropKind.NUKE -> {
         pulseRingRadius = 0.05f
@@ -3236,6 +4353,23 @@ class ArenaSimState(
         }
         hudScore += 400L * scoreMult
         postCallout("TACTICAL NUKE • +${400L * scoreMult}")
+      }
+      ArenaDropKind.AEGIS_RING -> {
+        hudOrbitalBladesCount = (hudOrbitalBladesCount + 1).coerceAtMost(12)
+        hudArmorPlates = (hudArmorPlates + 1).coerceAtMost(hudMaxArmorPlates)
+        postCallout("SENTINEL ORBITAL BLADE GRANTED! ($hudOrbitalBladesCount ACTIVE)")
+      }
+      ArenaDropKind.FATE_BLESSING -> {
+        hudPendingDraftCount++
+        rollInGameUpgradeDraft()
+        hudDoaMultiplier = (hudDoaMultiplier + 1.0f).coerceIn(1.0f, 9.0f)
+        postCallout("DEAD OPS FATE BLESSING! NEW UPGRADE DRAFT + x${String.format("%.1f", hudDoaMultiplier)}")
+      }
+      ArenaDropKind.EPOCH_SURGE -> {
+        grantSurvivalXp(85L)
+        hudArmorPlates = (hudArmorPlates + 1).coerceAtMost(hudMaxArmorPlates)
+        overdriveTicks = maxOf(overdriveTicks, 180f)
+        postCallout("SURVIVAL EPOCH SURGE! +85 XP & OVERDRIVE")
       }
     }
   }
@@ -3275,6 +4409,20 @@ class ArenaSimState(
       val mSec = if (meleeCd <= 0f) 0 else (meleeCd / 60f).toInt() + 1
       if (hudMeleeCdSec != mSec) hudMeleeCdSec = mSec
     }
+    if (magicCd > 0f) {
+      magicCd = (magicCd - cdRate).coerceAtLeast(0f)
+      val mgSec = if (magicCd <= 0f) 0 else (magicCd / 60f).toInt() + 1
+      if (hudMagicCdSec != mgSec) hudMagicCdSec = mgSec
+    }
+    if (spiritHealCd > 0f) {
+      spiritHealCd = (spiritHealCd - cdRate).coerceAtLeast(0f)
+      val spSec = if (spiritHealCd <= 0f) 0 else (spiritHealCd / 60f).toInt() + 1
+      if (hudSpiritHealCdSec != spSec) hudSpiritHealCdSec = spSec
+    }
+    if (progression.magicState.unlocked && manaCurrent < manaMax) {
+      manaCurrent = (manaCurrent + (5.5f + progression.magicState.magicTier * 0.4f) * dtSec).coerceAtMost(manaMax)
+      if (elapsedTicks % 6L == 0L) hudMana = manaCurrent
+    }
     if (dashInvulnTicks > 0f) dashInvulnTicks = (dashInvulnTicks - dt).coerceAtLeast(0f)
     if (overdriveTicks > 0f) overdriveTicks = (overdriveTicks - dt).coerceAtLeast(0f)
     if (stasisTicks > 0f) stasisTicks = (stasisTicks - dt).coerceAtLeast(0f)
@@ -3311,6 +4459,326 @@ class ArenaSimState(
     if (pulseRingRadius > 0f) {
       pulseRingRadius += 0.018f * dt
       if (pulseRingRadius > 0.36f) pulseRingRadius = 0f
+    }
+    if (aegisDomeTicks > 0f) {
+      aegisDomeTicks = (aegisDomeTicks - dt).coerceAtLeast(0f)
+      hudAegisDomeActive = aegisDomeTicks > 0f
+    } else if (hudAegisDomeActive) {
+      hudAegisDomeActive = false
+    }
+    if (aegisDomeCd > 0f) {
+      aegisDomeCd = (aegisDomeCd - cdRate).coerceAtLeast(0f)
+      val adSec = if (aegisDomeCd <= 0f) 0 else (aegisDomeCd / 60f).toInt() + 1
+      if (hudAegisDomeCdSec != adSec) hudAegisDomeCdSec = adSec
+    }
+    if (doaStreakTicks > 0f) {
+      doaStreakTicks = (doaStreakTicks - dt).coerceAtLeast(0f)
+      if (doaStreakTicks <= 0f && hudDoaMultiplier > 1.0f) {
+        hudDoaMultiplier = (hudDoaMultiplier - 0.5f).coerceAtLeast(1.0f)
+        doaStreakTicks = 120f
+      }
+    }
+    if (magicWaveRadius > 0f) {
+      magicWaveRadius += 0.022f * dt
+      if (magicWaveRadius > 0.56f) magicWaveRadius = 0f
+    }
+    if (spiritWaveRadius > 0f) {
+      spiritWaveRadius += 0.016f * dt
+      if (spiritWaveRadius > 0.42f) spiritWaveRadius = 0f
+    }
+
+    // Player Base Citadel Automated Turrets + AoE Survival Epoch Bonus & Active Raid Defense
+    baseTurretCd -= dt
+    val baseTurretTier = progression.playerBaseState.turretTier
+    if (baseTurretCd <= 0f && hostiles.isNotEmpty()) {
+      baseTurretCd = (58f - baseTurretTier * 2f - hudEpoch.tier * 2f).coerceAtLeast(14f)
+      val target = hostiles.firstOrNull { (it.x - baseX) * (it.x - baseX) + (it.y - baseY) * (it.y - baseY) <= 1.25f * 1.25f }
+      if (target != null && bolts.size < 180) {
+        val dx = target.x - baseX
+        val dy = target.y - baseY
+        val d = sqrt(dx * dx + dy * dy).coerceAtLeast(0.001f)
+        addBoltIfAllowed(
+          ArenaBolt(
+            x = baseX,
+            y = baseY,
+            vx = (dx / d) * 0.028f,
+            vy = (dy / d) * 0.028f,
+            life = 55f,
+            isSupercharged = true,
+            pierceLeft = 1,
+            damage = (4 + baseTurretTier * 2 + hudEpoch.turretBonus),
+            color = Color(progression.playerBaseState.primaryHex),
+            damageType = ArenaDamageType.ENERGY,
+          )
+        )
+      }
+    }
+
+    // Protection Orbital Aegis Blades (intercept enemy bolts & slice nearby hostiles)
+    if (hudOrbitalBladesCount > 0) {
+      val orbRad = 0.145f
+      val baseOrbAng = elapsedTicks * 0.11f
+      val orbStep = (2f * PI.toFloat()) / hudOrbitalBladesCount.coerceAtLeast(1)
+      for (k in 0 until hudOrbitalBladesCount) {
+        val ang = baseOrbAng + k * orbStep
+        val ox = playerX + cos(ang) * orbRad
+        val oy = playerY + sin(ang) * orbRad
+        // Intercept incoming enemy bolts near the orbiting shield blade
+        bolts.removeAll { b ->
+          b.isEnemyShot && ((b.x - ox) * (b.x - ox) + (b.y - oy) * (b.y - oy)) <= 0.055f * 0.055f
+        }
+        if (elapsedTicks % 10L == 0L) {
+          val bladeDmg = (2 + (hudPackTier / 6) + hudEpoch.tier).coerceAtLeast(2)
+          val hIterOrb = hostiles.iterator()
+          while (hIterOrb.hasNext()) {
+            val h = hIterOrb.next()
+            val dx = h.x - ox
+            val dy = h.y - oy
+            if (dx * dx + dy * dy <= 0.068f * 0.068f) {
+              applyDamageToHostile(h, bladeDmg, ArenaDamageType.ENERGY)
+              addSparkIfAllowed(h.x, h.y, Color(0xFF38BDF8), 10f)
+              if (h.hp <= 0) {
+                hIterOrb.remove()
+                onHostileDefeated(h, if (doubleEssenceTicks > 0f) 2L else 1L)
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Dead Ops Arcade Wingman Companion Drone
+    if (wingmanLevel > 0) {
+      val wAng = -elapsedTicks * 0.065f
+      wingmanX = playerX + cos(wAng) * 0.095f
+      wingmanY = playerY + sin(wAng) * 0.095f
+      wingmanFireCd -= dt
+      if (wingmanFireCd <= 0f && hostiles.isNotEmpty() && bolts.size < 180) {
+        wingmanFireCd = (28f - wingmanLevel * 4f).coerceAtLeast(10f)
+        val nearest = hostiles.minByOrNull { (it.x - wingmanX) * (it.x - wingmanX) + (it.y - wingmanY) * (it.y - wingmanY) }
+        if (nearest != null) {
+          val dx = nearest.x - wingmanX
+          val dy = nearest.y - wingmanY
+          val d = sqrt(dx * dx + dy * dy).coerceAtLeast(0.001f)
+          addBoltIfAllowed(
+            ArenaBolt(
+              x = wingmanX,
+              y = wingmanY,
+              vx = (dx / d) * 0.029f,
+              vy = (dy / d) * 0.029f,
+              life = 52f,
+              isSupercharged = true,
+              pierceLeft = 1,
+              damage = (3 + wingmanLevel * 2 + hudEpoch.tier),
+              color = Color(0xFFE040FB),
+              damageType = ArenaDamageType.ENERGY,
+            )
+          )
+        }
+      }
+    }
+
+    // Tesla Overwatch Pylon
+    if (teslaLevel > 0 && hostiles.isNotEmpty()) {
+      teslaCd -= dt
+      if (teslaCd <= 0f) {
+        teslaCd = (58f - teslaLevel * 6f).coerceAtLeast(22f)
+        var zapped = 0
+        val maxZaps = teslaLevel + 1
+        val teslaDmg = 3 + teslaLevel * 2 + hudEpoch.tier
+        val hIterT = hostiles.iterator()
+        while (hIterT.hasNext() && zapped < maxZaps) {
+          val h = hIterT.next()
+          val dx = h.x - playerX
+          val dy = h.y - playerY
+          if (dx * dx + dy * dy <= 0.44f * 0.44f) {
+            applyDamageToHostile(h, teslaDmg, ArenaDamageType.ENERGY)
+            addArcIfAllowed(playerX, playerY, h.x, h.y, Color(0xFF00E5FF), 14f)
+            zapped++
+            if (h.hp <= 0) {
+              hIterT.remove()
+              onHostileDefeated(h, if (doubleEssenceTicks > 0f) 2L else 1L)
+            }
+          }
+        }
+      }
+    }
+
+    // Perimeter & Section Automated Defense Turrets
+    if (defenseTurrets.isNotEmpty() && hostiles.isNotEmpty()) {
+      for (tIdx in 0 until defenseTurrets.size) {
+        val turret = defenseTurrets.getOrNull(tIdx) ?: continue
+        if (turret.muzzleFlashTicks > 0f) turret.muzzleFlashTicks = (turret.muzzleFlashTicks - dt).coerceAtLeast(0f)
+        turret.fireCdTicks -= dt
+        if (turret.fireCdTicks <= 0f) {
+          val rSq = turret.range * turret.range
+          var bestH: ArenaHostile? = null
+          var bestDSq = Float.MAX_VALUE
+          for (hIdx in 0 until hostiles.size) {
+            val h = hostiles.getOrNull(hIdx) ?: continue
+            val dSq = (h.x - turret.x) * (h.x - turret.x) + (h.y - turret.y) * (h.y - turret.y)
+            if (dSq <= rSq && dSq < bestDSq) {
+              bestDSq = dSq
+              bestH = h
+            }
+          }
+          if (bestH != null && bolts.size < 185) {
+            val dx = bestH.x - turret.x
+            val dy = bestH.y - turret.y
+            val dist = sqrt(dx * dx + dy * dy).coerceAtLeast(0.001f)
+            turret.aimAngle = kotlin.math.atan2(dy, dx)
+            turret.fireCdTicks = turret.fireRateTicks
+            turret.muzzleFlashTicks = 8f
+            val tDmg = turret.baseDamage + hudEpoch.turretBonus
+            val dmgType = when (turret.turretKind) {
+              "tesla" -> ArenaDamageType.ENERGY
+              "diamond_rail" -> ArenaDamageType.ENERGY
+              "laser" -> ArenaDamageType.THERMAL
+              else -> ArenaDamageType.KINETIC
+            }
+            addBoltIfAllowed(
+              ArenaBolt(
+                x = turret.x,
+                y = turret.y,
+                vx = (dx / dist) * 0.034f,
+                vy = (dy / dist) * 0.034f,
+                life = 48f,
+                isSupercharged = turret.turretKind == "diamond_rail" || turret.turretKind == "laser",
+                pierceLeft = if (turret.turretKind == "diamond_rail") 2 else 0,
+                damage = tDmg,
+                color = turret.accentColor,
+                damageType = dmgType,
+              )
+            )
+            if (turret.turretKind == "tesla") {
+              addArcIfAllowed(turret.x, turret.y, bestH.x, bestH.y, turret.accentColor, 8f)
+            }
+          }
+        }
+      }
+    }
+
+    // Resonance Diamond Laser Core
+    if (inGameDiamondLaserLevel > 0 && hostiles.isNotEmpty()) {
+      diamondLaserCd -= dt
+      if (diamondLaserCd <= 0f) {
+        diamondLaserCd = (85f - inGameDiamondLaserLevel * 10f).coerceAtLeast(30f)
+        val targets = hostiles.filter { (it.x - playerX) * (it.x - playerX) + (it.y - playerY) * (it.y - playerY) <= 1.25f * 1.25f }.take(3)
+        targets.forEach { h ->
+          applyDamageToHostile(h, 18 + inGameDiamondLaserLevel * 12, ArenaDamageType.ENERGY)
+          addArcIfAllowed(playerX, playerY, h.x, h.y, Color(0xFF40C4FF), 16f)
+        }
+        val hIterD = hostiles.iterator()
+        while (hIterD.hasNext()) {
+          val h = hIterD.next()
+          if (h.hp <= 0) {
+            hIterD.remove()
+            onHostileDefeated(h, if (doubleEssenceTicks > 0f) 2L else 1L)
+            diamondsEarned += (3L * inGameDiamondMult).toLong().coerceAtLeast(3L)
+          }
+        }
+      }
+    }
+
+    // TUUCash Gunship Overwatch Airstrike
+    if (inGameTuuAirstrikeLevel > 0 && hostiles.isNotEmpty()) {
+      tuuAirstrikeCd -= dt
+      if (tuuAirstrikeCd <= 0f) {
+        tuuAirstrikeCd = (195f - inGameTuuAirstrikeLevel * 22f).coerceAtLeast(75f)
+        val target = hostiles.firstOrNull { (it.x - playerX) * (it.x - playerX) + (it.y - playerY) * (it.y - playerY) <= 1.4f * 1.4f }
+        if (target != null) {
+          addSparkIfAllowed(target.x, target.y, Color(0xFFFFD54F), 24f)
+          val blastRadiusSq = 0.42f * 0.42f
+          val blastDmg = 28 + inGameTuuAirstrikeLevel * 18
+          val hIterA = hostiles.iterator()
+          while (hIterA.hasNext()) {
+            val h = hIterA.next()
+            if ((h.x - target.x) * (h.x - target.x) + (h.y - target.y) * (h.y - target.y) <= blastRadiusSq) {
+              applyDamageToHostile(h, blastDmg, ArenaDamageType.THERMAL)
+              if (h.hp <= 0) {
+                hIterA.remove()
+                onHostileDefeated(h, if (doubleEssenceTicks > 0f) 2L else 1L)
+                tuuCashEarned += (120L * inGameTuuCashMult).toLong().coerceAtLeast(120L)
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Celestial Astral Cataclysm Auto-Runes
+    if (inGameCataclysmLevel > 0 && hostiles.isNotEmpty()) {
+      cataclysmCd -= dt
+      if (cataclysmCd <= 0f) {
+        cataclysmCd = (75f - inGameCataclysmLevel * 8f).coerceAtLeast(25f)
+        val hIterC = hostiles.iterator()
+        var strikes = 0
+        while (hIterC.hasNext() && strikes < inGameCataclysmLevel + 1) {
+          val h = hIterC.next()
+          if ((h.x - playerX) * (h.x - playerX) + (h.y - playerY) * (h.y - playerY) <= 0.65f * 0.65f) {
+            applyDamageToHostile(h, (16 + inGameCataclysmLevel * 10 * inGameMagicDmgMult).roundToInt(), ArenaDamageType.VOID)
+            addArcIfAllowed(playerX, playerY, h.x, h.y, Color(0xFFB388FF), 14f)
+            strikes++
+            if (h.hp <= 0) {
+              hIterC.remove()
+              onHostileDefeated(h, if (doubleEssenceTicks > 0f) 2L else 1L)
+            }
+          }
+        }
+      }
+    }
+
+    // Active Vehicle Signature Combat Support
+    if (activeVehicleSpec != null && hostiles.isNotEmpty()) {
+      vehicleSupportCd -= dt
+      if (vehicleSupportCd <= 0f) {
+        val vTier = (activeVehicleItem?.tier?.toInt() ?: 1).coerceAtLeast(1)
+        val vStars = activeVehicleItem?.let { progression.armoryItemStar(it.id) } ?: 1
+        vehicleSupportCd = (420f - (vTier * 4f)).coerceAtLeast(180f)
+        val near = hostiles.filter { (it.x - playerX) * (it.x - playerX) + (it.y - playerY) * (it.y - playerY) <= 1.2f * 1.2f }.take(3)
+        if (near.isNotEmpty()) {
+          val vCol = Color(activeVehicleSpec.accentHex)
+          near.forEach { h ->
+            val dmg = (activeVehicleSpec.firepowerRating / 4) + hudEpoch.tier * 4 + vTier * 3 + vStars * 4
+            applyDamageToHostile(h, dmg, ArenaDamageType.ENERGY)
+            addArcIfAllowed(playerX, playerY, h.x, h.y, vCol, 15f)
+          }
+          val hIterV = hostiles.iterator()
+          while (hIterV.hasNext()) {
+            val h = hIterV.next()
+            if (h.hp <= 0) {
+              hIterV.remove()
+              onHostileDefeated(h, if (doubleEssenceTicks > 0f) 2L else 1L)
+            }
+          }
+        }
+      }
+    }
+    if (hudBaseRaidActive) {
+      baseRaidTicksLeft = (baseRaidTicksLeft - dt).coerceAtLeast(0f)
+      hudBaseRaidSecLeft = (baseRaidTicksLeft / 60f).toInt().coerceAtLeast(0)
+      if (elapsedTicks % 30L == 0L) {
+        val breaching = hostiles.count { (it.x - baseX) * (it.x - baseX) + (it.y - baseY) * (it.y - baseY) <= 0.30f * 0.30f }
+        if (breaching > 0) {
+          hudBaseHp = (hudBaseHp - breaching * 12).coerceAtLeast(0)
+          addSparkIfAllowed(baseX, baseY, Color(0xFFFF3D71), 14f)
+        }
+      }
+      if (hudBaseHp <= 0) {
+        hudBaseRaidActive = false
+        hudBaseRaidSecLeft = 0
+        postCallout("CITADEL SHIELD BREACHED! REBUILD & DEFEND NEXT RAID")
+      } else if (baseRaidTicksLeft <= 0f) {
+        hudBaseRaidActive = false
+        hudBaseRaidSecLeft = 0
+        baseDefenseWon = true
+        goldEarned += 450L
+        diamondsEarned += 45L
+        tuuCashEarned += 1200L
+        systemShardsEarned["base"] = (systemShardsEarned["base"] ?: 0L) + 10L
+        pulseRingRadius = 0.06f
+        postCallout("BASE DEFENSE VICTORY! +450 GOLD • +45 DIAMONDS • +1200 TUUCASH!")
+      }
     }
 
     // Active Elemental Hazards (Ice, Fire, Toxic, Electric, Windy) + Safe Rest Camps
@@ -3360,7 +4828,8 @@ class ArenaSimState(
     }
 
     // Passive perk armor regeneration (x3 accelerated while resting in a Safe Camp!)
-    if (hudShield < loadout.maxShield && (damageFlashTicks <= 0f || insideCamp)) {
+    val maxShdNow = effectiveMaxShield()
+    if (hudShield < maxShdNow && (damageFlashTicks <= 0f || insideCamp)) {
       val assistMult = (if (liveSettings.assistShieldBoost) 1.55f else 1.0f) * (if (insideCamp) 3.2f else 1.0f)
       val toxicMult = if (activeHaz?.kind == ArenaHazardKind.TOXIC) 0.45f else 1.0f
       val customRegenMult = progression.collectionCustomMode.effectiveRegenMultFor(progression.activeAreaId, progression.customGameMaps)
@@ -3368,7 +4837,7 @@ class ArenaSimState(
       if (regenAccum >= 1f) {
         val add = regenAccum.toInt()
         regenAccum -= add
-        hudShield = (hudShield + add).coerceAtMost(loadout.maxShield)
+        hudShield = (hudShield + add).coerceAtMost(maxShdNow)
       }
     }
 
@@ -3382,7 +4851,7 @@ class ArenaSimState(
       else -> 1.0f
     }
     val cryoMoveFactor = (if (activeHaz?.kind == ArenaHazardKind.ICE || playerCryoSlowTicks > 0f) 0.76f else 1.0f)
-    val maxSpd = 0.0066f * loadout.moveBoost * stanceSpeedFactor * cryoMoveFactor * liveSettings.moveSensitivity.coerceIn(0.6f, 1.6f)
+    val maxSpd = 0.0066f * loadout.moveBoost * inGameMoveMult * stanceSpeedFactor * cryoMoveFactor * liveSettings.moveSensitivity.coerceIn(0.6f, 1.6f)
     if (moving) {
       val len = sqrt(joyMagSq).coerceAtLeast(0.001f)
       val nx = joyDx / len
@@ -3604,7 +5073,8 @@ class ArenaSimState(
       fireAutoTicker -= dt
       if (fireAutoTicker <= 0f) {
         fireVolley()
-        fireAutoTicker = if (overdriveTicks > 0f) loadout.fireCadenceTicks * 0.65f else loadout.fireCadenceTicks
+        val effCadence = (loadout.fireCadenceTicks / inGameFireRateMult.coerceAtLeast(1.0f)).coerceAtLeast(1.4f)
+        fireAutoTicker = if (overdriveTicks > 0f) effCadence * 0.65f else effCadence
       }
     }
 
@@ -3696,7 +5166,8 @@ class ArenaSimState(
       if (a.life <= 0f) aIter.remove()
     }
 
-    val vacRadSq = loadout.vacuumRadius * loadout.vacuumRadius
+    val effVacRadius = (loadout.vacuumRadius + inGameVacuumBonus).coerceAtMost(1.35f)
+    val vacRadSq = effVacRadius * effVacRadius
 
     // Collectibles (Blast Shards, Perk Drinks, Essence Orbs, Blast Cores) + Vacuum Suction
     val cIter = collectibles.iterator()
@@ -3778,8 +5249,7 @@ class ArenaSimState(
           val customIncomingMult = progression.collectionCustomMode.effectiveIncomingDamageMultFor(progression.activeAreaId, progression.customGameMaps)
           val crouchMitigation = if (hudCrouching) 0.65f else 1.0f
           val shotDmg = ((if (matchRules.friendlyFire) rawShot * 1.35f else rawShot.toFloat()) * customIncomingMult * crouchMitigation).roundToInt().coerceAtLeast(1)
-          hudShield = (hudShield - shotDmg).coerceAtLeast(0)
-          damageFlashTicks = if (liveSettings.reduceFlashes) 0f else 12f
+          damagePlayer(shotDmg)
           if (b.isMirroredElemental) {
             when (b.damageType) {
               ArenaDamageType.CRYO -> playerCryoSlowTicks = maxOf(playerCryoSlowTicks, 75f)
@@ -3797,7 +5267,6 @@ class ArenaSimState(
           } else {
             addSparkIfAllowed(playerX, playerY, Color(0xFFFF1744), 10f)
           }
-          if (hudShield <= 0) hudRunEnded = true
         }
       }
       if (b.life <= 0f || kotlin.math.abs(b.x - playerX) > 2.8f || kotlin.math.abs(b.y - playerY) > 2.8f) {
@@ -3946,11 +5415,7 @@ class ArenaSimState(
             val preGuardDmg = if (liveSettings.assistShieldBoost) (baseDmg * 2 / 3).coerceAtLeast(4) else baseDmg
             val crouchMitigation = if (hudCrouching) 0.65f else 1.0f
             val dmg = (preGuardDmg * customIncomingMult * crouchMitigation).roundToInt().coerceAtLeast(1)
-            hudShield = (hudShield - dmg).coerceAtLeast(0)
-            damageFlashTicks = if (liveSettings.reduceFlashes) 0f else 12f
-            if (hudShield <= 0) {
-              hudRunEnded = true
-            }
+            damagePlayer(dmg)
           }
         }
       }

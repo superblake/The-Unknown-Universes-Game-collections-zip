@@ -345,10 +345,20 @@ enum class NewGamePlusVersion(
     enemyHpScale = 2.15f,
     enemySpeedScale = 1.40f,
     accentHex = 0xFFFFD54F,
-  );
+  ),
+  NG_PLUS_6(6, "NG+ VI: Rift Dominion", "NG+6", "Post-Completion #5 • 7.80x rewards", 7.80f, 2.40f, 1.44f, 0xFF00E5FF),
+  NG_PLUS_7(7, "NG+ VII: Kyber Eclipse", "NG+7", "Post-Completion #6 • 9.20x rewards", 9.20f, 2.65f, 1.48f, 0xFF00E676),
+  NG_PLUS_8(8, "NG+ VIII: Astral Crusher", "NG+8", "Post-Completion #7 • 10.8x rewards", 10.80f, 2.90f, 1.52f, 0xFF7C4DFF),
+  NG_PLUS_9(9, "NG+ IX: Singularity War", "NG+9", "Post-Completion #8 • 12.6x rewards", 12.60f, 3.15f, 1.56f, 0xFFFFAB40),
+  NG_PLUS_10(10, "NG+ X: Multiverse Nexus", "NG+10", "Post-Completion #9 • 14.5x rewards", 14.50f, 3.40f, 1.60f, 0xFFFF3D71),
+  NG_PLUS_11(11, "NG+ XI: Cosmic Ascendant", "NG+11", "Post-Completion #10 • 16.6x rewards", 16.60f, 3.65f, 1.64f, 0xFFE040FB),
+  NG_PLUS_12(12, "NG+ XII: Eternium Rift", "NG+12", "Post-Completion #11 • 19.0x rewards", 19.00f, 3.90f, 1.68f, 0xFF40C4FF),
+  NG_PLUS_13(13, "NG+ XIII: Infinite Paradox", "NG+13", "Post-Completion #12 • 21.5x rewards", 21.50f, 4.15f, 1.72f, 0xFFFFEA00),
+  NG_PLUS_14(14, "NG+ XIV: Omega Pantheon", "NG+14", "Post-Completion #13 • 24.5x rewards", 24.50f, 4.40f, 1.76f, 0xFFFF1744),
+  NG_PLUS_15(15, "NG+ XV: Sovereign Infinity", "NG+15", "Final Ascension +10 • 28.0x rewards & peak chaos", 28.00f, 4.70f, 1.80f, 0xFFFFFFFF);
 
   companion object {
-    const val MAX_NG_PLUS_TIER: Int = 5
+    const val MAX_NG_PLUS_TIER: Int = 15
 
     fun fromTier(tier: Int): NewGamePlusVersion =
       entries.firstOrNull { it.tier == tier.coerceIn(0, MAX_NG_PLUS_TIER) } ?: STANDARD
@@ -392,13 +402,48 @@ enum class PowerTier(
   SERAPHIC(22, "Seraphic", 0xFFFFC400, 75.0f),
   PRIMORDIAL(23, "Primordial", 0xFF00E676, 92.0f),
   SINGULARITY(24, "Singularity", 0xFFFF3D71, 112.0f),
-  MULTIVERSAL(25, "Multiversal", 0xFFFFFFFF, 140.0f);
+  MULTIVERSAL(25, "Multiversal", 0xFFFFFFFF, 140.0f),
+  EMPYREAN_26(26, "Empyrean T26", 0xFF00E5FF, 165.0f),
+  SOLARIS_27(27, "Solaris T27", 0xFFFFD54F, 192.0f),
+  VALKYRION_28(28, "Valkyrion T28", 0xFF7C4DFF, 222.0f),
+  NEXUS_PRIME_29(29, "Nexus Prime T29", 0xFF00E676, 255.0f),
+  ETHERIAL_30(30, "Etherial T30", 0xFFE040FB, 290.0f),
+  GALAXION_31(31, "Galaxion T31", 0xFF40C4FF, 328.0f),
+  PARAGON_32(32, "Paragon T32", 0xFFFFAB40, 368.0f),
+  APOTHEOSIS_33(33, "Apotheosis T33", 0xFFFF3D71, 412.0f),
+  CELESTION_34(34, "Celestion T34", 0xFF1DE9B6, 458.0f),
+  ECLIPSE_35(35, "Eclipse T35", 0xFFAA00FF, 508.0f),
+  ZENITH_36(36, "Zenith T36", 0xFFFFEA00, 560.0f),
+  ARCHON_37(37, "Archon T37", 0xFF2979FF, 616.0f),
+  VALHALLA_38(38, "Valhalla T38", 0xFFFF6D00, 675.0f),
+  KYBERION_39(39, "Kyberion T39", 0xFF00E5FF, 738.0f),
+  INFINITY_CORE_40(40, "Infinity Core T40", 0xFFFFD54F, 804.0f),
+  SOVEREIGN_PRIME_41(41, "Sovereign Prime T41", 0xFFFF1744, 875.0f),
+  OMEGA_ASCENT_42(42, "Omega Ascent T42", 0xFF00E676, 948.0f),
+  COSMOCRAT_43(43, "Cosmocrat T43", 0xFFE040FB, 1025.0f),
+  METAVERSE_44(44, "Metaverse T44", 0xFF40C4FF, 1106.0f),
+  OVERLORD_45(45, "Overlord T45", 0xFFFFAB40, 1190.0f),
+  REALITY_WEAVER_46(46, "Reality Weaver T46", 0xFF7C4DFF, 1280.0f),
+  CHRONO_SOVEREIGN_47(47, "Chrono Sovereign T47", 0xFF00BFA5, 1375.0f),
+  SOURCE_48(48, "Source T48", 0xFFFF4081, 1475.0f),
+  ETERNAL_APEX_49(49, "Eternal Apex T49", 0xFFFFD54F, 1580.0f),
+  TRANSCENDENT_MAX_50(50, "Omniversal T50", 0xFFFFFFFF, 1700.0f),
+  HYPER_ASCENDANT_51(51, "Hyper Ascendant T51", 0xFF00E5FF, 1825.0f),
+  AETHER_PRIME_52(52, "Aether Prime T52", 0xFF40C4FF, 1955.0f),
+  NEXUS_IMMORTAL_53(53, "Nexus Immortal T53", 0xFF00E676, 2090.0f),
+  COSMIC_EMPEROR_54(54, "Cosmic Emperor T54", 0xFF7C4DFF, 2230.0f),
+  KYBER_ASCENSION_55(55, "Kyber Ascension T55", 0xFFFFD54F, 2375.0f),
+  SUPERNOVA_REX_56(56, "Supernova Rex T56", 0xFFFFAB40, 2525.0f),
+  VOID_MONARCH_57(57, "Void Monarch T57", 0xFFE040FB, 2680.0f),
+  CELESTIAL_CORE_58(58, "Celestial Core T58", 0xFFFF3D71, 2840.0f),
+  OMEGA_ZENITH_59(59, "Omega Zenith T59", 0xFF1DE9B6, 3005.0f),
+  ETERNIUM_APEX_60(60, "Eternium Apex T60", 0xFFFFFFFF, 3180.0f);
 
   companion object {
-    const val MAX_TIER = 25
+    const val MAX_TIER = 60
 
     fun fromLevel(tier: Int): PowerTier =
-      entries.firstOrNull { it.level == tier.coerceIn(1, MAX_TIER) } ?: MULTIVERSAL
+      entries.firstOrNull { it.level == tier.coerceIn(1, MAX_TIER) } ?: ETERNIUM_APEX_60
   }
 }
 
@@ -422,13 +467,23 @@ enum class StarRankMeta(
   STAR_12(12, "12★ Singularity King", 3.85f, 0xFFFF3D71),
   STAR_13(13, "13★ Infinite Cosmos", 4.15f, 0xFFE040FB),
   STAR_14(14, "14★ Transcendent Apex", 4.45f, 0xFFFFD54F),
-  STAR_15(15, "15★ Omniverse Sovereign", 4.80f, 0xFFFFFFFF);
+  STAR_15(15, "15★ Omniverse Sovereign", 4.80f, 0xFFFFFFFF),
+  STAR_16(16, "16★ Hyperion Crown", 5.15f, 0xFF00E5FF),
+  STAR_17(17, "17★ Nebula Paragon", 5.50f, 0xFF00E676),
+  STAR_18(18, "18★ Astral Architect", 5.85f, 0xFF7C4DFF),
+  STAR_19(19, "19★ Quasar Dominion", 6.20f, 0xFFFFAB40),
+  STAR_20(20, "20★ Galaxion Zenith", 6.55f, 0xFFFFD54F),
+  STAR_21(21, "21★ Kyber Continuum", 6.95f, 0xFF40C4FF),
+  STAR_22(22, "22★ Chronos Immortal", 7.35f, 0xFFE040FB),
+  STAR_23(23, "23★ Void Overlord", 7.75f, 0xFFFF3D71),
+  STAR_24(24, "24★ Celestial Infinite", 8.15f, 0xFF1DE9B6),
+  STAR_25(25, "25★ Eternium Sovereign", 8.60f, 0xFFFFFFFF);
 
   companion object {
-    const val MAX_STARS: Int = 15
+    const val MAX_STARS: Int = 25
 
     fun forStars(stars: Int): StarRankMeta =
-      entries.firstOrNull { it.stars == stars.coerceIn(1, MAX_STARS) } ?: STAR_15
+      entries.firstOrNull { it.stars == stars.coerceIn(1, MAX_STARS) } ?: STAR_25
   }
 }
 
@@ -661,7 +716,7 @@ data class SkillNode(
   val costEssence: Long,
   val unlocked: Boolean = false,
   val tier: Int = 1,
-  val maxTier: Int = 25,
+  val maxTier: Int = PowerTier.MAX_TIER,
   val starLevel: Int = 1,
   val inspirationTag: String = "Core",
 ) {
@@ -675,7 +730,7 @@ data class ProtectionUpgradeSpec(
   val subtitle: String,
   val effectTag: String,
   val baseCostEssence: Long,
-  val maxRank: Int = 25,
+  val maxRank: Int = PowerTier.MAX_TIER,
   val colorHex: Long,
 ) {
   fun nextCost(currentRank: Int): Long = baseCostEssence + (currentRank.coerceAtLeast(0) * 180L)
@@ -695,7 +750,7 @@ data class UserCustomPerkSpec(
   val regenPerSecPerRank: Float = 1.0f,
   val siphonPerKillPerRank: Int = 1,
   val tier: Int = 1,
-  val maxTier: Int = 25,
+  val maxTier: Int = PowerTier.MAX_TIER,
   val starLevel: Int = 1,
 )
 
@@ -723,7 +778,7 @@ data class UserCustomGearSpec(
   val bonusCooldownHastePct: Int = 10,
   val bonusProtectionPct: Int = 4,
   val tier: Int = 1,
-  val maxTier: Int = 25,
+  val maxTier: Int = PowerTier.MAX_TIER,
   val starLevel: Int = 1,
 )
 
@@ -739,7 +794,7 @@ data class UserCustomEquipmentSpec(
   val cooldownHastePct: Int = 6,
   val accentHex: Long = 0xFFFF6D00L,
   val tier: Int = 1,
-  val maxTier: Int = 25,
+  val maxTier: Int = PowerTier.MAX_TIER,
   val starLevel: Int = 1,
 ) {
   fun toEquipmentItemSpec(): EquipmentItemSpec = EquipmentItemSpec(
@@ -930,6 +985,15 @@ data class MatchProgressionReport(
   val catsFound: Int = 0,
   val lootCratesOpened: Int = 0,
   val recruitedOutfitIds: List<String> = emptyList(),
+  val goldEarned: Long = 0L,
+  val diamondsEarned: Long = 0L,
+  val tuuCashEarned: Long = 0L,
+  val environmentalResourcesEarned: Map<String, Long> = emptyMap(),
+  val systemShardsEarned: Map<String, Long> = emptyMap(),
+  val magicCastsCount: Int = 0,
+  val baseDefenseWon: Boolean = false,
+  val diamondsSpent: Long = 0L,
+  val tuuCashSpent: Long = 0L,
 )
 
 @Immutable
@@ -1029,10 +1093,11 @@ data class OperatorProgressionState(
   val companionBuffTier: Int = 1,
   val modeTierMap: Map<String, Int> = emptyMap(),
   val modeStarMap: Map<String, Int> = emptyMap(),
-  val gold: Long = 1500L,
-  val diamonds: Long = 350L,
-  val tuuCash: Long = 10000L,
-  val environmentalResources: Map<String, Long> = mapOf("crystal_shard" to 50L, "metal_scrap" to 120L, "energy_cell" to 40L),
+  val gold: Long = 50000L,
+  val diamonds: Long = 50000L,
+  val tuuCash: Long = 100000L,
+  val environmentalResources: Map<String, Long> = defaultEnvironmentalResources(),
+  val systemShards: Map<String, Long> = defaultSystemShards(),
   val magicState: MagicSystemState = MagicSystemState(),
   val playerBaseState: PlayerBaseState = PlayerBaseState(),
   val crystals: List<CrystalItem> = defaultCrystals(),
@@ -1041,9 +1106,20 @@ data class OperatorProgressionState(
     get() = ProgressionCatalog.levelForXp(playerXp)
 
   fun canHealWithThoughtAndSpirit(): Boolean {
+    val outfit = activeOutfitSpec()
+    if (outfit.isCreatorSelfForm()) return true
     val summary = computePowerAndLightLevel()
-    return summary.powerLevel >= 300 || playerLevel >= 2
+    return summary.powerLevel >= 300 || playerLevel >= 1
   }
+
+  fun thoughtSpiritHealAmount(powerLevel: Int = computePowerAndLightLevel().powerLevel): Int {
+    val selfFormBonus = if (activeOutfitSpec().isCreatorSelfForm()) 1.45f else 1.0f
+    return ((45 + (powerLevel / 12) + (characterTier * 8)) * selfFormBonus).toInt().coerceAtLeast(50)
+  }
+
+  fun systemShardCount(domain: String): Long = (systemShards[domain] ?: 0L).coerceAtLeast(0L)
+
+  fun resourceCount(resId: String): Long = (environmentalResources[resId] ?: 0L).coerceAtLeast(0L)
 
   val playerRankTitle: String
     get() = ProgressionCatalog.rankTitleForLevel(playerLevel, playerPrestige)
@@ -1067,11 +1143,11 @@ data class OperatorProgressionState(
 
   fun weaponPrestige(weaponId: String): Int = weaponPrestigeMap[weaponId] ?: 0
 
-  fun weaponTier(weaponId: String): Int = (weaponTierMap[weaponId] ?: 1).coerceIn(1, 25)
+  fun weaponTier(weaponId: String): Int = (weaponTierMap[weaponId] ?: 1).coerceIn(1, PowerTier.MAX_TIER)
 
   fun weaponStar(weaponId: String): Int = (weaponStarMap[weaponId] ?: 1).coerceIn(1, StarRankMeta.MAX_STARS)
 
-  fun wonderTier(wonderId: String): Int = (wonderTierMap[wonderId] ?: 1).coerceIn(1, 25)
+  fun wonderTier(wonderId: String): Int = (wonderTierMap[wonderId] ?: 1).coerceIn(1, PowerTier.MAX_TIER)
 
   fun wonderStar(wonderId: String): Int = (wonderStarMap[wonderId] ?: 1).coerceIn(1, StarRankMeta.MAX_STARS)
 
@@ -1183,11 +1259,11 @@ data class OperatorProgressionState(
     return PowerLightSummary(powerLevel = powerLevel, lightLevel = lightLevel, tierLabel = label)
   }
 
-  fun perkRank(perkId: String): Int = (perkRanks[perkId] ?: 0).coerceIn(0, 25)
+  fun perkRank(perkId: String): Int = (perkRanks[perkId] ?: 0).coerceIn(0, ProgressionCatalog.MAX_PERK_RANK)
 
   fun perkStar(perkId: String): Int = (perkStarMap[perkId] ?: 1).coerceIn(1, StarRankMeta.MAX_STARS)
 
-  fun protectionRank(protId: String): Int = (protectionRanks[protId] ?: 0).coerceIn(0, 25)
+  fun protectionRank(protId: String): Int = (protectionRanks[protId] ?: 0).coerceIn(0, ProgressionCatalog.MAX_PROT_RANK)
 
   fun protectionStar(protId: String): Int = (protectionStarMap[protId] ?: 1).coerceIn(1, StarRankMeta.MAX_STARS)
 
@@ -1207,7 +1283,16 @@ data class OperatorProgressionState(
 
   fun blastCoreCount(color: BlastCoreColor): Long = (blastCoreInventory[color.id] ?: 0L).coerceAtLeast(0L)
 
-  fun blastCoreLevel(color: BlastCoreColor): Int = (blastCoreLevels[color.id] ?: 1).coerceIn(1, 20)
+  fun blastCoreLevel(color: BlastCoreColor): Int = (blastCoreLevels[color.id] ?: 1).coerceIn(1, ProgressionCatalog.MAX_CORE_LEVEL)
+
+  fun crystalTotalDamagePct(): Int =
+    crystals.filter { !it.socketedSlot.isNullOrBlank() }.sumOf { it.scaledDamageBoostPct() }
+
+  fun crystalTotalShieldPct(): Int =
+    crystals.filter { !it.socketedSlot.isNullOrBlank() }.sumOf { it.scaledShieldBoostPct() }
+
+  fun crystalTotalLuckPct(): Int =
+    crystals.filter { !it.socketedSlot.isNullOrBlank() }.sumOf { it.scaledLuckBoostPct() }
 
   fun essenceResonance(blueEssence: Long): EssenceResonanceBonuses =
     comprehensiveBonuses(blueEssence = blueEssence)
@@ -1228,6 +1313,9 @@ data class OperatorProgressionState(
       customGear.sumOf { (it.tier - 1) + (it.starLevel - 1) } +
       customEquipment.sumOf { (it.tier - 1) + (it.starLevel - 1) } +
       gearCustomizations.size
+    val magicDmgMult = if (magicState.unlocked) {
+      1.0f + ((magicState.magicTier - 1) * 0.04f) + (if (magicState.overchargeDifficultyEnabled) (magicState.difficultyScalingFactor - 1f).coerceAtLeast(0f) * 0.65f else 0f)
+    } else 1.0f
     return EssenceResonanceBonuses.computeComprehensive(
       blueEssence = blueEssence,
       blueEssenceSpent = totalBlueEssenceSpent,
@@ -1263,6 +1351,11 @@ data class OperatorProgressionState(
       serverDamageMult = srvDmg,
       serverShieldMult = srvShd,
       serverFireRateMult = srvRate,
+      crystalsDamagePct = crystalTotalDamagePct(),
+      crystalsShieldPct = crystalTotalShieldPct(),
+      crystalsLuckPct = crystalTotalLuckPct(),
+      magicBonusDmgMult = magicDmgMult,
+      baseShieldBonus = playerBaseState.shieldGeneratorTier * 12,
     )
   }
 
@@ -1306,6 +1399,18 @@ data class OperatorProgressionState(
 }
 
 object ProgressionCatalog {
+
+  const val MAX_PLAYER_LEVEL: Int = 1010
+  const val MAX_OUTFIT_LEVEL: Int = 1010
+  const val MAX_WEAPON_LEVEL: Int = 70
+  const val MAX_EQUIPMENT_LEVEL: Int = 70
+  const val MAX_GEAR_LEVEL: Int = 60
+  const val MAX_PRESTIGE: Int = 40
+  const val MAX_BOT_LEVEL: Int = 60
+  const val MAX_CORE_LEVEL: Int = 60
+  const val MAX_CLAN_LEVEL: Int = 60
+  const val MAX_PERK_RANK: Int = 60
+  const val MAX_PROT_RANK: Int = 60
 
   val weapons: List<WeaponSpec> = listOf(
     WeaponSpec(
@@ -1647,85 +1752,85 @@ object ProgressionCatalog {
   )
 
   fun defaultSkillNodes(): Map<String, SkillNode> = listOf(
-    // Core + Existing 14 IDs preserved
-    SkillNode("sk_shield_1", "Reinforced Chassis I", "+25 Max Shield per Tier (up to T25: +625 Shield).", "SURVIVAL", 300L, false, 1, 25, inspirationTag = "The Division SHD"),
-    SkillNode("sk_shield_2", "Reinforced Chassis II", "+35 Max Shield & +1 Regen/sec per Tier (up to T25).", "SURVIVAL", 600L, false, 1, 25, inspirationTag = "Warframe / Destiny"),
-    SkillNode("sk_damage_1", "Ballistic Lethality I", "+2 Bolt Damage per Tier (up to T25: +50 DMG).", "COMBAT", 350L, false, 1, 25, inspirationTag = "Call of Duty Zombies"),
-    SkillNode("sk_damage_2", "Ballistic Lethality II", "+3 Bolt Damage & +1 Pierce every 2 Tiers (T1-T25).", "COMBAT", 750L, false, 1, 25, inspirationTag = "Doom Eternal"),
-    SkillNode("sk_cooldown_1", "Overdrive Capacitor", "+12% Cooldown Haste & +3% Move Speed per Tier.", "ENGINEERING", 450L, false, 1, 25, inspirationTag = "inFAMOUS / Control"),
-    SkillNode("sk_cooldown_2", "Temporal Flux Relay", "+14% Cooldown Haste & +5% Fire Rate per Tier.", "ENGINEERING", 650L, false, 1, 25, inspirationTag = "Chrono / Force Unleashed"),
-    SkillNode("sk_wonder_1", "Mystery Crate Attractor", "+30% Wonder Drop Rate & +15% Wonder Duration per Tier.", "WONDER", 550L, false, 1, 25, inspirationTag = "BO3 / MW Zombies"),
-    SkillNode("sk_protection_1", "Titanium Reactive Plate", "+3.5% Incoming Damage Protection & +20 Shield per Tier.", "PROTECTION", 400L, false, 1, 25, inspirationTag = "Batman Arkham"),
-    SkillNode("sk_protection_2", "Multiverse Aegis Ward", "+4% Elemental/Explosive/Rock/Sand DR & +1.5 Siphon/Tier.", "PROTECTION", 650L, false, 1, 25, inspirationTag = "God of War / Hades"),
-    SkillNode("sk_explosive_1", "Ordnance & Seismic Mastery", "+12% Explosive, Rock & Sand Damage + Blast Splash per Tier.", "COMBAT", 500L, false, 1, 25, inspirationTag = "GTA IV / Prototype"),
-    SkillNode("sk_perk_amp_1", "Global Perk Overcharger", "+8% Effectiveness to ALL Perks & Custom Perks per Tier.", "SURVIVAL", 550L, false, 1, 25, inspirationTag = "BO3 GobbleGum / Sunset"),
-    SkillNode("sk_buff_mastery_1", "Omniverse Buff Resonance", "+6% Power to ALL Buffs, Cores, Shards & Companions per Tier.", "WONDER", 600L, false, 1, 25, inspirationTag = "Control / Warframe"),
-    SkillNode("sk_sand_rock_1", "Tectonic Dune Shredder", "+3 Armor Shred & +8% Stagger/Knockback per Tier.", "COMBAT", 480L, false, 1, 25, inspirationTag = "Abyss / Dark & Darker"),
-    SkillNode("sk_siphon_1", "Blacklight Shield Siphon", "+3 Kill Shield Siphon & +1.2/sec Regen per Tier.", "PROTECTION", 520L, false, 1, 25, inspirationTag = "Prototype / Bloodborne"),
+    // Core + Existing 14 IDs preserved (now up to T60)
+    SkillNode("sk_shield_1", "Reinforced Chassis I", "+25 Max Shield per Tier (up to T60).", "SURVIVAL", 300L, false, 1, PowerTier.MAX_TIER, inspirationTag = "The Division SHD"),
+    SkillNode("sk_shield_2", "Reinforced Chassis II", "+35 Max Shield & +1 Regen/sec per Tier (up to T60).", "SURVIVAL", 600L, false, 1, PowerTier.MAX_TIER, inspirationTag = "Warframe / Destiny"),
+    SkillNode("sk_damage_1", "Ballistic Lethality I", "+2 Bolt Damage per Tier (up to T60).", "COMBAT", 350L, false, 1, PowerTier.MAX_TIER, inspirationTag = "Call of Duty Zombies"),
+    SkillNode("sk_damage_2", "Ballistic Lethality II", "+3 Bolt Damage & +1 Pierce every 2 Tiers (T1-T60).", "COMBAT", 750L, false, 1, PowerTier.MAX_TIER, inspirationTag = "Doom Eternal"),
+    SkillNode("sk_cooldown_1", "Overdrive Capacitor", "+12% Cooldown Haste & +3% Move Speed per Tier.", "ENGINEERING", 450L, false, 1, PowerTier.MAX_TIER, inspirationTag = "inFAMOUS / Control"),
+    SkillNode("sk_cooldown_2", "Temporal Flux Relay", "+14% Cooldown Haste & +5% Fire Rate per Tier.", "ENGINEERING", 650L, false, 1, PowerTier.MAX_TIER, inspirationTag = "Chrono / Force Unleashed"),
+    SkillNode("sk_wonder_1", "Mystery Crate Attractor", "+30% Wonder Drop Rate & +15% Wonder Duration per Tier.", "WONDER", 550L, false, 1, PowerTier.MAX_TIER, inspirationTag = "BO3 / MW Zombies"),
+    SkillNode("sk_protection_1", "Titanium Reactive Plating", "+3.5% Incoming Damage Mitigation & +20 Shield per Tier.", "DEFENSE", 400L, false, 1, PowerTier.MAX_TIER, inspirationTag = "Batman Arkham"),
+    SkillNode("sk_protection_2", "Omniverse Bastion Ward", "+4% Elemental/Explosive/Rock/Sand DR & +1.5 Siphon/Tier.", "WARDING", 650L, false, 1, PowerTier.MAX_TIER, inspirationTag = "God of War / Hades"),
+    SkillNode("sk_explosive_1", "Ordnance & Seismic Mastery", "+12% Explosive, Rock & Sand Damage + Blast Splash per Tier.", "COMBAT", 500L, false, 1, PowerTier.MAX_TIER, inspirationTag = "GTA IV / Prototype"),
+    SkillNode("sk_perk_amp_1", "Global Perk Overcharger", "+8% Effectiveness to ALL Perks & Custom Perks per Tier.", "SURVIVAL", 550L, false, 1, PowerTier.MAX_TIER, inspirationTag = "BO3 GobbleGum / Sunset"),
+    SkillNode("sk_buff_mastery_1", "Omniverse Buff Resonance", "+6% Power to ALL Buffs, Cores, Shards & Companions per Tier.", "WONDER", 600L, false, 1, PowerTier.MAX_TIER, inspirationTag = "Control / Warframe"),
+    SkillNode("sk_sand_rock_1", "Tectonic Dune Shredder", "+3 Armor Shred & +8% Stagger/Knockback per Tier.", "COMBAT", 480L, false, 1, PowerTier.MAX_TIER, inspirationTag = "Abyss / Dark & Darker"),
+    SkillNode("sk_siphon_1", "Blacklight Shield Siphon", "+3 Kill Shield Siphon & +1.2/sec Regen per Tier.", "PROTECTION", 520L, false, 1, PowerTier.MAX_TIER, inspirationTag = "Prototype / Bloodborne"),
     // Expanded Inspired Collection & Spiritual Successor Skills (22 new nodes -> 36 total)
-    SkillNode("sk_zombies_gobble", "Aether GobbleGum Alchemy", "+5% Essence Gain & +18% Wonder Drop Chance per Tier.", "WONDER", 420L, false, 1, 25, inspirationTag = "BO3 Zombies"),
-    SkillNode("sk_zombies_deadbolt", "Deadbolt Exfil Mastery", "+12 Max Shield & +4% Fire Rate per Tier during Waves.", "SURVIVAL", 440L, false, 1, 25, inspirationTag = "MW Zombies"),
-    SkillNode("sk_division_isac", "ISAC Smart Tech Support", "-5% All Cooldowns & +0.8/sec Armor Regen per Tier.", "ENGINEERING", 460L, false, 1, 25, inspirationTag = "The Division"),
-    SkillNode("sk_infamous_karmic", "Karmic Conduit Overload", "+2 Chain Voltage DMG & +3% Sprint Speed per Tier.", "COMBAT", 430L, false, 1, 25, inspirationTag = "inFAMOUS / Sunset Overdrive"),
-    SkillNode("sk_prototype_biomass", "Blacklight Tendril Devour", "+20 Max Shield & +2 Shield Siphon on Kill per Tier.", "SURVIVAL", 480L, false, 1, 25, inspirationTag = "Prototype / Crackdown"),
-    SkillNode("sk_arkham_freeflow", "Freeflow Critical Combo", "+8% Crit Damage & +2.5% Evade Speed per Tier.", "COMBAT", 410L, false, 1, 25, inspirationTag = "Batman Arkham / Shadow of War"),
-    SkillNode("sk_arkham_predator", "Detective Sonar Disruptor", "+1 Bolt Pierce every 4 Tiers & +14% Trap Bonus per Tier.", "ENGINEERING", 450L, false, 1, 25, inspirationTag = "Arkham Origins"),
-    SkillNode("sk_gow_spartan", "Spartan Runic Rage", "+3 Heavy DMG & +15 Max Shield per Tier.", "COMBAT", 510L, false, 1, 25, inspirationTag = "God of War / DMC"),
-    SkillNode("sk_gow_valkyrie", "Valkyrie Parry Ward", "+3% Incoming DR & +1.0/sec Regen per Tier.", "PROTECTION", 540L, false, 1, 25, inspirationTag = "God of War Ragnarök"),
-    SkillNode("sk_force_telekinesis", "Force Repulse Mastery", "-6% Power Cooldown & +10% Knockback/Splash per Tier.", "ENGINEERING", 490L, false, 1, 25, inspirationTag = "Force Unleashed / Control"),
-    SkillNode("sk_spider_acuity", "Spider-Sense Dodge Flow", "+4% Move Speed & +2.5% Incoming DR per Tier.", "PROTECTION", 400L, false, 1, 25, inspirationTag = "Insomniac Spider-Man"),
-    SkillNode("sk_gta4_grit", "Liberty Street Grit", "+18 Max Shield & +2 Close-Range DMG per Tier.", "SURVIVAL", 360L, false, 1, 25, inspirationTag = "GTA IV / Max Payne"),
-    SkillNode("sk_superman_solar", "Fortress Solar Overcharge", "+14% Projectile Velocity & +2 Solar DMG per Tier.", "COMBAT", 530L, false, 1, 25, inspirationTag = "Superman Returns / Saints Row IV"),
-    SkillNode("sk_abyss_dungeon", "Abyssal Torch Extraction", "+6% Loot Luck & +1.5/sec Dungeon Regen per Tier.", "WONDER", 470L, false, 1, 25, inspirationTag = "Abyss / Dark & Darker"),
-    SkillNode("sk_abyss_boon", "Chthonic Death Defiance", "+25 Max Shield & +3% Boss Impact DR per Tier.", "PROTECTION", 580L, false, 1, 25, inspirationTag = "Hades / Abyss"),
-    SkillNode("sk_doom_glory", "Rip & Tear Armor Belch", "+2.5 Kill Shield Siphon & +4% Fire Rate per Tier.", "COMBAT", 560L, false, 1, 25, inspirationTag = "Doom Eternal"),
-    SkillNode("sk_dmc_style", "SSS Stylish Cadence", "+6% Fire Rate & +5% Crit Multiplier per Tier.", "COMBAT", 520L, false, 1, 25, inspirationTag = "Devil May Cry"),
-    SkillNode("sk_control_astral", "Astral Object of Power", "-6% Power & Dash Cooldown + 12% Wonder Duration per Tier.", "WONDER", 550L, false, 1, 25, inspirationTag = "Control / Remedy"),
+    SkillNode("sk_zombies_gobble", "Aether GobbleGum Alchemy", "+5% Essence Gain & +18% Wonder Drop Chance per Tier.", "WONDER", 420L, false, 1, PowerTier.MAX_TIER, inspirationTag = "BO3 Zombies"),
+    SkillNode("sk_zombies_deadbolt", "Deadbolt Exfil Mastery", "+12 Max Shield & +4% Fire Rate per Tier during Waves.", "SURVIVAL", 440L, false, 1, PowerTier.MAX_TIER, inspirationTag = "MW Zombies"),
+    SkillNode("sk_division_isac", "ISAC Smart Tech Support", "-5% All Cooldowns & +0.8/sec Armor Regen per Tier.", "ENGINEERING", 460L, false, 1, PowerTier.MAX_TIER, inspirationTag = "The Division"),
+    SkillNode("sk_infamous_karmic", "Karmic Conduit Overload", "+2 Chain Voltage DMG & +3% Sprint Speed per Tier.", "COMBAT", 430L, false, 1, PowerTier.MAX_TIER, inspirationTag = "inFAMOUS / Sunset Overdrive"),
+    SkillNode("sk_prototype_biomass", "Blacklight Tendril Devour", "+20 Max Shield & +2 Shield Siphon on Kill per Tier.", "SURVIVAL", 480L, false, 1, PowerTier.MAX_TIER, inspirationTag = "Prototype / Crackdown"),
+    SkillNode("sk_arkham_freeflow", "Freeflow Critical Combo", "+8% Crit Damage & +2.5% Evade Speed per Tier.", "COMBAT", 410L, false, 1, PowerTier.MAX_TIER, inspirationTag = "Batman Arkham / Shadow of War"),
+    SkillNode("sk_arkham_predator", "Detective Sonar Disruptor", "+1 Bolt Pierce every 4 Tiers & +14% Trap Bonus per Tier.", "ENGINEERING", 450L, false, 1, PowerTier.MAX_TIER, inspirationTag = "Arkham Origins"),
+    SkillNode("sk_gow_spartan", "Spartan Runic Rage", "+3 Heavy DMG & +15 Max Shield per Tier.", "COMBAT", 510L, false, 1, PowerTier.MAX_TIER, inspirationTag = "God of War / DMC"),
+    SkillNode("sk_gow_valkyrie", "Valkyrie Parry Ward", "+3% Incoming DR & +1.0/sec Regen per Tier.", "PROTECTION", 540L, false, 1, PowerTier.MAX_TIER, inspirationTag = "God of War Ragnarök"),
+    SkillNode("sk_force_telekinesis", "Force Repulse Mastery", "-6% Power Cooldown & +10% Knockback/Splash per Tier.", "ENGINEERING", 490L, false, 1, PowerTier.MAX_TIER, inspirationTag = "Force Unleashed / Control"),
+    SkillNode("sk_spider_acuity", "Spider-Sense Dodge Flow", "+4% Move Speed & +2.5% Incoming DR per Tier.", "PROTECTION", 400L, false, 1, PowerTier.MAX_TIER, inspirationTag = "Insomniac Spider-Man"),
+    SkillNode("sk_gta4_grit", "Liberty Street Grit", "+18 Max Shield & +2 Close-Range DMG per Tier.", "SURVIVAL", 360L, false, 1, PowerTier.MAX_TIER, inspirationTag = "GTA IV / Max Payne"),
+    SkillNode("sk_superman_solar", "Fortress Solar Overcharge", "+14% Projectile Velocity & +2 Solar DMG per Tier.", "COMBAT", 530L, false, 1, PowerTier.MAX_TIER, inspirationTag = "Superman Returns / Saints Row IV"),
+    SkillNode("sk_abyss_dungeon", "Abyssal Torch Extraction", "+6% Loot Luck & +1.5/sec Dungeon Regen per Tier.", "WONDER", 470L, false, 1, PowerTier.MAX_TIER, inspirationTag = "Abyss / Dark & Darker"),
+    SkillNode("sk_abyss_boon", "Chthonic Death Defiance", "+25 Max Shield & +3% Boss Impact DR per Tier.", "PROTECTION", 580L, false, 1, PowerTier.MAX_TIER, inspirationTag = "Hades / Abyss"),
+    SkillNode("sk_doom_glory", "Rip & Tear Armor Belch", "+2.5 Kill Shield Siphon & +4% Fire Rate per Tier.", "COMBAT", 560L, false, 1, PowerTier.MAX_TIER, inspirationTag = "Doom Eternal"),
+    SkillNode("sk_dmc_style", "SSS Stylish Cadence", "+6% Fire Rate & +5% Crit Multiplier per Tier.", "COMBAT", 520L, false, 1, PowerTier.MAX_TIER, inspirationTag = "Devil May Cry"),
+    SkillNode("sk_control_astral", "Astral Object of Power", "-6% Power & Dash Cooldown + 12% Wonder Duration per Tier.", "WONDER", 550L, false, 1, PowerTier.MAX_TIER, inspirationTag = "Control / Remedy"),
     // Real-Life Creator Skills (Blake's real-life habits & creative craft)
-    SkillNode("sk_rl_sketchbook", "Sep 2025 Sketchbook Focus", "+2 Bolt DMG & +5% Essence Gain per Tier from hand-drawn planning.", "REAL_LIFE", 320L, false, 1, 25, inspirationTag = "Real-Life Origins Map"),
-    SkillNode("sk_rl_krita_layers", "Krita & PENUP Layer Flow", "+5% Crit & -5% Cooldowns per Tier from digital art precision.", "REAL_LIFE", 360L, false, 1, 25, inspirationTag = "Real-Life Art Tablet"),
-    SkillNode("sk_rl_gym_cardio", "Everyday Gym & Cardio Grit", "+22 Max Shield & +4% Sprint Speed per Tier from real conditioning.", "REAL_LIFE", 340L, false, 1, 25, inspirationTag = "Real-Life Conditioning"),
-    SkillNode("sk_rl_modder_tinker", "Android & Blender Tinker", "+5% Fire Rate & +12% Trap/Vacuum Radius per Tier.", "REAL_LIFE", 390L, false, 1, 25, inspirationTag = "Real-Life Modding"),
+    SkillNode("sk_rl_sketchbook", "Sep 2025 Sketchbook Focus", "+2 Bolt DMG & +5% Essence Gain per Tier from hand-drawn planning.", "REAL_LIFE", 320L, false, 1, PowerTier.MAX_TIER, inspirationTag = "Real-Life Origins Map"),
+    SkillNode("sk_rl_krita_layers", "Krita & PENUP Layer Flow", "+5% Crit & -5% Cooldowns per Tier from digital art precision.", "REAL_LIFE", 360L, false, 1, PowerTier.MAX_TIER, inspirationTag = "Real-Life Art Tablet"),
+    SkillNode("sk_rl_gym_cardio", "Everyday Gym & Cardio Grit", "+22 Max Shield & +4% Sprint Speed per Tier from real conditioning.", "REAL_LIFE", 340L, false, 1, PowerTier.MAX_TIER, inspirationTag = "Real-Life Conditioning"),
+    SkillNode("sk_rl_modder_tinker", "Android & Blender Tinker", "+5% Fire Rate & +12% Trap/Vacuum Radius per Tier.", "REAL_LIFE", 390L, false, 1, PowerTier.MAX_TIER, inspirationTag = "Real-Life Modding"),
   ).associateBy { it.id }
 
   val protectionUpgrades: List<ProtectionUpgradeSpec> = listOf(
     ProtectionUpgradeSpec(
       id = "prot_armor_weave",
-      title = "Ballistic Armor Weave",
-      subtitle = "+3% All Incoming Damage Reduction & +18 Max Shield per Rank (R0-R25)",
-      effectTag = "ARMOR DR",
+      title = "Reactive Exo-Weave Plating",
+      subtitle = "+3% All Incoming Damage Reduction & +18 Max Shield per Rank (R0-R60)",
+      effectTag = "EXO-ARMOR",
       baseCostEssence = 300L,
       colorHex = 0xFF00E5FFL,
     ),
     ProtectionUpgradeSpec(
       id = "prot_elemental_ward",
-      title = "Elemental & Explosive Ward",
-      subtitle = "+4% Protection vs Explosive, Rock, Sand, Fire, Void & Cryo per Rank",
+      title = "Elemental & Blast Deflector",
+      subtitle = "+4% Ward vs Explosive, Rock, Sand, Fire, Void & Cryo per Rank",
       effectTag = "ELEM WARD",
       baseCostEssence = 350L,
       colorHex = 0xFFFFAB40L,
     ),
     ProtectionUpgradeSpec(
       id = "prot_aegis_siphon",
-      title = "Aegis Shield Siphon",
+      title = "Guardian Bastion Siphon",
       subtitle = "+2 Shield on Kill, +25 Max Shield & +0.8/s Shield Regen per Rank",
-      effectTag = "SIPHON",
+      effectTag = "BASTION",
       baseCostEssence = 400L,
       colorHex = 0xFF00E676L,
     ),
     ProtectionUpgradeSpec(
       id = "prot_cover_fortress",
-      title = "Parkour Bastion Plate",
+      title = "Parkour Bulwark Harness",
       subtitle = "+2.5% Damage Reduction & +3% Sprint/Dodge Speed per Rank",
-      effectTag = "MOBILITY DR",
+      effectTag = "BULWARK",
       baseCostEssence = 320L,
       colorHex = 0xFF448AFFL,
     ),
     ProtectionUpgradeSpec(
       id = "prot_emergency_dome",
-      title = "Chrono Overclock Dome",
+      title = "Chrono Forcefield Capacitor",
       subtitle = "+8% Cooldown Haste & +1.5/sec Emergency Regen per Rank",
-      effectTag = "HASTE + REGEN",
+      effectTag = "FORCEFIELD",
       baseCostEssence = 450L,
       colorHex = 0xFFE040FBL,
     ),
@@ -2059,7 +2164,7 @@ object ProgressionCatalog {
         val baseName = botCallsigns[(slotIdx - 1) % botCallsigns.size]
         val suffixCycle = (slotIdx - 1) / botCallsigns.size
         val botName = if (suffixCycle == 0) baseName else "$baseName-${suffixCycle + 1}"
-        val botLvl = (playerLevel + ((slotIdx * 7) % 25) - 5).coerceIn(1, 1000)
+        val botLvl = (playerLevel + ((slotIdx * 7) % 25) - 5).coerceIn(1, MAX_PLAYER_LEVEL)
         val botPrestige = if (config.botDifficulty == BotDifficulty.APEX) (slotIdx % 10) + 1 else (slotIdx % 4)
         members.add(
           LobbyBotMember(
@@ -2088,7 +2193,7 @@ object ProgressionCatalog {
   fun levelForXp(xp: Long): Int {
     var lvl = 1
     var remaining = xp.coerceAtLeast(0L)
-    while (lvl < 1000) {
+    while (lvl < MAX_PLAYER_LEVEL) {
       val need = xpRequiredForPlayerLevel(lvl)
       if (remaining < need) break
       remaining -= need
@@ -2100,29 +2205,29 @@ object ProgressionCatalog {
   fun xpProgressInCurrentPlayerLevel(xp: Long): Pair<Long, Long> {
     var lvl = 1
     var remaining = xp.coerceAtLeast(0L)
-    while (lvl < 1000) {
+    while (lvl < MAX_PLAYER_LEVEL) {
       val need = xpRequiredForPlayerLevel(lvl)
       if (remaining < need) return remaining to need
       remaining -= need
       lvl++
     }
-    val maxNeed = xpRequiredForPlayerLevel(999)
+    val maxNeed = xpRequiredForPlayerLevel(MAX_PLAYER_LEVEL - 1)
     return maxNeed to maxNeed
   }
 
-  val milestoneLevels: List<Int> = listOf(5, 10, 20, 35, 50, 75, 100, 150, 200, 350, 500, 750, 1000)
+  val milestoneLevels: List<Int> = listOf(5, 10, 20, 35, 50, 75, 100, 150, 200, 350, 500, 750, 1000, MAX_PLAYER_LEVEL)
 
   fun isMilestoneLevel(level: Int): Boolean = milestoneLevels.contains(level)
 
   fun nextMilestoneLevel(level: Int): Int =
-    milestoneLevels.firstOrNull { it > level } ?: 1000
+    milestoneLevels.firstOrNull { it > level } ?: MAX_PLAYER_LEVEL
 
   fun milestoneTierCount(level: Int): Int =
     milestoneLevels.count { level >= it }
 
   /**
    * Non-linear milestone leveling: intermediate levels plateau with minimal passive change,
-   * while milestone breakthroughs (5, 10, 20, 35, 50, 75, 100, 150, 200, 350, 500, 750, 1000)
+   * while milestone breakthroughs (5, 10, 20, 35, 50, 75, 100, 150, 200, 350, 500, 750, 1000, 1010)
    * grant dramatically larger cumulative stat jumps over time.
    */
   fun levelStatMultiplier(level: Int): Float {
@@ -2135,7 +2240,7 @@ object ProgressionCatalog {
     val nextMs = nextMilestoneLevel(level)
     return if (isMilestoneLevel(level)) {
       "MILESTONE LV.$level BREAKTHROUGH ACTIVE (x${String.format(java.util.Locale.US, "%.2f", levelStatMultiplier(level))} Stats)"
-    } else if (level >= 1000) {
+    } else if (level >= MAX_PLAYER_LEVEL) {
       "MAX OMEGA MILESTONE (x${String.format(java.util.Locale.US, "%.2f", levelStatMultiplier(level))} Stats)"
     } else {
       "Milestone $unlocked/${milestoneLevels.size} • Next Stat Jump at Lv.$nextMs"
@@ -2158,12 +2263,28 @@ object ProgressionCatalog {
     return "$title$suffix"
   }
 
+  fun totalXpForLevel(targetLvl: Int): Long {
+    var total = 0L
+    for (l in 1 until targetLvl.coerceIn(1, MAX_PLAYER_LEVEL)) {
+      total += xpRequiredForPlayerLevel(l)
+    }
+    return total
+  }
+
+  fun totalXpForWeaponLevel(targetLvl: Int): Long {
+    var total = 0L
+    for (l in 1 until targetLvl.coerceIn(1, MAX_WEAPON_LEVEL)) {
+      total += xpRequiredForWeaponLevel(l)
+    }
+    return total
+  }
+
   fun xpRequiredForWeaponLevel(level: Int): Long = 100L + (level - 1).coerceAtLeast(0) * 26L
 
   fun weaponLevelForXp(xp: Long): Int {
     var lvl = 1
     var remaining = xp.coerceAtLeast(0L)
-    while (lvl < 60) {
+    while (lvl < MAX_WEAPON_LEVEL) {
       val need = xpRequiredForWeaponLevel(lvl)
       if (remaining < need) break
       remaining -= need
@@ -2175,13 +2296,13 @@ object ProgressionCatalog {
   fun xpProgressInCurrentWeaponLevel(xp: Long): Pair<Long, Long> {
     var lvl = 1
     var remaining = xp.coerceAtLeast(0L)
-    while (lvl < 60) {
+    while (lvl < MAX_WEAPON_LEVEL) {
       val need = xpRequiredForWeaponLevel(lvl)
       if (remaining < need) return remaining to need
       remaining -= need
       lvl++
     }
-    val maxNeed = xpRequiredForWeaponLevel(59)
+    val maxNeed = xpRequiredForWeaponLevel(MAX_WEAPON_LEVEL - 1)
     return maxNeed to maxNeed
   }
 
@@ -2216,7 +2337,7 @@ object ProgressionCatalog {
 
   fun totalXpForEquipmentLevel(targetLevel: Int): Long {
     var sum = 0L
-    for (lvl in 1 until targetLevel.coerceIn(1, 60)) {
+    for (lvl in 1 until targetLevel.coerceIn(1, MAX_EQUIPMENT_LEVEL)) {
       sum += xpRequiredForEquipmentLevel(lvl)
     }
     return sum
@@ -2225,7 +2346,7 @@ object ProgressionCatalog {
   fun equipmentLevelForXp(xp: Long): Int {
     var lvl = 1
     var remaining = xp.coerceAtLeast(0L)
-    while (lvl < 60) {
+    while (lvl < MAX_EQUIPMENT_LEVEL) {
       val need = xpRequiredForEquipmentLevel(lvl)
       if (remaining < need) break
       remaining -= need
@@ -2237,13 +2358,13 @@ object ProgressionCatalog {
   fun xpProgressInCurrentEquipmentLevel(xp: Long): Pair<Long, Long> {
     var lvl = 1
     var remaining = xp.coerceAtLeast(0L)
-    while (lvl < 60) {
+    while (lvl < MAX_EQUIPMENT_LEVEL) {
       val need = xpRequiredForEquipmentLevel(lvl)
       if (remaining < need) return remaining to need
       remaining -= need
       lvl++
     }
-    val maxNeed = xpRequiredForEquipmentLevel(59)
+    val maxNeed = xpRequiredForEquipmentLevel(MAX_EQUIPMENT_LEVEL - 1)
     return maxNeed to maxNeed
   }
 
@@ -2251,7 +2372,7 @@ object ProgressionCatalog {
 
   fun totalXpForGearLevel(targetLevel: Int): Long {
     var sum = 0L
-    for (lvl in 1 until targetLevel.coerceIn(1, 50)) {
+    for (lvl in 1 until targetLevel.coerceIn(1, MAX_GEAR_LEVEL)) {
       sum += xpRequiredForGearLevel(lvl)
     }
     return sum
@@ -2260,7 +2381,7 @@ object ProgressionCatalog {
   fun gearLevelForXp(xp: Long): Int {
     var lvl = 1
     var remaining = xp.coerceAtLeast(0L)
-    while (lvl < 50) {
+    while (lvl < MAX_GEAR_LEVEL) {
       val need = xpRequiredForGearLevel(lvl)
       if (remaining < need) break
       remaining -= need
@@ -2272,13 +2393,13 @@ object ProgressionCatalog {
   fun xpProgressInCurrentGearLevel(xp: Long): Pair<Long, Long> {
     var lvl = 1
     var remaining = xp.coerceAtLeast(0L)
-    while (lvl < 50) {
+    while (lvl < MAX_GEAR_LEVEL) {
       val need = xpRequiredForGearLevel(lvl)
       if (remaining < need) return remaining to need
       remaining -= need
       lvl++
     }
-    val maxNeed = xpRequiredForGearLevel(49)
+    val maxNeed = xpRequiredForGearLevel(MAX_GEAR_LEVEL - 1)
     return maxNeed to maxNeed
   }
 
@@ -2322,6 +2443,16 @@ object UpgradeCosts {
   fun blastCoreBlueEssence(level: Int): Long = 240L + (level * 190L)
   fun vacuumBot(tier: Int): Long = 220L + (tier * 160L)
   fun vacuumBotStar(stars: Int): Long = stars * 400L
+  fun crystalUpgradeGold(level: Int): Long = 350L + (level * 220L)
+  fun crystalUpgradeDiamonds(level: Int): Long = 40L + (level * 25L)
+  fun baseModuleGold(tier: Int): Long = 450L + (tier * 320L)
+  fun baseModuleTuuCash(tier: Int): Long = 1200L + (tier * 650L)
+  fun magicTierCostGold(tier: Int): Long = 400L + (tier * 280L)
+  fun magicTierCostDiamonds(tier: Int): Long = 50L + (tier * 30L)
+  fun systemShardCost(currentLevel: Int): Long = (6L + (currentLevel * 3L)).coerceAtLeast(4L)
+  fun goldCostForTierUpgrade(currentLevel: Int): Long = 400L + (currentLevel * 260L)
+  fun diamondCostForTierUpgrade(currentLevel: Int): Long = 45L + (currentLevel * 28L)
+  fun tuuCashCostForTierUpgrade(currentLevel: Int): Long = 1200L + (currentLevel * 600L)
 
   /**
    * Embedded No-APK Play Guide for running exported collections without an Android APK.
@@ -3254,48 +3385,207 @@ object CuratedCustomMapsCatalog {
 }
 
 @Immutable
+data class MagicSpellSpec(
+  val id: String,
+  val name: String,
+  val shortTag: String,
+  val description: String,
+  val manaCost: Float,
+  val cooldownTicks: Float,
+  val colorHex: Long,
+  val unlockGold: Long = 600L,
+  val unlockDiamonds: Long = 80L,
+)
+
+@Immutable
 data class MagicSystemState(
   val unlocked: Boolean = true,
   val activeSpellId: String = "spell_abyssal_nova",
   val manaCurrent: Float = 100f,
   val manaMax: Float = 100f,
   val magicTier: Int = 1,
-  val difficultyScalingFactor: Float = 1.20f,
+  val difficultyScalingFactor: Float = 1.25f,
+  val overchargeDifficultyEnabled: Boolean = true,
   val unlockedSpells: Set<String> = setOf("spell_abyssal_nova", "spell_chrono_stasis", "spell_soul_heal"),
+  val spellTiers: Map<String, Int> = mapOf(
+    "spell_abyssal_nova" to 1,
+    "spell_chrono_stasis" to 1,
+    "spell_soul_heal" to 1,
+  ),
+) {
+  fun spellTier(id: String): Int = (spellTiers[id] ?: 1).coerceIn(1, PowerTier.MAX_TIER)
+}
+
+@Immutable
+data class PlayerBaseThemeSpec(
+  val id: String,
+  val name: String,
+  val description: String,
+  val accentHex: Long,
 )
 
 @Immutable
 data class PlayerBaseState(
   val baseName: String = "Nexus Command Citadel",
+  val layoutTheme: String = "citadel",
+  val primaryHex: Long = 0xFF00E5FFL,
   val wallTier: Int = 1,
   val turretTier: Int = 1,
   val shieldGeneratorTier: Int = 1,
   val resourceVaultTier: Int = 1,
   val storedGold: Long = 850L,
   val storedDiamonds: Long = 200L,
+  val storedTuuCash: Long = 2500L,
+  val baseHpCurrent: Int = 1000,
+  val baseHpMax: Int = 1000,
   val underAttack: Boolean = false,
-  val attackWaveCountdownSec: Int = 300,
+  val attackWaveCountdownSec: Int = 240,
   val defenseSuccessCount: Int = 0,
-)
+) {
+  fun maxIntegrity(): Int = 800 + (wallTier * 250) + (shieldGeneratorTier * 150)
+}
 
 @Immutable
 data class CrystalItem(
   val id: String,
   val name: String,
   val rarity: String,
+  val element: String = "kyber",
   val statBonusSummary: String,
   val damageBoostPct: Int,
   val shieldBoostPct: Int,
   val luckBoostPct: Int,
   val socketedSlot: String? = null,
   val level: Int = 1,
+) {
+  fun scaledDamageBoostPct(): Int = damageBoostPct + ((level - 1) * 4)
+  fun scaledShieldBoostPct(): Int = shieldBoostPct + ((level - 1) * 5)
+  fun scaledLuckBoostPct(): Int = luckBoostPct + ((level - 1) * 3)
+}
+
+object MultiverseSystemsCatalog {
+  val systemShardDomains: List<Pair<String, String>> = listOf(
+    "weapon" to "Weapon Shards",
+    "wonder" to "Wonder Shards",
+    "gear" to "Gear Shards",
+    "equipment" to "Equipment Shards",
+    "skill" to "Skill Shards",
+    "perk" to "Perk Shards",
+    "protection" to "Protection Shards",
+    "core" to "Blast Core Shards",
+    "bot" to "Vacuum Bot Shards",
+    "area" to "Area / Map Shards",
+    "outfit" to "Outfit / Hero Shards",
+    "crystal" to "Crystal Shards",
+    "magic" to "Arcane Magic Shards",
+    "base" to "Citadel Base Shards",
+    "mode" to "Game Mode Shards",
+  )
+
+  val environmentalResourceSpecs: List<Pair<String, String>> = listOf(
+    "crystal_shard" to "Prism Crystal Frag",
+    "metal_scrap" to "Beskar / Alloy Scrap",
+    "energy_cell" to "Fusion Energy Cell",
+    "aether_herb" to "Aether Spirit Herb",
+    "kyber_fragment" to "Kyber Force Fragment",
+  )
+
+  val magicSpells: List<MagicSpellSpec> = listOf(
+    MagicSpellSpec(
+      id = "spell_abyssal_nova",
+      name = "Abyssal Nova",
+      shortTag = "NOVA",
+      description = "Detonates an arcane gravity pulse dealing heavy Void AoE damage & shredding armor.",
+      manaCost = 30f,
+      cooldownTicks = 180f,
+      colorHex = 0xFFE040FB,
+      unlockGold = 0L,
+      unlockDiamonds = 0L,
+    ),
+    MagicSpellSpec(
+      id = "spell_chrono_stasis",
+      name = "Chrono Stasis",
+      shortTag = "STASIS",
+      description = "Freezes & slows hostiles in a temporal shockwave while accelerating your fire rate.",
+      manaCost = 28f,
+      cooldownTicks = 210f,
+      colorHex = 0xFF00E5FF,
+      unlockGold = 0L,
+      unlockDiamonds = 0L,
+    ),
+    MagicSpellSpec(
+      id = "spell_soul_heal",
+      name = "Soul & Spirit Mending",
+      shortTag = "SOUL",
+      description = "Channels Spiritual & Thought healing into instant shields, purges burn/cryo, and radiates recovery.",
+      manaCost = 25f,
+      cooldownTicks = 160f,
+      colorHex = 0xFF00E676,
+      unlockGold = 0L,
+      unlockDiamonds = 0L,
+    ),
+    MagicSpellSpec(
+      id = "spell_arcane_barrage",
+      name = "Arcane Prism Barrage",
+      shortTag = "BARRAGE",
+      description = "Fires a 360-degree homing barrage of piercing cosmic bolts around the operator.",
+      manaCost = 36f,
+      cooldownTicks = 220f,
+      colorHex = 0xFFFFD54F,
+      unlockGold = 800L,
+      unlockDiamonds = 90L,
+    ),
+    MagicSpellSpec(
+      id = "spell_kyber_storm",
+      name = "Kyber Force Tempest",
+      shortTag = "KYBER",
+      description = "Unleashes Force lightning arcs + lightsaber orbital slashes across the Star Wars & Nexus grids.",
+      manaCost = 42f,
+      cooldownTicks = 240f,
+      colorHex = 0xFFFF3D71,
+      unlockGold = 1200L,
+      unlockDiamonds = 140L,
+    ),
+  )
+
+  val baseThemes: List<PlayerBaseThemeSpec> = listOf(
+    PlayerBaseThemeSpec("citadel", "Command Citadel", "Reinforced multiverse headquarters with dual plasma pylons.", 0xFF00E5FF),
+    PlayerBaseThemeSpec("orbital_station", "Stark Orbital Deck", "High-altitude orbital satellite platform & arc shields.", 0xFFFFD54F),
+    PlayerBaseThemeSpec("underground_bunker", "Der Riese Vault", "Hardened subterranean zombie-proof element bunker.", 0xFF00E676),
+    PlayerBaseThemeSpec("jedi_temple", "Coruscant Jedi Enclave", "Kyber resonator spires & Force defense turrets.", 0xFF40C4FF),
+    PlayerBaseThemeSpec("liberty_penthouse", "Liberty Safe Penthouse", "Armored penthouse stash vault & perimeter alarms.", 0xFFFFAB40),
+  )
+
+  val craftableCrystalTemplates: List<CrystalItem> = listOf(
+    CrystalItem("crystal_saber_crimson", "Crimson Sith Kyber", "Exotic", "thermal", "+22% Fire & Saber DMG • +10% Luck", 22, 8, 10, null, 1),
+    CrystalItem("crystal_emerald_spirit", "Spirit Conduit Gem", "Cosmic", "bio", "+16% DMG • +28% Shield • Spirit Heal Boost", 16, 28, 8, null, 1),
+    CrystalItem("crystal_gold_midas", "TUUCash Vault Crystal", "Legendary", "kinetic", "+14% DMG • +12% Shield • +26% Gold/Luck", 14, 12, 26, null, 1),
+    CrystalItem("crystal_beskar_aegis", "Mandalorian Beskar Gem", "Mythic", "cryo", "+12% DMG • +34% Shield & Turret Defense", 12, 34, 6, null, 1),
+  )
+
+  fun spellById(id: String): MagicSpellSpec =
+    magicSpells.firstOrNull { it.id == id } ?: magicSpells.first()
+
+  fun baseThemeById(id: String): PlayerBaseThemeSpec =
+    baseThemes.firstOrNull { it.id == id } ?: baseThemes.first()
+}
+
+fun defaultSystemShards(): Map<String, Long> =
+  MultiverseSystemsCatalog.systemShardDomains.associate { (id, _) -> id to 25L }
+
+fun defaultEnvironmentalResources(): Map<String, Long> = mapOf(
+  "crystal_shard" to 60L,
+  "metal_scrap" to 140L,
+  "energy_cell" to 50L,
+  "aether_herb" to 35L,
+  "kyber_fragment" to 25L,
 )
 
 fun defaultCrystals(): List<CrystalItem> = listOf(
-  CrystalItem("crystal_kyber", "Kyber Resonance Crystal", "Mythic", "+15% Energy DMG & +20% Shield", 15, 20, 5, "weapon", 1),
-  CrystalItem("crystal_aether", "Aether 115 Shard Crystal", "Legendary", "+12% Fire Rate & +10% Loot Luck", 12, 10, 10, "rig", 1),
-  CrystalItem("crystal_vibranium", "Vibranium Plating Crystal", "Epic", "+25% Max Shield & Armor Regen", 0, 25, 0, "chest", 1),
-  CrystalItem("crystal_chrono", "Chrono-Stasis Temporal Crystal", "Cosmic", "-20% Cooldowns & +18% Move Speed", 10, 15, 12, "helmet", 1),
+  CrystalItem("crystal_kyber", "Kyber Resonance Crystal", "Mythic", "energy", "+15% Energy DMG & +20% Shield", 15, 20, 5, "weapon", 1),
+  CrystalItem("crystal_aether", "Aether 115 Shard Crystal", "Legendary", "void", "+12% Fire Rate & +10% Loot Luck", 12, 10, 10, "rig", 1),
+  CrystalItem("crystal_vibranium", "Vibranium Plating Crystal", "Epic", "kinetic", "+25% Max Shield & Armor Regen", 4, 25, 4, "chest", 1),
+  CrystalItem("crystal_chrono", "Chrono-Stasis Temporal Crystal", "Cosmic", "cryo", "-20% Cooldowns & +18% Move Speed", 10, 15, 12, "helmet", 1),
 )
 
 

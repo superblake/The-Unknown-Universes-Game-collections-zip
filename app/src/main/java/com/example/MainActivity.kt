@@ -110,6 +110,7 @@ import com.example.ui.screens.MissionsDialog
 import com.example.ui.screens.OsDesktopScreen
 import com.example.ui.screens.SettingsDialog
 import com.example.ui.screens.SocialAndCommsDialog
+import com.example.ui.screens.MultiverseSystemsHubDialog
 import com.example.data.model.CustomMapGameCategory
 import com.example.data.model.SocialCatalog
 import com.example.ui.screens.ForgeArmoryItemDialog
@@ -484,6 +485,7 @@ fun UnknownOsShell(
   val achievements by viewModel.achievementStates.collectAsStateWithLifecycle()
   val missions by viewModel.missionStates.collectAsStateWithLifecycle()
   val activeTab by viewModel.activeTab.collectAsStateWithLifecycle()
+  val selectedArmorySection by viewModel.selectedArmorySection.collectAsStateWithLifecycle()
   val statusBanner by viewModel.statusBanner.collectAsStateWithLifecycle()
   val oauthRedirectUri by pendingOAuthRedirect.collectAsStateWithLifecycle()
   val snackbarHostState = remember { SnackbarHostState() }
@@ -501,6 +503,8 @@ fun UnknownOsShell(
   var showHubForgePerk by remember { mutableStateOf(false) }
   var showHubForgeGear by remember { mutableStateOf(false) }
   var showHubForgeEquipment by remember { mutableStateOf(false) }
+  var showMultiverseHubDialog by remember { mutableStateOf(false) }
+  var multiverseHubInitialTab by remember { mutableIntStateOf(0) }
   var cachedArenaSimKey by remember { mutableStateOf<String?>(null) }
   var cachedArenaSim by remember { mutableStateOf<com.example.ui.screens.ArenaSimState?>(null) }
 
@@ -745,6 +749,10 @@ fun UnknownOsShell(
                   onOpenStore = { showStoreDialog = true },
                   onOpenAchievements = { showAchievementsDialog = true },
                   onOpenMissions = { showMissionsDialog = true },
+                  onOpenVehiclesArmory = {
+                    viewModel.selectArmorySection("vehicles")
+                    viewModel.selectTab(OsWorkspaceTab.ARMORY)
+                  },
                   onOpenMatchBrowser = { tabIdx ->
                     matchBrowserInitialTab = tabIdx
                     showMatchBrowserDialog = true
@@ -765,6 +773,10 @@ fun UnknownOsShell(
                   onBoostAllTiers = viewModel::boostAllTiers,
                   onMaxAllTiers = viewModel::maxAllTiers,
                   onMaxAllStars = viewModel::maxAllStars,
+                  onOpenMultiverseHub = { tabIdx ->
+                    multiverseHubInitialTab = tabIdx
+                    showMultiverseHubDialog = true
+                  },
                   onGrantEssenceBonus = { viewModel.grantEssenceBonus(50_000L) },
                   onImportBo3Preset = viewModel::importBo3ModToolsCuratedPack,
                   onDeployArea = viewModel::deployToAreaAndPlay,
@@ -840,6 +852,7 @@ fun UnknownOsShell(
                   settings = appSettings,
                   progression = progression,
                   onStatusMessage = viewModel::showBanner,
+                  onImportPrisma3dResult = viewModel::importPrisma3dAsset,
                   onOpenForgeWeapon = { showHubForgeWeapon = true },
                   onOpenForgeMap = { showHubForgeMap = true },
                   onOpenForgeModule = { showHubForgeModule = true },
@@ -948,6 +961,8 @@ fun UnknownOsShell(
                   onForgeCustomPerk = viewModel::addOrUpdateCustomPerk,
                   onForgeCustomGear = viewModel::addOrUpdateCustomGear,
                   onForgeCustomEquipment = viewModel::addOrUpdateCustomEquipment,
+                  persistedSectionTag = if (selectedArmorySection == "armory_items") "mods" else selectedArmorySection,
+                  onPersistSectionTag = viewModel::selectArmorySection,
                 )
 
                 OsWorkspaceTab.MEDIA_VAULT -> MediaVaultScreen(
@@ -1061,6 +1076,38 @@ fun UnknownOsShell(
           if (ok) showSocialDialog = false
         },
         onDismiss = { showSocialDialog = false },
+      )
+    }
+
+    if (showMultiverseHubDialog) {
+      MultiverseSystemsHubDialog(
+        progression = progression,
+        onSelectMagicSpell = viewModel::selectMagicSpell,
+        onUnlockOrUpgradeMagicSpell = viewModel::unlockOrUpgradeMagicSpell,
+        onUpgradeMagicTier = viewModel::upgradeMagicTier,
+        onAdjustMagicDifficulty = viewModel::adjustMagicDifficulty,
+        onToggleMagicOvercharge = viewModel::toggleMagicOvercharge,
+        onCraftCrystal = viewModel::craftCrystal,
+        onUpgradeCrystal = viewModel::upgradeCrystal,
+        onSocketCrystal = viewModel::socketCrystal,
+        onCustomizePlayerBase = viewModel::customizePlayerBase,
+        onUpgradePlayerBaseModule = viewModel::upgradePlayerBaseModule,
+        onCollectBaseVault = viewModel::collectBaseVault,
+        onTriggerOrResolveBaseAttack = viewModel::triggerOrResolveBaseAttack,
+        onConvertCurrencyOrResource = viewModel::convertCurrencyOrResource,
+        onUpgradeTargetWithCurrency = viewModel::upgradeTargetWithCurrency,
+        onBoostAllTiers = viewModel::boostAllTiers,
+        onBoostAllStars = viewModel::boostAllStars,
+        onBoostEverythingPlusTen = viewModel::boostEverythingPlusTen,
+        onMaxAllTiers = viewModel::maxAllTiers,
+        onMaxAllStars = viewModel::maxAllStars,
+        onGrantDiamondBonus = viewModel::grantDiamondBonus,
+        onDeployArea = { areaId ->
+          showMultiverseHubDialog = false
+          viewModel.deployToAreaAndPlay(areaId)
+        },
+        onDismiss = { showMultiverseHubDialog = false },
+        initialTab = multiverseHubInitialTab,
       )
     }
 

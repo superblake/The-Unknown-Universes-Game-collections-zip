@@ -640,15 +640,15 @@ fun CharacterCustomizationTab(
           ) {
             Box(
               modifier = Modifier
-                .size(width = 100.dp, height = 122.dp)
+                .size(width = 116.dp, height = 132.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(Color(0xFF0A101E))
                 .border(1.dp, Color(cc.primaryArmorHex).copy(alpha = 0.5f), RoundedCornerShape(12.dp)),
             ) {
               Canvas(modifier = Modifier.fillMaxSize()) {
                 val skel = RigEvaluator.evaluate(
-                  origin = Offset(size.width * 0.5f, size.height * 0.56f),
-                  scalePx = size.height * 0.52f,
+                  origin = Offset(size.width * 0.46f, size.height * 0.54f),
+                  scalePx = minOf(size.width * 0.68f, size.height * 0.48f),
                   poseAngles = activeRig?.poseAngles ?: UniverseCatalog.defaultPoseMap(),
                   clip = "idle",
                   frame = 12f,
