@@ -4744,7 +4744,7 @@ class ProgressionStore(
     }
     val customGearList = safeParse(fallback.customGear) {
       val arr = root.optJSONArray("customGear")
-      if (arr != null) {
+      val parsed = if (arr != null) {
         val list = ArrayList<UserCustomGearSpec>(arr.length())
         for (i in 0 until arr.length()) {
           val obj = arr.optJSONObject(i) ?: continue
@@ -4771,6 +4771,7 @@ class ProgressionStore(
         }
         list.distinctBy { it.id }
       } else fallback.customGear
+      (parsed + ProgressionCatalog.creatorZombieAetherGearPresets).distinctBy { it.id }
     }
     val equippedCustomGear = safeParse(fallback.equippedCustomGearMap) {
       val map = mutableMapOf<String, String>()
@@ -4781,7 +4782,7 @@ class ProgressionStore(
         }
         map
       } ?: fallback.equippedCustomGearMap
-    }
+    }.ifEmpty { ProgressionCatalog.defaultEquippedCreatorGearMap() }
     val customEquipList = safeParse(fallback.customEquipment) {
       val arr = root.optJSONArray("customEquipment")
       if (arr != null) {

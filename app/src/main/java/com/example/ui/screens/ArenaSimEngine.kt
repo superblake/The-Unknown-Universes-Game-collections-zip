@@ -354,6 +354,14 @@ data class ArenaWonderPickup(
   var life: Float = 960f,
 )
 
+data class ArenaWeaponPickup(
+  var x: Float,
+  var y: Float,
+  val weaponId: String,
+  val weaponName: String,
+  var life: Float = 960f,
+)
+
 data class ArenaBot(
   val id: String,
   val callsign: String,
@@ -609,12 +617,28 @@ data class ArenaLoadoutStats(
       val helmetStarAbove = ((helmet?.starLevel ?: 1) - 1).coerceAtLeast(0)
       val backRigStarAbove = ((backRig?.starLevel ?: 1) - 1).coerceAtLeast(0)
 
-      val chestShield = ((chest?.level ?: 1) - 1) * 3 + (((chest?.tier ?: 1) - 1) * 18) + (chestStarAbove * 22) + progression.gearPrestige * 15
+      val customGearHelmet = progression.equippedCustomGear(GearSlot.HELMET)
+      val customGearChest = progression.equippedCustomGear(GearSlot.CHEST)
+      val customGearGloves = progression.equippedCustomGear(GearSlot.GLOVES)
+      val customGearBoots = progression.equippedCustomGear(GearSlot.BOOTS)
+      val customGearBackRig = progression.equippedCustomGear(GearSlot.BACK_RIG)
+
+      val customGearShieldBonus = (customGearHelmet?.bonusShield ?: 0) + (customGearChest?.bonusShield ?: 0) +
+        (customGearGloves?.bonusShield ?: 0) + (customGearBoots?.bonusShield ?: 0) + (customGearBackRig?.bonusShield ?: 0)
+      val customGearDmgBonus = (customGearHelmet?.bonusDamagePct ?: 0) + (customGearChest?.bonusDamagePct ?: 0) +
+        (customGearGloves?.bonusDamagePct ?: 0) + (customGearBoots?.bonusDamagePct ?: 0) + (customGearBackRig?.bonusDamagePct ?: 0)
+
+      val protZombieShieldRank = progression.protectionRank("prot_zombie_aether_shield")
+      val protZombieArmorRank = progression.protectionRank("prot_zombie_aether_armor")
+      val zombieAetherShieldBonus = (protZombieShieldRank * 35) + (protZombieArmorRank * 45)
+
+      val chestShield = ((chest?.level ?: 1) - 1) * 3 + (((chest?.tier ?: 1) - 1) * 18) + (chestStarAbove * 22) + progression.gearPrestige * 15 + customGearShieldBonus + zombieAetherShieldBonus
       val skillShield = (skShield1 * 25) + (skShield2 * 35) + (skProt1 * 20) +
         (skZombiesDeadbolt * 12) + (skPrototypeBiomass * 20) + (skGowSpartan * 15) +
         (skGta4Grit * 18) + (skAbyssBoon * 25) + (skRlGymCardio * 22)
       val protShield = (protArmorRank * 18) + (protSiphonRank * 25) + (protTitanRank * 40) +
-        (protArkhamRank * 20) + (protControlRank * 28) + (protHadesRank * 22) + (protDoomRank * 30)
+        (protArkhamRank * 20) + (protControlRank * 28) + (protHadesRank * 22) + (protDoomRank * 30) +
+        (protZombieShieldRank * 25) + (protZombieArmorRank * 30)
 
       val juggBonus = perks.sumOf { p ->
         val starExtra = (progression.armoryItemStar(p.id) - 1) * 15
@@ -744,7 +768,7 @@ data class ArenaLoadoutStats(
       val levelDmgBonus = ((wpnLevel - 1) / 3) + (wpnPrestige * 2)
       val skillDmgBonus = (skDmg1 * 2) + (skDmg2 * 3) + (skExplosive * 2) + (skSandRock * 2) +
         (skInfamousKarmic * 2) + (skGowSpartan * 3) + (skGta4Grit * 2) + (skSupermanSolar * 2) + (skRlSketchbook * 2) +
-        outfitDmgBonus + charTierDmg + ((doubleTapRank * 2 + muleKickRank * 2 + elementalPopRank * 2) * perkAmpMult).roundToInt() + (redCoreAbove * 2)
+        outfitDmgBonus + charTierDmg + customGearDmgBonus + ((doubleTapRank * 2 + muleKickRank * 2 + elementalPopRank * 2) * perkAmpMult).roundToInt() + (redCoreAbove * 2)
       val rawTotalWpnDmg = ((weapon.baseDamage - 1).coerceAtLeast(0) + attachmentTotalBonusDmg +
         levelDmgBonus + skillDmgBonus) * originPowerMult * wpnTierMult * wpnStarMult * charStarMult * modeTierMult * modeStarMult * resonance.damageMult * era.damageMod * areaCycleMult * areaStarMult * storyAreaDmgMult * levelMilestoneMult * customModeDmgMult
 
@@ -951,6 +975,7 @@ class ArenaSimState(
   val lootCrates = ArrayList<ArenaLootCrate>(16)
   val catEasterEggs = ArrayList<ArenaCatEasterEgg>(4)
   val wonderPickups = ArrayList<ArenaWonderPickup>(8)
+  val weaponPickups = ArrayList<ArenaWeaponPickup>(8)
   val sparks = ArrayList<HitSpark>(48)
   val arcs = ArrayList<ArenaArcLine>(24)
   val arenaBots = ArrayList<ArenaBot>(16)
@@ -2002,6 +2027,7 @@ class ArenaSimState(
     if ((crate.fromHazard || crate.rarity.rank >= 4) && !progression.collectionCustomMode.shouldSuppressCrateWonderDrops(progression.activeAreaId, progression.customGameMaps)) {
       spawnRandomWonderWeapon(crate.x, crate.y)
     }
+    spawnRandomWeaponPickup(crate.x + 0.04f, crate.y)
     pulseRingRadius = 0.05f
     postCallout("${crate.rarity.label.uppercase()} CRATE! +$shardBonus SHARDS (${foundOutfit.nameWithVersion})")
   }
@@ -2362,6 +2388,35 @@ class ArenaSimState(
     wonderPickups.add(ArenaWonderPickup(x, y, chosen))
     postCallout("WONDER CRATE: ${chosen.displayName.uppercase()}!")
     return chosen
+  }
+
+  fun spawnRandomWeaponPickup(
+    x: Float = (playerX - 0.30f + Random.nextFloat() * 0.60f).coerceIn(0.3f, ARENA_WORLD_SIZE - 0.3f),
+    y: Float = (playerY - 0.30f + Random.nextFloat() * 0.60f).coerceIn(0.3f, ARENA_WORLD_SIZE - 0.3f),
+    fixedWeaponId: String? = null,
+  ): String {
+    val allWpns = ProgressionCatalog.weapons
+    val chosenWpn = fixedWeaponId?.let { id -> allWpns.firstOrNull { it.id == id } } ?: allWpns.randomOrNull() ?: allWpns.first()
+    if (weaponPickups.size >= 8) {
+      weaponPickups.removeAt(0)
+    }
+    weaponPickups.add(ArenaWeaponPickup(x, y, chosenWpn.id, chosenWpn.name))
+    postCallout("WEAPON CRATE DROP: ${chosenWpn.name.uppercase()}!")
+    return chosenWpn.id
+  }
+
+  fun collectWeaponPickup(weaponId: String, weaponName: String) {
+    loadout = ArenaLoadoutStats.fromArmory(
+      armory = armoryItems,
+      fallbackAccent = accentColor,
+      progression = progression,
+      blueEssence = initialBlueEssence,
+      weaponOverrideId = weaponId,
+      activeModeId = modeId,
+    )
+    hudActiveWeaponName = loadout.weaponSpec.name
+    pulseRingRadius = 0.05f
+    postCallout("ACQUIRED WEAPON: ${weaponName.uppercase()}!")
   }
 
   private fun pickWeightedWonderKind(): WonderWeaponKind {
@@ -4156,6 +4211,10 @@ class ArenaSimState(
       val kind = ArenaDropKind.entries[Random.nextInt(ArenaDropKind.entries.size)]
       drops.add(ArenaDrop(h.x, h.y, kind))
     }
+    // Random Weapon Pickup Drop
+    if (h.isBoss || h.isElite || Random.nextFloat() < 0.14f) {
+      spawnRandomWeaponPickup(h.x, h.y)
+    }
     // Dead Ops / AoE Survival XP Gems
     if (h.isBoss || h.isElite || Random.nextFloat() < 0.68f) {
       collectibles.add(ArenaCollectible(h.x - 0.025f, h.y + 0.025f, ArenaCollectibleKind.XP_GEM, amount = if (h.isBoss) 65L else if (h.isElite) 28L else 12L))
@@ -5229,6 +5288,27 @@ class ArenaSimState(
           wp.y += (dy / d) * 0.010f * dt
         }
         if (wp.life <= 0f) wIter.remove()
+      }
+    }
+
+    // Weapon Pickups update & Vacuum Pull + collection
+    val wpIter = weaponPickups.iterator()
+    while (wpIter.hasNext()) {
+      val wp = wpIter.next()
+      wp.life -= dt
+      val dx = playerX - wp.x
+      val dy = playerY - wp.y
+      val dSq = dx * dx + dy * dy
+      if (dSq <= 0.06f * 0.06f) {
+        wpIter.remove()
+        collectWeaponPickup(wp.weaponId, wp.weaponName)
+      } else {
+        if (progression.vacuumBot.autoCollectEnabled && dSq <= vacRadSq) {
+          val d = sqrt(dSq).coerceAtLeast(0.001f)
+          wp.x += (dx / d) * 0.010f * dt
+          wp.y += (dy / d) * 0.010f * dt
+        }
+        if (wp.life <= 0f) wpIter.remove()
       }
     }
 

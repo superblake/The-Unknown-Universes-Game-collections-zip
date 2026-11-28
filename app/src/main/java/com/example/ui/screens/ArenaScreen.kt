@@ -981,6 +981,20 @@ fun ArenaScreen(
           drawCircle(Color.White, radius = 4.5f * wpScale, center = pos)
         }
 
+        // Random Non-Wonder Weapon Pickups
+        for (i in 0 until sim.weaponPickups.size) {
+          val wpnPk = sim.weaponPickups.getOrNull(i) ?: continue
+          val pos = worldToPerspectiveScreen(wpnPk.x, wpnPk.y, camX, camY, w, h)
+          val wpScale = perspectiveScaleForRelY(wpnPk.y - camY, w, h)
+          if (pos.x < -30f * resScale || pos.x > w + 30f * resScale || pos.y < -30f * resScale || pos.y > h + 30f * resScale) continue
+          val wCol = Color(0xFF00E676)
+          val boxHalf = 10f * wpScale
+          if (glowOn) drawCircle(wCol.copy(alpha = 0.28f + pulse * 0.22f), radius = 20f * wpScale, center = pos)
+          drawRect(color = Color(0xFF0F172A), topLeft = Offset(pos.x - boxHalf, pos.y - boxHalf), size = Size(boxHalf * 2f, boxHalf * 2f))
+          drawRect(color = wCol, topLeft = Offset(pos.x - boxHalf, pos.y - boxHalf), size = Size(boxHalf * 2f, boxHalf * 2f), style = Stroke(width = 2.5f * resScale))
+          drawCircle(Color.White, radius = 3.5f * wpScale, center = pos)
+        }
+
         if (sim.pulseRingRadius > 0f && !settings.reduceFlashes) {
           val pCenter = worldToPerspectiveScreen(sim.playerX, sim.playerY, camX, camY, w, h)
           val pR = sim.pulseRingRadius * worldAxis
